@@ -8,8 +8,8 @@ export async function getTenantConfig(_hint: string): Promise<TenantConfig> {
       version: 1,
 
       colors: {
-        background: "#0b1020",
-        text: "#ffffff",
+        background: "#fff",
+        text: "#2D2C2B",
         buttonBg: "#ffffff",
         buttonText: "#0b1020",
       },
