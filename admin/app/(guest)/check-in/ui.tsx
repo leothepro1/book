@@ -1,5 +1,7 @@
 "use client";
 
+import type * as React from "react";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Method = "booking" | "nameDate" | "email";
@@ -121,7 +123,7 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
     const today = startOfDay(new Date());
     const selected = mode === "saveCancel" ? tempSelected : saved;
 
-    const months: JSX.Element[] = [];
+    const months: React.ReactNode[] = [];
 
     for (let i = 0; i < monthsCount; i++) {
       const monthDate = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + i, 1);
