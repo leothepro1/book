@@ -34,28 +34,27 @@
   padding: 8px 18px;
 }
 
-.sektion73-card__header{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap: 12px;
-  margin-bottom: 10px;
+.sektion73-card__header {
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    display: flex;
 }
-
 .sektion73-title {
-  font-size: 26px;
-  line-height: 1.15;
-  margin: 0;
-  font-weight: 800;
-  font-family: var(--font-heading, ui-sans-serif);
-  color: var(--text);
-  letter-spacing: -0.2px;
+    font-size: 29px;
+    font-weight: 800;
+    line-height: 1.15;
+    font-family: var(--font-heading, ui-sans-serif);
+    color: var(--text);
+    margin: 0;
+    text-align: center;
 }
-
-.sektion73-muted{
-  margin: 8px 0 0 0;
-  color: rgba(255,255,255,.75);
-  font-size: 14px;
+.sektion73-muted {
+    color: #ffffffbf;
+    margin: 6px 0 0;
+    font-size: 14px;
+    text-align: center;
 }
 
 /* Segment control */
@@ -548,7 +547,11 @@
 }
 .sektion73-choicebtn:hover{ background: rgba(255,255,255,.10); }
 .sektion73-choicebtn:active{ transform: scale(.99); }
-.sektion73-choicebtn__title{ font-weight: 900; font-size: 14px; }
+.sektion73-choicebtn__title {
+    font-size: 14px;
+    font-weight: 900;
+    text-align: center;
+}
 .sektion73-choicebtn__sub{ margin-top: 6px; font-size: 12px; opacity: .72; }
 
 /* Sticky CTA only on step 2 */
