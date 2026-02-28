@@ -1,6 +1,8 @@
 import "./checkin.css";
-import CheckInLogin from "./ui";
+
+import CheckInClient from "./ui";
+import { submitCheckIn } from "./actions";
 
 export default function Page() {
-  return <CheckInLogin />;
+  return <CheckInClient onSubmit={submitCheckIn} />;
 }
