@@ -2,7 +2,8 @@
 "use client";
 
 import type * as React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type Method = "booking" | "nameArrival" | "email";
@@ -98,7 +99,7 @@ type DatePickerProps = {
   valueISO: string;
   onChangeISO: (iso: string) => void;
   mode: "oneClickClose" | "saveCancel";
-  closeSignal?: string; // ändras när vi vill tvinga stängning
+  closeSignal?: string;
 };
 
 function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePickerProps) {
@@ -111,13 +112,14 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
   const saved = useMemo(() => parseISODate(valueISO), [valueISO]);
   const [tempSelected, setTempSelected] = useState<Date | null>(null);
 
-  useEffect(() => {
-    if (mode === "saveCancel") {
-      setTempSelected(saved ? new Date(saved) : null);
-    }
-  }, [mode, valueISO, saved]);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  // Stäng alltid datepicker när vi byter steg/metod (closeSignal ändras)
+  useEffect(() => {
+    if (mode === "saveCancel") setTempSelected(saved ? new Date(saved) : null);
+  }, [mode, saved]);
+
+  // Stäng när vi byter steg/metod
   useEffect(() => {
     if (!closeSignal) return;
     setOpen(false);
@@ -178,13 +180,7 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
       const daysInMonth = new Date(y, m + 1, 0).getDate();
 
       const blanks = Array.from({ length: mondayIndex }, (_, idx) => (
-        <button
-          key={`b-${idx}`}
-          type="button"
-          className="sektion73-day is-muted"
-          disabled
-          aria-hidden="true"
-        />
+        <button key={`b-${idx}`} type="button" className="sektion73-day is-muted" disabled aria-hidden="true" />
       ));
 
       const days = Array.from({ length: daysInMonth }, (_, idx) => {
@@ -199,13 +195,7 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
           <button
             key={`d-${day}`}
             type="button"
-            className={[
-              "sektion73-day",
-              disabled ? "is-disabled" : "",
-              isSel ? "is-selected" : "",
-            ]
-              .join(" ")
-              .trim()}
+            className={["sektion73-day", disabled ? "is-disabled" : "", isSel ? "is-selected" : ""].join(" ").trim()}
             disabled={disabled}
             onClick={(e) => {
               e.preventDefault();
@@ -255,12 +245,7 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
             )}
           </div>
 
-          <div className="sektion73-cal__dow">
-            {dowSv.map((x) => (
-              <div key={x}>{x}</div>
-            ))}
-          </div>
-
+          <div className="sektion73-cal__dow">{dowSv.map((x) => <div key={x}>{x}</div>)}</div>
           <div className="sektion73-cal__grid">
             {blanks}
             {days}
@@ -276,6 +261,43 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
     const d = parseISODate(valueISO);
     return d ? formatSv(d) : "Välj datum";
   }, [valueISO]);
+
+  // PORTAL: Mobile sheet ska ligga i document.body (förbi transform)
+  const mobileSheet =
+    mounted && open && isMobile()
+      ? createPortal(
+          <div className={["sektion73-sheet", "is-open"].join(" ")}>
+            <div className="sektion73-sheet__overlay" onClick={closePicker} />
+            <div className="sektion73-sheet__panel" role="dialog" aria-label="Välj datum">
+              <div className="sektion73-sheet__grab" />
+              <div className="sektion73-sheet__content">
+                <div className="sektion73-calwrap">{renderMonths(1)}</div>
+
+                {mode === "saveCancel" ? (
+                  <div className="sektion73-calactions" style={{ marginTop: 10 }}>
+                    <button type="button" className="sektion73-btn" onClick={cancel}>
+                      Avbryt
+                    </button>
+                    <button
+                      type="button"
+                      className="sektion73-btn sektion73-btn--primary"
+                      onClick={save}
+                      disabled={!tempSelected}
+                    >
+                      Spara
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>
+                    Välj ett datum så stängs kalendern.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      : null;
 
   return (
     <div className="sektion73-field" style={{ position: "relative" }}>
@@ -307,7 +329,7 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
         </span>
       </button>
 
-      {/* Desktop dropdown */}
+      {/* Desktop dropdown (behåll inline, det är absolute och påverkas inte på samma sätt) */}
       <div
         className={["sektion73-datepicker", open && !isMobile() ? "is-open" : ""].join(" ").trim()}
         role="dialog"
@@ -338,36 +360,8 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
         </div>
       </div>
 
-      {/* Mobile sheet */}
-      <div className={["sektion73-sheet", open && isMobile() ? "is-open" : ""].join(" ").trim()}>
-        <div className="sektion73-sheet__overlay" onClick={closePicker} />
-        <div className="sektion73-sheet__panel" role="dialog" aria-label="Välj datum">
-          <div className="sektion73-sheet__grab" />
-          <div className="sektion73-sheet__content">
-            <div className="sektion73-calwrap">{renderMonths(1)}</div>
-
-            {mode === "saveCancel" ? (
-              <div className="sektion73-calactions" style={{ marginTop: 10 }}>
-                <button type="button" className="sektion73-btn" onClick={cancel}>
-                  Avbryt
-                </button>
-                <button
-                  type="button"
-                  className="sektion73-btn sektion73-btn--primary"
-                  onClick={save}
-                  disabled={!tempSelected}
-                >
-                  Spara
-                </button>
-              </div>
-            ) : (
-              <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>
-                Välj ett datum så stängs kalendern.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* Mobile sheet (PORTAL) */}
+      {mobileSheet}
     </div>
   );
 }
@@ -401,10 +395,9 @@ export default function CheckInClient({ onSubmit }: Props) {
 
   const [error, setError] = useState<string | null>(null);
 
-  // Close signal för DatePicker (stänger när steg/metod ändras)
+  // signal som stänger DatePicker när steg/metod ändras
   const closeSignal = `${step}:${method}`;
 
-  // (valfritt) stöd för ?method=...
   useEffect(() => {
     const m = (params.get("method") || "").trim();
     if (m === "booking" || m === "nameArrival" || m === "email") {
@@ -442,8 +435,7 @@ export default function CheckInClient({ onSubmit }: Props) {
       setBusy(true);
 
       if (method === "booking") {
-        if (!bookingId.trim() || !lastName.trim())
-          throw new Error("Fyll i bokningsnummer och efternamn.");
+        if (!bookingId.trim() || !lastName.trim()) throw new Error("Fyll i bokningsnummer och efternamn.");
         await onSubmit({ method, bookingId: bookingId.trim(), lastName: lastName.trim() });
         return;
       }
@@ -454,7 +446,6 @@ export default function CheckInClient({ onSubmit }: Props) {
         return;
       }
 
-      // email
       if (!emailOk(email) || !emailLastName.trim() || !departureISO.trim()) {
         throw new Error("Fyll i e-post, efternamn och utcheckningsdatum.");
       }
@@ -625,9 +616,7 @@ export default function CheckInClient({ onSubmit }: Props) {
         <button type="button" className="sektion73-backbtn" onClick={onBack} aria-label="Back">
           <ChevronLeftIcon />
         </button>
-        <div className="sektion73-modal__title">
-          {step === "choose" ? "Checka in" : titleForMethod(method)}
-        </div>
+        <div className="sektion73-modal__title">{step === "choose" ? "Checka in" : titleForMethod(method)}</div>
       </header>
 
       <div className="sektion73-modal__body">
@@ -669,25 +658,19 @@ export default function CheckInClient({ onSubmit }: Props) {
 
           {/* STEP 2 */}
           <section className="sektion73-step">
-            {/* KRITISKT: rendera bara form när step === "form" så DatePicker inte kan “läcka” visuellt */}
-            {step === "form" ? (
-              <>
-                {renderForm()}
+            {renderForm()}
+            {error && <div className="sektion73-alert">{error}</div>}
 
-                {error && <div className="sektion73-alert">{error}</div>}
-
-                <div className="sektion73-cta">
-                  <button
-                    type="button"
-                    className="sektion73-btn sektion73-btn--primary"
-                    disabled={busy || !canSubmit()}
-                    onClick={submit}
-                  >
-                    {busy ? "Jobbar…" : "Fortsätt"}
-                  </button>
-                </div>
-              </>
-            ) : null}
+            <div className="sektion73-cta">
+              <button
+                type="button"
+                className="sektion73-btn sektion73-btn--primary"
+                disabled={busy || !canSubmit()}
+                onClick={submit}
+              >
+                {busy ? "Jobbar…" : "Fortsätt"}
+              </button>
+            </div>
           </section>
         </div>
       </div>
