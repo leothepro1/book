@@ -1,8 +1,7 @@
-// app/(guest)/check-in/ui.tsx
 "use client";
 
 import type * as React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -262,11 +261,11 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
     return d ? formatSv(d) : "Välj datum";
   }, [valueISO]);
 
-  // PORTAL: Mobile sheet ska ligga i document.body (förbi transform)
+  // PORTAL: Mobile sheet i document.body (förbi transform)
   const mobileSheet =
     mounted && open && isMobile()
       ? createPortal(
-          <div className={["sektion73-sheet", "is-open"].join(" ")}>
+          <div className="sektion73-sheet is-open">
             <div className="sektion73-sheet__overlay" onClick={closePicker} />
             <div className="sektion73-sheet__panel" role="dialog" aria-label="Välj datum">
               <div className="sektion73-sheet__grab" />
@@ -299,6 +298,8 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
         )
       : null;
 
+  const desktopOpen = open && !isMobile();
+
   return (
     <div className="sektion73-field" style={{ position: "relative" }}>
       <label className="sektion73-label">{label}</label>
@@ -329,12 +330,13 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
         </span>
       </button>
 
-      {/* Desktop dropdown (behåll inline, det är absolute och påverkas inte på samma sätt) */}
+      {/* Desktop dropdown: VIKTIGT -> pointerEvents none när stängd så den inte "äter" klick */}
       <div
-        className={["sektion73-datepicker", open && !isMobile() ? "is-open" : ""].join(" ").trim()}
+        className={["sektion73-datepicker", desktopOpen ? "is-open" : ""].join(" ").trim()}
         role="dialog"
         aria-label="Välj datum"
-        aria-hidden={open && !isMobile() ? "false" : "true"}
+        aria-hidden={desktopOpen ? "false" : "true"}
+        style={{ pointerEvents: desktopOpen ? "auto" : "none" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sektion73-datepicker__inner">
@@ -624,8 +626,12 @@ export default function CheckInClient({ onSubmit }: Props) {
           className="sektion73-steps"
           style={{ transform: step === "choose" ? "translateX(0%)" : "translateX(-100%)" }}
         >
-          {/* STEP 1 */}
-          <section className="sektion73-step">
+          {/* STEP 1: VIKTIGT -> gör bara aktiva steget klickbart */}
+          <section
+            className="sektion73-step"
+            aria-hidden={step !== "choose"}
+            style={{ pointerEvents: step === "choose" ? "auto" : "none" }}
+          >
             <div className="sektion73-card__header">
               <div>
                 <h1 className="sektion73-title">Checka in</h1>
@@ -656,8 +662,12 @@ export default function CheckInClient({ onSubmit }: Props) {
             {error && <div className="sektion73-alert">{error}</div>}
           </section>
 
-          {/* STEP 2 */}
-          <section className="sektion73-step">
+          {/* STEP 2: VIKTIGT -> gör bara aktiva steget klickbart */}
+          <section
+            className="sektion73-step"
+            aria-hidden={step !== "form"}
+            style={{ pointerEvents: step === "form" ? "auto" : "none" }}
+          >
             {renderForm()}
             {error && <div className="sektion73-alert">{error}</div>}
 
