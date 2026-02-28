@@ -1,21 +1,19 @@
+import "./guest.css";
+
 import type { ReactNode } from "react";
 import { getTenantConfig } from "./_lib/tenant";
 import { themeToStyleAttr, backgroundStyle } from "./_lib/theme";
 import GuestHeader from "./_components/GuestHeader";
 import GuestFooter from "./_components/GuestFooter";
 
-export default async function GuestLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default async function GuestLayout({ children }: { children: ReactNode }) {
   const config = await getTenantConfig("default");
 
   const cssVars = themeToStyleAttr(config.theme);
   const bgStyle = backgroundStyle(config.theme.background);
 
   return (
-    <div style={cssVars}>
+    <div style={cssVars} className="g-body">
       <div style={bgStyle} className="min-h-dvh flex flex-col">
         <GuestHeader config={config} />
         <main className="flex-1">{children}</main>

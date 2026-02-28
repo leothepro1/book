@@ -1,4 +1,20 @@
-import type { ThemeConfig } from "./types";
+import type { ThemeConfig, FontKey } from "./types";
+
+function fontStack(key: FontKey): string {
+  switch (key) {
+    case "inter":
+      return "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    case "poppins":
+      return "Poppins, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    case "dm_sans":
+      return "DM Sans, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    case "playfair":
+      return "Playfair Display, ui-serif, Georgia, Times New Roman, serif";
+    case "system":
+    default:
+      return "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+  }
+}
 
 export function themeToStyleAttr(theme: ThemeConfig) {
   return {
@@ -6,6 +22,10 @@ export function themeToStyleAttr(theme: ThemeConfig) {
     "--text": theme.colors.text,
     "--button-bg": theme.colors.buttonBg,
     "--button-fg": theme.colors.buttonText,
+
+    "--muted-opacity": String(theme.typography.mutedOpacity ?? 0.72),
+    "--font-heading": fontStack(theme.typography.headingFont),
+    "--font-body": fontStack(theme.typography.bodyFont),
   } as React.CSSProperties;
 }
 
@@ -19,23 +39,33 @@ export function buttonClass(theme: any): string {
   const shadow = theme?.buttons?.shadow ?? "soft";
 
   const radiusClass =
-    radius === "square" ? "rounded-none" :
-    radius === "rounded" ? "rounded-lg" :
-    radius === "round" ? "rounded-xl" :
-    radius === "rounder" ? "rounded-2xl" :
-    "rounded-full";
+    radius === "square"
+      ? "rounded-none"
+      : radius === "rounded"
+      ? "rounded-lg"
+      : radius === "round"
+      ? "rounded-xl"
+      : radius === "rounder"
+      ? "rounded-2xl"
+      : "rounded-full";
 
   const shadowClass =
-    shadow === "none" ? "shadow-none" :
-    shadow === "soft" ? "shadow" :
-    shadow === "strong" ? "shadow-lg" :
-    "shadow-2xl";
+    shadow === "none"
+      ? "shadow-none"
+      : shadow === "soft"
+      ? "shadow"
+      : shadow === "strong"
+      ? "shadow-lg"
+      : "shadow-2xl";
 
   const base =
     "inline-flex w-full items-start justify-start gap-2 px-4 py-4 text-sm font-semibold transition";
 
   const solid = "bg-[var(--button-bg)] text-[var(--button-fg)]";
-  const outline = "border border-[var(--border)] bg-transparent text-[var(--text)]";
+  const outline =
+    "border border-[var(--border)] bg-transparent text-[var(--text)]";
 
-  return [base, radiusClass, shadowClass, variant === "solid" ? solid : outline].join(" ");
+  return [base, radiusClass, shadowClass, variant === "solid" ? solid : outline].join(
+    " "
+  );
 }

@@ -1,0 +1,29 @@
+/* Guest default tokens (fallbacks). Tenant overrides via themeToStyleAttr(). */
+
+:root {
+  /* Core colors (tenant brukar sätta dessa) */
+  --background: #ffffff;
+  --text: #171717;
+  --button-bg: #111827;
+  --button-fg: #ffffff;
+
+  /* Missing i ThemeConfig idag — defaults */
+  --surface: rgba(0, 0, 0, 0.04);
+  --border: rgba(0, 0, 0, 0.10);
+
+  /* Typography tokens (tenant sätter via themeToStyleAttr) */
+  --font-body: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  --font-heading: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  --muted-opacity: 0.72;
+}
+
+/* Dark-mode defaults om inget tenant override sker */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --text: #ededed;
+
+    --surface: rgba(255, 255, 255, 0.06);
+    --border: rgba(255, 255, 255, 0.12);
+  }
+}
