@@ -114,33 +114,32 @@
   min-width: 0;
 }
 
-/* Input: mer top-padding när label flyter */
-.sektion73-float .sektion73-input{
-  padding: 18px var(--sek-float-pad-x) 10px var(--sek-float-pad-x);
+.sektion73-float .sektion73-input {
+    padding: 23px var(--sek-float-pad-x) 5px var(--sek-float-pad-x);
+    border: 1px solid #fff;
+    border-radius: 8px;
+    width: 100%;
+    font-size: 16px;
 }
 
 /* Placeholder ska vara “tom” så label får vara placeholder */
 .sektion73-float .sektion73-input::placeholder{
   color: transparent;
 }
-
-/* Label: default centrerad som placeholder */
-.sektion73-float__label{
-  position: absolute;
-  left: var(--sek-float-pad-x);
-  top: 50%;
-  transform: translateY(-50%);
-  transform-origin: left top;
-  pointer-events: none;
-  z-index: 1;
-
-  font-size: 15px;
-  font-weight: 650;
-  color: rgba(255,255,255,.62);
-  font-family: var(--font-body, ui-sans-serif);
-
-  transition: top .14s ease, transform .14s ease, color .14s ease, opacity .14s ease;
-  opacity: 1;
+.sektion73-float__label {
+    left: var(--sek-float-pad-x);
+    transform-origin: 0 0;
+    pointer-events: none;
+    z-index: 1;
+    color: #ffffff9e;
+    font-size: 15px;
+    font-weight: 400;
+    font-family: var(--font-body, ui-sans-serif);
+    opacity: 1;
+    transition: top .14s, transform .14s, color .14s, opacity .14s;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 /* När input har text eller fokus → label flyter upp */
