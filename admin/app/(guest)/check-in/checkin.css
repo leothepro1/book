@@ -415,7 +415,6 @@ display:none;
   pointer-events: auto;
 }
 
-/* overlay */
 .sektion73-sheet__overlay{
   position:absolute;
   inset:0;
@@ -429,7 +428,7 @@ display:none;
   opacity: 1;
 }
 
-/* panel */
+/* START (closed) */
 .sektion73-sheet__panel{
   position:absolute;
   left:0;
@@ -442,8 +441,7 @@ display:none;
   max-height: 82vh;
   overflow:auto;
 
-  /* closed state (för både initial och leave) */
-  transform: translate3d(0, 26px, 0);
+  transform: translate3d(0, 28px, 0);
   opacity: 0;
   filter: blur(6px);
 
@@ -454,19 +452,20 @@ display:none;
   will-change: transform, opacity, filter;
 }
 
+/* OPEN (animate up) */
 .sektion73-sheet.is-open .sektion73-sheet__panel{
   transform: translate3d(0, 0, 0);
   opacity: 1;
   filter: blur(0);
 }
 
-/* leave-state (kräver att vi håller kvar sheeten en stund i React) */
+/* CLOSING (animate down) */
 .sektion73-sheet.is-closing .sektion73-sheet__overlay{
   opacity: 0;
 }
 
 .sektion73-sheet.is-closing .sektion73-sheet__panel{
-  transform: translate3d(0, 34px, 0);
+  transform: translate3d(0, 36px, 0);
   opacity: 0;
   filter: blur(6px);
 }
