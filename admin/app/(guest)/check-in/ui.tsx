@@ -1,10 +1,41 @@
+// app/(guest)/check-in/ui.tsx
 "use client";
 
 import type * as React from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+type Method = "booking" | "nameArrival" | "email";
+type Step = "choose" | "form";
 
-type Method = "booking" | "nameDate" | "email";
+type SubmitPayload = {
+  method: Method;
+  bookingId?: string;
+  lastName?: string;
+  name?: string;
+  arrivalDateISO?: string;
+  email?: string;
+  departureDateISO?: string;
+};
+
+type Props = {
+  onSubmit: (payload: SubmitPayload) => Promise<void>;
+};
+
+function ChevronLeftIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M15 18l-6-6 6-6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -49,7 +80,6 @@ function sameDay(a: Date, b: Date) {
 function emailOk(v: string) {
   const s = v.trim();
   if (!s) return false;
-  // enkel men robust enough
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
 
@@ -57,7 +87,7 @@ type DatePickerProps = {
   label: string;
   valueISO: string;
   onChangeISO: (iso: string) => void;
-  mode: "oneClickClose" | "saveCancel"; // oneClickClose = välj 1 datum och stäng direkt
+  mode: "oneClickClose" | "saveCancel";
 };
 
 function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
@@ -68,15 +98,14 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
   });
 
   const saved = useMemo(() => parseISODate(valueISO), [valueISO]);
-
-  // tempSelected används bara i save/cancel-läget
   const [tempSelected, setTempSelected] = useState<Date | null>(null);
 
   useEffect(() => {
     if (mode === "saveCancel") {
       setTempSelected(saved ? new Date(saved) : null);
     }
-  }, [mode, valueISO]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, valueISO]);
 
   const isMobile = () =>
     typeof window !== "undefined" &&
@@ -84,9 +113,7 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
     window.matchMedia("(max-width: 680px)").matches;
 
   function openPicker() {
-    if (mode === "saveCancel") {
-      setTempSelected(saved ? new Date(saved) : null);
-    }
+    if (mode === "saveCancel") setTempSelected(saved ? new Date(saved) : null);
     setOpen(true);
   }
 
@@ -95,8 +122,7 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
   }
 
   function commitDate(d: Date) {
-    const iso = toISODate(d);
-    onChangeISO(iso);
+    onChangeISO(toISODate(d));
   }
 
   function onPick(d: Date) {
@@ -204,9 +230,7 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
           </div>
 
           <div className="sektion73-cal__dow">
-            {dowSv.map((x) => (
-              <div key={x}>{x}</div>
-            ))}
+            {dowSv.map((x) => <div key={x}>{x}</div>)}
           </div>
 
           <div className="sektion73-cal__grid">
@@ -226,7 +250,7 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
   }, [valueISO]);
 
   return (
-    <div className="sektion73-field">
+    <div className="sektion73-field" style={{ position: "relative" }}>
       <label className="sektion73-label">{label}</label>
 
       <button
@@ -258,11 +282,13 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sektion73-datepicker__inner">
-          <div className="sektion73-calwrap">{renderMonths(2)}</div>
+          <div className="sektion73-calwrap">
+            {renderMonths(typeof window !== "undefined" && window.innerWidth >= 720 ? 2 : 1)}
+          </div>
 
           {mode === "saveCancel" && (
             <div className="sektion73-calactions">
-              <button type="button" className="sektion73-btn sektion73-btn--ghost" onClick={cancel}>
+              <button type="button" className="sektion73-btn" onClick={cancel}>
                 Avbryt
               </button>
               <button type="button" className="sektion73-btn sektion73-btn--primary" onClick={save} disabled={!tempSelected}>
@@ -274,296 +300,316 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
       </div>
 
       {/* Mobile sheet */}
-      <div className={["sektion73-sheet", open && isMobile() ? "is-open" : ""].join(" ").trim()} aria-hidden={open && isMobile() ? "false" : "true"}>
-        <div
-          className="sektion73-sheet__overlay"
-          onClick={() => {
-            mode === "saveCancel" ? cancel() : closePicker();
-          }}
-        />
-        <div className="sektion73-sheet__panel" role="dialog" aria-label="Välj datum" onClick={(e) => e.stopPropagation()}>
-          <div className="sektion73-sheet__grab" aria-hidden="true" />
+      <div className={["sektion73-sheet", open && isMobile() ? "is-open" : ""].join(" ").trim()}>
+        <div className="sektion73-sheet__overlay" onClick={closePicker} />
+        <div className="sektion73-sheet__panel" role="dialog" aria-label="Välj datum">
+          <div className="sektion73-sheet__grab" />
           <div className="sektion73-sheet__content">
             <div className="sektion73-calwrap">{renderMonths(1)}</div>
 
-            {mode === "saveCancel" && (
-              <div className="sektion73-calactions">
-                <button type="button" className="sektion73-btn sektion73-btn--ghost" onClick={cancel}>
+            {mode === "saveCancel" ? (
+              <div className="sektion73-calactions" style={{ marginTop: 10 }}>
+                <button type="button" className="sektion73-btn" onClick={cancel}>
                   Avbryt
                 </button>
                 <button type="button" className="sektion73-btn sektion73-btn--primary" onClick={save} disabled={!tempSelected}>
                   Spara
                 </button>
               </div>
+            ) : (
+              <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>
+                Välj ett datum så stängs kalendern.
+              </div>
             )}
           </div>
         </div>
       </div>
-
-      {/* Outside click + ESC */}
-      {open && (
-        <div
-          className="sektion73-modalguard"
-          onClick={() => {
-            mode === "saveCancel" ? cancel() : closePicker();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              mode === "saveCancel" ? cancel() : closePicker();
-            }
-          }}
-        />
-      )}
     </div>
   );
 }
 
-type Props = {
-  // server action (från page.tsx)
-  onSubmit: (payload: {
-    method: Method;
-    bookingId?: string;
-    lastName?: string;
-    name?: string;
-    arrivalDateISO?: string;
-    email?: string;
-    departureDateISO?: string;
-  }) => Promise<void>;
-};
+function titleForMethod(m: Method) {
+  if (m === "booking") return "Bokningsnummer";
+  if (m === "nameArrival") return "Namn + datum";
+  return "E-post";
+}
 
 export default function CheckInClient({ onSubmit }: Props) {
+  const router = useRouter();
+  const params = useSearchParams();
+
+  const [step, setStep] = useState<Step>("choose");
   const [method, setMethod] = useState<Method>("booking");
   const [busy, setBusy] = useState(false);
 
-  // fields
+  // booking
   const [bookingId, setBookingId] = useState("");
   const [lastName, setLastName] = useState("");
 
+  // name+arrival
   const [fullName, setFullName] = useState("");
   const [arrivalISO, setArrivalISO] = useState("");
 
+  // email
   const [email, setEmail] = useState("");
   const [emailLastName, setEmailLastName] = useState("");
   const [departureISO, setDepartureISO] = useState("");
 
-  // errors
   const [error, setError] = useState<string | null>(null);
 
-  const bookingIdRef = useRef<HTMLInputElement | null>(null);
-  const lastNameRef = useRef<HTMLInputElement | null>(null);
-  const nameRef = useRef<HTMLInputElement | null>(null);
-  const emailRef = useRef<HTMLInputElement | null>(null);
-
-  // focus on method change
+  // (valfritt) stöd för ?method=...
   useEffect(() => {
-    setError(null);
-    const t = setTimeout(() => {
-      if (method === "booking") bookingIdRef.current?.focus();
-      if (method === "nameDate") nameRef.current?.focus();
-      if (method === "email") emailRef.current?.focus();
-    }, 0);
-    return () => clearTimeout(t);
-  }, [method]);
+    const m = (params.get("method") || "").trim();
+    if (m === "booking" || m === "nameArrival" || m === "email") {
+      setMethod(m);
+      setStep("form");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const canSubmit = useMemo(() => {
-    if (method === "booking") {
-      return bookingId.trim().length >= 3 && lastName.trim().length >= 2;
+  function onBack() {
+    if (step === "form") {
+      setError(null);
+      setStep("choose");
+      return;
     }
-    if (method === "nameDate") {
-      return fullName.trim().length >= 3 && !!parseISODate(arrivalISO);
-    }
-    // email
-    return emailOk(email) && emailLastName.trim().length >= 2 && !!parseISODate(departureISO);
-  }, [method, bookingId, lastName, fullName, arrivalISO, email, emailLastName, departureISO]);
+    router.back();
+  }
+
+  function pickMethod(next: Method) {
+    setError(null);
+    setMethod(next);
+    setStep("form");
+  }
+
+  function canSubmit() {
+    if (method === "booking") return bookingId.trim().length > 0 && lastName.trim().length > 0;
+    if (method === "nameArrival") return fullName.trim().length > 0 && arrivalISO.trim().length > 0;
+    return emailOk(email) && emailLastName.trim().length > 0 && departureISO.trim().length > 0;
+  }
 
   async function submit() {
     setError(null);
-    if (!canSubmit || busy) return;
 
-    setBusy(true);
     try {
+      setBusy(true);
+
       if (method === "booking") {
+        if (!bookingId.trim() || !lastName.trim()) throw new Error("Fyll i bokningsnummer och efternamn.");
         await onSubmit({ method, bookingId: bookingId.trim(), lastName: lastName.trim() });
-      } else if (method === "nameDate") {
-        await onSubmit({ method, name: fullName.trim(), arrivalDateISO: arrivalISO });
-      } else {
-        await onSubmit({
-          method,
-          email: email.trim(),
-          lastName: emailLastName.trim(),
-          departureDateISO: departureISO,
-        });
+        return;
       }
+
+      if (method === "nameArrival") {
+        if (!fullName.trim() || !arrivalISO.trim()) throw new Error("Fyll i namn och incheckningsdatum.");
+        await onSubmit({ method, name: fullName.trim(), arrivalDateISO: arrivalISO.trim() });
+        return;
+      }
+
+      // email
+      if (!emailOk(email) || !emailLastName.trim() || !departureISO.trim()) {
+        throw new Error("Fyll i e-post, efternamn och utcheckningsdatum.");
+      }
+      await onSubmit({
+        method,
+        email: email.trim(),
+        lastName: emailLastName.trim(),
+        departureDateISO: departureISO.trim(),
+      });
     } catch (e: any) {
       setError(e?.message || "Något gick fel. Försök igen.");
-      // fokusera på första rimliga fält
-      if (method === "booking") bookingIdRef.current?.focus();
-      if (method === "nameDate") nameRef.current?.focus();
-      if (method === "email") emailRef.current?.focus();
     } finally {
       setBusy(false);
     }
   }
 
-  return (
-    <div className="sektion73-root">
-      <div className="sektion73-card">
-        <header className="sektion73-card__header">
+  function renderForm() {
+    if (method === "booking") {
+      return (
+        <>
+          <div className="sektion73-card__header">
+            <div>
+              <h1 className="sektion73-title">Ange bokningsuppgifter</h1>
+              <p className="sektion73-muted">Skriv in bokningsnummer och efternamn.</p>
+            </div>
+          </div>
+
+          <div className="sektion73-grid-2">
+            <div className="sektion73-field">
+              <label className="sektion73-label">Bokningsnummer</label>
+              <input
+                className="sektion73-input"
+                value={bookingId}
+                onChange={(e) => setBookingId(e.target.value)}
+                placeholder="Ex: ABC123"
+                autoComplete="off"
+              />
+            </div>
+
+            <div className="sektion73-field">
+              <label className="sektion73-label">Efternamn</label>
+              <input
+                className="sektion73-input"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="Ex: Andersson"
+                autoComplete="family-name"
+              />
+            </div>
+          </div>
+
+          <div className="sektion73-footnote" style={{ marginTop: 12 }}>
+            Har du inget bokningsnummer? Gå tillbaka och välj ett annat alternativ.
+          </div>
+        </>
+      );
+    }
+
+    if (method === "nameArrival") {
+      return (
+        <>
+          <div className="sektion73-card__header">
+            <div>
+              <h1 className="sektion73-title">Hitta bokning</h1>
+              <p className="sektion73-muted">Ange namn och incheckningsdatum.</p>
+            </div>
+          </div>
+
+          <div className="sektion73-grid-2">
+            <div className="sektion73-field">
+              <label className="sektion73-label">Namn</label>
+              <input
+                className="sektion73-input"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Ex: Test Gäst"
+                autoComplete="name"
+              />
+              <div className="sektion73-help">Det räcker med för- eller efternamn.</div>
+            </div>
+
+            <DatePicker
+              label="Incheckningsdatum"
+              valueISO={arrivalISO}
+              onChangeISO={setArrivalISO}
+              mode="oneClickClose"
+            />
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <div className="sektion73-card__header">
           <div>
-            <h1 className="sektion73-title">Checka in</h1>
-            <p className="sektion73-muted">
-              Välj ett sätt att hitta din bokning.
-            </p>
+            <h1 className="sektion73-title">Verifiera via e-post</h1>
+            <p className="sektion73-muted">Ange e-post, efternamn och utcheckningsdatum.</p>
           </div>
-        </header>
-
-        {/* Method selector */}
-        <div className="sektion73-segment" role="tablist" aria-label="Inloggningsmetod">
-          <button
-            type="button"
-            className={["sektion73-segment__btn", method === "booking" ? "is-active" : ""].join(" ").trim()}
-            onClick={() => setMethod("booking")}
-            role="tab"
-            aria-selected={method === "booking"}
-          >
-            Bokningsnummer
-          </button>
-          <button
-            type="button"
-            className={["sektion73-segment__btn", method === "nameDate" ? "is-active" : ""].join(" ").trim()}
-            onClick={() => setMethod("nameDate")}
-            role="tab"
-            aria-selected={method === "nameDate"}
-          >
-            Namn + datum
-          </button>
-          <button
-            type="button"
-            className={["sektion73-segment__btn", method === "email" ? "is-active" : ""].join(" ").trim()}
-            onClick={() => setMethod("email")}
-            role="tab"
-            aria-selected={method === "email"}
-          >
-            E-post
-          </button>
         </div>
 
-        {/* Fields */}
-        <div className="sektion73-grid-2" style={{ marginTop: 18 }}>
-          {method === "booking" && (
-            <>
-              <div className="sektion73-field">
-                <label className="sektion73-label" htmlFor="bookingId">Bokningsnummer</label>
-                <input
-                  id="bookingId"
-                  ref={bookingIdRef}
-                  className="sektion73-input"
-                  value={bookingId}
-                  onChange={(e) => setBookingId(e.target.value)}
-                  autoComplete="off"
-                  inputMode="text"
-                  placeholder="t.ex. ABC123"
-                />
-                <div className="sektion73-help">Finns i ditt bekräftelsemail.</div>
-              </div>
+        <div className="sektion73-grid-2">
+          <div className="sektion73-field">
+            <label className="sektion73-label">E-post</label>
+            <input
+              className="sektion73-input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="exempel@domain.se"
+              autoComplete="email"
+              inputMode="email"
+            />
+          </div>
 
-              <div className="sektion73-field">
-                <label className="sektion73-label" htmlFor="lastName">Efternamn</label>
-                <input
-                  id="lastName"
-                  ref={lastNameRef}
-                  className="sektion73-input"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  autoComplete="family-name"
-                  placeholder="t.ex. Andersson"
-                />
-              </div>
-            </>
-          )}
+          <div className="sektion73-field">
+            <label className="sektion73-label">Efternamn</label>
+            <input
+              className="sektion73-input"
+              value={emailLastName}
+              onChange={(e) => setEmailLastName(e.target.value)}
+              placeholder="Ex: Andersson"
+              autoComplete="family-name"
+            />
+          </div>
 
-          {method === "nameDate" && (
-            <>
-              <div className="sektion73-field">
-                <label className="sektion73-label" htmlFor="fullName">Namn</label>
-                <input
-                  id="fullName"
-                  ref={nameRef}
-                  className="sektion73-input"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  autoComplete="name"
-                  placeholder="Förnamn Efternamn"
-                />
-                <div className="sektion73-help">Skriv som i bokningen.</div>
-              </div>
-
-              <DatePicker
-                label="Incheckningsdatum"
-                valueISO={arrivalISO}
-                onChangeISO={setArrivalISO}
-                mode="saveCancel"
-              />
-            </>
-          )}
-
-          {method === "email" && (
-            <>
-              <div className="sektion73-field">
-                <label className="sektion73-label" htmlFor="email">E-post</label>
-                <input
-                  id="email"
-                  ref={emailRef}
-                  className="sektion73-input"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  placeholder="namn@exempel.se"
-                />
-              </div>
-
-              <div className="sektion73-field">
-                <label className="sektion73-label" htmlFor="emailLastName">Efternamn</label>
-                <input
-                  id="emailLastName"
-                  className="sektion73-input"
-                  value={emailLastName}
-                  onChange={(e) => setEmailLastName(e.target.value)}
-                  autoComplete="family-name"
-                  placeholder="t.ex. Andersson"
-                />
-              </div>
-
-              <DatePicker
-                label="Utcheckningsdatum"
-                valueISO={departureISO}
-                onChangeISO={setDepartureISO}
-                mode="oneClickClose"
-              />
-            </>
-          )}
+          <DatePicker
+            label="Utcheckningsdatum"
+            valueISO={departureISO}
+            onChangeISO={setDepartureISO}
+            mode="oneClickClose"
+          />
         </div>
+      </>
+    );
+  }
 
-        {error && (
-          <div className="sektion73-alert" role="alert" aria-live="polite">
-            {error}
-          </div>
-        )}
+  return (
+    <div className="sektion73-modal">
+      <header className="sektion73-modal__header">
+        <button type="button" className="sektion73-backbtn" onClick={onBack} aria-label="Back">
+          <ChevronLeftIcon />
+        </button>
+        <div className="sektion73-modal__title">
+          {step === "choose" ? "Checka in" : titleForMethod(method)}
+        </div>
+      </header>
 
-        <footer className="sektion73-actions">
-          <button
-            type="button"
-            className="sektion73-btn sektion73-btn--primary"
-            disabled={!canSubmit || busy}
-            onClick={submit}
-          >
-            {busy ? "Söker..." : "Fortsätt"}
-          </button>
+      <div className="sektion73-modal__body">
+        <div
+          className="sektion73-steps"
+          style={{ transform: step === "choose" ? "translateX(0%)" : "translateX(-100%)" }}
+        >
+          {/* STEP 1: välj metod (ingen fortsätt-knapp) */}
+          <section className="sektion73-step">
+            <div className="sektion73-card__header">
+              <div>
+                <h1 className="sektion73-title">Checka in</h1>
+                <p className="sektion73-muted">Välj hur du vill hitta din bokning.</p>
+              </div>
+            </div>
 
-          <div className="sektion73-footnote">
-            Genom att fortsätta godkänner du att vi verifierar dina uppgifter mot bokningen.
-          </div>
-        </footer>
+            <div className="sektion73-choicegrid">
+              <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("booking")}>
+                <div className="sektion73-choicebtn__title">Bokningsnummer</div>
+                <div className="sektion73-choicebtn__sub">Bokningsnummer + efternamn</div>
+              </button>
+
+              <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("nameArrival")}>
+                <div className="sektion73-choicebtn__title">Namn + datum</div>
+                <div className="sektion73-choicebtn__sub">Namn + incheckningsdatum</div>
+              </button>
+
+              <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("email")}>
+                <div className="sektion73-choicebtn__title">E-post</div>
+                <div className="sektion73-choicebtn__sub">E-post + efternamn + utcheckningsdatum</div>
+              </button>
+            </div>
+
+            {error && <div className="sektion73-alert">{error}</div>}
+          </section>
+
+          {/* STEP 2: form + CTA */}
+          <section className="sektion73-step">
+            {renderForm()}
+
+            {error && <div className="sektion73-alert">{error}</div>}
+
+            <div className="sektion73-cta">
+              <button
+                type="button"
+                className="sektion73-btn sektion73-btn--primary"
+                disabled={busy || !canSubmit()}
+                onClick={submit}
+              >
+                {busy ? "Jobbar…" : "Fortsätt"}
+              </button>
+
+              <div className="sektion73-footnote" style={{ marginTop: 10 }}>
+                Vid godkänd matchning skickas du vidare automatiskt.
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );
