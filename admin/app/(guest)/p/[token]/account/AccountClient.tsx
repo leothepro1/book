@@ -294,14 +294,20 @@ export default function AccountClient({
       <div
         aria-hidden={!open}
         style={{
-          position: "absolute",
-          inset: 0,
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: "100vw",
+          height: "100dvh",
           transform: panelX,
           transition: "transform 220ms ease",
           background: "var(--background)",
           color: "var(--text)",
           borderLeft: "1px solid var(--border)",
           display: "flex",
+          zIndex: 60,
           flexDirection: "column",
         }}
       >
