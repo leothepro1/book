@@ -189,7 +189,7 @@ export default async function Page({ params }: { params: { token?: string } }) {
 
   const checkoutText = `Checkout is scheduled today at ${pad2(checkoutHour)}:00`;
 
-  const title = `Välkommen ${booking.guestName}`;
+ const title = `Välkommen ${booking.firstName}`;
   let subtitle = "You're booked to stay with us";
 
   // Order: checkout-day > checked-in > booked
