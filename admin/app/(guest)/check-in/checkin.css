@@ -43,7 +43,7 @@
 }
 .sektion73-title {
     font-size: 29px;
-    font-weight: 800;
+    font-weight: 700;
     line-height: 1.15;
     font-family: var(--font-heading, ui-sans-serif);
     color: var(--text);
@@ -577,7 +577,7 @@ display:none;
 /* Login choice cards */
 .sektion73-choicegrid{
   display:grid;
-  gap: 10px;
+  gap: 16px;
 }
 
 .sektion73-choicebtn {
@@ -595,8 +595,8 @@ display:none;
 .sektion73-choicebtn:hover{ background:#EEEDEC; }
 .sektion73-choicebtn:active{ transform: scale(.97); }
 .sektion73-choicebtn__title {
-    font-size: 14px;
-    font-weight: 900;
+    font-size: 15px;
+    font-weight: 600;
     text-align: center;
 }
 .sektion73-choicebtn__sub{ margin-top: 6px; font-size: 12px; opacity: .72; }
