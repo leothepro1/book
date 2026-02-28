@@ -100,6 +100,12 @@ type DatePickerProps = {
   mode: "oneClickClose" | "saveCancel";
   closeSignal?: string;
 };
+/* =========================
+   EFTER (komplett DatePicker med leave animation)
+   - ny state: present + closing
+   - håller kvar sheet 360ms vid close
+   - använder .is-open och .is-closing
+   ========================= */
 
 function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePickerProps) {
   const [open, setOpen] = useState(false);
@@ -145,7 +151,7 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
   function onPick(d: Date) {
     if (mode === "oneClickClose") {
       commitDate(d);
-      closePicker();
+      closePicker(); // triggar leave animation
       return;
     }
     setTempSelected(new Date(d));
@@ -261,11 +267,32 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
     return d ? formatSv(d) : "Välj datum";
   }, [valueISO]);
 
+  /* ===== NYTT: mount + leave animation ===== */
+  const [present, setPresent] = useState(false);
+  const [closing, setClosing] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setPresent(true);
+      setClosing(false);
+      return;
+    }
+
+    if (present) {
+      setClosing(true);
+      const t = window.setTimeout(() => {
+        setPresent(false);
+        setClosing(false);
+      }, 360);
+      return () => window.clearTimeout(t);
+    }
+  }, [open, present]);
+
   // PORTAL: Mobile sheet i document.body (förbi transform)
   const mobileSheet =
-    mounted && open && isMobile()
+    mounted && present && isMobile()
       ? createPortal(
-          <div className="sektion73-sheet is-open">
+          <div className={`sektion73-sheet ${open ? "is-open" : ""} ${closing ? "is-closing" : ""}`.trim()}>
             <div className="sektion73-sheet__overlay" onClick={closePicker} />
             <div className="sektion73-sheet__panel" role="dialog" aria-label="Välj datum">
               <div className="sektion73-sheet__grab" />
@@ -330,7 +357,6 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
         </span>
       </button>
 
-      {/* Desktop dropdown: VIKTIGT -> pointerEvents none när stängd så den inte "äter" klick */}
       <div
         className={["sektion73-datepicker", desktopOpen ? "is-open" : ""].join(" ").trim()}
         role="dialog"
@@ -362,7 +388,6 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
         </div>
       </div>
 
-      {/* Mobile sheet (PORTAL) */}
       {mobileSheet}
     </div>
   );

@@ -159,9 +159,8 @@
   outline: 1px solid #8b3dff;
 }
 
-.sektion73-help{
-  font-size: 12px;
-  color: rgba(255,255,255,.62);
+.sektion73-help {
+    display: none;
 }
 
 /* Alert */
@@ -405,8 +404,6 @@ display:none;
   justify-content:flex-end;
   gap: 10px;
 }
-
-/* Mobile sheet */
 .sektion73-sheet{
   position: fixed;
   inset: 0;
@@ -418,34 +415,67 @@ display:none;
   pointer-events: auto;
 }
 
+/* overlay */
 .sektion73-sheet__overlay{
   position:absolute;
   inset:0;
   background: rgba(0,0,0,.45);
   opacity: 0;
-  transition: opacity .18s ease;
+  transition: opacity .22s ease;
+  will-change: opacity;
 }
 
 .sektion73-sheet.is-open .sektion73-sheet__overlay{
   opacity: 1;
 }
 
+/* panel */
 .sektion73-sheet__panel{
   position:absolute;
   left:0;
   right:0;
   bottom:0;
+
   background: rgba(10, 14, 28, .98);
   border-radius: 18px 18px 0 0;
-  transform: translateY(102%);
-  transition: transform .22s ease;
+  border-top: 1px solid rgba(255,255,255,.12);
   max-height: 82vh;
   overflow:auto;
-  border-top: 1px solid rgba(255,255,255,.12);
+
+  /* closed state (för både initial och leave) */
+  transform: translate3d(0, 26px, 0);
+  opacity: 0;
+  filter: blur(6px);
+
+  transition:
+    transform .34s cubic-bezier(.2,.9,.2,1),
+    opacity .22s ease,
+    filter .34s ease;
+  will-change: transform, opacity, filter;
 }
 
 .sektion73-sheet.is-open .sektion73-sheet__panel{
-  transform: translateY(0);
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+  filter: blur(0);
+}
+
+/* leave-state (kräver att vi håller kvar sheeten en stund i React) */
+.sektion73-sheet.is-closing .sektion73-sheet__overlay{
+  opacity: 0;
+}
+
+.sektion73-sheet.is-closing .sektion73-sheet__panel{
+  transform: translate3d(0, 34px, 0);
+  opacity: 0;
+  filter: blur(6px);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .sektion73-sheet__overlay,
+  .sektion73-sheet__panel{
+    transition: none !important;
+  }
 }
 
 .sektion73-sheet__grab{
