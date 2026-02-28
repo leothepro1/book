@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import type { TenantConfig } from "../../../_lib/tenant/types";
 import { buttonClass } from "../../../_lib/theme";
 import { updateGuestAccount } from "./actions";
+import { Headset, LifeBuoy, MessageSquareText, ExternalLink } from "lucide-react";
 
 type AccountState = {
   firstName: string;
@@ -17,6 +18,7 @@ type AccountState = {
 };
 
 type FieldKey = "name" | "email" | "phone" | "address";
+type PanelKey = FieldKey | "support_customerService" | "support_helpCenter" | "support_feedback";
 
 const ChevronSvg = (
   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none">
@@ -31,9 +33,7 @@ const ChevronSvg = (
 );
 
 const ChevronLeft = (
-  <span style={{ display: "inline-flex", transform: "rotate(180deg)" }}>
-    {ChevronSvg}
-  </span>
+  <span style={{ display: "inline-flex", transform: "rotate(180deg)" }}>{ChevronSvg}</span>
 );
 
 function trim(s: string) {
@@ -47,10 +47,7 @@ function prettyAddress(s: AccountState) {
   return parts.length ? parts.join(", ") : "—";
 }
 
-function splitName(
-  full: string,
-  fallback: { firstName: string; lastName: string }
-) {
+function splitName(full: string, fallback: { firstName: string; lastName: string }) {
   const cleaned = trim(full).replace(/\s+/g, " ");
   if (!cleaned) return fallback;
   const parts = cleaned.split(" ").filter(Boolean);
@@ -60,11 +57,12 @@ function splitName(
   };
 }
 
-function rowStyle(): React.CSSProperties {
+function rowStyle(opts?: { withIcon?: boolean }): React.CSSProperties {
+  const withIcon = !!opts?.withIcon;
   return {
     width: "100%",
     display: "grid",
-    gridTemplateColumns: "1fr auto auto",
+    gridTemplateColumns: withIcon ? "22px 1fr auto" : "1fr auto auto",
     alignItems: "center",
     gap: 10,
     padding: "14px 14px",
@@ -89,6 +87,15 @@ function inputStyle(): React.CSSProperties {
   };
 }
 
+function sectionCardStyle(): React.CSSProperties {
+  return {
+    border: "1px solid var(--border)",
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.03)",
+    padding: 14,
+  };
+}
+
 export default function AccountClient({
   token,
   tenantId,
@@ -108,17 +115,27 @@ export default function AccountClient({
 
   const t = useMemo(() => {
     const sv = {
-      accountTitle: "Ditt konto",
-      supportTitle: "Support",
-      name: "Namn",
-      email: "Epost",
-      phone: "Telefon",
-      address: "Adress",
-      done: "Klar",
-      verifyEmail:
-        "Vi behöver verifiera din epostadress så att du kan använda vår app",
-      ifWrongPrefix: "Om uppgifterna är fel, kontakta ",
-      customerService: "kundserivice",
+      headings: {
+        accountTitle: "Ditt konto",
+        supportTitle: "Support",
+      },
+      fields: {
+        name: "Namn",
+        email: "Epost",
+        phone: "Telefon",
+        address: "Adress",
+      },
+      actions: {
+        done: "Klar",
+        back: "Tillbaka",
+        close: "Stäng",
+        open: "Öppna",
+      },
+      emailLock: {
+        verifyEmail: "Vi behöver verifiera din epostadress så att du kan använda vår app",
+        ifWrongPrefix: "Om uppgifterna är fel, kontakta ",
+        customerServiceLinkText: "kundservice",
+      },
       placeholders: {
         name: "Skriv ditt namn",
         phone: "Skriv telefonnummer",
@@ -126,22 +143,63 @@ export default function AccountClient({
         postalCode: "Postnummer",
         city: "Stad",
         country: "Land",
+        feedback: "Skriv din feedback här…",
       },
-      supportRow1: "Kontakta kundservice",
-      supportRow2: "Vanliga frågor",
+      support: {
+        customerService: "Kundservice",
+        helpCenter: "Hjälpcenter",
+        feedback: "Ge feedback",
+      },
+      supportPanels: {
+        customerService: {
+          title: "Kontakta oss",
+          body:
+            "Här kan du nå kundservice. (Placeholder – kopplas senare till riktiga kontaktvägar.)",
+          links: {
+            email: "Skicka e-post",
+            phone: "Ring oss",
+            chat: "Starta chatt",
+          },
+        },
+        helpCenter: {
+          title: "Hjälpcenter",
+          body: "Här kan du hitta guider och vanliga frågor. (Placeholder – kopplas senare.)",
+          links: {
+            faq: "Vanliga frågor",
+            guides: "Guider",
+            policies: "Villkor & policy",
+          },
+        },
+        feedback: {
+          title: "Feedback",
+          body: "Hjälp oss förbättra upplevelsen. (Placeholder – ingen inskickning än.)",
+          cta: "Skicka feedback",
+        },
+      },
     };
 
     const en = {
-      accountTitle: "Your account",
-      supportTitle: "Support",
-      name: "Name",
-      email: "Email",
-      phone: "Phone",
-      address: "Address",
-      done: "Done",
-      verifyEmail: "We need to verify your email address so you can use our app",
-      ifWrongPrefix: "If the details are incorrect, contact ",
-      customerService: "customer service",
+      headings: {
+        accountTitle: "Your account",
+        supportTitle: "Support",
+      },
+      fields: {
+        name: "Name",
+        email: "Email",
+        phone: "Phone",
+        address: "Address",
+      },
+      actions: {
+        done: "Done",
+        back: "Back",
+        close: "Close",
+        open: "Open",
+      },
+      emailLock: {
+        verifyEmail: "We need to verify your email address so you can use our app",
+        ifWrongPrefix: "If the details are incorrect, contact ",
+        customerServiceLinkText: "customer service",
+      },
       placeholders: {
         name: "Enter your name",
         phone: "Enter phone number",
@@ -149,9 +207,38 @@ export default function AccountClient({
         postalCode: "Postal code",
         city: "City",
         country: "Country",
+        feedback: "Write your feedback here…",
       },
-      supportRow1: "Contact customer service",
-      supportRow2: "FAQ",
+      support: {
+        customerService: "Customer service",
+        helpCenter: "Help center",
+        feedback: "Leave feedback",
+      },
+      supportPanels: {
+        customerService: {
+          title: "Contact us",
+          body: "Reach customer service here. (Placeholder – will be connected later.)",
+          links: {
+            email: "Send email",
+            phone: "Call us",
+            chat: "Start chat",
+          },
+        },
+        helpCenter: {
+          title: "Help center",
+          body: "Find guides and FAQs here. (Placeholder – will be connected later.)",
+          links: {
+            faq: "FAQ",
+            guides: "Guides",
+            policies: "Terms & policy",
+          },
+        },
+        feedback: {
+          title: "Feedback",
+          body: "Help us improve the experience. (Placeholder – no submission yet.)",
+          cta: "Submit feedback",
+        },
+      },
     };
 
     return lang === "en" ? en : sv;
@@ -159,7 +246,7 @@ export default function AccountClient({
 
   const [state, setState] = useState<AccountState>(initial);
   const [open, setOpen] = useState(false);
-  const [field, setField] = useState<FieldKey | null>(null);
+  const [panel, setPanel] = useState<PanelKey | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const [draftName, setDraftName] = useState("");
@@ -168,9 +255,17 @@ export default function AccountClient({
   const [draftPostal, setDraftPostal] = useState("");
   const [draftCity, setDraftCity] = useState("");
   const [draftCountry, setDraftCountry] = useState("");
+  const [draftFeedback, setDraftFeedback] = useState("");
 
-  function openField(k: FieldKey) {
-    setField(k);
+  const isFieldPanel =
+    panel === "name" || panel === "email" || panel === "phone" || panel === "address";
+  const isSupportPanel =
+    panel === "support_customerService" ||
+    panel === "support_helpCenter" ||
+    panel === "support_feedback";
+
+  function openPanel(k: PanelKey) {
+    setPanel(k);
 
     if (k === "name") setDraftName(`${state.firstName} ${state.lastName}`.trim());
     if (k === "phone") setDraftPhone(state.phone ?? "");
@@ -180,20 +275,26 @@ export default function AccountClient({
       setDraftCity(state.city ?? "");
       setDraftCountry(state.country ?? "");
     }
+    if (k === "support_feedback") setDraftFeedback("");
 
     setOpen(true);
   }
 
   function close() {
     setOpen(false);
-    setTimeout(() => setField(null), 220);
+    setTimeout(() => setPanel(null), 220);
   }
 
   function modalTitle() {
-    if (field === "name") return t.name;
-    if (field === "email") return t.email;
-    if (field === "phone") return t.phone;
-    if (field === "address") return t.address;
+    if (panel === "name") return t.fields.name;
+    if (panel === "email") return t.fields.email;
+    if (panel === "phone") return t.fields.phone;
+    if (panel === "address") return t.fields.address;
+
+    if (panel === "support_customerService") return t.support.customerService;
+    if (panel === "support_helpCenter") return t.support.helpCenter;
+    if (panel === "support_feedback") return t.support.feedback;
+
     return "";
   }
 
@@ -205,15 +306,15 @@ export default function AccountClient({
   }
 
   async function save() {
-    if (!field) return;
+    if (!panel || !isFieldPanel) return;
 
     startTransition(async () => {
-      if (field === "email") {
+      if (panel === "email") {
         close();
         return;
       }
 
-      if (field === "name") {
+      if (panel === "name") {
         const next = splitName(draftName, {
           firstName: state.firstName,
           lastName: state.lastName,
@@ -230,14 +331,13 @@ export default function AccountClient({
         });
       }
 
-      if (field === "phone") {
+      if (panel === "phone") {
         const phone = trim(draftPhone);
         setState((s) => ({ ...s, phone }));
-
         await updateGuestAccount({ token, tenantId, guestEmail, phone });
       }
 
-      if (field === "address") {
+      if (panel === "address") {
         const street = trim(draftStreet);
         const postalCode = trim(draftPostal);
         const city = trim(draftCity);
@@ -260,11 +360,18 @@ export default function AccountClient({
     });
   }
 
+  // UI-only (placeholder): feedback submit does not persist yet
+  function submitFeedback() {
+    // future: hook up to API / notification engine
+    close();
+  }
+
   const mainX = open ? "translateX(-22%)" : "translateX(0)";
   const panelX = open ? "translateX(0)" : "translateX(100%)";
 
   return (
     <div style={{ position: "relative", overflow: "hidden" }}>
+      {/* Main */}
       <div
         style={{
           transform: mainX,
@@ -272,25 +379,43 @@ export default function AccountClient({
           padding: "14px 17px 24px 17px",
         }}
       >
-        <div className="g-heading">{t.accountTitle}</div>
+        <div className="g-heading">{t.headings.accountTitle}</div>
 
         <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
-          <Row label={t.name} value={rowValue("name")} onClick={() => openField("name")} />
-          <Row label={t.email} value={rowValue("email")} onClick={() => openField("email")} />
-          <Row label={t.phone} value={rowValue("phone")} onClick={() => openField("phone")} />
-          <Row label={t.address} value={rowValue("address")} onClick={() => openField("address")} />
+          <Row label={t.fields.name} value={rowValue("name")} onClick={() => openPanel("name")} />
+          <Row label={t.fields.email} value={rowValue("email")} onClick={() => openPanel("email")} />
+          <Row label={t.fields.phone} value={rowValue("phone")} onClick={() => openPanel("phone")} />
+          <Row
+            label={t.fields.address}
+            value={rowValue("address")}
+            onClick={() => openPanel("address")}
+          />
         </div>
 
         <div style={{ marginTop: 18 }} className="g-heading">
-          {t.supportTitle}
+          {t.headings.supportTitle}
         </div>
 
         <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
-          <LinkRow label={t.supportRow1} />
-          <LinkRow label={t.supportRow2} />
+          <LinkRow
+            label={t.support.customerService}
+            icon={<Headset size={18} strokeWidth={2} />}
+            onClick={() => openPanel("support_customerService")}
+          />
+          <LinkRow
+            label={t.support.helpCenter}
+            icon={<LifeBuoy size={18} strokeWidth={2} />}
+            onClick={() => openPanel("support_helpCenter")}
+          />
+          <LinkRow
+            label={t.support.feedback}
+            icon={<MessageSquareText size={18} strokeWidth={2} />}
+            onClick={() => openPanel("support_feedback")}
+          />
         </div>
       </div>
 
+      {/* Panel */}
       <div
         aria-hidden={!open}
         style={{
@@ -325,7 +450,7 @@ export default function AccountClient({
           <button
             type="button"
             onClick={close}
-            aria-label="Back"
+            aria-label={t.actions.back}
             style={{
               height: 56,
               width: 56,
@@ -342,17 +467,18 @@ export default function AccountClient({
           <div />
         </div>
 
-        <div style={{ padding: 16, paddingBottom: 88 }}>
-          {field === "email" && (
+        <div style={{ padding: 16, paddingBottom: isFieldPanel ? 88 : 16 }}>
+          {/* Field panels */}
+          {panel === "email" && (
             <div style={{ display: "grid", gap: 10 }}>
               <div style={{ fontSize: 13, opacity: config.theme.typography.mutedOpacity }}>
-                {t.verifyEmail}
+                {t.emailLock.verifyEmail}
               </div>
 
               <div style={{ fontSize: 13, fontWeight: 800 }}>
-                {t.ifWrongPrefix}
+                {t.emailLock.ifWrongPrefix}
                 <a href="" style={{ textDecoration: "underline" }}>
-                  {t.customerService}
+                  {t.emailLock.customerServiceLinkText}
                 </a>
               </div>
 
@@ -360,7 +486,7 @@ export default function AccountClient({
             </div>
           )}
 
-          {field === "name" && (
+          {panel === "name" && (
             <input
               value={draftName}
               onChange={(e) => setDraftName(e.target.value)}
@@ -369,7 +495,7 @@ export default function AccountClient({
             />
           )}
 
-          {field === "phone" && (
+          {panel === "phone" && (
             <input
               value={draftPhone}
               onChange={(e) => setDraftPhone(e.target.value)}
@@ -378,38 +504,154 @@ export default function AccountClient({
             />
           )}
 
-          {field === "address" && (
+          {panel === "address" && (
             <div style={{ display: "grid", gap: 10 }}>
-              <input value={draftStreet} onChange={(e) => setDraftStreet(e.target.value)} placeholder={t.placeholders.street} style={inputStyle()} />
-              <input value={draftPostal} onChange={(e) => setDraftPostal(e.target.value)} placeholder={t.placeholders.postalCode} style={inputStyle()} />
-              <input value={draftCity} onChange={(e) => setDraftCity(e.target.value)} placeholder={t.placeholders.city} style={inputStyle()} />
-              <input value={draftCountry} onChange={(e) => setDraftCountry(e.target.value)} placeholder={t.placeholders.country} style={inputStyle()} />
+              <input
+                value={draftStreet}
+                onChange={(e) => setDraftStreet(e.target.value)}
+                placeholder={t.placeholders.street}
+                style={inputStyle()}
+              />
+              <input
+                value={draftPostal}
+                onChange={(e) => setDraftPostal(e.target.value)}
+                placeholder={t.placeholders.postalCode}
+                style={inputStyle()}
+              />
+              <input
+                value={draftCity}
+                onChange={(e) => setDraftCity(e.target.value)}
+                placeholder={t.placeholders.city}
+                style={inputStyle()}
+              />
+              <input
+                value={draftCountry}
+                onChange={(e) => setDraftCountry(e.target.value)}
+                placeholder={t.placeholders.country}
+                style={inputStyle()}
+              />
+            </div>
+          )}
+
+          {/* Support panels (UI-only placeholders) */}
+          {panel === "support_customerService" && (
+            <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ ...sectionCardStyle(), display: "grid", gap: 8 }}>
+                <div style={{ fontSize: 14, fontWeight: 900 }}>
+                  {t.supportPanels.customerService.title}
+                </div>
+                <div style={{ fontSize: 13, opacity: config.theme.typography.mutedOpacity }}>
+                  {t.supportPanels.customerService.body}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: 10 }}>
+                <SupportActionRow
+                  label={t.supportPanels.customerService.links.email}
+                  onClick={() => {}}
+                />
+                <SupportActionRow
+                  label={t.supportPanels.customerService.links.phone}
+                  onClick={() => {}}
+                />
+                <SupportActionRow
+                  label={t.supportPanels.customerService.links.chat}
+                  onClick={() => {}}
+                />
+              </div>
+            </div>
+          )}
+
+          {panel === "support_helpCenter" && (
+            <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ ...sectionCardStyle(), display: "grid", gap: 8 }}>
+                <div style={{ fontSize: 14, fontWeight: 900 }}>
+                  {t.supportPanels.helpCenter.title}
+                </div>
+                <div style={{ fontSize: 13, opacity: config.theme.typography.mutedOpacity }}>
+                  {t.supportPanels.helpCenter.body}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: 10 }}>
+                <SupportActionRow label={t.supportPanels.helpCenter.links.faq} onClick={() => {}} />
+                <SupportActionRow
+                  label={t.supportPanels.helpCenter.links.guides}
+                  onClick={() => {}}
+                />
+                <SupportActionRow
+                  label={t.supportPanels.helpCenter.links.policies}
+                  onClick={() => {}}
+                />
+              </div>
+            </div>
+          )}
+
+          {panel === "support_feedback" && (
+            <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ ...sectionCardStyle(), display: "grid", gap: 8 }}>
+                <div style={{ fontSize: 14, fontWeight: 900 }}>
+                  {t.supportPanels.feedback.title}
+                </div>
+                <div style={{ fontSize: 13, opacity: config.theme.typography.mutedOpacity }}>
+                  {t.supportPanels.feedback.body}
+                </div>
+              </div>
+
+              <textarea
+                value={draftFeedback}
+                onChange={(e) => setDraftFeedback(e.target.value)}
+                placeholder={t.placeholders.feedback}
+                style={{
+                  minHeight: 140,
+                  borderRadius: 14,
+                  border: "1px solid var(--border)",
+                  background: "rgba(255,255,255,0.03)",
+                  color: "var(--text)",
+                  padding: "12px 14px",
+                  outline: "none",
+                  fontSize: 14,
+                  resize: "none",
+                }}
+              />
+
+              <button
+                type="button"
+                className={btnClass}
+                onClick={submitFeedback}
+                style={{ justifyContent: "center" }}
+              >
+                {t.supportPanels.feedback.cta}
+              </button>
             </div>
           )}
         </div>
 
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            bottom: 0,
-            padding: 14,
-            borderTop: "1px solid var(--border)",
-            background: "rgba(0,0,0,0.12)",
-            backdropFilter: "blur(10px)",
-          }}
-        >
-          <button
-            type="button"
-            className={btnClass}
-            onClick={save}
-            disabled={isPending}
-            style={{ justifyContent: "center", opacity: isPending ? 0.7 : 1 }}
+        {/* Bottom action bar only for field panels */}
+        {isFieldPanel && (
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              padding: 14,
+              borderTop: "1px solid var(--border)",
+              background: "rgba(0,0,0,0.12)",
+              backdropFilter: "blur(10px)",
+            }}
           >
-            {t.done}
-          </button>
-        </div>
+            <button
+              type="button"
+              className={btnClass}
+              onClick={save}
+              disabled={isPending}
+              style={{ justifyContent: "center", opacity: isPending ? 0.7 : 1 }}
+            >
+              {t.actions.done}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -438,11 +680,31 @@ function Row({ label, value, onClick }: { label: string; value: string; onClick:
   );
 }
 
-function LinkRow({ label }: { label: string }) {
+function LinkRow({
+  label,
+  icon,
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+}) {
   return (
-    <button type="button" style={rowStyle()}>
+    <button type="button" onClick={onClick} style={rowStyle({ withIcon: true })}>
+      <div style={{ display: "inline-flex", color: "var(--text)" }}>{icon}</div>
       <div style={{ fontSize: 13, opacity: 0.9 }}>{label}</div>
-      <div />
+      <div style={{ display: "inline-flex", opacity: 0.9 }}>{ChevronSvg}</div>
+    </button>
+  );
+}
+
+function SupportActionRow({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} style={rowStyle({ withIcon: true })}>
+      <div style={{ display: "inline-flex", color: "var(--text)" }}>
+        <ExternalLink size={18} strokeWidth={2} />
+      </div>
+      <div style={{ fontSize: 13, opacity: 0.92, fontWeight: 700 }}>{label}</div>
       <div style={{ display: "inline-flex", opacity: 0.9 }}>{ChevronSvg}</div>
     </button>
   );
