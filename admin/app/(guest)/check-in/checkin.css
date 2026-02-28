@@ -38,7 +38,7 @@
     justify-content: center;
     align-items: center;
     gap: 12px;
-    margin-bottom: 10px;
+    margin: 10px 0px 32px 0px;
     display: flex;
 }
 .sektion73-title {
@@ -102,35 +102,55 @@
   gap: 7px;
   min-width: 0;
 }
+:root{
+  --sek-float-pad-x: 12px;
+  --sek-float-pad-y: 12px;
+  --sek-float-top: 6px;
+  --sek-float-scale: .85;
+}
 
-.sektion73-label {
-  font-size: 14px;
-  color: rgba(255,255,255,.92);
+.sektion73-float{
+  position: relative;
+  min-width: 0;
+}
+
+/* Input: mer top-padding när label flyter */
+.sektion73-float .sektion73-input{
+  padding: 18px var(--sek-float-pad-x) 10px var(--sek-float-pad-x);
+}
+
+/* Placeholder ska vara “tom” så label får vara placeholder */
+.sektion73-float .sektion73-input::placeholder{
+  color: transparent;
+}
+
+/* Label: default centrerad som placeholder */
+.sektion73-float__label{
+  position: absolute;
+  left: var(--sek-float-pad-x);
+  top: 50%;
+  transform: translateY(-50%);
+  transform-origin: left top;
+  pointer-events: none;
+  z-index: 1;
+
+  font-size: 15px;
   font-weight: 650;
-  display: inline-flex;
-  gap: 8px;
-  align-items: end;
+  color: rgba(255,255,255,.62);
   font-family: var(--font-body, ui-sans-serif);
-  margin: 0px;
-  line-height: 1em;
+
+  transition: top .14s ease, transform .14s ease, color .14s ease, opacity .14s ease;
+  opacity: 1;
 }
 
-.sektion73-input {
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 12px;
-  font-size: 16px;
-  outline: none;
-  background: rgba(255,255,255,.06);
-  color: rgba(255,255,255,.92);
-  transition: border-color .18s ease, outline-color .18s ease, background .18s ease;
+/* När input har text eller fokus → label flyter upp */
+.sektion73-float .sektion73-input:not(:placeholder-shown) + .sektion73-float__label,
+.sektion73-float .sektion73-input:focus + .sektion73-float__label{
+  top: var(--sek-float-top);
+  transform: scale(var(--sek-float-scale));
+  color: rgba(255,255,255,.72);
+  opacity: 1;
 }
-
-.sektion73-input::placeholder{
-  color: rgba(255,255,255,.45);
-}
-
 .sektion73-input:hover{ border-color: rgba(255,255,255,.22); }
 
 .sektion73-input:focus{

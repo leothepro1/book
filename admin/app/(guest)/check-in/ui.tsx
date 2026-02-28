@@ -434,29 +434,39 @@ export default function CheckInClient({ onSubmit }: Props) {
             </div>
           </div>
 
-          <div className="sektion73-grid-2">
-            <div className="sektion73-field">
-              <label className="sektion73-label">Bokningsnummer</label>
-              <input
-                className="sektion73-input"
-                value={bookingId}
-                onChange={(e) => setBookingId(e.target.value)}
-                placeholder="Ex: ABC123"
-                autoComplete="off"
-              />
-            </div>
+       <div className="sektion73-grid-2">
+  <div className="sektion73-field">
+    <div className="sektion73-float">
+      <input
+        id="sek-bookingId"
+        className="sektion73-input"
+        value={bookingId}
+        onChange={(e) => setBookingId(e.target.value)}
+        placeholder=" "
+        autoComplete="off"
+      />
+      <label className="sektion73-float__label" htmlFor="sek-bookingId">
+        Bokningsnummer
+      </label>
+    </div>
+  </div>
 
-            <div className="sektion73-field">
-              <label className="sektion73-label">Efternamn</label>
-              <input
-                className="sektion73-input"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                placeholder="Ex: Andersson"
-                autoComplete="family-name"
-              />
-            </div>
-          </div>
+  <div className="sektion73-field">
+    <div className="sektion73-float">
+      <input
+        id="sek-lastName"
+        className="sektion73-input"
+        value={lastName}
+        onChange={(e) => setLastName(e.target.value)}
+        placeholder=" "
+        autoComplete="family-name"
+      />
+      <label className="sektion73-float__label" htmlFor="sek-lastName">
+        Efternamn
+      </label>
+    </div>
+  </div>
+</div>
 
           <div className="sektion73-footnote" style={{ marginTop: 12 }}>
             Har du inget bokningsnummer? Gå tillbaka och välj ett annat alternativ.
@@ -475,26 +485,32 @@ export default function CheckInClient({ onSubmit }: Props) {
             </div>
           </div>
 
-          <div className="sektion73-grid-2">
-            <div className="sektion73-field">
-              <label className="sektion73-label">Namn</label>
-              <input
-                className="sektion73-input"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Ex: Test Gäst"
-                autoComplete="name"
-              />
-              <div className="sektion73-help">Det räcker med för- eller efternamn.</div>
-            </div>
+       <div className="sektion73-grid-2">
+  <div className="sektion73-field">
+    <div className="sektion73-float">
+      <input
+        id="sek-fullName"
+        className="sektion73-input"
+        value={fullName}
+        onChange={(e) => setFullName(e.target.value)}
+        placeholder=" "
+        autoComplete="name"
+      />
+      <label className="sektion73-float__label" htmlFor="sek-fullName">
+        Namn
+      </label>
+    </div>
 
-            <DatePicker
-              label="Incheckningsdatum"
-              valueISO={arrivalISO}
-              onChangeISO={setArrivalISO}
-              mode="oneClickClose"
-            />
-          </div>
+    <div className="sektion73-help">Det räcker med för- eller efternamn.</div>
+  </div>
+
+  <DatePicker
+    label="Incheckningsdatum"
+    valueISO={arrivalISO}
+    onChangeISO={setArrivalISO}
+    mode="oneClickClose"
+  />
+</div>
         </>
       );
     }
@@ -508,37 +524,47 @@ export default function CheckInClient({ onSubmit }: Props) {
           </div>
         </div>
 
-        <div className="sektion73-grid-2">
-          <div className="sektion73-field">
-            <label className="sektion73-label">E-post</label>
-            <input
-              className="sektion73-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="exempel@domain.se"
-              autoComplete="email"
-              inputMode="email"
-            />
-          </div>
+      <div className="sektion73-grid-2">
+  <div className="sektion73-field">
+    <div className="sektion73-float">
+      <input
+        id="sek-email"
+        className="sektion73-input"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder=" "
+        autoComplete="email"
+        inputMode="email"
+      />
+      <label className="sektion73-float__label" htmlFor="sek-email">
+        E-post
+      </label>
+    </div>
+  </div>
 
-          <div className="sektion73-field">
-            <label className="sektion73-label">Efternamn</label>
-            <input
-              className="sektion73-input"
-              value={emailLastName}
-              onChange={(e) => setEmailLastName(e.target.value)}
-              placeholder="Ex: Andersson"
-              autoComplete="family-name"
-            />
-          </div>
+  <div className="sektion73-field">
+    <div className="sektion73-float">
+      <input
+        id="sek-emailLastName"
+        className="sektion73-input"
+        value={emailLastName}
+        onChange={(e) => setEmailLastName(e.target.value)}
+        placeholder=" "
+        autoComplete="family-name"
+      />
+      <label className="sektion73-float__label" htmlFor="sek-emailLastName">
+        Efternamn
+      </label>
+    </div>
+  </div>
 
-          <DatePicker
-            label="Utcheckningsdatum"
-            valueISO={departureISO}
-            onChangeISO={setDepartureISO}
-            mode="oneClickClose"
-          />
-        </div>
+  <DatePicker
+    label="Utcheckningsdatum"
+    valueISO={departureISO}
+    onChangeISO={setDepartureISO}
+    mode="oneClickClose"
+  />
+</div>
       </>
     );
   }
