@@ -1,8 +1,8 @@
 import "./checkin.css";
 
 import CheckInClient from "./ui";
-import { submitCheckIn } from "./actions";
+import { checkInLookup } from "./actions";
 
 export default function Page() {
-  return <CheckInClient onSubmit={submitCheckIn} />;
+  return <CheckInClient onSubmit={ checkInLookup } />;
 }

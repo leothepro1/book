@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma } from "@/app/_lib/db/prisma";
+import { prisma } from "../../_lib/db/prisma";
 import { redirect } from "next/navigation";
 import crypto from "crypto";
 
