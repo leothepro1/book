@@ -267,95 +267,77 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
     return d ? formatSv(d) : "Välj datum";
   }, [valueISO]);
 
-  /* ===== NYTT: mount + leave animation ===== */
+    /* ===== Mobile sheet: mount + smooth open + smooth close ===== */
   const [present, setPresent] = useState(false);
+  const [phaseOpen, setPhaseOpen] = useState(false);
   const [closing, setClosing] = useState(false);
 
   useEffect(() => {
     if (open) {
+      // mounta först (closed state)
       setPresent(true);
       setClosing(false);
-      return;
+      setPhaseOpen(false);
+
+      // nästa frame: slå på open-state så transition triggas
+      const raf = requestAnimationFrame(() => setPhaseOpen(true));
+      return () => cancelAnimationFrame(raf);
     }
 
+    // stäng: spela leave innan unmount
     if (present) {
       setClosing(true);
+      setPhaseOpen(false);
+
       const t = window.setTimeout(() => {
         setPresent(false);
         setClosing(false);
-      }, 360);
+      }, 360); // måste matcha CSS transition-längden
       return () => window.clearTimeout(t);
     }
   }, [open, present]);
 
- // Lägg dessa states i DatePicker:
-const [present, setPresent] = useState(false);
-const [phaseOpen, setPhaseOpen] = useState(false);
-const [closing, setClosing] = useState(false);
+  const mobileSheet =
+    mounted && present && isMobile()
+      ? createPortal(
+          <div
+            className={[
+              "sektion73-sheet",
+              phaseOpen ? "is-open" : "",
+              closing ? "is-closing" : "",
+            ].join(" ").trim()}
+          >
+            <div className="sektion73-sheet__overlay" onClick={closePicker} />
+            <div className="sektion73-sheet__panel" role="dialog" aria-label="Välj datum">
+              <div className="sektion73-sheet__grab" />
+              <div className="sektion73-sheet__content">
+                <div className="sektion73-calwrap">{renderMonths(1)}</div>
 
-// Synka med `open`
-useEffect(() => {
-  if (open) {
-    setPresent(true);
-    setClosing(false);
-    setPhaseOpen(false);
-
-    // nästa frame -> trigga transition upp
-    const raf = requestAnimationFrame(() => setPhaseOpen(true));
-    return () => cancelAnimationFrame(raf);
-  }
-
-  // stäng: spela leave innan unmount
-  if (present) {
-    setClosing(true);
-    setPhaseOpen(false);
-    const t = window.setTimeout(() => {
-      setPresent(false);
-      setClosing(false);
-    }, 360); // matcha CSS-tiden
-    return () => window.clearTimeout(t);
-  }
-}, [open, present]);
-
-const mobileSheet =
-  mounted && present && isMobile()
-    ? createPortal(
-        <div
-          className={[
-            "sektion73-sheet",
-            phaseOpen ? "is-open" : "",
-            closing ? "is-closing" : "",
-          ].join(" ").trim()}
-        >
-          <div className="sektion73-sheet__overlay" onClick={closePicker} />
-          <div className="sektion73-sheet__panel" role="dialog" aria-label="Välj datum">
-            <div className="sektion73-sheet__grab" />
-            <div className="sektion73-sheet__content">
-              <div className="sektion73-calwrap">{renderMonths(1)}</div>
-
-              {mode === "saveCancel" ? (
-                <div className="sektion73-calactions" style={{ marginTop: 10 }}>
-                  <button type="button" className="sektion73-btn" onClick={cancel}>Avbryt</button>
-                  <button
-                    type="button"
-                    className="sektion73-btn sektion73-btn--primary"
-                    onClick={save}
-                    disabled={!tempSelected}
-                  >
-                    Spara
-                  </button>
-                </div>
-              ) : (
-                <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>
-                  Välj ett datum så stängs kalendern.
-                </div>
-              )}
+                {mode === "saveCancel" ? (
+                  <div className="sektion73-calactions" style={{ marginTop: 10 }}>
+                    <button type="button" className="sektion73-btn" onClick={cancel}>
+                      Avbryt
+                    </button>
+                    <button
+                      type="button"
+                      className="sektion73-btn sektion73-btn--primary"
+                      onClick={save}
+                      disabled={!tempSelected}
+                    >
+                      Spara
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>
+                    Välj ett datum så stängs kalendern.
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      )
-    : null;
+          </div>,
+          document.body
+        )
+      : null;
 
   const desktopOpen = open && !isMobile();
 
