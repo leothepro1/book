@@ -568,22 +568,25 @@ export default function CheckInClient({ onSubmit }: Props) {
               </div>
             </div>
 
-            <div className="sektion73-choicegrid">
-              <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("booking")}>
-                <div className="sektion73-choicebtn__title">Bokningsnummer</div>
-                <div className="sektion73-choicebtn__sub">Bokningsnummer + efternamn</div>
-              </button>
+      <div className="sektion73-choicegrid">
+  <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("booking")}>
+    <div className="sektion73-choicebtn__title">Bokningsnummer</div>
+  </button>
 
-              <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("nameArrival")}>
-                <div className="sektion73-choicebtn__title">Namn + datum</div>
-                <div className="sektion73-choicebtn__sub">Namn + incheckningsdatum</div>
-              </button>
+  <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("email")}>
+    <div className="sektion73-choicebtn__title">E-post</div>
+  </button>
 
-              <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("email")}>
-                <div className="sektion73-choicebtn__title">E-post</div>
-                <div className="sektion73-choicebtn__sub">E-post + efternamn + utcheckningsdatum</div>
-              </button>
-            </div>
+  <div className="sektion73-divider" aria-hidden="true">
+    <span className="sektion73-divider__line" />
+    <span className="sektion73-divider__text">ELLER</span>
+    <span className="sektion73-divider__line" />
+  </div>
+
+  <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("nameArrival")}>
+    <div className="sektion73-choicebtn__title">Namn + datum</div>
+  </button>
+</div>
 
             {error && <div className="sektion73-alert">{error}</div>}
           </section>
@@ -594,17 +597,16 @@ export default function CheckInClient({ onSubmit }: Props) {
 
             {error && <div className="sektion73-alert">{error}</div>}
 
-            <div className="sektion73-cta">
-              <button
-                type="button"
-                className="sektion73-btn sektion73-btn--primary"
-                disabled={busy || !canSubmit()}
-                onClick={submit}
-              >
-                {busy ? "Jobbar…" : "Fortsätt"}
-              </button>
-
-            </div>
+           <div className="sektion73-cta">
+  <button
+    type="button"
+    className="sektion73-btn sektion73-btn--primary"
+    disabled={busy || !canSubmit()}
+    onClick={submit}
+  >
+    {busy ? "Jobbar…" : "Fortsätt"}
+  </button>
+</div>
           </section>
         </div>
       </div>
