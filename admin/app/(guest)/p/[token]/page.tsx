@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
-import { getTenantConfig } from "../../../_lib/tenant";
-import { buttonClass, backgroundStyle } from "../../../_lib/theme";
+import { getTenantConfig } from "../../_lib/tenant";
+import { buttonClass, backgroundStyle } from "../../_lib/theme";
 
 const prisma = new PrismaClient();
 
