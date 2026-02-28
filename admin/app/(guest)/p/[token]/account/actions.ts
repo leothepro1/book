@@ -1,8 +1,7 @@
 "use server";
 
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/app/_lib/db/prisma";
 
-const prisma = new PrismaClient();
 
 export type AccountPatch = {
   token: string;
