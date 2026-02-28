@@ -18,7 +18,7 @@ export default async function Page(props: {
   const token = params?.token;
   const lang = (searchParams?.lang === "en" ? "en" : "sv") as Lang;
 
-  // BETATEST: /p/test/account -> senaste bokningen i DB
+  // BETATEST: /p/test/account => senaste bokningen
   if (token === "test") {
     const latestBooking = await prisma.booking.findFirst({
       orderBy: { createdAt: "desc" },
@@ -36,7 +36,10 @@ export default async function Page(props: {
     const config = await getTenantConfig(latestBooking.tenantId ?? "default");
 
     const allBookings = await prisma.booking.findMany({
-      where: { tenantId: latestBooking.tenantId, guestEmail: latestBooking.guestEmail },
+      where: {
+        tenantId: latestBooking.tenantId,
+        guestEmail: latestBooking.guestEmail,
+      },
       orderBy: { arrival: "desc" },
     });
 
@@ -44,13 +47,15 @@ export default async function Page(props: {
 
     return (
       <AccountClient
-        config={config}
-        lang={lang}
         token={latestBooking.id}
+        tenantId={latestBooking.tenantId}
+        guestEmail={latestBooking.guestEmail}
+        lang={lang}
+        config={config}
         initial={{
           firstName: latest.firstName ?? "",
           lastName: latest.lastName ?? "",
-          email: latest.guestEmail ?? "",
+          guestEmail: latest.guestEmail ?? "",
           phone: latest.phone ?? "",
           street: latest.street ?? "",
           postalCode: latest.postalCode ?? "",
@@ -61,15 +66,15 @@ export default async function Page(props: {
     );
   }
 
-  // 1) MagicLink.token -> booking
-  const viaMagic = token
+  // 1) MagicLink.token -> Booking
+  const magic = token
     ? await prisma.magicLink.findUnique({
         where: { token },
         include: { booking: { include: { tenant: true } } },
       })
     : null;
 
-  const bookingFromMagic = viaMagic?.booking ?? null;
+  const bookingFromMagic = magic?.booking ?? null;
 
   // 2) Fallback: token som Booking.id
   const bookingFromId =
@@ -93,7 +98,10 @@ export default async function Page(props: {
   const config = await getTenantConfig(booking.tenantId ?? "default");
 
   const allBookings = await prisma.booking.findMany({
-    where: { tenantId: booking.tenantId, guestEmail: booking.guestEmail },
+    where: {
+      tenantId: booking.tenantId,
+      guestEmail: booking.guestEmail,
+    },
     orderBy: { arrival: "desc" },
   });
 
@@ -101,13 +109,15 @@ export default async function Page(props: {
 
   return (
     <AccountClient
-      config={config}
-      lang={lang}
       token={booking.id}
+      tenantId={booking.tenantId}
+      guestEmail={booking.guestEmail}
+      lang={lang}
+      config={config}
       initial={{
         firstName: latest.firstName ?? "",
         lastName: latest.lastName ?? "",
-        email: latest.guestEmail ?? "",
+        guestEmail: latest.guestEmail ?? "",
         phone: latest.phone ?? "",
         street: latest.street ?? "",
         postalCode: latest.postalCode ?? "",
