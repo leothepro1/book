@@ -71,3 +71,54 @@
 .g-body {
   font-family: var(--font-body);
 }
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.g-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(0,0,0,0.06) 25%,
+    rgba(0,0,0,0.12) 37%,
+    rgba(0,0,0,0.06) 63%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.2s infinite linear;
+  border-radius: 18px;
+}
+
+.g-stayCard {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 18px;
+  color: var(--text);
+}
+
+.g-stayImage {
+  width: 120px;
+  height: 120px;
+  border-radius: 14px;
+  object-fit: cover;
+}
+
+.g-stayMeta {
+  display: grid;
+  gap: 6px;
+}
+
+.g-stayTitle {
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.g-stayDates {
+  font-size: 14px;
+  opacity: var(--muted-opacity);
+}
