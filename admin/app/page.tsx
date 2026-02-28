@@ -1,4 +1,4 @@
-import { prisma } from "@/app/_lib/db/prisma";
+import { prisma } from "./_lib/db/prisma";
 import { revalidatePath } from "next/cache";
 
 
