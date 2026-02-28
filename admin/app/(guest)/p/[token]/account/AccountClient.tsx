@@ -47,7 +47,10 @@ function prettyAddress(s: AccountState) {
   return parts.length ? parts.join(", ") : "—";
 }
 
-function splitName(full: string, fallback: { firstName: string; lastName: string }) {
+function splitName(
+  full: string,
+  fallback: { firstName: string; lastName: string }
+) {
   const cleaned = trim(full).replace(/\s+/g, " ");
   if (!cleaned) return fallback;
   const parts = cleaned.split(" ").filter(Boolean);
@@ -112,7 +115,8 @@ export default function AccountClient({
       phone: "Telefon",
       address: "Adress",
       done: "Klar",
-      verifyEmail: "Vi behöver verifiera din epostadress så att du kan använda vår app",
+      verifyEmail:
+        "Vi behöver verifiera din epostadress så att du kan använda vår app",
       ifWrongPrefix: "Om uppgifterna är fel, kontakta ",
       customerService: "kundserivice",
       placeholders: {
@@ -370,30 +374,10 @@ export default function AccountClient({
 
           {field === "address" && (
             <div style={{ display: "grid", gap: 10 }}>
-              <input
-                value={draftStreet}
-                onChange={(e) => setDraftStreet(e.target.value)}
-                placeholder={t.placeholders.street}
-                style={inputStyle()}
-              />
-              <input
-                value={draftPostal}
-                onChange={(e) => setDraftPostal(e.target.value)}
-                placeholder={t.placeholders.postalCode}
-                style={inputStyle()}
-              />
-              <input
-                value={draftCity}
-                onChange={(e) => setDraftCity(e.target.value)}
-                placeholder={t.placeholders.city}
-                style={inputStyle()}
-              />
-              <input
-                value={draftCountry}
-                onChange={(e) => setDraftCountry(e.target.value)}
-                placeholder={t.placeholders.country}
-                style={inputStyle()}
-              />
+              <input value={draftStreet} onChange={(e) => setDraftStreet(e.target.value)} placeholder={t.placeholders.street} style={inputStyle()} />
+              <input value={draftPostal} onChange={(e) => setDraftPostal(e.target.value)} placeholder={t.placeholders.postalCode} style={inputStyle()} />
+              <input value={draftCity} onChange={(e) => setDraftCity(e.target.value)} placeholder={t.placeholders.city} style={inputStyle()} />
+              <input value={draftCountry} onChange={(e) => setDraftCountry(e.target.value)} placeholder={t.placeholders.country} style={inputStyle()} />
             </div>
           )}
         </div>
@@ -425,15 +409,7 @@ export default function AccountClient({
   );
 }
 
-function Row({
-  label,
-  value,
-  onClick,
-}: {
-  label: string;
-  value: string;
-  onClick: () => void;
-}) {
+function Row({ label, value, onClick }: { label: string; value: string; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} style={rowStyle()}>
       <div style={{ fontSize: 13, opacity: 0.9 }}>{label}</div>

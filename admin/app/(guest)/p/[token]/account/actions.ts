@@ -5,7 +5,7 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 export type AccountPatch = {
-  token: string; // booking.id (nuvarande token-modell)
+  token: string;
   tenantId: string;
   guestEmail: string;
 
@@ -31,15 +31,12 @@ export async function updateGuestAccount(patch: AccountPatch) {
   }
 
   const data: Record<string, unknown> = {};
-
   if (patch.firstName !== undefined) data.firstName = patch.firstName.trim();
   if (patch.lastName !== undefined) data.lastName = patch.lastName.trim();
-
   if (patch.phone !== undefined) data.phone = (patch.phone ?? "").trim() || null;
 
   if (patch.street !== undefined) data.street = (patch.street ?? "").trim() || null;
-  if (patch.postalCode !== undefined)
-    data.postalCode = (patch.postalCode ?? "").trim() || null;
+  if (patch.postalCode !== undefined) data.postalCode = (patch.postalCode ?? "").trim() || null;
   if (patch.city !== undefined) data.city = (patch.city ?? "").trim() || null;
   if (patch.country !== undefined) data.country = (patch.country ?? "").trim() || null;
 
