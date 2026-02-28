@@ -1,7 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/app/_lib/db/prisma";
 import { revalidatePath } from "next/cache";
 
-const prisma = new PrismaClient();
 
 async function createFakeBooking(formData: FormData) {
   "use server";

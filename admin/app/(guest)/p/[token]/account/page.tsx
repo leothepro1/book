@@ -1,8 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/app/_lib/db/prisma";
 import { getTenantConfig } from "../../../_lib/tenant";
 import AccountClient from "./AccountClient";
 
-const prisma = new PrismaClient();
 
 export const dynamic = "force-dynamic";
 

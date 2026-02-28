@@ -1,6 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/app/_lib/db/prisma";
 
-const prisma = new PrismaClient();
 
 function formatDate(d: Date, lang: "sv" | "en") {
   return d.toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", {

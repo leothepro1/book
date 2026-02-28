@@ -1,0 +1,45 @@
+.g-card{
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+}
+.g-field{ display:grid; gap:6px; }
+.g-label{ font-size:14px; font-weight:700; opacity:.92; }
+.g-input{
+  width:100%;
+  border:1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 12px;
+  background: #fff;
+  color:#111;
+}
+.g-input:focus{ outline:2px solid rgba(255,255,255,.18); }
+.g-choice{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding: 14px 14px;
+  border-radius: 14px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  font-weight:800;
+}
+.g-choice.is-active{
+  outline: 2px solid rgba(255,255,255,.18);
+}
+.g-choice__dot{
+  width: 18px; height:18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.35);
+}
+.g-btn{
+  border-radius: 999px;
+  padding: 12px 16px;
+  font-weight: 900;
+}
+.g-btn-primary{
+  background: var(--button-bg);
+  color: var(--button-text);
+}
