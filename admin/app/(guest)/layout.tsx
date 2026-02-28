@@ -1,51 +1,26 @@
-import { GuestHeader } from "./_components/GuestHeader";
-import type { Locale } from "./_lib/i18n";
+import type { ReactNode } from "react";
+import { getTenantConfig } from "./_lib/tenant";
+import { themeToStyleAttr, backgroundStyle } from "./_lib/theme";
+import GuestHeader from "./_components/GuestHeader";
+import GuestFooter from "./_components/GuestFooter";
 
-export const dynamic = "force-dynamic";
-
-export default function GuestLayout({
+export default async function GuestLayout({
   children,
-  searchParams,
 }: {
-  children: React.ReactNode;
-  searchParams?: { [key: string]: string | string[] | undefined };
+  children: ReactNode;
 }) {
-  // Locale via URL: ?lang=sv eller ?lang=en
-  const lang = Array.isArray(searchParams?.lang) ? searchParams?.lang[0] : searchParams?.lang;
-  const locale: Locale = lang === "sv" ? "sv" : "en";
+  const config = await getTenantConfig("default");
 
-  const theme = {
-    primary: "#0EA5E9",
-    tertiary: "#6B7280",
-    text: "#0B1220",
-    fontFamily: "Arial, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-    logoUrl: "https://via.placeholder.com/220x80?text=LOGO",
-    logoWidthPx: 140,
-    wallpaper:
-      "linear-gradient(180deg, rgba(14,165,233,0.18) 0%, rgba(255,255,255,1) 55%)",
-  };
+  const cssVars = themeToStyleAttr(config.theme);
+  const bgStyle = backgroundStyle(config.theme.background);
 
   return (
-    <div
-      style={
-        {
-          minHeight: "100vh",
-          display: "grid",
-          gridTemplateRows: "auto 1fr",
-          background: theme.wallpaper,
-          fontFamily: "var(--font-sans)",
-          ["--primary" as any]: theme.primary,
-          ["--tertiary" as any]: theme.tertiary,
-          ["--text" as any]: theme.text,
-          ["--font-sans" as any]: theme.fontFamily,
-        } as React.CSSProperties
-      }
-    >
-      <GuestHeader locale={locale} logoUrl={theme.logoUrl} logoWidthPx={theme.logoWidthPx} />
-
-      <main style={{ padding: 16, maxWidth: 720, width: "100%", margin: "0 auto" }}>
-        {children}
-      </main>
+    <div style={cssVars}>
+      <div style={bgStyle} className="min-h-dvh flex flex-col">
+        <GuestHeader config={config} />
+        <main className="flex-1">{children}</main>
+        <GuestFooter config={config} />
+      </div>
     </div>
   );
 }
