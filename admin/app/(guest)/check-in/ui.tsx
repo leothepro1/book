@@ -54,10 +54,20 @@ function parseISODate(s: string) {
 }
 
 const monthNamesSv = [
-  "januari","februari","mars","april","maj","juni",
-  "juli","augusti","september","oktober","november","december"
+  "januari",
+  "februari",
+  "mars",
+  "april",
+  "maj",
+  "juni",
+  "juli",
+  "augusti",
+  "september",
+  "oktober",
+  "november",
+  "december",
 ];
-const dowSv = ["må","ti","on","to","fr","lö","sö"];
+const dowSv = ["må", "ti", "on", "to", "fr", "lö", "sö"];
 
 function formatSv(d: Date) {
   return `${d.getDate()} ${monthNamesSv[d.getMonth()]} ${d.getFullYear()}`;
@@ -88,9 +98,10 @@ type DatePickerProps = {
   valueISO: string;
   onChangeISO: (iso: string) => void;
   mode: "oneClickClose" | "saveCancel";
+  closeSignal?: string; // ändras när vi vill tvinga stängning
 };
 
-function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
+function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const [baseMonth, setBaseMonth] = useState(() => {
     const now = new Date();
@@ -104,8 +115,13 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
     if (mode === "saveCancel") {
       setTempSelected(saved ? new Date(saved) : null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, valueISO]);
+  }, [mode, valueISO, saved]);
+
+  // Stäng alltid datepicker när vi byter steg/metod (closeSignal ändras)
+  useEffect(() => {
+    if (!closeSignal) return;
+    setOpen(false);
+  }, [closeSignal]);
 
   const isMobile = () =>
     typeof window !== "undefined" &&
@@ -162,7 +178,13 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
       const daysInMonth = new Date(y, m + 1, 0).getDate();
 
       const blanks = Array.from({ length: mondayIndex }, (_, idx) => (
-        <button key={`b-${idx}`} type="button" className="sektion73-day is-muted" disabled aria-hidden="true" />
+        <button
+          key={`b-${idx}`}
+          type="button"
+          className="sektion73-day is-muted"
+          disabled
+          aria-hidden="true"
+        />
       ));
 
       const days = Array.from({ length: daysInMonth }, (_, idx) => {
@@ -181,7 +203,9 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
               "sektion73-day",
               disabled ? "is-disabled" : "",
               isSel ? "is-selected" : "",
-            ].join(" ").trim()}
+            ]
+              .join(" ")
+              .trim()}
             disabled={disabled}
             onClick={(e) => {
               e.preventDefault();
@@ -197,7 +221,9 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
       months.push(
         <div key={`${y}-${m}`} className="sektion73-cal">
           <div className="sektion73-cal__head">
-            <div className="sektion73-cal__title">{monthNamesSv[m]} {y}</div>
+            <div className="sektion73-cal__title">
+              {monthNamesSv[m]} {y}
+            </div>
 
             {i === 0 && (
               <div className="sektion73-cal__nav">
@@ -230,7 +256,9 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
           </div>
 
           <div className="sektion73-cal__dow">
-            {dowSv.map((x) => <div key={x}>{x}</div>)}
+            {dowSv.map((x) => (
+              <div key={x}>{x}</div>
+            ))}
           </div>
 
           <div className="sektion73-cal__grid">
@@ -265,12 +293,18 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
         <span className="sektion73-datebtn__left" aria-hidden="true">
           <svg className="uitk-icon uitk-field-icon" aria-hidden="true" viewBox="0 0 24 24">
             <path d="M7 12a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H7z"></path>
-            <path fillRule="evenodd" d="M8 4h8V2.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5V4h1a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V2.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5V4zM4 7a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v1H4V7zm0 3h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9z" clipRule="evenodd"></path>
+            <path
+              fillRule="evenodd"
+              d="M8 4h8V2.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5V4h1a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V2.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5V4zM4 7a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v1H4V7zm0 3h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9z"
+              clipRule="evenodd"
+            ></path>
           </svg>
         </span>
 
         <span className="sektion73-datebtn__label">{labelText}</span>
-        <span className="sektion73-datebtn__chev" aria-hidden="true">›</span>
+        <span className="sektion73-datebtn__chev" aria-hidden="true">
+          ›
+        </span>
       </button>
 
       {/* Desktop dropdown */}
@@ -291,7 +325,12 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
               <button type="button" className="sektion73-btn" onClick={cancel}>
                 Avbryt
               </button>
-              <button type="button" className="sektion73-btn sektion73-btn--primary" onClick={save} disabled={!tempSelected}>
+              <button
+                type="button"
+                className="sektion73-btn sektion73-btn--primary"
+                onClick={save}
+                disabled={!tempSelected}
+              >
                 Spara
               </button>
             </div>
@@ -312,7 +351,12 @@ function DatePicker({ label, valueISO, onChangeISO, mode }: DatePickerProps) {
                 <button type="button" className="sektion73-btn" onClick={cancel}>
                   Avbryt
                 </button>
-                <button type="button" className="sektion73-btn sektion73-btn--primary" onClick={save} disabled={!tempSelected}>
+                <button
+                  type="button"
+                  className="sektion73-btn sektion73-btn--primary"
+                  onClick={save}
+                  disabled={!tempSelected}
+                >
                   Spara
                 </button>
               </div>
@@ -357,6 +401,9 @@ export default function CheckInClient({ onSubmit }: Props) {
 
   const [error, setError] = useState<string | null>(null);
 
+  // Close signal för DatePicker (stänger när steg/metod ändras)
+  const closeSignal = `${step}:${method}`;
+
   // (valfritt) stöd för ?method=...
   useEffect(() => {
     const m = (params.get("method") || "").trim();
@@ -395,7 +442,8 @@ export default function CheckInClient({ onSubmit }: Props) {
       setBusy(true);
 
       if (method === "booking") {
-        if (!bookingId.trim() || !lastName.trim()) throw new Error("Fyll i bokningsnummer och efternamn.");
+        if (!bookingId.trim() || !lastName.trim())
+          throw new Error("Fyll i bokningsnummer och efternamn.");
         await onSubmit({ method, bookingId: bookingId.trim(), lastName: lastName.trim() });
         return;
       }
@@ -434,39 +482,39 @@ export default function CheckInClient({ onSubmit }: Props) {
             </div>
           </div>
 
-       <div className="sektion73-grid-2">
-  <div className="sektion73-field">
-    <div className="sektion73-float">
-      <input
-        id="sek-bookingId"
-        className="sektion73-input"
-        value={bookingId}
-        onChange={(e) => setBookingId(e.target.value)}
-        placeholder=" "
-        autoComplete="off"
-      />
-      <label className="sektion73-float__label" htmlFor="sek-bookingId">
-        Bokningsnummer
-      </label>
-    </div>
-  </div>
+          <div className="sektion73-grid-2">
+            <div className="sektion73-field">
+              <div className="sektion73-float">
+                <input
+                  id="sek-bookingId"
+                  className="sektion73-input"
+                  value={bookingId}
+                  onChange={(e) => setBookingId(e.target.value)}
+                  placeholder=" "
+                  autoComplete="off"
+                />
+                <label className="sektion73-float__label" htmlFor="sek-bookingId">
+                  Bokningsnummer
+                </label>
+              </div>
+            </div>
 
-  <div className="sektion73-field">
-    <div className="sektion73-float">
-      <input
-        id="sek-lastName"
-        className="sektion73-input"
-        value={lastName}
-        onChange={(e) => setLastName(e.target.value)}
-        placeholder=" "
-        autoComplete="family-name"
-      />
-      <label className="sektion73-float__label" htmlFor="sek-lastName">
-        Efternamn
-      </label>
-    </div>
-  </div>
-</div>
+            <div className="sektion73-field">
+              <div className="sektion73-float">
+                <input
+                  id="sek-lastName"
+                  className="sektion73-input"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder=" "
+                  autoComplete="family-name"
+                />
+                <label className="sektion73-float__label" htmlFor="sek-lastName">
+                  Efternamn
+                </label>
+              </div>
+            </div>
+          </div>
 
           <div className="sektion73-footnote" style={{ marginTop: 12 }}>
             Har du inget bokningsnummer? Gå tillbaka och välj ett annat alternativ.
@@ -485,32 +533,33 @@ export default function CheckInClient({ onSubmit }: Props) {
             </div>
           </div>
 
-       <div className="sektion73-grid-2">
-  <div className="sektion73-field">
-    <div className="sektion73-float">
-      <input
-        id="sek-fullName"
-        className="sektion73-input"
-        value={fullName}
-        onChange={(e) => setFullName(e.target.value)}
-        placeholder=" "
-        autoComplete="name"
-      />
-      <label className="sektion73-float__label" htmlFor="sek-fullName">
-        Namn
-      </label>
-    </div>
+          <div className="sektion73-grid-2">
+            <div className="sektion73-field">
+              <div className="sektion73-float">
+                <input
+                  id="sek-fullName"
+                  className="sektion73-input"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder=" "
+                  autoComplete="name"
+                />
+                <label className="sektion73-float__label" htmlFor="sek-fullName">
+                  Namn
+                </label>
+              </div>
 
-    <div className="sektion73-help">Det räcker med för- eller efternamn.</div>
-  </div>
+              <div className="sektion73-help">Det räcker med för- eller efternamn.</div>
+            </div>
 
-  <DatePicker
-    label="Incheckningsdatum"
-    valueISO={arrivalISO}
-    onChangeISO={setArrivalISO}
-    mode="oneClickClose"
-  />
-</div>
+            <DatePicker
+              label="Incheckningsdatum"
+              valueISO={arrivalISO}
+              onChangeISO={setArrivalISO}
+              mode="oneClickClose"
+              closeSignal={closeSignal}
+            />
+          </div>
         </>
       );
     }
@@ -524,47 +573,48 @@ export default function CheckInClient({ onSubmit }: Props) {
           </div>
         </div>
 
-      <div className="sektion73-grid-2">
-  <div className="sektion73-field">
-    <div className="sektion73-float">
-      <input
-        id="sek-email"
-        className="sektion73-input"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder=" "
-        autoComplete="email"
-        inputMode="email"
-      />
-      <label className="sektion73-float__label" htmlFor="sek-email">
-        E-post
-      </label>
-    </div>
-  </div>
+        <div className="sektion73-grid-2">
+          <div className="sektion73-field">
+            <div className="sektion73-float">
+              <input
+                id="sek-email"
+                className="sektion73-input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder=" "
+                autoComplete="email"
+                inputMode="email"
+              />
+              <label className="sektion73-float__label" htmlFor="sek-email">
+                E-post
+              </label>
+            </div>
+          </div>
 
-  <div className="sektion73-field">
-    <div className="sektion73-float">
-      <input
-        id="sek-emailLastName"
-        className="sektion73-input"
-        value={emailLastName}
-        onChange={(e) => setEmailLastName(e.target.value)}
-        placeholder=" "
-        autoComplete="family-name"
-      />
-      <label className="sektion73-float__label" htmlFor="sek-emailLastName">
-        Efternamn
-      </label>
-    </div>
-  </div>
+          <div className="sektion73-field">
+            <div className="sektion73-float">
+              <input
+                id="sek-emailLastName"
+                className="sektion73-input"
+                value={emailLastName}
+                onChange={(e) => setEmailLastName(e.target.value)}
+                placeholder=" "
+                autoComplete="family-name"
+              />
+              <label className="sektion73-float__label" htmlFor="sek-emailLastName">
+                Efternamn
+              </label>
+            </div>
+          </div>
 
-  <DatePicker
-    label="Utcheckningsdatum"
-    valueISO={departureISO}
-    onChangeISO={setDepartureISO}
-    mode="oneClickClose"
-  />
-</div>
+          <DatePicker
+            label="Utcheckningsdatum"
+            valueISO={departureISO}
+            onChangeISO={setDepartureISO}
+            mode="oneClickClose"
+            closeSignal={closeSignal}
+          />
+        </div>
       </>
     );
   }
@@ -585,7 +635,7 @@ export default function CheckInClient({ onSubmit }: Props) {
           className="sektion73-steps"
           style={{ transform: step === "choose" ? "translateX(0%)" : "translateX(-100%)" }}
         >
-          {/* STEP 1: välj metod (ingen fortsätt-knapp) */}
+          {/* STEP 1 */}
           <section className="sektion73-step">
             <div className="sektion73-card__header">
               <div>
@@ -594,45 +644,50 @@ export default function CheckInClient({ onSubmit }: Props) {
               </div>
             </div>
 
-      <div className="sektion73-choicegrid">
-  <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("booking")}>
-    <div className="sektion73-choicebtn__title">Bokningsnummer</div>
-  </button>
+            <div className="sektion73-choicegrid">
+              <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("booking")}>
+                <div className="sektion73-choicebtn__title">Bokningsnummer</div>
+              </button>
 
-  <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("email")}>
-    <div className="sektion73-choicebtn__title">E-post</div>
-  </button>
+              <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("email")}>
+                <div className="sektion73-choicebtn__title">E-post</div>
+              </button>
 
-  <div className="sektion73-divider" aria-hidden="true">
-    <span className="sektion73-divider__line" />
-    <span className="sektion73-divider__text">ELLER</span>
-    <span className="sektion73-divider__line" />
-  </div>
+              <div className="sektion73-divider" aria-hidden="true">
+                <span className="sektion73-divider__line" />
+                <span className="sektion73-divider__text">ELLER</span>
+                <span className="sektion73-divider__line" />
+              </div>
 
-  <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("nameArrival")}>
-    <div className="sektion73-choicebtn__title">Namn + datum</div>
-  </button>
-</div>
+              <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("nameArrival")}>
+                <div className="sektion73-choicebtn__title">Namn + datum</div>
+              </button>
+            </div>
 
             {error && <div className="sektion73-alert">{error}</div>}
           </section>
 
-          {/* STEP 2: form + CTA */}
+          {/* STEP 2 */}
           <section className="sektion73-step">
-            {renderForm()}
+            {/* KRITISKT: rendera bara form när step === "form" så DatePicker inte kan “läcka” visuellt */}
+            {step === "form" ? (
+              <>
+                {renderForm()}
 
-            {error && <div className="sektion73-alert">{error}</div>}
+                {error && <div className="sektion73-alert">{error}</div>}
 
-           <div className="sektion73-cta">
-  <button
-    type="button"
-    className="sektion73-btn sektion73-btn--primary"
-    disabled={busy || !canSubmit()}
-    onClick={submit}
-  >
-    {busy ? "Jobbar…" : "Fortsätt"}
-  </button>
-</div>
+                <div className="sektion73-cta">
+                  <button
+                    type="button"
+                    className="sektion73-btn sektion73-btn--primary"
+                    disabled={busy || !canSubmit()}
+                    onClick={submit}
+                  >
+                    {busy ? "Jobbar…" : "Fortsätt"}
+                  </button>
+                </div>
+              </>
+            ) : null}
           </section>
         </div>
       </div>
