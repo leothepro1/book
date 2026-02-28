@@ -604,9 +604,6 @@ export default function CheckInClient({ onSubmit }: Props) {
                 {busy ? "Jobbar…" : "Fortsätt"}
               </button>
 
-              <div className="sektion73-footnote" style={{ marginTop: 10 }}>
-                Vid godkänd matchning skickas du vidare automatiskt.
-              </div>
             </div>
           </section>
         </div>
