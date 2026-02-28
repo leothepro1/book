@@ -348,8 +348,7 @@ export default async function Page({ params }: { params: { token?: string } }) {
         </div>
       </div>
 
-      {/* GRID TILES (8 standard placeholders) */}
-      <div style={{ marginTop: 14 }}>
+    
         <div
           style={{
             display: "grid",
@@ -358,48 +357,57 @@ export default async function Page({ params }: { params: { token?: string } }) {
           }}
         >
           {tiles.map((tile) => (
-            <button
+            <div
               key={tile.id}
-              type="button"
-              className={btnClass}
               style={{
-                textAlign: "left",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-start",
-                gap: 10,
+                display: "grid",
+                gap: 8,
               }}
             >
-              {/* Icon container */}
-              <div
+              {/* Container (clickable) med ikon INUTI */}
+              <button
+                type="button"
+                className={btnClass}
                 style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 14,
-                  border: "1px solid var(--border)",
-                  background: "rgba(255,255,255,0.06)",
+                  width: "100%",
+                  height: 86,
+                  borderRadius: 18,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "currentColor",
                 }}
               >
-                {tile.svg}
-              </div>
+                <div
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 16,
+                    border: "1px solid var(--border)",
+                    background: "rgba(255,255,255,0.06)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {tile.svg}
+                </div>
+              </button>
 
-              {/* Label under icon */}
+              {/* Text UNDER containern */}
               <div
                 style={{
                   fontWeight: 900,
-                  lineHeight: 1.1,
+                  fontSize: 13,
+                  lineHeight: 1.15,
+                  color: "var(--text)",
+                  textAlign: "left",
                 }}
               >
                 {tile.label}
               </div>
-            </button>
+            </div>
           ))}
         </div>
       </div>
-    </div>
   );
 }
