@@ -1,18 +1,19 @@
-import { headers } from "next/headers";
 import { GuestHeader } from "./_components/GuestHeader";
 import type { Locale } from "./_lib/i18n";
 
 export const dynamic = "force-dynamic";
 
-export default function GuestLayout({ children }: { children: React.ReactNode }) {
-  // Minimal locale-stomme (sen byter ni till riktig locale-router)
-  const cookieHeader = headers().get("cookie") ?? "";
-  const match = cookieHeader.match(/(?:^|;\s*)LOCALE=([^;]+)/);
-  const cookieLocale = match ? decodeURIComponent(match[1]) : undefined;
+export default function GuestLayout({
+  children,
+  searchParams,
+}: {
+  children: React.ReactNode;
+  searchParams?: { [key: string]: string | string[] | undefined };
+}) {
+  // Locale via URL: ?lang=sv eller ?lang=en
+  const lang = Array.isArray(searchParams?.lang) ? searchParams?.lang[0] : searchParams?.lang;
+  const locale: Locale = lang === "sv" ? "sv" : "en";
 
-  const locale: Locale = cookieLocale === "sv" ? "sv" : "en";
-
-  // Temporärt: hårdkodat theme + logo. Sen hämtas från DB per tenant.
   const theme = {
     primary: "#0EA5E9",
     tertiary: "#6B7280",
