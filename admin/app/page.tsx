@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 
 const prisma = new PrismaClient();
 
@@ -10,16 +10,15 @@ async function createFakeBooking(formData: FormData) {
   const guestEmail = String(formData.get("guestEmail") || "").trim();
   const tenantId = String(formData.get("tenantId") || "").trim();
   const unit = String(formData.get("unit") || "").trim();
-  const arrivalStr = String(formData.get("arrival") || "").trim();   // yyyy-mm-dd
+  const arrivalStr = String(formData.get("arrival") || "").trim(); // yyyy-mm-dd
   const departureStr = String(formData.get("departure") || "").trim(); // yyyy-mm-dd
 
   if (!guestName || !guestEmail || !tenantId || !unit || !arrivalStr || !departureStr) {
     throw new Error("Alla fält måste fyllas i.");
   }
 
-  // Konvertera yyyy-mm-dd till Date (midnight UTC-agnostiskt är okej för fake data)
-  const arrival = new Date(arrivalStr + "T15:00:00.000Z");   // check-in tid
-  const departure = new Date(departureStr + "T10:00:00.000Z"); // check-out tid
+  const arrival = new Date(arrivalStr + "T15:00:00.000Z");
+  const departure = new Date(departureStr + "T10:00:00.000Z");
 
   if (Number.isNaN(arrival.getTime()) || Number.isNaN(departure.getTime())) {
     throw new Error("Ogiltiga datum.");
@@ -28,13 +27,12 @@ async function createFakeBooking(formData: FormData) {
     throw new Error("Avresedatum måste vara efter ankomstdatum.");
   }
 
-  // Säkerställ att tenant finns
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
   if (!tenant) {
     throw new Error("Tenant finns inte.");
   }
 
-  const booking = await prisma.booking.create({
+  await prisma.booking.create({
     data: {
       tenantId,
       guestName,
@@ -43,16 +41,11 @@ async function createFakeBooking(formData: FormData) {
       departure,
       unit,
       status: "booked",
-      // om ni har fler fält (t.ex. source, externalId etc), sätt defaults här
     },
-    include: { tenant: true },
   });
 
-  // Antingen tillbaka till listan…
-  redirect("/admin/bookings");
-
-  // …eller redirect till detaljsida om ni har den:
-  // redirect(`/admin/bookings/${booking.id}`);
+  // Re-rendera samma sida så listan uppdateras (ingen redirect)
+  revalidatePath("/admin"); // ändra till den route där denna page.tsx faktiskt ligger
 }
 
 export default async function Page() {
@@ -134,8 +127,7 @@ export default async function Page() {
               </div>
               <div>Camping: {b.tenant?.name}</div>
               <div>
-                Datum:{" "}
-                {new Date(b.arrival).toLocaleString("sv-SE")} →{" "}
+                Datum: {new Date(b.arrival).toLocaleString("sv-SE")} →{" "}
                 {new Date(b.departure).toLocaleString("sv-SE")}
               </div>
               <div>Plats: {b.unit} | Status: {b.status}</div>
