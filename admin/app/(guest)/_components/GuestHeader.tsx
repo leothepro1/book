@@ -4,12 +4,10 @@ import type { TenantConfig } from "../_lib/tenant/types";
 import { Bell, Globe } from "lucide-react";
 import { useState } from "react";
 
-export default function GuestHeader({
-  config,
-}: {
-  config: TenantConfig;
-}) {
+export default function GuestHeader({ config }: { config: TenantConfig }) {
   const { logoUrl, logoWidth } = config.theme.header;
+  const { notificationsEnabled, languageSwitcherEnabled } = config.features;
+
   const [showNotifications, setShowNotifications] = useState(false);
 
   return (
@@ -32,28 +30,38 @@ export default function GuestHeader({
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="text-[var(--text)]"
-              onClick={() => setShowNotifications(true)}
-            >
-              <Bell size={20} />
-            </button>
+            {notificationsEnabled && (
+              <button
+                type="button"
+                className="text-[var(--text)]"
+                aria-label="Notifications"
+                onClick={() => setShowNotifications(true)}
+              >
+                <Bell size={20} />
+              </button>
+            )}
 
-            <button type="button" className="text-[var(--text)]">
-              <Globe size={20} />
-            </button>
+            {languageSwitcherEnabled && (
+              <button
+                type="button"
+                className="text-[var(--text)]"
+                aria-label="Language"
+              >
+                <Globe size={20} />
+              </button>
+            )}
           </div>
         </div>
       </header>
 
-      {showNotifications && (
+      {notificationsEnabled && showNotifications && (
         <div className="fixed inset-0 z-50 flex flex-col bg-[var(--background)]">
           <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-4">
             <h2 className="text-lg font-semibold text-[var(--text)]">
               Notifications
             </h2>
             <button
+              type="button"
               onClick={() => setShowNotifications(false)}
               className="text-sm text-[var(--text)]"
             >

@@ -21,10 +21,6 @@ export async function getTenantConfig(_hint: string): Promise<TenantConfig> {
 
       background: {
         mode: "fill",
-        // gradientId?: "g1".."g6"
-        // imageUrl?: string
-        // overlayOpacity?: number
-        // blurStrength?: 0|8|16|24
       },
 
       buttons: {
@@ -99,6 +95,9 @@ export async function getTenantConfig(_hint: string): Promise<TenantConfig> {
     features: {
       commerceEnabled: false,
       accountEnabled: false,
+
+      notificationsEnabled: true,
+      languageSwitcherEnabled: true,
     },
 
     rules: [],
