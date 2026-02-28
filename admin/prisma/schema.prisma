@@ -20,8 +20,19 @@ model Booking {
   tenantId   String
   tenant     Tenant   @relation(fields: [tenantId], references: [id])
 
-  guestName  String
+  // Guest identity
+  firstName  String
+  lastName   String
   guestEmail String
+  phone      String?
+
+  // Address
+  street     String?
+  postalCode String?
+  city       String?
+  country    String?
+
+  // Stay
   arrival    DateTime
   departure  DateTime
   unit       String

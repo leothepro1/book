@@ -6,14 +6,15 @@ const prisma = new PrismaClient();
 async function createFakeBooking(formData: FormData) {
   "use server";
 
-  const guestName = String(formData.get("guestName") || "").trim();
+  const firstName = String(formData.get("firstName") || "").trim();
+  const lastName = String(formData.get("lastName") || "").trim();
   const guestEmail = String(formData.get("guestEmail") || "").trim();
   const tenantId = String(formData.get("tenantId") || "").trim();
   const unit = String(formData.get("unit") || "").trim();
-  const arrivalStr = String(formData.get("arrival") || "").trim(); // yyyy-mm-dd
-  const departureStr = String(formData.get("departure") || "").trim(); // yyyy-mm-dd
+  const arrivalStr = String(formData.get("arrival") || "").trim();
+  const departureStr = String(formData.get("departure") || "").trim();
 
-  if (!guestName || !guestEmail || !tenantId || !unit || !arrivalStr || !departureStr) {
+  if (!firstName || !lastName || !guestEmail || !tenantId || !unit || !arrivalStr || !departureStr) {
     throw new Error("Alla fält måste fyllas i.");
   }
 
@@ -23,6 +24,7 @@ async function createFakeBooking(formData: FormData) {
   if (Number.isNaN(arrival.getTime()) || Number.isNaN(departure.getTime())) {
     throw new Error("Ogiltiga datum.");
   }
+
   if (departure <= arrival) {
     throw new Error("Avresedatum måste vara efter ankomstdatum.");
   }
@@ -35,7 +37,8 @@ async function createFakeBooking(formData: FormData) {
   await prisma.booking.create({
     data: {
       tenantId,
-      guestName,
+      firstName,
+      lastName,
       guestEmail,
       arrival,
       departure,
@@ -44,8 +47,7 @@ async function createFakeBooking(formData: FormData) {
     },
   });
 
-  // Re-rendera samma sida så listan uppdateras (ingen redirect)
-  revalidatePath("/admin"); // ändra till den route där denna page.tsx faktiskt ligger
+  revalidatePath("/");
 }
 
 export default async function Page() {
@@ -64,29 +66,51 @@ export default async function Page() {
     <main style={{ padding: 24, fontFamily: "Arial", maxWidth: 900 }}>
       <h1>Admin – Fake bokningar</h1>
 
-      <section style={{ padding: 16, border: "1px solid #ddd", borderRadius: 8, marginBottom: 24 }}>
+      <section
+        style={{
+          padding: 16,
+          border: "1px solid #ddd",
+          borderRadius: 8,
+          marginBottom: 24,
+        }}
+      >
         <h2 style={{ marginTop: 0 }}>Skapa bokning</h2>
 
         <form action={createFakeBooking} style={{ display: "grid", gap: 12 }}>
           <div style={{ display: "grid", gap: 6 }}>
-            <label>Testgäst (namn)</label>
-            <input name="guestName" placeholder="Testgäst" required />
+            <label>Förnamn</label>
+            <input name="firstName" placeholder="Test" required />
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>
-            <label>Testgäst (email)</label>
-            <input name="guestEmail" type="email" placeholder="test@exempel.se" required />
+            <label>Efternamn</label>
+            <input name="lastName" placeholder="Gäst" required />
+          </div>
+
+          <div style={{ display: "grid", gap: 6 }}>
+            <label>Email</label>
+            <input
+              name="guestEmail"
+              type="email"
+              placeholder="test@exempel.se"
+              required
+            />
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>
             <label>Camping (tenant)</label>
-            <select name="tenantId" required defaultValue={tenants[0]?.id ?? ""}>
+            <select
+              name="tenantId"
+              required
+              defaultValue={tenants[0]?.id ?? ""}
+            >
               {tenants.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
               ))}
             </select>
+
             {tenants.length === 0 && (
               <small style={{ color: "crimson" }}>
                 Inga tenants finns. Skapa en tenant först i DB/seed.
@@ -123,14 +147,20 @@ export default async function Page() {
           {bookings.map((b) => (
             <li key={b.id} style={{ marginBottom: 12 }}>
               <div>
-                <b>{b.guestName}</b> ({b.guestEmail})
+                <b>
+                  {b.firstName} {b.lastName}
+                </b>{" "}
+                ({b.guestEmail})
               </div>
               <div>Camping: {b.tenant?.name}</div>
               <div>
-                Datum: {new Date(b.arrival).toLocaleString("sv-SE")} →{" "}
+                Datum:{" "}
+                {new Date(b.arrival).toLocaleString("sv-SE")} →{" "}
                 {new Date(b.departure).toLocaleString("sv-SE")}
               </div>
-              <div>Plats: {b.unit} | Status: {b.status}</div>
+              <div>
+                Plats: {b.unit} | Status: {b.status}
+              </div>
             </li>
           ))}
         </ul>

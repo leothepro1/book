@@ -2,8 +2,8 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-function formatDate(d: Date) {
-  return d.toLocaleDateString("sv-SE", {
+function formatDate(d: Date, lang: "sv" | "en") {
+  return d.toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -60,16 +60,37 @@ export default async function Page({
             />
 
             <div className="g-stayMeta">
+              {/* Unit / Property reference */}
               <div className="g-stayTitle">
                 {b.unit}
               </div>
 
+              {/* Dates */}
               <div className="g-stayDates">
-                {formatDate(new Date(b.arrival))} –{" "}
-                {formatDate(new Date(b.departure))}
+                {formatDate(new Date(b.arrival), lang)} –{" "}
+                {formatDate(new Date(b.departure), lang)}
               </div>
 
-              <div style={{ fontSize: 13, opacity: 0.8 }}>
+              {/* Guest name */}
+              <div style={{ fontSize: 14, fontWeight: 600 }}>
+                {b.firstName} {b.lastName}
+              </div>
+
+              {/* Location (if exists) */}
+              {(b.city || b.country) && (
+                <div className="g-muted">
+                  {[b.city, b.country].filter(Boolean).join(", ")}
+                </div>
+              )}
+
+              {/* Status */}
+              <div
+                style={{
+                  fontSize: 13,
+                  opacity: 0.85,
+                  textTransform: "capitalize",
+                }}
+              >
                 {b.status}
               </div>
             </div>
