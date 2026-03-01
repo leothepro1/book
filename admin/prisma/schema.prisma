@@ -37,6 +37,8 @@ model Booking {
   departure  DateTime
   unit       String
   status     String   @default("booked")
+  checkedInAt DateTime?
+  checkedOutAt DateTime?
 
   magicLinks MagicLink[]
   createdAt  DateTime @default(now())

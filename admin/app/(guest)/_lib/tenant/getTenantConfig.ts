@@ -4,6 +4,16 @@ export async function getTenantConfig(_hint: string): Promise<TenantConfig> {
   return {
     tenantId: "default",
 
+    property: {
+      name: "Apelviken Camping",
+      address: "Apelviksvägen 47, 439 76 Kungsbacka",
+      latitude: 57.4875,
+      longitude: 12.0739,
+      checkInTime: "14:00",
+      checkOutTime: "11:00",
+      timezone: "Europe/Stockholm",
+    },
+
     theme: {
       version: 1,
 

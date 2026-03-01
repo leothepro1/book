@@ -322,16 +322,16 @@ display:none;
   min-width: 0;
 }
 
-.sektion73-cal__title {
-    font-size: 15px;
-    font-weight: 700;
-    font-family: var(--font-heading, ui-sans-serif);
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    color: #2D2C2B;
-    flex: auto;
-    min-width: 0;
-    overflow: hidden;
+.sektion73-cal__title{
+  font-weight: 800;
+  font-size: 15px;
+  font-family: var(--font-heading, ui-sans-serif);
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(255,255,255,.92);
 }
 
 .sektion73-cal__nav{
@@ -356,15 +356,15 @@ display:none;
   background: rgba(255,255,255,.10);
 }
 
-.sektion73-cal__dow {
-    color: #2D2C2B;
-    text-align: center;
-    font-size: 12px;
-    font-family: var(--font-body, ui-sans-serif);
-    grid-template-columns: repeat(7, 1fr);
-    gap: 6px;
-    margin: 6px 0 8px;
-    display: grid;
+.sektion73-cal__dow{
+  display:grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin: 6px 0 8px;
+  font-size: 12px;
+  color: rgba(255,255,255,.58);
+  text-align:center;
+  font-family: var(--font-body, ui-sans-serif);
 }
 
 .sektion73-cal__grid{
@@ -373,41 +373,35 @@ display:none;
   gap: 6px;
 }
 
-.sektion73-day {
-    cursor: pointer;
-    color: #2D2C2B;
-    height: 40px;
-    font-size: 14px;
-    font-weight: 400;
-    font-family: var(--font-body, ui-sans-serif);
-    background: none;
-    border-width: 1px;
-    border-style: solid;
-    border-color: rgba(0, 0, 0, 0);
-    border-image: initial;
-    border-radius: 8px;
+.sektion73-day{
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 750;
+  font-size: 14px;
+  color: rgba(255,255,255,.92);
+  font-family: var(--font-body, ui-sans-serif);
 }
 
 .sektion73-day:hover{
   background: rgba(255,255,255,.08);
 }
 
-.sektion73-day.is-muted {
-    color: #2D2C2B;
-    opacity: 0.45;
+.sektion73-day.is-muted{
+  color: rgba(255,255,255,.18);
 }
 
 .sektion73-day.is-disabled{
-    color: #2D2C2B;
-    opacity: 0.45;
+  color: rgba(255,255,255,.22);
   cursor: not-allowed;
   background:transparent;
 }
 
-.sektion73-day.is-selected {
-    color: #fff;
-    font-weight: 600;
-    background: #8B3DFF;
+.sektion73-day.is-selected{
+  background: rgba(255,255,255,.92);
+  color: rgba(0,0,0,.90);
 }
 
 .sektion73-calactions{
@@ -424,13 +418,14 @@ display:none;
 .sektion73-sheet.is-open{
   pointer-events: auto;
 }
-.sektion73-sheet__overlay {
-    opacity: 0;
-    will-change: opacity;
-    background: rgba(25, 25, 25, .55);
-    transition: opacity .26s;
-    position: absolute;
-    inset: 0;
+
+.sektion73-sheet__overlay{
+  position:absolute;
+  inset:0;
+  background: rgba(0,0,0,.45);
+  opacity: 0;
+  transition: opacity .22s ease;
+  will-change: opacity;
 }
 .sektion73-sheet.is-open .sektion73-sheet__overlay{
   opacity: 1;
@@ -443,27 +438,28 @@ display:none;
   right:0;
   bottom:0;
 
-  background: #fff;
+  background: rgba(10, 14, 28, .98);
   border-radius: 18px 18px 0 0;
-  border-top: none;
+  border-top: 1px solid rgba(255,255,255,.12);
   max-height: 82vh;
   overflow:auto;
 
-  transform: translate3d(0, 100%, 0);
+  transform: translate3d(0, 28px, 0);
   opacity: 0;
+  filter: blur(6px);
 
   transition:
-    transform 420ms cubic-bezier(.16,1,.3,1),
-    opacity 260ms ease;
-  will-change: transform, opacity;
-  backface-visibility: hidden;
-  transform-origin: bottom center;
+    transform .34s cubic-bezier(.2,.9,.2,1),
+    opacity .22s ease,
+    filter .34s ease;
+  will-change: transform, opacity, filter;
 }
 
 /* OPEN */
 .sektion73-sheet.is-open .sektion73-sheet__panel{
-  transform: translate3d(0, 0, 0) scale(1);
+  transform: translate3d(0, 0, 0);
   opacity: 1;
+  filter: blur(0);
 }
 
 /* CLOSING */
@@ -471,8 +467,16 @@ display:none;
   opacity: 0;
 }
 .sektion73-sheet.is-closing .sektion73-sheet__panel{
-  transform: translate3d(0, 100%, 0);
+  transform: translate3d(0, 36px, 0);
   opacity: 0;
+  filter: blur(6px);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .sektion73-sheet__overlay,
+  .sektion73-sheet__panel{
+    transition: none !important;
+  }
 }
 
 .sektion73-sheet__grab{

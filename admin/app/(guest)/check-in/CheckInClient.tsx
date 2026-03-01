@@ -1,14 +1,13 @@
 "use client";
 
 import type * as React from "react";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppLoader from "../_components/AppLoader";
-import SuccessLoader from "../_components/SuccessLoader";
 
 type Method = "booking" | "nameArrival" | "email";
-type Step = "choose" | "form" | "success";
+type Step = "choose" | "form";
 
 type SubmitPayload = {
   method: Method;
@@ -82,11 +81,7 @@ function startOfDay(d: Date) {
 }
 
 function sameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
 function emailOk(v: string) {
@@ -105,6 +100,10 @@ type DatePickerProps = {
 
 function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePickerProps) {
   const [open, setOpen] = useState(false);
+  const [baseMonth, setBaseMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
 
   const saved = useMemo(() => parseISODate(valueISO), [valueISO]);
   const [tempSelected, setTempSelected] = useState<Date | null>(null);
@@ -122,9 +121,7 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
   }, [closeSignal]);
 
   const isMobile = () =>
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(max-width: 680px)").matches;
+    typeof window !== "undefined" && window.matchMedia && window.matchMedia("(max-width: 680px)").matches;
 
   function openPicker() {
     if (mode === "saveCancel") setTempSelected(saved ? new Date(saved) : null);
@@ -159,21 +156,19 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
     closePicker();
   }
 
-  function renderMonths(monthsCount: number) {
+  function renderMonths(monthsCount: 1 | 2) {
     const today = startOfDay(new Date());
     const selected = mode === "saveCancel" ? tempSelected : saved;
-    const now = new Date();
-    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const months: React.ReactNode[] = [];
 
     for (let i = 0; i < monthsCount; i++) {
-      const monthDate = new Date(startMonth.getFullYear(), startMonth.getMonth() + i, 1);
+      const monthDate = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + i, 1);
       const y = monthDate.getFullYear();
       const m = monthDate.getMonth();
 
       const firstDay = new Date(y, m, 1);
-      const jsDow = firstDay.getDay();
+      const jsDow = firstDay.getDay(); // 0=sön
       const mondayIndex = jsDow === 0 ? 6 : jsDow - 1;
       const daysInMonth = new Date(y, m + 1, 0).getDate();
 
@@ -212,8 +207,38 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
             <div className="sektion73-cal__title">
               {monthNamesSv[m]} {y}
             </div>
+
+            {i === 0 && (
+              <div className="sektion73-cal__nav">
+                <button
+                  type="button"
+                  className="sektion73-cal__navbtn"
+                  aria-label="Föregående månad"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setBaseMonth(new Date(baseMonth.getFullYear(), baseMonth.getMonth() - 1, 1));
+                  }}
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  className="sektion73-cal__navbtn"
+                  aria-label="Nästa månad"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setBaseMonth(new Date(baseMonth.getFullYear(), baseMonth.getMonth() + 1, 1));
+                  }}
+                >
+                  ›
+                </button>
+              </div>
+            )}
           </div>
 
+          <div className="sektion73-cal__dow">{dowSv.map((x) => <div key={x}>{x}</div>)}</div>
           <div className="sektion73-cal__grid">
             {blanks}
             {days}
@@ -230,62 +255,41 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
     return d ? formatSv(d) : "Välj datum";
   }, [valueISO]);
 
-  const [sheetVisible, setSheetVisible] = useState(false);
-  const [sheetAnimating, setSheetAnimating] = useState(false);
-  const closeTimeoutRef = useRef<number | null>(null);
+  const [present, setPresent] = useState(false);
+  const [phaseOpen, setPhaseOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   useEffect(() => {
-    if (open && isMobile()) {
-      if (closeTimeoutRef.current) {
-        window.clearTimeout(closeTimeoutRef.current);
-        closeTimeoutRef.current = null;
-      }
-      
-      setSheetVisible(true);
-      
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setSheetAnimating(true);
-        });
-      });
-    } else if (!open && sheetVisible) {
-      setSheetAnimating(false);
-      
-      closeTimeoutRef.current = window.setTimeout(() => {
-        setSheetVisible(false);
-        closeTimeoutRef.current = null;
-      }, 420);
+    if (open) {
+      setPresent(true);
+      setClosing(false);
+      setPhaseOpen(false);
+
+      const raf = requestAnimationFrame(() => setPhaseOpen(true));
+      return () => cancelAnimationFrame(raf);
     }
 
-    return () => {
-      if (closeTimeoutRef.current) {
-        window.clearTimeout(closeTimeoutRef.current);
-        closeTimeoutRef.current = null;
-      }
-    };
-  }, [open, sheetVisible]);
+    if (present) {
+      setClosing(true);
+      setPhaseOpen(false);
+
+      const t = window.setTimeout(() => {
+        setPresent(false);
+        setClosing(false);
+      }, 360);
+      return () => window.clearTimeout(t);
+    }
+  }, [open, present]);
 
   const mobileSheet =
-    mounted && sheetVisible && isMobile()
+    mounted && present && isMobile()
       ? createPortal(
-          <div className={["sektion73-sheet", sheetAnimating ? "is-open" : "is-closing"].join(" ").trim()}>
+          <div className={["sektion73-sheet", phaseOpen ? "is-open" : "", closing ? "is-closing" : ""].join(" ").trim()}>
             <div className="sektion73-sheet__overlay" onClick={closePicker} />
             <div className="sektion73-sheet__panel" role="dialog" aria-label="Välj datum">
               <div className="sektion73-sheet__grab" />
-
-              <div
-                className="sektion73-cal__dow"
-                style={{ position: "sticky", top: 0, background: "white", zIndex: 10, padding: "12px 20px 8px" }}
-              >
-                {dowSv.map((x) => (
-                  <div key={x}>{x}</div>
-                ))}
-              </div>
-
               <div className="sektion73-sheet__content">
-                <div className="sektion73-calwrap" style={{ paddingBottom: "20px" }}>
-                  {renderMonths(12)}
-                </div>
+                <div className="sektion73-calwrap">{renderMonths(1)}</div>
 
                 {mode === "saveCancel" ? (
                   <div className="sektion73-calactions" style={{ marginTop: 10 }}>
@@ -302,9 +306,7 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
                     </button>
                   </div>
                 ) : (
-                  <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>
-                    Välj ett datum så stängs kalendern.
-                  </div>
+                  <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>Välj ett datum så stängs kalendern.</div>
                 )}
               </div>
             </div>
@@ -354,39 +356,14 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sektion73-datepicker__inner">
-          <div
-            className="sektion73-cal__dow"
-            style={{ position: "sticky", top: 0, background: "white", zIndex: 10, padding: "8px 0" }}
-          >
-            {dowSv.map((x) => (
-              <div key={x}>{x}</div>
-            ))}
-          </div>
-
-          <div
-            className="sektion73-calwrap"
-            style={{
-              maxHeight: "500px",
-              overflowY: "auto",
-              display: "grid",
-              gridTemplateColumns: typeof window !== "undefined" && window.innerWidth >= 720 ? "repeat(2, 1fr)" : "1fr",
-              gap: "20px",
-            }}
-          >
-            {renderMonths(12)}
-          </div>
+          <div className="sektion73-calwrap">{renderMonths(typeof window !== "undefined" && window.innerWidth >= 720 ? 2 : 1)}</div>
 
           {mode === "saveCancel" && (
             <div className="sektion73-calactions">
               <button type="button" className="sektion73-btn" onClick={cancel}>
                 Avbryt
               </button>
-              <button
-                type="button"
-                className="sektion73-btn sektion73-btn--primary"
-                onClick={save}
-                disabled={!tempSelected}
-              >
+              <button type="button" className="sektion73-btn sektion73-btn--primary" onClick={save} disabled={!tempSelected}>
                 Spara
               </button>
             </div>
@@ -405,111 +382,31 @@ function titleForMethod(m: Method) {
   return "E-post";
 }
 
-function SuccessScreen({ nextHref, seconds = 60 }: { nextHref: string; seconds?: number }) {
-  const router = useRouter();
-  const [countdown, setCountdown] = useState(seconds);
-
-  useEffect(() => {
-    setCountdown(seconds);
-    const t = window.setInterval(() => {
-      setCountdown((v) => {
-        const nv = v - 1;
-        if (nv <= 0) {
-          window.clearInterval(t);
-          router.push(nextHref);
-          return 0;
-        }
-        return nv;
-      });
-    }, 1000);
-    return () => window.clearInterval(t);
-  }, [router, nextHref, seconds]);
-
-  const size = 26;
-  const stroke = 1.5;
-  const r = (size - stroke) / 2;
-  const c = 2 * 3.141592653589793 * r;
-  const progress = Math.max(0, Math.min(1, countdown / seconds));
-  const dashoffset = c * (1 - progress);
-
-  return (
-    <div className="sektion73-success">
-      <div className="sektion73-success__top">
-        <SuccessLoader size={160} ariaLabel="Success" />
-        <div className="sektion73-success__title">Välkommen!</div>
-        <div className="sektion73-success__body">Incheckningen är klar. Varmt välkommen!</div>
-      </div>
-
-      <div className="sektion73-success__ctaWrap">
-        <button
-          type="button"
-          className="sektion73-btn sektion73-btn--primary sektion73-btn--withTimer"
-          onClick={() => router.push(nextHref)}
-        >
-          <span className="sektion73-timerPuck" aria-hidden="true">
-            <span className="sektion73-timerPuck__inner">
-              <svg
-                width={size}
-                height={size}
-                viewBox={`0 0 ${size} ${size}`}
-                style={{ display: "block", transform: "rotate(-90deg) scaleX(-1)" }}
-              >
-                <circle
-                  cx={size / 2}
-                  cy={size / 2}
-                  r={r}
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={stroke}
-                  strokeLinecap="round"
-                  strokeDasharray={`${c} ${c}`}
-                  strokeDashoffset={dashoffset}
-                  style={{ transition: "stroke-dashoffset 1s linear" }}
-                />
-              </svg>
-              <span className="sektion73-timerPuck__num">{countdown}</span>
-            </span>
-          </span>
-          Fortsätt
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function CheckInClient({ onSubmit }: Props) {
   const router = useRouter();
   const params = useSearchParams();
 
-  const nextHref = (params.get("next") || "/").trim() || "/";
   const [step, setStep] = useState<Step>("choose");
   const [method, setMethod] = useState<Method>("booking");
   const [busy, setBusy] = useState(false);
 
+  // ✅ loader för 3 val-knappar (step "choose")
   const [pickBusy, setPickBusy] = useState<Method | null>(null);
 
+  // booking
   const [bookingId, setBookingId] = useState("");
   const [lastName, setLastName] = useState("");
 
+  // name+arrival
   const [fullName, setFullName] = useState("");
   const [arrivalISO, setArrivalISO] = useState("");
 
+  // email
   const [email, setEmail] = useState("");
   const [emailLastName, setEmailLastName] = useState("");
   const [departureISO, setDepartureISO] = useState("");
 
   const [error, setError] = useState<string | null>(null);
-
-  const [countdown, setCountdown] = useState(20);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      (window as any).__forceBusy = () => setBusy(true);
-      (window as any).__clearBusy = () => setBusy(false);
-      (window as any).__forcePick = (m: Method) => setPickBusy(m);
-      (window as any).__clearPick = () => setPickBusy(null);
-    }
-  }, []);
 
   const closeSignal = `${step}:${method}`;
 
@@ -519,8 +416,10 @@ export default function CheckInClient({ onSubmit }: Props) {
       setMethod(m);
       setStep("form");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ✅ när vi lämnar choose-steget: släck loader på valknapparna
   useEffect(() => {
     if (step !== "choose") setPickBusy(null);
   }, [step]);
@@ -536,7 +435,7 @@ export default function CheckInClient({ onSubmit }: Props) {
 
   function pickMethod(next: Method) {
     setError(null);
-    setPickBusy(next);
+    setPickBusy(next); // ✅ text försvinner i vald knapp, loader visas
     setMethod(next);
     setStep("form");
   }
@@ -548,15 +447,38 @@ export default function CheckInClient({ onSubmit }: Props) {
   }
 
   async function submit() {
-    if (busy) return;
     setError(null);
-    setBusy(true);
 
-    await new Promise((r) => setTimeout(r, 2500));
+    try {
+      setBusy(true);
 
-    setBusy(false);
-    if (typeof document !== "undefined") (document.activeElement as any)?.blur?.();
-    setStep("success");
+      if (method === "booking") {
+        if (!bookingId.trim() || !lastName.trim()) throw new Error("Fyll i bokningsnummer och efternamn.");
+        await onSubmit({ method, bookingId: bookingId.trim(), lastName: lastName.trim() });
+        return;
+      }
+
+      if (method === "nameArrival") {
+        if (!fullName.trim() || !arrivalISO.trim()) throw new Error("Fyll i namn och incheckningsdatum.");
+        await onSubmit({ method, name: fullName.trim(), arrivalDateISO: arrivalISO.trim() });
+        return;
+      }
+
+      if (!emailOk(email) || !emailLastName.trim() || !departureISO.trim()) {
+        throw new Error("Fyll i e-post, efternamn och utcheckningsdatum.");
+      }
+
+      await onSubmit({
+        method,
+        email: email.trim(),
+        lastName: emailLastName.trim(),
+        departureDateISO: departureISO.trim(),
+      });
+    } catch (e: any) {
+      setError(e?.message || "Något gick fel. Försök igen.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function renderForm() {
@@ -707,10 +629,6 @@ export default function CheckInClient({ onSubmit }: Props) {
     );
   }
 
-  if (step === "success") {
-    return <SuccessScreen nextHref={nextHref} seconds={60} />;
-  }
-
   return (
     <div className="sektion73-modal">
       <header className="sektion73-modal__header">
@@ -721,11 +639,8 @@ export default function CheckInClient({ onSubmit }: Props) {
       </header>
 
       <div className="sektion73-modal__body">
-        <div
-          className="sektion73-steps"
-          style={{ transform: step === "choose" ? "translateX(0%)" : "translateX(-100%)" }}
-        >
-          <section className="sektion73-step" style={{ pointerEvents: step === "choose" ? "auto" : "none" }}>
+        <div className="sektion73-steps" style={{ transform: step === "choose" ? "translateX(0%)" : "translateX(-100%)" }}>
+          <section className="sektion73-step" aria-hidden={step !== "choose"} style={{ pointerEvents: step === "choose" ? "auto" : "none" }}>
             <div className="sektion73-card__header">
               <div>
                 <h1 className="sektion73-title">Checka in</h1>
@@ -734,15 +649,25 @@ export default function CheckInClient({ onSubmit }: Props) {
             </div>
 
             <div className="sektion73-choicegrid">
-              <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("booking")}>
+              <button
+                type="button"
+                className="sektion73-choicebtn"
+                disabled={pickBusy !== null}
+                onClick={() => pickMethod("booking")}
+              >
                 <div className="sektion73-choicebtn__title">
-                  {pickBusy === "booking" ? <AppLoader size={24} ariaLabel="Loading" /> : "Bokningsnummer"}
+                  {pickBusy === "booking" ? <AppLoader size={18} ariaLabel="Loading" /> : "Bokningsnummer"}
                 </div>
               </button>
 
-              <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("email")}>
+              <button
+                type="button"
+                className="sektion73-choicebtn"
+                disabled={pickBusy !== null}
+                onClick={() => pickMethod("email")}
+              >
                 <div className="sektion73-choicebtn__title">
-                  {pickBusy === "email" ? <AppLoader size={24} ariaLabel="Loading" /> : "E-post"}
+                  {pickBusy === "email" ? <AppLoader size={18} ariaLabel="Loading" /> : "E-post"}
                 </div>
               </button>
 
@@ -752,9 +677,14 @@ export default function CheckInClient({ onSubmit }: Props) {
                 <span className="sektion73-divider__line" />
               </div>
 
-              <button type="button" className="sektion73-choicebtn" onClick={() => pickMethod("nameArrival")}>
+              <button
+                type="button"
+                className="sektion73-choicebtn"
+                disabled={pickBusy !== null}
+                onClick={() => pickMethod("nameArrival")}
+              >
                 <div className="sektion73-choicebtn__title">
-                  {pickBusy === "nameArrival" ? <AppLoader size={24} ariaLabel="Loading" /> : "Namn + datum"}
+                  {pickBusy === "nameArrival" ? <AppLoader size={18} ariaLabel="Loading" /> : "Namn + datum"}
                 </div>
               </button>
             </div>
@@ -762,7 +692,7 @@ export default function CheckInClient({ onSubmit }: Props) {
             {error && <div className="sektion73-alert">{error}</div>}
           </section>
 
-          <section className="sektion73-step" style={{ pointerEvents: step === "form" ? "auto" : "none" }}>
+          <section className="sektion73-step" aria-hidden={step !== "form"} style={{ pointerEvents: step === "form" ? "auto" : "none" }}>
             {renderForm()}
             {error && <div className="sektion73-alert">{error}</div>}
 
@@ -770,11 +700,11 @@ export default function CheckInClient({ onSubmit }: Props) {
               <button
                 type="button"
                 className="sektion73-btn sektion73-btn--primary"
-                disabled={!canSubmit()}
+                disabled={busy || !canSubmit()}
                 onClick={submit}
                 aria-busy={busy ? "true" : "false"}
               >
-                {busy ? <AppLoader size={24} ariaLabel="Loading" /> : "Fortsätt"}
+                {busy ? <AppLoader size={18} ariaLabel="Loading" /> : "Fortsätt"}
               </button>
             </div>
           </section>

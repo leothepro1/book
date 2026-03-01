@@ -2,8 +2,6 @@ import { getTenantConfig } from "../../_lib/tenant";
 import { buttonClass, backgroundStyle } from "../../_lib/theme";
 import { resolveBookingFromToken } from "../../_lib/portal/resolveBooking";
 
-import LoadingWrapper from "../../_components/LoadingWrapper";
-import DevLoadingToggle from "../../_components/DevLoadingToggle";
 export const dynamic = "force-dynamic";
 
 function isSameDay(a: Date, b: Date) {

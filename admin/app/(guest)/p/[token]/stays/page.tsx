@@ -1,5 +1,5 @@
+import { resolveBookingFromToken } from "../../../_lib/portal/resolveBooking";
 import { prisma } from "../../../../_lib/db/prisma";
-
 
 function formatDate(d: Date, lang: "sv" | "en") {
   return d.toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", {
@@ -11,20 +11,17 @@ function formatDate(d: Date, lang: "sv" | "en") {
 
 export const dynamic = "force-dynamic";
 
-export default async function Page({
-  params,
-  searchParams,
-}: {
-  params: { token?: string };
-  searchParams?: Record<string, string | string[] | undefined>;
+export default async function Page(props: {
+  params: Promise<{ token?: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const token = params?.token;
-  const lang =
-    (searchParams?.lang === "en" ? "en" : "sv") as "sv" | "en";
+  const params = await props.params;
+  const searchParams = (await props.searchParams) ?? {};
 
-  const current = await prisma.booking.findFirst({
-    where: token ? { id: token } : undefined,
-  });
+  const token = params?.token;
+  const lang = (searchParams?.lang === "en" ? "en" : "sv") as "sv" | "en";
+
+  const current = await resolveBookingFromToken(token);
 
   if (!current) {
     return <div className="g-container">No booking found.</div>;
@@ -42,10 +39,7 @@ export default async function Page({
 
   return (
     <div className="g-container">
-      <h1
-        className="g-heading"
-        style={{ fontSize: 22, marginBottom: 16 }}
-      >
+      <h1 className="g-heading" style={{ fontSize: 22, marginBottom: 16 }}>
         {lang === "en" ? "Stays" : "Bokningar"}
       </h1>
 
@@ -59,37 +53,24 @@ export default async function Page({
             />
 
             <div className="g-stayMeta">
-              {/* Unit / Property reference */}
-              <div className="g-stayTitle">
-                {b.unit}
-              </div>
+              <div className="g-stayTitle">{b.unit}</div>
 
-              {/* Dates */}
               <div className="g-stayDates">
                 {formatDate(new Date(b.arrival), lang)} –{" "}
                 {formatDate(new Date(b.departure), lang)}
               </div>
 
-              {/* Guest name */}
               <div style={{ fontSize: 14, fontWeight: 600 }}>
                 {b.firstName} {b.lastName}
               </div>
 
-              {/* Location (if exists) */}
               {(b.city || b.country) && (
                 <div className="g-muted">
                   {[b.city, b.country].filter(Boolean).join(", ")}
                 </div>
               )}
 
-              {/* Status */}
-              <div
-                style={{
-                  fontSize: 13,
-                  opacity: 0.85,
-                  textTransform: "capitalize",
-                }}
-              >
+              <div style={{ fontSize: 13, opacity: 0.85, textTransform: "capitalize" }}>
                 {b.status}
               </div>
             </div>

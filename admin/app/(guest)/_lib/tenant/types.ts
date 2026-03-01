@@ -4,8 +4,19 @@ import type { FooterConfig } from "../footer/types";
 import type { FeatureFlags } from "../features/types";
 import type { VisibilityRule } from "../rules/types";
 
+export type PropertySettings = {
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  checkInTime: string;
+  checkOutTime: string;
+  timezone: string;
+};
+
 export type TenantConfig = {
   tenantId: string;
+  property: PropertySettings;
 
   theme: ThemeConfig;
   home: HomeConfig;
