@@ -44,8 +44,8 @@ export default function LoadingWrapper({ children, minLoadTime = 0 }: Props) {
           zIndex: 1,
         }}
       >
-        <div style={{ transform: "scale(2)" }}>
-          <AppLoader size={48} colorVar="--text" ariaLabel="Laddar portal" />
+        <div style={{  }}>
+          <AppLoader size={96} colorVar="--text" ariaLabel="Laddar portal" />
         </div>
       </div>
     );

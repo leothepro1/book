@@ -3,7 +3,6 @@ import type { TenantConfig } from "./types";
 export async function getTenantConfig(_hint: string): Promise<TenantConfig> {
   return {
     tenantId: "default",
-
     property: {
       name: "Apelviken Camping",
       address: "Apelviksvägen 47, 439 76 Kungsbacka",
@@ -13,39 +12,32 @@ export async function getTenantConfig(_hint: string): Promise<TenantConfig> {
       checkOutTime: "11:00",
       timezone: "Europe/Stockholm",
     },
-
     theme: {
       version: 1,
-
       colors: {
         background: "#fff",
         text: "#2D2C2B",
         buttonBg: "#ffffff",
         buttonText: "#0b1020",
       },
-
       header: {
         logoUrl: undefined,
         logoWidth: 120,
       },
-
       background: {
         mode: "fill",
       },
-
       buttons: {
         variant: "solid",
         radius: "rounder",
         shadow: "soft",
       },
-
       typography: {
         headingFont: "inter",
         bodyFont: "inter",
         mutedOpacity: 0.72,
       },
     },
-
     home: {
       version: 1,
       links: [
@@ -71,7 +63,6 @@ export async function getTenantConfig(_hint: string): Promise<TenantConfig> {
         },
       ],
     },
-
     footer: {
       version: 1,
       items: [
@@ -101,15 +92,16 @@ export async function getTenantConfig(_hint: string): Promise<TenantConfig> {
         },
       ],
     },
-
     features: {
       commerceEnabled: false,
       accountEnabled: false,
-
       notificationsEnabled: true,
       languageSwitcherEnabled: true,
     },
-
+    supportLinks: {
+      supportUrl: "https://apelviken.se/support",
+      faqUrl: "https://apelviken.se/faq",
+    },
     rules: [],
   };
 }

@@ -15,6 +15,7 @@ export type PropertySettings = {
 };
 
 export type TenantConfig = {
+  supportLinks: SupportLinks;
   tenantId: string;
   property: PropertySettings;
 
@@ -24,4 +25,10 @@ export type TenantConfig = {
 
   features: FeatureFlags;
   rules: VisibilityRule[];
+};
+
+
+export type SupportLinks = {
+  supportUrl?: string;
+  faqUrl?: string;
 };

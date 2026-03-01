@@ -1,5 +1,6 @@
 "use client";
 
+import LinkCardModal from "../../../_components/LinkCardModal";
 import { useMemo, useState, useTransition } from "react";
 import type { TenantConfig } from "../../../_lib/tenant/types";
 import { buttonClass } from "../../../_lib/theme";
@@ -400,12 +401,12 @@ export default function AccountClient({
           <LinkRow
             label={t.support.customerService}
             icon={<Headset size={18} strokeWidth={2} />}
-            onClick={() => openPanel("support_customerService")}
+            onClick={() => (window.location.href = `/p/${token}/support`)}
           />
           <LinkRow
             label={t.support.helpCenter}
             icon={<LifeBuoy size={18} strokeWidth={2} />}
-            onClick={() => openPanel("support_helpCenter")}
+            onClick={() => (window.location.href = `/p/${token}/help-center`)}
           />
           <LinkRow
             label={t.support.feedback}
@@ -574,14 +575,20 @@ export default function AccountClient({
               </div>
 
               <div style={{ display: "grid", gap: 10 }}>
-                <SupportActionRow label={t.supportPanels.helpCenter.links.faq} onClick={() => {}} />
-                <SupportActionRow
-                  label={t.supportPanels.helpCenter.links.guides}
-                  onClick={() => {}}
+                <LinkCardModal
+                  title={t.supportPanels.helpCenter.links.faq}
+                  url={config.supportLinks.faqUrl || ""}
+                  trigger={<SupportActionRow label={t.supportPanels.helpCenter.links.faq} onClick={() => {}} />}
                 />
-                <SupportActionRow
-                  label={t.supportPanels.helpCenter.links.policies}
-                  onClick={() => {}}
+                <LinkCardModal
+                  title={t.supportPanels.helpCenter.links.guides}
+                  url={config.supportLinks.guidesUrl || ""}
+                  trigger={<SupportActionRow label={t.supportPanels.helpCenter.links.guides} onClick={() => {}} />}
+                />
+                <LinkCardModal
+                  title={t.supportPanels.helpCenter.links.policies}
+                  url={config.supportLinks.policiesUrl || ""}
+                  trigger={<SupportActionRow label={t.supportPanels.helpCenter.links.policies} onClick={() => {}} />}
                 />
               </div>
             </div>
