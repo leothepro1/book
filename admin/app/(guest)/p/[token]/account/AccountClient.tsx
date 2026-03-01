@@ -574,23 +574,6 @@ export default function AccountClient({
                 </div>
               </div>
 
-              <div style={{ display: "grid", gap: 10 }}>
-                <LinkCardModal
-                  title={t.supportPanels.helpCenter.links.faq}
-                  url={config.supportLinks.faqUrl || ""}
-                  trigger={<SupportActionRow label={t.supportPanels.helpCenter.links.faq} onClick={() => {}} />}
-                />
-                <LinkCardModal
-                  title={t.supportPanels.helpCenter.links.guides}
-                  url={config.supportLinks.guidesUrl || ""}
-                  trigger={<SupportActionRow label={t.supportPanels.helpCenter.links.guides} onClick={() => {}} />}
-                />
-                <LinkCardModal
-                  title={t.supportPanels.helpCenter.links.policies}
-                  url={config.supportLinks.policiesUrl || ""}
-                  trigger={<SupportActionRow label={t.supportPanels.helpCenter.links.policies} onClick={() => {}} />}
-                />
-              </div>
             </div>
           )}
 
