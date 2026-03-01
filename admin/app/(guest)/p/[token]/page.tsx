@@ -4,6 +4,7 @@ import { resolveBookingFromToken } from "../../_lib/portal/resolveBooking";
 
 import LoadingWrapper from "../../_components/LoadingWrapper";
 import DevLoadingToggle from "../../_components/DevLoadingToggle";
+import WeatherWidget from "../../_components/WeatherWidget";
 export const dynamic = "force-dynamic";
 
 function isSameDay(a: Date, b: Date) {
@@ -230,21 +231,11 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
             color: "var(--text)",
           }}
         >
-          <div style={{ fontWeight: 900, marginBottom: 10 }}>Väder</div>
-
-          <div style={{ display: "grid", gap: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ opacity: config.theme.typography.mutedOpacity }}>Idag</span>
-              <span style={{ fontWeight: 800 }}>—° / —°</span>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ opacity: config.theme.typography.mutedOpacity }}>Imorgon</span>
-              <span style={{ fontWeight: 800 }}>—° / —°</span>
-            </div>
-
-            <div style={{ fontSize: 12, opacity: config.theme.typography.mutedOpacity }}>(Placeholder — kopplas till väder senare)</div>
-          </div>
+          <WeatherWidget 
+            latitude={config.property.latitude}
+            longitude={config.property.longitude}
+            mutedOpacity={config.theme.typography.mutedOpacity}
+          />
         </div>
       </div>
 

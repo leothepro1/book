@@ -435,7 +435,7 @@ function SuccessScreen({ nextHref, seconds = 60 }: { nextHref: string; seconds?:
   return (
     <div className="sektion73-success">
       <div className="sektion73-success__top">
-        <SuccessLoader size={160} ariaLabel="Success" />
+        <SuccessLoader size={160} />
         <div className="sektion73-success__title">Välkommen!</div>
         <div className="sektion73-success__body">Incheckningen är klar. Varmt välkommen!</div>
       </div>
