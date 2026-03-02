@@ -134,7 +134,7 @@ export default async function Page() {
             </div>
             <div style={{ opacity: 0.8, marginTop: 6 }}>
               <div>
-                <b>Bokningsnummer:</b> {b.bookingNumber}
+                <b>Bokningsnummer:</b> {b.id}
               </div>
               <div>
                 <b>DB id:</b> {b.id}
