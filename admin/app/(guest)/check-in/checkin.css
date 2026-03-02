@@ -40,24 +40,24 @@
 }
 
 .sektion73-card__header {
-    justify-content: center;
+    justify-content: start;
     align-items: center;
     gap: 12px;
-    margin: 10px 0px 32px 0px;
+    margin: 25px 0 32px;
     display: flex;
 }
 .sektion73-title {
-    font-size: 29px;
+    font-size: 26px;
     font-weight: 700;
     line-height: 1.15;
     font-family: var(--font-heading, ui-sans-serif);
     color: var(--text);
     margin: 0;
-    text-align: center;
+    text-align: left;
 }
 .sektion73-muted {
     color: var(--text);
-    text-align: center;
+    text-align: left;
     margin: 8px 0 0;
     font-size: 14px;
 }
@@ -160,25 +160,25 @@
 }
 
 .sektion73-input:focus{
-  border: 1px solid #8b3dff;
-  outline: 1px solid #8b3dff;
+  border: 1px solid var(--button-bg);
+  outline: 1px solid var(--button-bg);
 }
 
 .sektion73-help {
     display: none;
 }
 
-/* Alert */
-.sektion73-alert{
-  margin-top: 14px;
-  border: 1px solid rgba(255,255,255,.18);
-  background: rgba(255,255,255,.06);
-  color: rgba(255,255,255,.92);
-  border-radius: 12px;
-  padding: 12px 12px;
-  font-size: 14px;
+.sektion73-alert {
+    color: #a94442;
+    background: #F2DEDE;
+    border: 1px solid #a94442;
+    border-radius: 8px;
+    margin-top: 14px;
+    padding: 12px;
+    font-size: 14px;
+    font-family: Inter, sans-serif;
+    font-weight: 500;
 }
-
 /* Actions */
 .sektion73-actions{
   display:flex;
@@ -204,7 +204,7 @@
 }
 
 .sektion73-btn--primary {
-    background: #8b3dff;
+    background: var(--button-bg);
     color: #fff;
     border: none;
 }
@@ -407,7 +407,7 @@ display:none;
 .sektion73-day.is-selected {
     color: #fff;
     font-weight: 600;
-    background: #8B3DFF;
+    background: var(--button-bg);
 }
 
 .sektion73-calactions{
@@ -509,7 +509,7 @@ display:none;
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: var(--background);
+  background: #FBFAF9;
   color: var(--text);
   display: flex;
   flex-direction: column;
@@ -540,7 +540,7 @@ display:none;
     align-items: center;
     display: inline-flex;
 }
-.sektion73-backbtn:hover { background: rgba(255,255,255,.10); }
+.sektion73-backbtn:hover { background: #E0E2D9; }
 
 .sektion73-modal__title {
   font-size: 15px;
@@ -549,10 +549,10 @@ display:none;
   letter-spacing: -0.15px;
 }
 
-/* Body with sliding pages */
 .sektion73-modal__body {
-  flex: 1;
-  overflow: hidden;
+    flex: 1;
+    overflow: hidden;
+    padding: 0px 18px;
 }
 
 .sektion73-steps {
@@ -680,8 +680,8 @@ display:none;
 }
 
 .sektion73-success .sektion73-timerPuck__inner {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   position: relative;
@@ -749,4 +749,327 @@ display:none;
 
 .sektion73-timerPuck svg{
   opacity: 0.95;
+}
+
+.sektion73-lookup-error {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #fff4f4;
+  border: 1px solid #ffd6d6;
+  color: #7a1c1c;
+  animation: fadeInLookup .18s ease;
+}
+
+.sektion73-lookup-error__title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.sektion73-lookup-error__body {
+  font-size: 14px;
+  line-height: 1.45;
+  opacity: .9;
+}
+
+@keyframes fadeInLookup {
+  from { opacity:0; transform:translateY(6px); }
+  to { opacity:1; transform:translateY(0); }
+}
+
+/* Override: Perfect center title regardless of back button */
+.sektion73-modal__header {
+  position: relative !important;
+}
+
+.sektion73-modal__title {
+  position: absolute !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  pointer-events: none !important;
+}
+
+.sektion73-backbtn {
+  z-index: 1 !important;
+  position: relative !important;
+}
+
+.booking-card {
+    background: var(--surface);
+    border: none;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 0 0 1px #0000000a, 0 2px 4px #0000000f;
+}
+
+.booking-card__hero {
+  height: 160px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.booking-card__badge {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #4667D3;
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.booking-card__badge--ready {
+  background: #4767D4;
+}
+
+.booking-card__badge--pending {
+  background: #f59e0b;
+}
+
+.booking-card__content {
+  padding: 16px;
+}
+
+.booking-card__unit {
+    color: var(--text);
+    margin-bottom: 12px;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1em;
+}
+
+.booking-card__dates {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.booking-card__date {
+  flex: 1;
+}
+
+.booking-card__date--right {
+  text-align: right;
+}
+
+.booking-card__date-label {
+  font-size: 12px;
+  opacity: 0.6;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+.booking-card__date-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.booking-card__arrow {
+  flex-shrink: 0;
+  color: #121212;
+}
+
+/* Booking confirmation card */
+.booking-card {
+  border-radius: 18px;
+  overflow: hidden;
+  border: none;
+  background: var(--surface);
+  box-shadow: 0px 0px 0px 1px rgba(0, 0, 0, .04), 0px 2px 4px rgba(0, 0, 0, .06);
+}
+
+.booking-card__hero {
+  height: 160px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+.booking-card__badge {
+    color: #fff;
+    background: #4667d3;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    position: absolute;
+    bottom: 9px;
+    right: 12px;
+    box-shadow: 0 2px 8px #00000026;
+}
+
+.booking-card__badge--ready {
+  background: #4667d3;
+}
+
+.booking-card__badge--pending {
+  background: #f59e0b;
+}
+
+.booking-card__content {
+  padding: 16px;
+}
+
+.booking-card__unit {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.booking-card__dates {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.booking-card__date {
+  flex: 1;
+}
+
+.booking-card__date--right {
+  text-align: right;
+}
+
+.booking-card__date-label {
+    opacity: .7;
+    color: var(--text);
+    margin-bottom: 0;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.booking-card__date-value {
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 400;
+}
+
+.booking-card__arrow {
+  flex-shrink: 0;
+  color: #121212;
+}
+
+/* Signature components */
+.signature-wrapper {
+  margin-top: 20px;
+}
+
+.signature-canvas-container {
+  position: relative;
+}
+
+.signature-canvas {
+    cursor: crosshair;
+    touch-action: none;
+    background: #fff;
+    border: none;
+    border-radius: 12px;
+    width: 100%;
+    height: 200px;
+    box-shadow: 0 0 0 1px #0000000a, 0 2px 4px #0000000f;
+}
+
+.signature-clear-btn {
+    cursor: pointer;
+    color: #2d2c2b;
+    box-shadow: none;
+    background: #e6e5e3;
+    border: none;
+    border-radius: 8px;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1em;
+    display: inline-flex;
+    position: absolute;
+    bottom: 11px;
+    left: 18px;
+}
+
+.terms-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 14px;
+}
+
+.terms-checkbox {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 2px solid #D7DADE;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.terms-checkbox--checked {
+  background: var(--button-bg);
+  border-color: var(--button-bg);
+}
+
+.terms-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.terms-link {
+  color: var(--button-bg);
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+/* Progress bar som border-bottom */
+.sektion73-modal__header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--button-bg);
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 3;
+}
+
+/* Progress per steg */
+.sektion73-modal__header[data-step="form"]::after {
+  width: 25%;
+}
+
+.sektion73-modal__header[data-step="confirm"]::after {
+  width: 50%;
+}
+
+.sektion73-modal__header[data-step="signature"]::after {
+  width: 75%;
+}
+
+.sektion73-modal__header[data-step="success"]::after {
+  width: 100%;
+}
+
+/* Signaturlinje - 20px från botten, 70% bredd, centrerad */
+.signature-canvas-container::before {
+    content: "";
+    pointer-events: none;
+    z-index: 1;
+    background: #e6e6e6;
+    width: 90%;
+    height: 1px;
+    position: absolute;
+    bottom: 50px;
+    left: 50%;
+    transform: translateX(-50%);
 }

@@ -18,17 +18,15 @@ export type TenantConfig = {
   supportLinks: SupportLinks;
   tenantId: string;
   property: PropertySettings;
-
   theme: ThemeConfig;
   home: HomeConfig;
   footer: FooterConfig;
-
   features: FeatureFlags;
   rules: VisibilityRule[];
 };
 
-
 export type SupportLinks = {
   supportUrl?: string;
   faqUrl?: string;
+  termsUrl?: string;
 };

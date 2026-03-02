@@ -1,0 +1,8 @@
+/* Account page styles */
+
+/* Input focus state */
+input:focus,
+textarea:focus {
+  border-color: var(--button-bg) !important;
+  outline: 1px solid var(--button-bg) !important;
+}

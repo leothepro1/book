@@ -1,0 +1,310 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import AppLoader from "../_components/AppLoader";
+import SuccessLoader from "../_components/SuccessLoader";
+import type { CheckInLookupPayload, CheckInLookupResponse, CheckInCommitResponse } from "./actions";
+
+type Step = "form" | "confirm" | "success";
+
+type Props = {
+  onLookup: (payload: CheckInLookupPayload) => Promise<CheckInLookupResponse>;
+  onCommit: (payload: { bookingId: string; token?: string; next?: string }) => Promise<CheckInCommitResponse>;
+};
+
+function ChevronLeftIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M15 18l-6-6 6-6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+const monthNamesSv = [
+  "januari",
+  "februari",
+  "mars",
+  "april",
+  "maj",
+  "juni",
+  "juli",
+  "augusti",
+  "september",
+  "oktober",
+  "november",
+  "december",
+];
+
+function formatSvFromISO(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getDate()} ${monthNamesSv[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+export default function CheckInClient({ onLookup, onCommit }: Props) {
+  const router = useRouter();
+  const params = useSearchParams();
+
+  const token = (params.get("token") || "").trim();
+  const next = (params.get("next") || "").trim();
+
+  const [step, setStep] = useState<Step>("form");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [bookingId, setBookingId] = useState("");
+  const [lastName, setLastName] = useState("");
+
+  const [found, setFound] = useState<CheckInLookupResponse extends { ok: true } ? any : any>(null);
+  const [nextHref, setNextHref] = useState<string>(token ? `/p/${token}` : (next || "/"));
+
+  const titleText = useMemo(() => {
+    if (step === "form") return "Ange bokningsuppgifter";
+    if (step === "confirm") return "Matchning av bokning";
+    return "Klart";
+  }, [step]);
+
+  const mutedText = useMemo(() => {
+    if (step === "form") return "Skriv in bokningsnummer och efternamn.";
+    if (step === "confirm") return "Kontrollera att uppgifterna stämmer innan du fortsätter.";
+    return "Du skickas vidare...";
+  }, [step]);
+
+  function canSubmitForm() {
+    return bookingId.trim().length > 0 && lastName.trim().length > 0;
+  }
+
+  async function doLookup() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+
+    try {
+      const res = await onLookup({
+        method: "booking",
+        bookingId: bookingId.trim(),
+        lastName: lastName.trim(),
+        token: token || undefined,
+      });
+
+      if (!res || res.ok !== true) {
+        setError((res as any)?.message || "Ingen bokning hittades.");
+        return;
+      }
+
+      setFound(res.booking);
+      setStep("confirm");
+    } catch (e: any) {
+      setError(e?.message || "Serverfel. Försök igen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doCommit() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+
+    try {
+      const res = await onCommit({
+        bookingId: found?.id,
+        token: token || undefined,
+        next: next || undefined,
+      });
+
+      if (!res || res.ok !== true) {
+        setError((res as any)?.message || "Kunde inte checka in.");
+        return;
+      }
+
+      setNextHref(res.nextHref || (token ? `/p/${token}` : (next || "/")));
+      setStep("success");
+    } catch (e: any) {
+      setError(e?.message || "Serverfel. Försök igen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (step !== "success") return;
+    const t = window.setTimeout(() => {
+      router.push(nextHref);
+    }, 900);
+    return () => window.clearTimeout(t);
+  }, [step, nextHref, router]);
+
+  function onBack() {
+    if (step === "confirm") {
+      setError(null);
+      setStep("form");
+      return;
+    }
+    router.back();
+  }
+
+  // --- UI blocks ---
+
+  const Header = (
+    <div className="sektion73-card__header">
+      <div>
+        <h1 className="sektion73-title">{titleText}</h1>
+        <p className="sektion73-muted">{mutedText}</p>
+      </div>
+    </div>
+  );
+
+  const FormStep = (
+    <>
+      {Header}
+
+      <div className="sektion73-grid-2">
+        <div className="sektion73-field">
+          <div className="sektion73-float">
+            <input
+              id="sek-bookingId"
+              className="sektion73-input"
+              value={bookingId}
+              onChange={(e) => setBookingId(e.target.value)}
+              placeholder=" "
+              autoComplete="off"
+            />
+            <label className="sektion73-float__label" htmlFor="sek-bookingId">
+              Bokningsnummer
+            </label>
+          </div>
+        </div>
+
+        <div className="sektion73-field">
+          <div className="sektion73-float">
+            <input
+              id="sek-lastName"
+              className="sektion73-input"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder=" "
+              autoComplete="family-name"
+            />
+            <label className="sektion73-float__label" htmlFor="sek-lastName">
+              Efternamn
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {error && <div className="sektion73-alert">{error}</div>}
+
+      <div className="sektion73-cta">
+        <button
+          type="button"
+          className="sektion73-btn sektion73-btn--primary"
+          disabled={!canSubmitForm() || busy}
+          onClick={doLookup}
+          aria-busy={busy ? "true" : "false"}
+        >
+          {busy ? <AppLoader size={24} ariaLabel="Loading" /> : "Fortsätt"}
+        </button>
+      </div>
+    </>
+  );
+
+  const ConfirmCard = (
+    <div
+      style={{
+        borderRadius: 18,
+        overflow: "hidden",
+        border: "1px solid var(--border)",
+        background: "var(--surface)",
+      }}
+    >
+      <div
+        style={{
+          height: 160,
+          backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.55) 100%), url("${found?.heroImageUrl || ""}")`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          position: "relative",
+        }}
+      >
+        <div style={{ position: "absolute", left: 14, right: 14, bottom: 12, color: "white" }}>
+          <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.2 }}>
+            {found?.firstName} {found?.lastName}
+          </div>
+          <div style={{ fontSize: 13, opacity: 0.9 }}>
+            {found?.unit ? `Boende: ${found.unit}` : ""}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding: 14, display: "grid", gap: 10, color: "var(--text)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ opacity: 0.7 }}>Check-in</div>
+          <div style={{ fontWeight: 700 }}>{formatSvFromISO(found?.arrivalISO || "")}</div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ opacity: 0.7 }}>Check-out</div>
+          <div style={{ fontWeight: 700 }}>{formatSvFromISO(found?.departureISO || "")}</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const ConfirmStep = (
+    <>
+      {Header}
+
+      {ConfirmCard}
+
+      {error && <div className="sektion73-alert" style={{ marginTop: 12 }}>{error}</div>}
+
+      <div className="sektion73-cta" style={{ marginTop: 14 }}>
+        <button
+          type="button"
+          className="sektion73-btn sektion73-btn--primary"
+          disabled={busy}
+          onClick={doCommit}
+          aria-busy={busy ? "true" : "false"}
+        >
+          {busy ? <AppLoader size={24} ariaLabel="Loading" /> : "Fortsätt"}
+        </button>
+      </div>
+    </>
+  );
+
+  const SuccessStep = (
+    <>
+      {Header}
+      <div style={{ padding: 18, display: "grid", placeItems: "center", gap: 10 }}>
+        <SuccessLoader size={160} />
+        <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)" }}>Välkommen!</div>
+        <div style={{ opacity: 0.75, color: "var(--text)" }}>Du skickas vidare...</div>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="sektion73-modal">
+      <header className="sektion73-modal__header">
+        <button type="button" className="sektion73-backbtn" onClick={onBack} aria-label="Back">
+          <ChevronLeftIcon />
+        </button>
+        <div className="sektion73-modal__title">Checka in</div>
+      </header>
+
+      <div className="sektion73-modal__body">
+        {step === "form" && FormStep}
+        {step === "confirm" && ConfirmStep}
+        {step === "success" && SuccessStep}
+      </div>
+    </div>
+  );
+}

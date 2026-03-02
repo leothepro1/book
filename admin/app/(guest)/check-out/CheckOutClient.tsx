@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppLoader from "../_components/AppLoader";
 
-type Method = "booking" | "nameArrival" | "email";
+type Method = "booking" | "nameDeparture" | "email";
 type Step = "choose" | "form";
 
 type SubmitPayload = {
@@ -14,7 +14,6 @@ type SubmitPayload = {
   bookingId?: string;
   lastName?: string;
   name?: string;
-  arrivalDateISO?: string;
   email?: string;
   departureDateISO?: string;
 };
@@ -378,11 +377,11 @@ function DatePicker({ label, valueISO, onChangeISO, mode, closeSignal }: DatePic
 
 function titleForMethod(m: Method) {
   if (m === "booking") return "Bokningsnummer";
-  if (m === "nameArrival") return "Namn + datum";
+  if (m === "nameDeparture") return "Namn + datum";
   return "E-post";
 }
 
-export default function CheckInClient({ onSubmit }: Props) {
+export default function CheckOutClient({ onSubmit }: Props) {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -412,7 +411,7 @@ export default function CheckInClient({ onSubmit }: Props) {
 
   useEffect(() => {
     const m = (params.get("method") || "").trim();
-    if (m === "booking" || m === "nameArrival" || m === "email") {
+    if (m === "booking" || m === "nameDeparture" || m === "email") {
       setMethod(m);
       setStep("form");
     }
@@ -442,7 +441,7 @@ export default function CheckInClient({ onSubmit }: Props) {
 
   function canSubmit() {
     if (method === "booking") return bookingId.trim().length > 0 && lastName.trim().length > 0;
-    if (method === "nameArrival") return fullName.trim().length > 0 && arrivalISO.trim().length > 0;
+    if (method === "nameDeparture") return fullName.trim().length > 0 && arrivalISO.trim().length > 0;
     return emailOk(email) && emailLastName.trim().length > 0 && departureISO.trim().length > 0;
   }
 
@@ -458,9 +457,9 @@ export default function CheckInClient({ onSubmit }: Props) {
         return;
       }
 
-      if (method === "nameArrival") {
+      if (method === "nameDeparture") {
         if (!fullName.trim() || !arrivalISO.trim()) throw new Error("Fyll i namn och incheckningsdatum.");
-        await onSubmit({ method, name: fullName.trim(), arrivalDateISO: arrivalISO.trim() });
+        await onSubmit({ method, name: fullName.trim(), departureDateISO: arrivalISO.trim() });
         return;
       }
 
@@ -533,7 +532,7 @@ export default function CheckInClient({ onSubmit }: Props) {
       );
     }
 
-    if (method === "nameArrival") {
+    if (method === "nameDeparture") {
       return (
         <>
           <div className="sektion73-card__header">
@@ -681,10 +680,10 @@ export default function CheckInClient({ onSubmit }: Props) {
                 type="button"
                 className="sektion73-choicebtn"
                 disabled={pickBusy !== null}
-                onClick={() => pickMethod("nameArrival")}
+                onClick={() => pickMethod("nameDeparture")}
               >
                 <div className="sektion73-choicebtn__title">
-                  {pickBusy === "nameArrival" ? <AppLoader size={18} ariaLabel="Loading" /> : "Namn + datum"}
+                  {pickBusy === "nameDeparture" ? <AppLoader size={18} ariaLabel="Loading" /> : "Namn + datum"}
                 </div>
               </button>
             </div>

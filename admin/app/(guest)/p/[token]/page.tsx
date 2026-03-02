@@ -1,10 +1,12 @@
 import { getTenantConfig } from "../../_lib/tenant";
 import { buttonClass, backgroundStyle } from "../../_lib/theme";
 import { resolveBookingFromToken } from "../../_lib/portal/resolveBooking";
+import { getBookingStatus, canCheckIn, isCheckInTimeReached } from "../../_lib/booking";
+import { BookingStatus } from "../../_lib/booking";
 
-import LoadingWrapper from "../../_components/LoadingWrapper";
-import DevLoadingToggle from "../../_components/DevLoadingToggle";
+import BookingStatusCard from "../../_components/BookingStatusCard";
 import WeatherWidget from "../../_components/WeatherWidget";
+
 export const dynamic = "force-dynamic";
 
 function isSameDay(a: Date, b: Date) {
@@ -15,23 +17,8 @@ function isSameDay(a: Date, b: Date) {
   );
 }
 
-function formatDate(d: Date) {
-  return d.toLocaleDateString("sv-SE", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-}
-
 function pad2(n: number) {
   return String(n).padStart(2, "0");
-}
-
-function localDateTime(date: Date, timeHHmm: string) {
-  const m = /^(\d{2}):(\d{2})$/.exec((timeHHmm || "").trim());
-  const hh = m ? Number(m[1]) : 14;
-  const mm = m ? Number(m[2]) : 0;
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hh, mm, 0, 0);
 }
 
 type Tile = {
@@ -130,19 +117,31 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
   const config = await getTenantConfig(booking.tenantId ?? "default");
 
   const now = new Date();
-  const arrival = new Date(booking.arrival);
   const departure = new Date(booking.departure);
+  const bookingStatus = getBookingStatus(booking);
 
   const checkoutHour = 12;
   const checkoutText = `Checkout is scheduled today at ${pad2(checkoutHour)}:00`;
 
   const title = `Välkommen ${booking.firstName}`;
-  let subtitle = "You're booked to stay with us";
+  let subtitle = "";
 
+  if (booking.status === BookingStatus.PRE_CHECKIN) {
+    subtitle = "Vi ser fram emot din ankomst.";
+  } else if (booking.status === BookingStatus.ACTIVE) {
+    subtitle = "Vi hoppas att du har en trevlig vistelse hos oss.";
+  } else if (booking.status === BookingStatus.COMPLETED) {
+    subtitle = "Din vistelse är nu avslutad. Tack för ditt besök.";
+  }
+
+
+  // Update subtitle based on status
   if (isSameDay(now, departure)) {
     subtitle = checkoutText;
-  } else if (booking.status === "checked_in") {
+  } else if (bookingStatus === BookingStatus.ACTIVE) {
     subtitle = "You are currently checked in";
+  } else if (bookingStatus === BookingStatus.COMPLETED) {
+    subtitle = "Thank you for your stay";
   }
 
   const btnClass = buttonClass(config.theme);
@@ -151,34 +150,44 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
     (config as any)?.home?.heroImageUrl ||
     "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=1600&q=60";
 
-  const checkInTime = (config as any)?.stay?.checkInTime || "14:00";
-  const checkInOpensAt = localDateTime(arrival, checkInTime);
-  const canCheckIn = now >= checkInOpensAt;
-  const canCheckInEffective = token === "test" ? true : canCheckIn;
-  const isCheckedIn = booking.checkedInAt != null && booking.checkedOutAt == null;
+  const checkInTime = config.property.checkInTime || "14:00";
+  const checkOutTime = config.property.checkOutTime || "11:00";
+  
+  // Check-in logic based on status
+  const canCheckInNow = canCheckIn(booking, now);
+  const checkInTimeReached = isCheckInTimeReached(booking, checkInTime, now);
+  const canCheckInEffective = (canCheckInNow && checkInTimeReached);
+  const isCheckedIn = bookingStatus === BookingStatus.ACTIVE;
+  const isCompleted = bookingStatus === BookingStatus.COMPLETED;
 
   const primary: Tile = {
     ...DEFAULT_TILES[0],
     id: "primary",
-    label: isCheckedIn ? "Öppna dörr" : canCheckInEffective ? "Check-in" : `Check-in öppnar ${checkInTime}`,
-    href: isCheckedIn ? undefined : canCheckInEffective ? `/check-in?token=${token}` : undefined,
-    disabled: !isCheckedIn && !canCheckInEffective,
+    label: isCompleted 
+      ? "Vistelsen avslutad"
+      : isCheckedIn 
+        ? "Öppna dörr" 
+        : canCheckInEffective 
+          ? "Check-in" 
+          : `Check-in öppnar ${checkInTime}`,
+    href: isCompleted || isCheckedIn ? undefined : canCheckInEffective ? `/check-in?token=${token}` : undefined,
+    disabled: isCompleted || (!isCheckedIn && !canCheckInEffective),
   };
 
   const tiles: Tile[] = [primary, ...DEFAULT_TILES.slice(1, 8)];
 
   return (
-    <div style={{ padding: "14px 17px 24px 17px" }}>
+    <div style={{ padding: "17px 17px 24px 17px" }}>
       <div
         style={{
           position: "relative",
           width: "100%",
-          height: 210,
-          borderRadius: 18,
+          height: 230,
+          borderRadius: 12,
           overflow: "hidden",
-          border: "1px solid var(--border)",
-          ...backgroundStyle(config.theme.background),
-          backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.55) 100%), url("${heroImageUrl}")`,
+          border: "none",
+          background: "var(--background)",
+          backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.75) 100%), url("${heroImageUrl}")`,
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
@@ -186,49 +195,41 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
         <div
           style={{
             position: "absolute",
-            left: 15,
-            bottom: 12,
+            left: 16,
+            bottom: 13,
             right: 15,
             display: "grid",
-            gap: 8,
+            gap: 5,
             color: "white",
           }}
         >
-          <div style={{ fontSize: 20, fontWeight: 900, lineHeight: 1.15, opacity: 1 }}>{title}</div>
+          <div style={{ fontSize: 23, fontWeight: "bold", lineHeight: "1.1em", opacity: 1 }}>{title}</div>
           <div style={{ fontSize: 14, lineHeight: 1.35, opacity: 0.92 }}>{subtitle}</div>
         </div>
       </div>
 
-      <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div
           style={{
-            borderRadius: 18,
-            padding: 14,
-            border: "1px solid var(--border)",
+            borderRadius: 12,
+            padding: 16,
             background: "var(--surface)",
             color: "var(--text)",
+            boxShadow: "0 0 0 1px #0000000a, 0 2px 4px #0000000f",
+            fontSize: 15,
           }}
         >
-          <div style={{ display: "grid", gap: 10 }}>
-            <div>
-              <div style={{ fontWeight: 900 }}>Check-in</div>
-              <div style={{ marginTop: 4, opacity: config.theme.typography.mutedOpacity }}>{formatDate(arrival)}</div>
-            </div>
-
-            <div>
-              <div style={{ fontWeight: 900 }}>Check-out</div>
-              <div style={{ marginTop: 4, opacity: config.theme.typography.mutedOpacity }}>{formatDate(departure)}</div>
-            </div>
-          </div>
+          <BookingStatusCard booking={booking} mutedOpacity={config.theme.typography.mutedOpacity} checkInTime={config.property.checkInTime} checkOutTime={config.property.checkOutTime} />
         </div>
 
         <div
           style={{
-            borderRadius: 18,
-            padding: 14,
-            border: "1px solid var(--border)",
+            borderRadius: 12,
+            padding: 16,
             background: "var(--surface)",
             color: "var(--text)",
+            boxShadow: "0 0 0 1px #0000000a, 0 2px 4px #0000000f",
+            fontSize: 15,
           }}
         >
           <WeatherWidget 
@@ -239,7 +240,7 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
         </div>
       </div>
 
-      <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div style={{ marginTop: 21, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
         {tiles.map((tile) => {
           const disabled = !!tile.disabled;
           const ButtonEl = (
@@ -249,13 +250,16 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
               className={btnClass}
               style={{
                 width: "100%",
-                height: 86,
-                borderRadius: 18,
+                height: "100%",
+                borderRadius: 12,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 opacity: disabled ? 0.55 : 1,
                 cursor: disabled ? "not-allowed" : "pointer",
+                aspectRatio: "5 / 4",
+                boxShadow: "none",
+                background: "#F1F0EE",
               }}
             >
               <div
@@ -287,11 +291,12 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
 
               <div
                 style={{
-                  fontWeight: 900,
+                  fontWeight: "bold",
                   fontSize: 13,
-                  lineHeight: 1.15,
+                  lineHeight: "1.2em",
                   color: "var(--text)",
-                  textAlign: "left",
+                  textAlign: "center",
+                  marginBottom: 10,
                 }}
               >
                 {tile.label}

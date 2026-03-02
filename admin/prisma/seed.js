@@ -1,42 +1,48 @@
 const { PrismaClient } = require("@prisma/client");
-
 const prisma = new PrismaClient();
 
 async function main() {
-  const tenant = await prisma.tenant.create({
-    data: {
-      name: "Apelviken Camping",
-      slug: "apelviken",
-    },
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: "apelviken" },
+    update: { name: "Apelviken Camping" },
+    create: { name: "Apelviken Camping", slug: "apelviken" },
   });
 
-  await prisma.booking.create({
-    data: {
+  // Exempel: skapa en test-booking bara om den inte redan finns
+  const existing = await prisma.booking.findFirst({
+    where: {
       tenantId: tenant.id,
-
-      firstName: "Test",
-      lastName: "Gäst",
       guestEmail: "test@exempel.se",
-      phone: "+46700000000",
-
-      street: "Storgatan 1",
-      postalCode: "43244",
-      city: "Varberg",
-      country: "Sweden",
-
-      arrival: new Date("2026-06-01T15:00:00Z"),
-      departure: new Date("2026-06-05T10:00:00Z"),
-      unit: "A12",
-      status: "booked",
+      arrival: new Date("2026-06-01T15:00:00.000Z"),
     },
   });
 
-  console.log("Seed complete");
+  if (!existing) {
+    await prisma.booking.create({
+      data: {
+          bookingNumber: "TESTBOOKING01",
+        tenantId: tenant.id,
+        firstName: "Test",
+        lastName: "Gäst",
+        guestEmail: "test@exempel.se",
+        phone: "+46700000000",
+        street: "Storgatan 1",
+        postalCode: "43244",
+        city: "Varberg",
+        country: "Sweden",
+        arrival: new Date("2026-06-01T15:00:00.000Z"),
+        departure: new Date("2026-06-05T10:00:00.000Z"),
+        unit: "A12",
+        status: "PRE_CHECKIN",
+      },
+    });
+  }
 }
 
 main()
-  .catch((e) => {
+  .then(() => prisma.$disconnect())
+  .catch(async (e) => {
     console.error(e);
+    await prisma.$disconnect();
     process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+  });

@@ -1,0 +1,131 @@
+/* Stays page specific styles */
+
+.stays-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+
+.stays-tab {
+  position: relative;
+  padding: 12px 0;
+  font-size: 15px;
+  font-weight: 600;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  opacity: 0.75;
+  transition: opacity 0.2s ease;
+}
+
+.stays-tab:hover {
+  opacity: 0.9;
+}
+
+.stays-tab.active {
+  opacity: 1;
+}
+
+.stays-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--text);
+}
+
+.stays-list {
+  display: grid;
+  gap: 14px;
+}
+
+/* Booking card styles - same as check-in */
+.booking-card {
+  border-radius: 12px;
+  overflow: hidden;
+  border: none;
+  background: var(--surface);
+  box-shadow: 0px 0px 0px 1px rgba(0, 0, 0, .04), 0px 2px 4px rgba(0, 0, 0, .06);
+}
+
+.booking-card__hero {
+  height: 160px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.booking-card__badge {
+  color: #fff;
+  background: #4667d3;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  position: absolute;
+  bottom: 9px;
+  right: 12px;
+  box-shadow: 0 2px 8px #00000026;
+}
+
+.booking-card__badge--ready {
+  background: #10b981;
+}
+
+.booking-card__badge--pending {
+  background: #f59e0b;
+}
+
+.booking-card__badge--completed {
+  background: #4667d3;
+}
+
+.booking-card__content {
+  padding: 16px;
+}
+
+.booking-card__unit {
+    color: var(--text);
+    margin-bottom: 12px;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1em;
+}
+
+.booking-card__dates {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.booking-card__date {
+  flex: 1;
+}
+
+.booking-card__date--right {
+  text-align: right;
+}
+
+.booking-card__date-label {
+  opacity: .7;
+  color: var(--text);
+  margin-bottom: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.booking-card__date-value {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.booking-card__arrow {
+  flex-shrink: 0;
+  color: var(--text);
+  opacity: 0.5;
+}

@@ -1,10 +1,15 @@
 import { prisma } from "./_lib/db/prisma";
+import { BookingStatus } from "./(guest)/_lib/booking";
 import { revalidatePath } from "next/cache";
+import crypto from "crypto";
 
+function makeBookingNumber() {
+  // 10 tecken, versaler+nummer (tillräckligt svårt att gissa, kort nog för användare)
+  return crypto.randomBytes(6).toString("base64url").toUpperCase().slice(0, 10);
+}
 
 async function createFakeBooking(formData: FormData) {
   "use server";
-
   const firstName = String(formData.get("firstName") || "").trim();
   const lastName = String(formData.get("lastName") || "").trim();
   const guestEmail = String(formData.get("guestEmail") || "").trim();
@@ -33,16 +38,16 @@ async function createFakeBooking(formData: FormData) {
     throw new Error("Tenant finns inte.");
   }
 
+  // Om tomt: generera. Om angivet: använd och låt DB/unique fånga kollision.
   await prisma.booking.create({
-    data: {
-      tenantId,
+    data: {tenantId,
       firstName,
       lastName,
       guestEmail,
       arrival,
       departure,
       unit,
-      status: "booked",
+      status: BookingStatus.PRE_CHECKIN,
     },
   });
 
@@ -56,114 +61,91 @@ export default async function Page() {
   });
 
   const bookings = await prisma.booking.findMany({
-    take: 50,
     orderBy: { createdAt: "desc" },
+    take: 10,
     include: { tenant: true },
   });
 
   return (
-    <main style={{ padding: 24, fontFamily: "Arial", maxWidth: 900 }}>
-      <h1>Admin – Fake bokningar</h1>
+    <div style={{ padding: 40, maxWidth: 900, margin: "0 auto" }}>
+      <h1>Fake Booking Creator</h1>
 
-      <section
-        style={{
-          padding: 16,
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          marginBottom: 24,
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>Skapa bokning</h2>
-
-        <form action={createFakeBooking} style={{ display: "grid", gap: 12 }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label>Förnamn</label>
-            <input name="firstName" placeholder="Test" required />
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <label>Efternamn</label>
-            <input name="lastName" placeholder="Gäst" required />
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <label>Email</label>
-            <input
-              name="guestEmail"
-              type="email"
-              placeholder="test@exempel.se"
-              required
-            />
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <label>Camping (tenant)</label>
-            <select
-              name="tenantId"
-              required
-              defaultValue={tenants[0]?.id ?? ""}
-            >
+      <form action={createFakeBooking} style={{ marginTop: 20 }}>
+        <div style={{ display: "grid", gap: 12 }}>
+          <div>
+            <label>Tenant</label>
+            <select name="tenantId" required style={{ width: "100%", padding: 8 }}>
+              <option value="">Välj tenant</option>
               {tenants.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
               ))}
             </select>
-
-            {tenants.length === 0 && (
-              <small style={{ color: "crimson" }}>
-                Inga tenants finns. Skapa en tenant först i DB/seed.
-              </small>
-            )}
           </div>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label>Datum från</label>
-            <input name="arrival" type="date" required />
+          <div>
+            <label>Bokningsnummer (valfritt)</label>
+            <input name="bookingNumber" placeholder="Lämna tomt för autogenerering" style={{ width: "100%", padding: 8 }} />
           </div>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label>Datum till</label>
-            <input name="departure" type="date" required />
+          <div>
+            <label>Förnamn</label>
+            <input name="firstName" required style={{ width: "100%", padding: 8 }} />
           </div>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label>Plats/enhet</label>
-            <input name="unit" placeholder="A12" required />
+          <div>
+            <label>Efternamn</label>
+            <input name="lastName" required style={{ width: "100%", padding: 8 }} />
           </div>
 
-          <button type="submit" disabled={tenants.length === 0}>
+          <div>
+            <label>E-post</label>
+            <input name="guestEmail" type="email" required style={{ width: "100%", padding: 8 }} />
+          </div>
+
+          <div>
+            <label>Enhet</label>
+            <input name="unit" required style={{ width: "100%", padding: 8 }} />
+          </div>
+
+          <div>
+            <label>Ankomst (YYYY-MM-DD)</label>
+            <input name="arrival" type="date" required style={{ width: "100%", padding: 8 }} />
+          </div>
+
+          <div>
+            <label>Avresa (YYYY-MM-DD)</label>
+            <input name="departure" type="date" required style={{ width: "100%", padding: 8 }} />
+          </div>
+
+          <button type="submit" style={{ padding: 12, background: "#000", color: "#fff", border: 0 }}>
             Skapa bokning
           </button>
-        </form>
-      </section>
+        </div>
+      </form>
 
-      <section>
-        <h2>Senaste bokningar</h2>
-        <p>Antal bokningar: {bookings.length}</p>
-
-        <ul style={{ paddingLeft: 18 }}>
-          {bookings.map((b) => (
-            <li key={b.id} style={{ marginBottom: 12 }}>
+      <h2 style={{ marginTop: 40 }}>Senaste bokningar</h2>
+      <ul style={{ marginTop: 20, display: "grid", gap: 10 }}>
+        {bookings.map((b) => (
+          <li key={b.id} style={{ padding: 12, border: "1px solid #ddd", borderRadius: 10 }}>
+            <div style={{ fontWeight: 700 }}>
+              {b.firstName} {b.lastName} — {b.tenant?.name}
+            </div>
+            <div style={{ opacity: 0.8, marginTop: 6 }}>
               <div>
-                <b>
-                  {b.firstName} {b.lastName}
-                </b>{" "}
-                ({b.guestEmail})
-              </div>
-              <div>Camping: {b.tenant?.name}</div>
-              <div>
-                Datum:{" "}
-                {new Date(b.arrival).toLocaleString("sv-SE")} →{" "}
-                {new Date(b.departure).toLocaleString("sv-SE")}
+                <b>Bokningsnummer:</b> {b.bookingNumber}
               </div>
               <div>
-                Plats: {b.unit} | Status: {b.status}
+                <b>DB id:</b> {b.id}
               </div>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </main>
+              <div>
+                {new Date(b.arrival).toISOString().slice(0, 10)} → {new Date(b.departure).toISOString().slice(0, 10)} ({b.unit})
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

@@ -1,0 +1,37 @@
+/* Guest Footer Styles */
+
+.footer-link {
+  position: relative;
+}
+
+.footer-link:active {
+  transform: scale(0.91);
+}
+
+.footer-link.active {
+  color: var(--button-bg);
+}
+
+.footer-link.active::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--button-bg);
+  opacity: 0.1;
+  border-radius: 12px;
+  z-index: -1;
+}
+
+.footer-icon {
+  color: currentColor;
+  width: 23px;
+  height: 23px;
+}
+
+.footer-link .gap-1 {
+  gap: calc(var(--spacing) * 1.5);
+}
+
+.footer-link .text-\[11px\] {
+  font-size: 12px;
+}

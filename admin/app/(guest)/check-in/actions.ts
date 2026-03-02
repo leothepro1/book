@@ -1,114 +1,118 @@
 "use server";
 
 import { prisma } from "../../_lib/db/prisma";
-import { redirect } from "next/navigation";
-import crypto from "crypto";
+import { getTenantConfig } from "../_lib/tenant";
+import { performCheckIn } from "../_lib/booking/actions";
 
 function norm(s?: string) {
   return (s || "").trim();
 }
 
-function parseISODateOnly(s?: string) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || "");
-  if (!m) return null;
-  const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, 0, 0));
-  if (Number.isNaN(dt.getTime())) return null;
-  return dt;
-}
+export type CheckInLookupPayload = {
+  method: "booking";
+  bookingId?: string;
+  lastName?: string;
+  token?: string;
+};
 
-async function createMagicLinkForBooking(bookingId: string) {
-  const token = crypto.randomBytes(24).toString("hex");
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 min
-  await prisma.magicLink.create({ data: { token, bookingId, expiresAt } });
-  return token;
-}
-
-// OBS: payload:any för att undvika "Method" typ-krock med ui.tsx
-export async function checkInLookup(payload: any) {
-  const methodRaw = norm(payload?.method);
-
-  // tillåt både "booking" och "bookingNumber" (UI kan använda "booking")
-  const method =
-    methodRaw === "booking" ? "bookingNumber" :
-    methodRaw === "bookingNumber" ? "bookingNumber" :
-    methodRaw === "nameArrival" ? "nameArrival" :
-    methodRaw === "email" ? "email" :
-    "";
-
-  if (method === "bookingNumber") {
-    const bookingId = norm(payload?.bookingId ?? payload?.bookingNumber);
-    const lastName = norm(payload?.lastName);
-
-    if (!bookingId || !lastName) throw new Error("Fyll i bokningsnummer och efternamn.");
-
-    const booking = await prisma.booking.findFirst({
-      where: { id: bookingId, lastName: { equals: lastName, mode: "insensitive" } },
-      select: { id: true },
-    });
-
-    if (!booking) throw new Error("Ingen bokning hittades.");
-    const token = await createMagicLinkForBooking(booking.id);
-    redirect(`/p/${token}`);
-  }
-
-  if (method === "nameArrival") {
-    const fullName = norm(payload?.name);
-    const arrivalDate = norm(payload?.arrivalDateISO ?? payload?.arrivalDate);
-
-    if (!fullName || !arrivalDate) throw new Error("Fyll i namn och incheckningsdatum.");
-
-    const dt = parseISODateOnly(arrivalDate);
-    if (!dt) throw new Error("Ogiltigt datum.");
-
-    const start = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate(), 0, 0, 0));
-    const end = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate() + 1, 0, 0, 0));
-
-    const booking = await prisma.booking.findFirst({
-      where: {
-        arrival: { gte: start, lt: end },
-        OR: [
-          { firstName: { contains: fullName, mode: "insensitive" } },
-          { lastName: { contains: fullName, mode: "insensitive" } },
-        ],
-      },
-      orderBy: { createdAt: "desc" },
-      select: { id: true },
-    });
-
-    if (!booking) throw new Error("Ingen bokning hittades.");
-    const token = await createMagicLinkForBooking(booking.id);
-    redirect(`/p/${token}`);
-  }
-
-  if (method === "email") {
-    const email = norm(payload?.email);
-    const lastName = norm(payload?.lastName);
-    const departureDate = norm(payload?.departureDateISO ?? payload?.departureDate);
-
-    if (!email || !lastName || !departureDate) {
-      throw new Error("Fyll i e-post, efternamn och utcheckningsdatum.");
+export type CheckInLookupResponse =
+  | {
+      ok: true;
+      booking: {
+        id: string;
+        firstName: string;
+        lastName: string;
+        arrivalISO: string;
+        departureISO: string;
+        unit: string;
+        heroImageUrl: string;
+        termsUrl: string;
+      };
     }
+  | { ok: false; message: string };
 
-    const dt = parseISODateOnly(departureDate);
-    if (!dt) throw new Error("Ogiltigt datum.");
+export async function checkInLookup(payload: CheckInLookupPayload): Promise<CheckInLookupResponse> {
+  const bookingId = norm(payload?.bookingId);
+  const lastName = norm(payload?.lastName);
 
-    const start = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate(), 0, 0, 0));
-    const end = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate() + 1, 0, 0, 0));
-
-    const booking = await prisma.booking.findFirst({
-      where: {
-        guestEmail: { equals: email, mode: "insensitive" },
-        lastName: { equals: lastName, mode: "insensitive" },
-        departure: { gte: start, lt: end },
-      },
-      orderBy: { createdAt: "desc" },
-      select: { id: true },
-    });
-
-    if (!booking) throw new Error("Ingen bokning hittades.");
-    const token = await createMagicLinkForBooking(booking.id);
-    redirect(`/p/${token}`);
+  if (!bookingId || !lastName) {
+    return { ok: false, message: "Fyll i bokningsnummer och efternamn." };
   }
 
-  throw new Error("Ogiltigt val.");
+  const booking = await prisma.booking.findFirst({
+    where: {
+      id: bookingId,
+      lastName: { equals: lastName, mode: "insensitive" },
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      arrival: true,
+      departure: true,
+      unit: true,
+      tenantId: true,
+    },
+  });
+
+  if (!booking) {
+    return { ok: false, message: "Ingen bokning hittades. Kontrollera bokningsnummer och efternamn." };
+  }
+
+  const config = await getTenantConfig(booking.tenantId ?? "default");
+  const heroImageUrl =
+    (config as any)?.home?.heroImageUrl ||
+    "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=1600&q=60";
+
+  const termsUrl = config.supportLinks?.termsUrl || "https://apelviken.se/vistelsevillkor";
+
+  return {
+    ok: true,
+    booking: {
+      id: booking.id,
+      firstName: booking.firstName,
+      lastName: booking.lastName,
+      arrivalISO: new Date(booking.arrival).toISOString(),
+      departureISO: new Date(booking.departure).toISOString(),
+      unit: booking.unit,
+      heroImageUrl,
+      termsUrl,
+    },
+  };
+}
+
+export type CheckInCommitResponse =
+  | { ok: true; already: boolean; nextHref: string }
+  | { ok: false; message: string };
+
+export async function checkInCommit(payload: {
+  bookingId: string;
+  signatureDataUrl: string;
+  token?: string;
+  next?: string;
+}): Promise<CheckInCommitResponse> {
+  const bookingId = norm(payload?.bookingId);
+  const signatureDataUrl = norm(payload?.signatureDataUrl);
+  const token = norm(payload?.token);
+  const next = norm(payload?.next);
+
+  if (!bookingId) return { ok: false, message: "Boknings-ID saknas." };
+  if (!signatureDataUrl) return { ok: false, message: "Signatur saknas." };
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    select: { id: true, tenantId: true },
+  });
+
+  if (!booking) return { ok: false, message: "Ingen bokning hittades." };
+
+  const config = await getTenantConfig(booking.tenantId ?? "default");
+  const checkInTime = config.property.checkInTime || "14:00";
+
+  // Perform check-in with signature
+  const res = await performCheckIn(booking.id, checkInTime, new Date(), signatureDataUrl);
+  if (!res.ok) return { ok: false, message: res.message };
+
+  const nextHref = token ? `/p/${token}` : (next || "/");
+  return { ok: true, already: res.already, nextHref };
 }

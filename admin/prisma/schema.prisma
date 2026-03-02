@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum BookingStatus {
+  PRE_CHECKIN
+  ACTIVE
+  COMPLETED
+}
+
 model Tenant {
   id        String   @id @default(cuid())
   name      String
@@ -36,9 +42,13 @@ model Booking {
   arrival    DateTime
   departure  DateTime
   unit       String
-  status     String   @default("booked")
+  status     BookingStatus @default(PRE_CHECKIN)
   checkedInAt DateTime?
   checkedOutAt DateTime?
+
+  // Digital signature
+  signatureCapturedAt DateTime?
+  signatureDataUrl    String?   @db.Text
 
   magicLinks MagicLink[]
   createdAt  DateTime @default(now())

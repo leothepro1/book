@@ -109,7 +109,7 @@ export default function WeatherWidget({ latitude, longitude, mutedOpacity }: Pro
 
   return (
     <>
-      <div style={{ fontWeight: 900, marginBottom: 10 }}>Just nu</div>
+      <div style={{ fontWeight: "bold", lineHeight: "1.2em", marginBottom: 10 }}>Just nu</div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ opacity: mutedOpacity, display: "flex", alignItems: "center" }}>
           {weatherIcons[weather.weatherDescription] || weatherIcons.clear}

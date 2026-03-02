@@ -1,13 +1,6 @@
 import { resolveBookingFromToken } from "../../../_lib/portal/resolveBooking";
 import { prisma } from "../../../../_lib/db/prisma";
-
-function formatDate(d: Date, lang: "sv" | "en") {
-  return d.toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-}
+import StaysTabs from "./StaysTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -37,46 +30,26 @@ export default async function Page(props: {
     },
   });
 
+  // Split bookings into current and previous
+  const now = new Date();
+  const currentBookings = bookings.filter(
+    (b) => new Date(b.departure) >= now
+  );
+  const previousBookings = bookings.filter(
+    (b) => new Date(b.departure) < now
+  );
+
   return (
     <div className="g-container">
       <h1 className="g-heading" style={{ fontSize: 22, marginBottom: 16 }}>
         {lang === "en" ? "Stays" : "Bokningar"}
       </h1>
 
-      <div style={{ display: "grid", gap: 14 }}>
-        {bookings.map((b) => (
-          <div key={b.id} className="g-stayCard">
-            <img
-              src="https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=600&q=60"
-              className="g-stayImage"
-              alt=""
-            />
-
-            <div className="g-stayMeta">
-              <div className="g-stayTitle">{b.unit}</div>
-
-              <div className="g-stayDates">
-                {formatDate(new Date(b.arrival), lang)} –{" "}
-                {formatDate(new Date(b.departure), lang)}
-              </div>
-
-              <div style={{ fontSize: 14, fontWeight: 600 }}>
-                {b.firstName} {b.lastName}
-              </div>
-
-              {(b.city || b.country) && (
-                <div className="g-muted">
-                  {[b.city, b.country].filter(Boolean).join(", ")}
-                </div>
-              )}
-
-              <div style={{ fontSize: 13, opacity: 0.85, textTransform: "capitalize" }}>
-                {b.status}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      <StaysTabs
+        currentBookings={currentBookings}
+        previousBookings={previousBookings}
+        lang={lang}
+      />
     </div>
   );
 }

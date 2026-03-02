@@ -17,8 +17,8 @@ export async function getTenantConfig(_hint: string): Promise<TenantConfig> {
       colors: {
         background: "#fff",
         text: "#2D2C2B",
-        buttonBg: "#ffffff",
-        buttonText: "#0b1020",
+        buttonBg: "#8B3DFF",
+        buttonText: "#fff",
       },
       header: {
         logoUrl: undefined,
@@ -101,6 +101,7 @@ export async function getTenantConfig(_hint: string): Promise<TenantConfig> {
     supportLinks: {
       supportUrl: "https://apelviken.se/support",
       faqUrl: "https://apelviken.se/faq",
+      termsUrl: "https://apelviken.se/vistelsevillkor",
     },
     rules: [],
   };

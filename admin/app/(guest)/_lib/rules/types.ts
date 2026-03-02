@@ -1,5 +1,5 @@
 export type StayPhase = "pre_arrival" | "during" | "checkout_day" | "post_checkout";
-export type BookingStatus = "booked" | "checked_in" | "checked_out" | "cancelled";
+export type RuleBookingStatus = "booked" | "checked_in" | "checked_out" | "cancelled";
 
 export type VisibilityRule = {
   id: string;
@@ -7,6 +7,6 @@ export type VisibilityRule = {
   isEnabled: boolean;
 
   phases?: StayPhase[];
-  statuses?: BookingStatus[];
+  statuses?: RuleBookingStatus[];
   daysBeforeArrivalMax?: number;
 };
