@@ -2,10 +2,9 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
 const isPublicRoute = createRouteMatcher([
   '/',
-  '/(guest)(.*)',
   '/p/(.*)',
-  '/check-in',
-  '/check-out',
+  '/check-in(.*)',
+  '/check-out(.*)',
   '/preview/(.*)',
   '/api/webhooks/(.*)',
 ]);
@@ -18,7 +17,12 @@ export default clerkMiddleware(async (auth, request) => {
 
 export const config = {
   matcher: [
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    '/(api|trpc)(.*)',
+    // Only run middleware on admin routes, skip guest portal entirely
+    '/(admin)(.*)',
+    '/(api(?!/webhooks))(.*)',
+    '/dashboard(.*)',
+    '/design(.*)',
+    '/sign-in(.*)',
+    '/sign-up(.*)',
   ],
 };
