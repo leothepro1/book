@@ -106,7 +106,6 @@ export default function PreviewTestClient({ initialConfig }: Props) {
           {/* Preview */}
           <GuestPreviewFrame 
             route={route} 
-            device={device}
           />
 
           {/* Instructions */}
