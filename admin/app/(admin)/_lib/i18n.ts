@@ -1,5 +1,5 @@
 // Admin i18n - följer samma pattern som guest portal
-export type AdminLocale = "sv" | "en" | "de" | "fr" | "es" | "no";
+export type AdminLocale = "sv" | "en";
 
 const adminDict = {
   sv: {
