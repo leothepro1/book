@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/app/_lib/db/prisma";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
-import { randomUUID } from "crypto";
 
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/gif"];
 
@@ -40,23 +36,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "File too large (max 5MB)" }, { status: 400 });
     }
 
-    // Create tenant upload dir
-    const tenantDir = path.join(UPLOAD_DIR, tenant.slug);
-    await mkdir(tenantDir, { recursive: true });
-
-    // Generate unique filename
-    const ext = file.name.split(".").pop() || "png";
-    const filename = `${randomUUID()}.${ext}`;
-    const filepath = path.join(tenantDir, filename);
-
-    // Write file
+    // Convert to base64 data URL (works on ephemeral filesystems like Render)
     const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(filepath, buffer);
+    const base64 = buffer.toString("base64");
+    const url = "data:" + file.type + ";base64," + base64;
 
-    // Public URL
-    const url = `/uploads/${tenant.slug}/${filename}`;
-
-    return NextResponse.json({ url, filename });
+    return NextResponse.json({ url, filename: file.name });
   } catch (err) {
     console.error("[upload] Error:", err);
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });
