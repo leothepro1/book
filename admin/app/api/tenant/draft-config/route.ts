@@ -28,7 +28,7 @@ export async function GET() {
 
     return NextResponse.json(
       {
-        config: config ? { tenantId: tenant.id, ...config } : null,
+        config: config ? { tenantId: tenant.id, ...(config as Record<string, unknown>) } : null,
         hasDraft: !!tenant.draftSettings,
         draftUpdatedAt: tenant.draftUpdatedAt?.toISOString() ?? null,
         draftUpdatedBy: tenant.draftUpdatedBy,
