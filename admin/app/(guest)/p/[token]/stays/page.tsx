@@ -24,7 +24,7 @@ export default async function Page(props: {
   console.log("[STAYS PAGE] Entering preview/test mode");
     // Try to get tenant from auth (for preview mode)
     try {
-      let userId: string | null = null; let orgId: string | null = null; try { const a = await auth(); userId = a.userId; orgId = a.orgId; } catch {}
+      let userId: string | null = null; let orgId: string | null = null; try { const a = await auth(); userId = a.userId ?? null; orgId = a.orgId ?? null; } catch {}
       if (userId && orgId) {
         tenant = await prisma.tenant.findUnique({
           where: { clerkOrgId: orgId },
