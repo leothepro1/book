@@ -38,7 +38,7 @@ export async function updateDraft(
     await prisma.tenant.update({
       where: { id: tenant.id },
       data: {
-        draftSettings: updatedDraft,
+        draftSettings: updatedDraft as any,
         draftUpdatedAt: new Date(),
         draftUpdatedBy: userId,
       },
