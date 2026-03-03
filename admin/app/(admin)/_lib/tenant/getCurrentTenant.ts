@@ -13,6 +13,7 @@ import { prisma } from "@/app/_lib/db/prisma";
  */
 export async function getCurrentTenant() {
   const { userId, orgId } = await auth();
+  console.log("[getCurrentTenant] userId:", userId, "orgId:", orgId);
 
   if (!userId) {
     return null;
