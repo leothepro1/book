@@ -46,6 +46,9 @@ export function createMockBooking(tenantId: string): Booking {
     
     // Signature
     signature: null,
+    unit: "Strandhus 12",
+    signatureCapturedAt: null,
+    signatureDataUrl: null,
     signedAt: null,
     
     // Timestamps
@@ -86,6 +89,9 @@ export function createMockBookingHistory(tenantId: string, guestEmail: string): 
     checkedInAt: prevArrival1,
     checkedOutAt: prevDeparture1,
     signature: null,
+    unit: "Strandhus 12",
+    signatureCapturedAt: null,
+    signatureDataUrl: null,
     signedAt: null,
     createdAt: new Date(prevArrival1.getTime() - 60 * 24 * 60 * 60 * 1000),
     updatedAt: prevDeparture1,
@@ -118,6 +124,9 @@ export function createMockBookingHistory(tenantId: string, guestEmail: string): 
     checkedInAt: prevArrival2,
     checkedOutAt: prevDeparture2,
     signature: null,
+    unit: "Strandhus 12",
+    signatureCapturedAt: null,
+    signatureDataUrl: null,
     signedAt: null,
     createdAt: new Date(prevArrival2.getTime() - 90 * 24 * 60 * 60 * 1000),
     updatedAt: prevDeparture2,
