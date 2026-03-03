@@ -2,6 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/app/_lib/db/prisma";
+import { Prisma } from "@prisma/client";
 import { getCurrentTenant } from "./getCurrentTenant";
 import { revalidatePath } from "next/cache";
 
@@ -32,9 +33,9 @@ export async function publishDraft(): Promise<{
       where: { id: tenant.id },
       data: {
         settings: tenant.draftSettings,
-        draftSettings: null,
-        draftUpdatedAt: null,
-        draftUpdatedBy: null,
+        draftSettings: Prisma.DbNull,
+        draftUpdatedAt: null as any,
+        draftUpdatedBy: null as any,
       },
     });
 
@@ -69,9 +70,9 @@ export async function discardDraft(): Promise<{
     await prisma.tenant.update({
       where: { id: tenantData.tenant.id },
       data: {
-        draftSettings: null,
-        draftUpdatedAt: null,
-        draftUpdatedBy: null,
+        draftSettings: Prisma.DbNull,
+        draftUpdatedAt: null as any,
+        draftUpdatedBy: null as any,
       },
     });
 
