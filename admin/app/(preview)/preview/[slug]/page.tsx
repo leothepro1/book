@@ -12,7 +12,6 @@ export default async function PreviewPage(props: {
   return (
     <PortalHomePage 
       params={Promise.resolve({ token: "preview" })}
-      searchParams={Promise.resolve({ lang: "sv" })}
     />
   );
 }
