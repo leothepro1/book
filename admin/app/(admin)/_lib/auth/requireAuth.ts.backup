@@ -1,0 +1,32 @@
+"use server";
+
+/**
+ * Placeholder för auth requirement.
+ * Detta kommer ersättas med Clerk's currentUser() efter installation.
+ * 
+ * För nu returnerar vi en mock clerkId för development.
+ */
+export async function requireAuth() {
+  // TODO: Efter Clerk installation, använd:
+  // import { currentUser } from '@clerk/nextjs/server';
+  // const user = await currentUser();
+  // if (!user) redirect('/sign-in');
+  // return user;
+
+  // DEV MOCK - returnera dev admin user clerkId från seed
+  return {
+    id: "dev_clerk_id_admin",
+    emailAddresses: [{ emailAddress: "admin@apelviken.se" }],
+    firstName: "Admin",
+    lastName: "User",
+  };
+}
+
+/**
+ * Hämtar current user's clerkId.
+ * Används för att koppla till User model i databasen.
+ */
+export async function getCurrentUserId(): Promise<string> {
+  const user = await requireAuth();
+  return user.id;
+}

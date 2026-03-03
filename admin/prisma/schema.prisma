@@ -7,24 +7,54 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================================================
+// ENUMS
+// ============================================================================
+
 enum BookingStatus {
   PRE_CHECKIN
   ACTIVE
   COMPLETED
 }
 
+// ============================================================================
+// TENANT & BOOKINGS (Organizations-based)
+// ============================================================================
+
 model Tenant {
   id        String   @id @default(cuid())
+  
+  // Clerk Organization mapping (1:1)
+  clerkOrgId String  @unique
+  
+  // Tenant identity
   name      String
   slug      String   @unique
+  
+  // Owner info (convenience - första admin som skapade org)
+  ownerClerkUserId String?
+  
+  // Tenant configuration (TenantConfig serialized as JSON)
+  settings  Json?
+
+  // Draft settings (uncommitted changes for live preview)
+  draftSettings  Json?
+  draftUpdatedAt DateTime?
+  draftUpdatedBy String?  // Clerk userId som senast editerade draft
+  
   createdAt DateTime @default(now())
-  bookings  Booking[]
+  updatedAt DateTime @updatedAt
+
+  bookings Booking[]
+
+  @@index([slug])
+  @@index([clerkOrgId])
 }
 
 model Booking {
-  id         String   @id @default(cuid())
-  tenantId   String
-  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
 
   // Guest identity
   firstName  String
@@ -39,11 +69,11 @@ model Booking {
   country    String?
 
   // Stay
-  arrival    DateTime
-  departure  DateTime
-  unit       String
-  status     BookingStatus @default(PRE_CHECKIN)
-  checkedInAt DateTime?
+  arrival      DateTime
+  departure    DateTime
+  unit         String
+  status       BookingStatus @default(PRE_CHECKIN)
+  checkedInAt  DateTime?
   checkedOutAt DateTime?
 
   // Digital signature
@@ -51,7 +81,12 @@ model Booking {
   signatureDataUrl    String?   @db.Text
 
   magicLinks MagicLink[]
-  createdAt  DateTime @default(now())
+  createdAt  DateTime    @default(now())
+
+  @@index([tenantId])
+  @@index([guestEmail])
+  @@index([status])
+  @@index([arrival])
 }
 
 model MagicLink {
@@ -63,4 +98,7 @@ model MagicLink {
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([bookingId])
 }

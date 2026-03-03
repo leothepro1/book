@@ -9,6 +9,14 @@ import "./guest-footer.css";
 type FooterKey = "home" | "stays" | "account";
 
 function isActive(key: FooterKey, pathname: string) {
+  // Preview mode routes
+  if (pathname.startsWith("/preview")) {
+    if (key === "home") return pathname === "/preview/home" || pathname === "/preview";
+    if (key === "stays") return pathname.startsWith("/preview/stays");
+    if (key === "account") return pathname.startsWith("/preview/account");
+  }
+  
+  // Normal portal routes
   if (key === "home") return /\/p\/[^/]+$/.test(pathname);
   if (key === "stays") return /\/p\/[^/]+\/stays(\/|$)/.test(pathname);
   if (key === "account") return /\/p\/[^/]+\/account(\/|$)/.test(pathname);
@@ -38,30 +46,32 @@ const StaysInactive = () => (
 
 const StaysActive = () => (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M8.29 6.29c-.42 0-.75-.34-.75-.75V2.75a.749.749 0 1 1 1.5 0v2.78c0 .42-.33.76-.75.76m7.42 0c-.42 0-.75-.34-.75-.75V2.75a.749.749 0 1 1 1.5 0v2.78c0 .42-.33.76-.75.76" fill="currentColor"/>
-    <path d="M19.57 4.5c-.66-.49-1.61-.02-1.61.81v.1c0 1.17-.84 2.25-2.01 2.37-1.35.14-2.49-.92-2.49-2.24V4.5c0-.55-.45-1-1-1h-.92c-.55 0-1 .45-1 1v1.04c0 .79-.41 1.49-1.03 1.88-.09.06-.19.11-.29.16q-.135.075-.3.12c-.12.04-.25.07-.39.08q-.24.03-.48 0c-.14-.01-.27-.04-.39-.08q-.15-.045-.3-.12c-.1-.05-.2-.1-.29-.16-.63-.44-1.03-1.2-1.03-2.01v-.1c0-.77-.82-1.23-1.47-.9-.01.01-.02.01-.03.02-.04.02-.07.04-.11.07-.03.03-.07.05-.1.08-.28.22-.53.47-.74.74-.11.12-.2.25-.28.38a3.5 3.5 0 0 0-.27.46c-.02.02-.03.03-.03.05-.06.12-.12.24-.16.37-.03.05-.04.09-.06.14-.06.15-.1.3-.14.45-.04.14-.07.29-.09.44a6 6 0 0 0-.06.76v8.76A4.87 4.87 0 0 0 7.37 22h9.26a4.87 4.87 0 0 0 4.87-4.87V8.37c0-1.59-.76-2.98-1.93-3.87M12 17.42H7.36a.755.755 0 0 1 0-1.51H12c.42 0 .75.34.75.76 0 .41-.33.75-.75.75m2.78-3.71H7.36a.755.755 0 0 1 0-1.51h7.42c.42 0 .76.34.76.76 0 .41-.34.75-.76.75" fill="currentColor"/>
+    <path d="M8.75 2.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75v2.33c-2.37.26-3.75 1.52-3.75 5.57v6.18C3.5 21.06 4.56 23 9.5 23h5c4.94 0 6-1.94 6-6.18V10.65c0-4.05-1.38-5.31-3.75-5.57V2.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75V5h-6.5zM9 17.25h5c.41 0 .75-.34.75-.75s-.34-.75-.75-.75H9c-.41 0-.75.34-.75.75s.34.75.75.75m-2-4h8c.41 0 .75-.34.75-.75s-.34-.75-.75-.75H7c-.41 0-.75.34-.75.75s.34.75.75.75" fill="currentColor"/>
   </svg>
 );
 
 const AccountInactive = () => (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10m8.59 10c0-3.87-3.85-7-8.59-7s-8.59 3.13-8.59 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10m0 2c-5.33 0-10 2.69-10 6v2h20v-2c0-3.31-4.67-6-10-6" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
   </svg>
 );
 
 const AccountActive = () => (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10m0 2.5c-5.01 0-9.09 3.36-9.09 7.5 0 .28.22.5.5.5h17.18c.28 0 .5-.22.5-.5 0-4.14-4.08-7.5-9.09-7.5" fill="currentColor"/>
+    <path d="M12 12c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5m0 2c-3.87 0-10 1.94-10 6v2h20v-2c0-4.06-6.13-6-10-6" fill="currentColor"/>
   </svg>
 );
 
 export default function GuestFooter({ config }: { config: TenantConfig }) {
-  const pathname = usePathname() || "";
-  const params = useParams<{ token?: string }>();
-  const token = params?.token ?? "";
+  const pathname = usePathname();
+  const params = useParams<{ token?: string; slug?: string }>();
+  
+  // KRITISK FIX: Använd preview mode base OM vi är i /preview/
+  const isPreviewMode = pathname.startsWith("/preview");
+  const token = isPreviewMode ? "preview" : (params?.token ?? "");
 
   const items = useMemo(() => {
-    const base = token ? `/p/${token}` : "/p";
+    const base = token === "preview" ? "/preview" : token ? `/p/${token}` : "/p";
     return [
       {
         key: "home" as const,
@@ -90,11 +100,10 @@ export default function GuestFooter({ config }: { config: TenantConfig }) {
   void config;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--border)] bg-[var(--background)]">
-      <div className="mx-auto flex max-w-6xl items-center justify-around" style={{ padding: "8px 17px" }}>
+    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--border)] bg-[var(--background)] p-[5px]">
+      <div className="flex items-center justify-around">
         {items.map((item) => {
           const active = isActive(item.key, pathname);
-          const color = active ? "#121212" : "rgba(0,0,0,0.549)";
           const Icon = active ? item.IconActive : item.IconInactive;
 
           return (

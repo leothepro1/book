@@ -1,13 +1,50 @@
+import { prisma } from "@/app/_lib/db/prisma";
 import type { TenantConfig } from "./types";
 
-export async function getTenantConfig(_hint: string): Promise<TenantConfig> {
+/**
+ * Hämtar tenant config för guest portal.
+ * 
+ * Nu läser från Tenant.settings i databasen istället för hårdkodat.
+ * Fallback till default config om tenant inte har settings.
+ */
+export async function getTenantConfig(tenantIdOrSlug: string): Promise<TenantConfig> {
+  // Försök hitta tenant via ID eller slug
+  const tenant = await prisma.tenant.findFirst({
+    where: {
+      OR: [
+        { id: tenantIdOrSlug },
+        { slug: tenantIdOrSlug },
+      ],
+    },
+  });
+
+  if (!tenant) {
+    throw new Error(`Tenant not found: ${tenantIdOrSlug}`);
+  }
+
+  // Om settings finns i DB, använd dem
+  if (tenant.settings && typeof tenant.settings === 'object') {
+    return {
+      tenantId: tenant.id,
+      ...(tenant.settings as any),
+    };
+  }
+
+  // Fallback config (borde inte nås efter seed)
+  return getDefaultConfig(tenant.id);
+}
+
+/**
+ * Default fallback config (används om tenant.settings är null)
+ */
+function getDefaultConfig(tenantId: string): TenantConfig {
   return {
-    tenantId: "default",
+    tenantId,
     property: {
-      name: "Apelviken Camping",
-      address: "Apelviksvägen 47, 439 76 Kungsbacka",
-      latitude: 57.4875,
-      longitude: 12.0739,
+      name: "Default Property",
+      address: "",
+      latitude: 0,
+      longitude: 0,
       checkInTime: "14:00",
       checkOutTime: "11:00",
       timezone: "Europe/Stockholm",
@@ -17,8 +54,8 @@ export async function getTenantConfig(_hint: string): Promise<TenantConfig> {
       colors: {
         background: "#fff",
         text: "#2D2C2B",
-        buttonBg: "#ffffff",
-        buttonText: "#0b1020",
+        buttonBg: "#8B3DFF",
+        buttonText: "#fff",
       },
       header: {
         logoUrl: undefined,
@@ -40,57 +77,11 @@ export async function getTenantConfig(_hint: string): Promise<TenantConfig> {
     },
     home: {
       version: 1,
-      links: [
-        {
-          id: "checkin",
-          order: 10,
-          isEnabled: true,
-          label_sv: "Checka in",
-          label_en: "Check in",
-          icon: "calendar",
-          type: "internalModule",
-          moduleKey: "checkin",
-        },
-        {
-          id: "info",
-          order: 20,
-          isEnabled: true,
-          label_sv: "Information",
-          label_en: "Information",
-          icon: "info",
-          type: "internalModule",
-          moduleKey: "info",
-        },
-      ],
+      links: [],
     },
     footer: {
       version: 1,
-      items: [
-        {
-          key: "home",
-          order: 10,
-          isEnabled: true,
-          label_sv: "Hem",
-          label_en: "Home",
-          requiredFeature: "none",
-        },
-        {
-          key: "shop",
-          order: 20,
-          isEnabled: true,
-          label_sv: "Shop",
-          label_en: "Shop",
-          requiredFeature: "commerce",
-        },
-        {
-          key: "account",
-          order: 30,
-          isEnabled: true,
-          label_sv: "Konto",
-          label_en: "Account",
-          requiredFeature: "account",
-        },
-      ],
+      items: [],
     },
     features: {
       commerceEnabled: false,
@@ -98,10 +89,7 @@ export async function getTenantConfig(_hint: string): Promise<TenantConfig> {
       notificationsEnabled: true,
       languageSwitcherEnabled: true,
     },
-    supportLinks: {
-      supportUrl: "https://apelviken.se/support",
-      faqUrl: "https://apelviken.se/faq",
-    },
+    supportLinks: {},
     rules: [],
   };
 }

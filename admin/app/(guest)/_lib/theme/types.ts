@@ -4,7 +4,12 @@ export type ButtonVariant = "solid" | "outline";
 export type ButtonRadius = "square" | "rounded" | "round" | "rounder" | "full";
 export type ButtonShadow = "none" | "soft" | "strong" | "hard";
 
-export type FontKey = "inter" | "system" | "poppins" | "dm_sans" | "playfair";
+export type FontKey =
+  | "albert_sans" | "dm_sans" | "epilogue" | "ibm_plex_sans" | "inter"
+  | "link_sans" | "manrope" | "oxanium" | "poppins" | "red_hat_display"
+  | "roboto" | "rubik" | "space_grotesk" | "syne"
+  | "biorhyme" | "bitter" | "caudex" | "corben" | "domine" | "hahmlet"
+  | "avenir" | "playfair" | "system";
 
 export type ThemeConfig = {
   version: 1;

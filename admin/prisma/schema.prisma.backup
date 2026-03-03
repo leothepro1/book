@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BookingStatus {
+  PRE_CHECKIN
+  ACTIVE
+  COMPLETED
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  bookings  Booking[]
+}
+
+model Booking {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+
+  // Guest identity
+  firstName  String
+  lastName   String
+  guestEmail String
+  phone      String?
+
+  // Address
+  street     String?
+  postalCode String?
+  city       String?
+  country    String?
+
+  // Stay
+  arrival    DateTime
+  departure  DateTime
+  unit       String
+  status     BookingStatus @default(PRE_CHECKIN)
+  checkedInAt DateTime?
+  checkedOutAt DateTime?
+
+  // Digital signature
+  signatureCapturedAt DateTime?
+  signatureDataUrl    String?   @db.Text
+
+  magicLinks MagicLink[]
+  createdAt  DateTime @default(now())
+}
+
+model MagicLink {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+}

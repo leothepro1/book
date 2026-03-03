@@ -1,19 +1,36 @@
 import type { ThemeConfig, FontKey } from "./types";
 
 function fontStack(key: FontKey): string {
-  switch (key) {
-    case "inter":
-      return "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
-    case "poppins":
-      return "Poppins, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
-    case "dm_sans":
-      return "DM Sans, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
-    case "playfair":
-      return "Playfair Display, ui-serif, Georgia, Times New Roman, serif";
-    case "system":
-    default:
-      return "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
-  }
+  const sans = "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+  const serif = "ui-serif, Georgia, Times New Roman, serif";
+
+  const map: Record<FontKey, string> = {
+    albert_sans: `Albert Sans, ${sans}`,
+    dm_sans: `DM Sans, ${sans}`,
+    epilogue: `Epilogue, ${sans}`,
+    ibm_plex_sans: `IBM Plex Sans, ${sans}`,
+    inter: `Inter, ${sans}`,
+    link_sans: `Link Sans, ${sans}`,
+    manrope: `Manrope, ${sans}`,
+    oxanium: `Oxanium, ${sans}`,
+    poppins: `Poppins, ${sans}`,
+    red_hat_display: `Red Hat Display, ${sans}`,
+    roboto: `Roboto, ${sans}`,
+    rubik: `Rubik, ${sans}`,
+    space_grotesk: `Space Grotesk, ${sans}`,
+    syne: `Syne, ${sans}`,
+    biorhyme: `BioRhyme, ${serif}`,
+    bitter: `Bitter, ${serif}`,
+    caudex: `Caudex, ${serif}`,
+    corben: `Corben, ${serif}`,
+    domine: `Domine, ${serif}`,
+    hahmlet: `Hahmlet, ${serif}`,
+    avenir: `Avenir, ${sans}`,
+    playfair: `Playfair Display, ${serif}`,
+    system: sans,
+  };
+
+  return map[key] || sans;
 }
 
 export function themeToStyleAttr(theme: ThemeConfig) {
@@ -26,6 +43,14 @@ export function themeToStyleAttr(theme: ThemeConfig) {
     "--muted-opacity": String(theme.typography.mutedOpacity ?? 0.72),
     "--font-heading": fontStack(theme.typography.headingFont),
     "--font-body": fontStack(theme.typography.bodyFont),
+    "--button-radius": (() => {
+      const r = theme?.buttons?.radius ?? "rounder";
+      if (r === "square") return "0px";
+      if (r === "rounded") return "8px";
+      if (r === "round") return "12px";
+      if (r === "rounder") return "16px";
+      return "999px";
+    })(),
   } as React.CSSProperties;
 }
 

@@ -1,0 +1,9 @@
+.tile-icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* Hide scrollbar for slider */
+div::-webkit-scrollbar {
+  display: none;
+}

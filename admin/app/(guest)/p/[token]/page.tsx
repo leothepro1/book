@@ -1,3 +1,4 @@
+import "./page.css";
 import { getTenantConfig } from "../../_lib/tenant";
 import { buttonClass, backgroundStyle } from "../../_lib/theme";
 import { resolveBookingFromToken } from "../../_lib/portal/resolveBooking";
@@ -34,8 +35,10 @@ const DEFAULT_TILES: Tile[] = [
     id: "checkin",
     label: "Check-in",
     svg: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
-        <path d="M216,56H40A16,16,0,0,0,24,72V184a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V72A16,16,0,0,0,216,56Zm0,16V96H40V72ZM40,184V112H216v72Z" />
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="tile-icon">
+        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-7-7Z" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M13 2v7h7" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M9 15h6M9 18h4" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     ),
   },
@@ -43,8 +46,10 @@ const DEFAULT_TILES: Tile[] = [
     id: "checkout",
     label: "Check-out",
     svg: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
-        <path d="M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48Zm0,144H32V64H224V192ZM80,104h96a8,8,0,0,1,0,16H80a8,8,0,0,1,0-16Zm0,32h56a8,8,0,0,1,0,16H80a8,8,0,0,1,0-16Z" />
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="tile-icon">
+        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-7-7Z" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M13 2v7h7" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="m9 15 2 2 4-4" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     ),
   },
@@ -52,8 +57,9 @@ const DEFAULT_TILES: Tile[] = [
     id: "map",
     label: "Karta",
     svg: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
-        <path d="M224,56a8,8,0,0,0-6.9-7.9l-56-8a8,8,0,0,0-4.2.6L104,66.6,39.1,48.1A8,8,0,0,0,24,56V200a8,8,0,0,0,6.9,7.9l56,8a8,8,0,0,0,4.2-.6L152,189.4l64.9,18.5A8,8,0,0,0,232,200V56ZM96,198.2l-56-8V65.8l56,8Zm64-8.4L112,205.4V73.8l48-13.7Zm56,0-56-16V58.8l56,8Z" />
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="tile-icon">
+        <path d="m1 6 8-4 6 4 8-4v16l-8 4-6-4-8 4V6Z" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M9 2v16m6-12v16" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     ),
   },
@@ -61,8 +67,10 @@ const DEFAULT_TILES: Tile[] = [
     id: "info",
     label: "Info",
     svg: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
-        <path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm8-56V112a8,8,0,0,0-16,0v48a8,8,0,0,0,16,0Zm-8-72a12,12,0,1,0,12,12A12,12,0,0,0,128,88Z" />
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="tile-icon">
+        <circle cx="12" cy="12" r="11.25" stroke="var(--text)" strokeWidth="1.5"/>
+        <path d="M12 10.5V18" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M12 6v.5" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -70,35 +78,9 @@ const DEFAULT_TILES: Tile[] = [
     id: "wifi",
     label: "Wi-Fi",
     svg: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
-        <path d="M128,200a16,16,0,1,0,16,16A16,16,0,0,0,128,200Zm94.1-91.6a152,152,0,0,0-188.2,0,8,8,0,0,0,9.9,12.6,136,136,0,0,1,168.4,0,8,8,0,0,0,9.9-12.6ZM128,152a96,96,0,0,0-59.7,20.8,8,8,0,0,0,10,12.5,80,80,0,0,1,99.4,0,8,8,0,0,0,10-12.5A96,96,0,0,0,128,152Zm0-48A144,144,0,0,0,48.3,128.8a8,8,0,0,0,10,12.5,128,128,0,0,1,139.4,0,8,8,0,0,0,10-12.5A144,144,0,0,0,128,104Z" />
-      </svg>
-    ),
-  },
-  {
-    id: "faq",
-    label: "FAQ",
-    svg: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
-        <path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm0-48a12,12,0,1,0,12,12A12,12,0,0,0,128,168Zm0-96a32,32,0,0,0-32,32,8,8,0,0,0,16,0,16,16,0,1,1,25.6,12.8c-9.1,6.8-17.6,14.8-17.6,27.2v3.2a8,8,0,0,0,16,0V144c0-5.5,4.7-9.7,11.2-14.6A32,32,0,0,0,128,72Z" />
-      </svg>
-    ),
-  },
-  {
-    id: "contact",
-    label: "Kontakt",
-    svg: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
-        <path d="M222.37,158.46l-48-20.57a16,16,0,0,0-18.57,4.72l-21.56,26.36A120.13,120.13,0,0,1,87,121.76L113.39,100.2a16,16,0,0,0,4.72-18.57l-20.57-48A16,16,0,0,0,79.68,24.6l-40,16A16,16,0,0,0,29,58.1C32.88,157.41,98.59,223.12,197.9,227a16,16,0,0,0,17.5-10.68l16-40A16,16,0,0,0,222.37,158.46Z" />
-      </svg>
-    ),
-  },
-  {
-    id: "offers",
-    label: "Erbjudanden",
-    svg: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">
-        <path d="M232,120a8,8,0,0,0-8,8v56H88a8,8,0,0,0-5.66,2.34l-24,24A8,8,0,0,0,64,224H224a16,16,0,0,0,16-16V128A8,8,0,0,0,232,120ZM64,208l16-16H224v16ZM72,56a16,16,0,0,0-16,16v72a16,16,0,0,0,16,16h96a16,16,0,0,0,16-16V72a16,16,0,0,0-16-16Zm96,88H72V72h96Z" />
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" className="tile-icon">
+        <path d="M12 19.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z" fill="var(--text)"/>
+        <path d="M6.713 13.428a7.5 7.5 0 0 1 10.568 0M3.532 10.247a12 12 0 0 1 16.935 0M.781 6.652a16.5 16.5 0 0 1 22.438 0" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     ),
   },
@@ -160,6 +142,14 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
   const isCheckedIn = bookingStatus === BookingStatus.ACTIVE;
   const isCompleted = bookingStatus === BookingStatus.COMPLETED;
 
+  const keyIcon = (
+    <svg viewBox="-0.5 0 25 25" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M12.75 9.807a6 6 0 1 0-7.5 5.811v6.136a1.5 1.5 0 0 0 3 0v-6.136a6 6 0 0 0 4.5-5.811" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M9.741 4.605a6 6 0 0 1 8.16 8.251l4.91 4.906a1.5 1.5 0 0 1-2.122 2.121l-4.907-4.906a6 6 0 0 1-2.172.766h-.044M6.75 10.557a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M6.75 7.406V3a2.25 2.25 0 1 1 4.5 0v.766" stroke="var(--text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+
   const primary: Tile = {
     ...DEFAULT_TILES[0],
     id: "primary",
@@ -170,14 +160,15 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
         : canCheckInEffective 
           ? "Check-in" 
           : `Check-in öppnar ${checkInTime}`,
+    svg: isCheckedIn ? keyIcon : DEFAULT_TILES[0].svg,
     href: isCompleted || isCheckedIn ? undefined : canCheckInEffective ? `/check-in?token=${token}` : undefined,
     disabled: isCompleted || (!isCheckedIn && !canCheckInEffective),
   };
 
-  const tiles: Tile[] = [primary, ...DEFAULT_TILES.slice(1, 8)];
+  const tiles: Tile[] = [primary, ...DEFAULT_TILES.slice(1, 5)];
 
   return (
-    <div style={{ padding: "17px 17px 24px 17px" }}>
+    <div style={{ padding: "17px 17px 124px 17px" }}>
       <div
         style={{
           position: "relative",
@@ -264,11 +255,11 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
             >
               <div
                 style={{
-                  width: 48,
-                  height: 48,
+                  width: 32,
+                  height: 32,
                   borderRadius: 16,
-                  border: "1px solid var(--border)",
-                  background: "rgba(255,255,255,0.06)",
+                  border: "none",
+                  background: "transparent",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -304,6 +295,56 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
             </div>
           );
         })}
+      </div>
+
+      {/* Slider section */}
+      <div style={{ marginTop: 28 }}>
+        <h3 style={{ fontSize: 20, fontWeight: "bold", color: "var(--text)", marginBottom: 16, lineHeight: "1em" }}>Upptäck mer</h3>
+        <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4, marginLeft: -17, marginRight: -17, paddingLeft: 17, paddingRight: 17, scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          {[
+            {
+              img: "https://static.wixstatic.com/media/68b2a7_52e3c49890434442b80a60c563124fb5~mv2.jpg/v1/fill/w_1435,h_634,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/68b2a7_52e3c49890434442b80a60c563124fb5~mv2.jpg",
+              title: "Aktiviteter",
+              subtitle: "Inte en lugn stund hos oss",
+            },
+            {
+              img: "https://static.wixstatic.com/media/68b2a7_5338c98eacaf4df18d7f7b8ab3f84d0e~mv2.jpg/v1/fill/w_1435,h_953,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/68b2a7_5338c98eacaf4df18d7f7b8ab3f84d0e~mv2.jpg",
+              title: "Event",
+              subtitle: "Inte en lugn stund",
+            },
+            {
+              img: "https://static.wixstatic.com/media/68b2a7_1acc216be4f0408fbbb5608f8726b5a1~mv2.jpg/v1/fill/w_355,h_498,al_r,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/68b2a7_1acc216be4f0408fbbb5608f8726b5a1~mv2.jpg",
+              title: "Öppetider",
+              subtitle: "Läs om våra öppetider",
+            },
+          ].map((item) => (
+            <div
+              key={item.title}
+              style={{
+                minWidth: "70%",
+                                borderRadius: 12,
+                overflow: "hidden",
+                background: "var(--surface)",
+                boxShadow: "0 0 0 1px #0000000a, 0 2px 4px #0000000f",
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  width: "100%",
+                  aspectRatio: "16 / 10",
+                  backgroundImage: `url("${item.img}")`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }}
+              />
+              <div style={{ padding: "12px 14px 14px" }}>
+                <div style={{ fontSize: 15, fontWeight: "bold", color: "var(--text)", lineHeight: 1.3 }}>{item.title}</div>
+                <div style={{ fontSize: 13, color: "var(--text)", opacity: 0.55, marginTop: 2, lineHeight: 1.3 }}>{item.subtitle}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -1,0 +1,15 @@
+import type { ReactNode } from "react";
+import { Sidebar } from "./_components/Sidebar";
+import { SidebarProvider } from "./_components/SidebarContext";
+import { AdminLayoutContent } from "./_components/AdminLayoutContent";
+
+export default function AdminLayout({ children }: { children: ReactNode }) {
+  return (
+    <SidebarProvider>
+      <div className="flex min-h-screen bg-gray-50">
+        <Sidebar />
+        <AdminLayoutContent>{children}</AdminLayoutContent>
+      </div>
+    </SidebarProvider>
+  );
+}

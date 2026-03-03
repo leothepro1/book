@@ -328,7 +328,7 @@ export default function CheckInClient({ onLookup, onCommit }: Props) {
     </>
   );
 
-  const SuccessStep = <SuccessView nextHref={nextHref} seconds={20} />;
+  const SuccessStep = <SuccessView nextHref={nextHref} booking={found ? { unit: found.unit, arrivalISO: found.arrivalISO, departureISO: found.departureISO, heroImageUrl: found.heroImageUrl } : undefined} />;
 
   const termsUrl = found?.termsUrl || "https://apelviken.se/vistelsevillkor";
 

@@ -1,0 +1,71 @@
+"use server";
+
+import { prisma } from "@/app/_lib/db/prisma";
+
+/**
+ * Hämtar current tenant för en inloggad admin user.
+ * 
+ * @param clerkId - Clerk user ID (kommer från Clerk auth)
+ * @returns Tenant med settings, eller null om user inte har access
+ */
+export async function getCurrentTenant(clerkId: string) {
+  // 1. Hitta user via clerkId
+  const user = await prisma.user.findUnique({
+    where: { clerkId },
+    include: {
+      tenantMemberships: {
+        include: {
+          tenant: true,
+        },
+        orderBy: {
+          createdAt: "asc", // Första tenant de gick med i
+        },
+      },
+    },
+  });
+
+  if (!user || user.tenantMemberships.length === 0) {
+    return null;
+  }
+
+  // 2. Returnera första tenant (för nu - senare kan vi ha multi-tenant selector)
+  const membership = user.tenantMemberships[0];
+  
+  return {
+    tenant: membership.tenant,
+    role: membership.role,
+    userId: user.id,
+  };
+}
+
+/**
+ * Hämtar tenant config från settings JSON field.
+ * Fallback till hårdkodad config om settings är null.
+ */
+export async function getTenantConfig(tenantId: string) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+  });
+
+  if (!tenant) {
+    throw new Error("Tenant not found");
+  }
+
+  // Om settings finns i DB, använd dem
+  if (tenant.settings) {
+    return tenant.settings as any; // TenantConfig type
+  }
+
+  // Fallback (borde inte behövas efter seed)
+  return null;
+}
+
+/**
+ * Uppdaterar tenant settings.
+ */
+export async function updateTenantSettings(tenantId: string, settings: any) {
+  return await prisma.tenant.update({
+    where: { id: tenantId },
+    data: { settings },
+  });
+}

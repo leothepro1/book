@@ -1,18 +1,33 @@
 import { prisma } from "../../../_lib/db/prisma";
+import { createGlobalMockBooking } from "@/app/_lib/mockData";
 
 export async function resolveBookingFromToken(token?: string | null) {
   if (!token) return null;
 
-  // Dev shortcut: /p/test => senaste bokningen (utan magic links)
-  if (token === "test") {
-    const latest = await prisma.booking.findFirst({
-      orderBy: { createdAt: "desc" },
-      include: { tenant: true },
-    });
-    return latest ?? null;
+  // PREVIEW MODE eller TEST MODE: Använd global mock booking
+  if (token === "preview" || token === "test") {
+    console.log(`[resolveBooking] ${token.toUpperCase()} mode - using global mock`);
+
+    try {
+      const firstTenant = await prisma.tenant.findFirst();
+
+      if (firstTenant) {
+        const mockBooking = createGlobalMockBooking(firstTenant.id);
+        console.log("[resolveBooking] Mock booking created for first tenant:", firstTenant.id);
+
+        return {
+          ...mockBooking,
+          tenant: firstTenant,
+        } as any;
+      }
+    } catch (error) {
+      console.error("[resolveBooking] Mock mode error:", error);
+    }
+
+    return null;
   }
 
-  // 1) MagicLink.token -> Booking (endast om inte expired/used)
+  // NORMAL FLOW: Real bookings
   const magic = await prisma.magicLink.findUnique({
     where: { token },
     include: { booking: { include: { tenant: true } } },
@@ -25,7 +40,6 @@ export async function resolveBookingFromToken(token?: string | null) {
     if (!isExpired && !isUsed) return magic.booking;
   }
 
-  // 2) Fallback: token as Booking.id
   const booking = await prisma.booking.findUnique({
     where: { id: token },
     include: { tenant: true },

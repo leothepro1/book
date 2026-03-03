@@ -1,0 +1,39 @@
+/* ── Preview Widget - Responsive Scaling ── */
+
+.preview-widget {
+  --preview-scale: 0.8;
+  --preview-phone-width: 375px;
+  --preview-phone-height: 667px;
+  --preview-margin: 24px;
+
+  /* Actual rendered size after scale */
+  width: calc(var(--preview-phone-width) * var(--preview-scale));
+  max-width: 100%;
+  flex-shrink: 0;
+}
+
+/* Scale the inner content */
+.preview-widget-inner {
+  width: var(--preview-phone-width);
+  transform: scale(var(--preview-scale));
+  transform-origin: top center;
+  place-self: center;
+}
+
+@media (max-height: 800px) {
+  .preview-widget {
+    --preview-scale: 0.7;
+  }
+}
+
+@media (max-height: 700px) {
+  .preview-widget {
+    --preview-scale: 0.6;
+  }
+}
+
+.preview-widget-sticky {
+  position: sticky;
+  top: var(--preview-margin);
+  align-self: flex-start;
+}

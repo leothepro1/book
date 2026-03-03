@@ -39,6 +39,54 @@ export async function checkInLookup(payload: CheckInLookupPayload): Promise<Chec
     return { ok: false, message: "Fyll i bokningsnummer och efternamn." };
   }
 
+  // DEV MOCK: booking "1234" + "Test" always works
+  if (bookingId === "1234" && lastName.toLowerCase() === "test") {
+    const tenant = await prisma.tenant.findFirst({ where: { slug: "apelviken" } });
+    const tenantId = tenant?.id ?? "default";
+    const config = await getTenantConfig(tenantId);
+    const heroImageUrl =
+      (config as any)?.home?.heroImageUrl ||
+      "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=1600&q=60";
+    const termsUrl = config.supportLinks?.termsUrl || "https://apelviken.se/vistelsevillkor";
+    return {
+      ok: true as const,
+      booking: {
+        id: "mock-1234",
+        firstName: "Test",
+        lastName: "Test",
+        arrivalISO: new Date("2026-03-05T14:00:00").toISOString(),
+        departureISO: new Date("2026-03-08T11:00:00").toISOString(),
+        unit: "Strandhus 32",
+        heroImageUrl,
+        termsUrl,
+      },
+    };
+  }
+
+  // DEV MOCK: booking "1234" + "Test" always works
+  if (bookingId === "1234" && lastName.toLowerCase() === "test") {
+    const tenant = await prisma.tenant.findFirst({ where: { slug: "apelviken" } });
+    const tenantId = tenant?.id ?? "default";
+    const config = await getTenantConfig(tenantId);
+    const heroImageUrl =
+      (config as any)?.home?.heroImageUrl ||
+      "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=1600&q=60";
+    const termsUrl = config.supportLinks?.termsUrl || "https://apelviken.se/vistelsevillkor";
+    return {
+      ok: true as const,
+      booking: {
+        id: "mock-1234",
+        firstName: "Test",
+        lastName: "Test",
+        arrivalISO: new Date("2026-03-05T14:00:00").toISOString(),
+        departureISO: new Date("2026-03-08T11:00:00").toISOString(),
+        unit: "Strandhus 32",
+        heroImageUrl,
+        termsUrl,
+      },
+    };
+  }
+
   const booking = await prisma.booking.findFirst({
     where: {
       id: bookingId,
@@ -98,6 +146,12 @@ export async function checkInCommit(payload: {
 
   if (!bookingId) return { ok: false, message: "Boknings-ID saknas." };
   if (!signatureDataUrl) return { ok: false, message: "Signatur saknas." };
+
+  // DEV MOCK: skip DB for mock booking
+  if (bookingId === "mock-1234") {
+    const nextHref = token ? `/p/${token}` : (next || "/");
+    return { ok: true, already: false, nextHref };
+  }
 
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },

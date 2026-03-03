@@ -57,6 +57,7 @@
 }
 .sektion73-muted {
     color: var(--text);
+    font-weight:400;
     text-align: left;
     margin: 8px 0 0;
     font-size: 14px;
@@ -72,7 +73,7 @@
 
 .sektion73-segment__btn{
   width: 100%;
-  border-radius: 999px;
+  border-radius: var(--button-radius, 999px);
   padding: 10px 10px;
   font-size: 13px;
   font-weight: 800;
@@ -125,6 +126,7 @@
     border-radius: 8px;
     width: 100%;
     font-size: 16px;
+    font-weight: 400;
 }
 
 /* Placeholder ska vara “tom” så label får vara placeholder */
@@ -191,9 +193,8 @@
     -webkit-user-select: none;
     user-select: none;
     font-size: 16px;
-    font-weight: 700;
     font-family: var(--font-heading, ui-sans-serif);
-    border-radius: 999px;
+    border-radius: var(--button-radius, 999px);
     padding: 10px 20px;
     transition: transform .12s, opacity .12s;
     width: 100%;
@@ -343,7 +344,7 @@ display:none;
 .sektion73-cal__navbtn{
   width: 34px;
   height: 34px;
-  border-radius: 999px;
+  border-radius: var(--button-radius, 999px);
   border: 1px solid rgba(255,255,255,.14);
   background: rgba(255,255,255,.06);
   cursor:pointer;
@@ -478,7 +479,7 @@ display:none;
 .sektion73-sheet__grab{
   width: 44px;
   height: 5px;
-  border-radius: 999px;
+  border-radius: var(--button-radius, 999px);
   background: rgba(255,255,255,.20);
   margin: 10px auto 6px;
 }
@@ -534,7 +535,7 @@ display:none;
     cursor: pointer;
     background: #EEEDEC;
     border: none;
-    border-radius: 999px;
+    border-radius: var(--button-radius, 999px);
     flex: none;
     justify-content: center;
     align-items: center;
@@ -602,9 +603,9 @@ display:none;
     margin-top: auto;
     position: fixed;
     bottom: 0;
-    transform: translateX(0%);
-    width: min(820px, calc(100vw - 28px));
-    padding: 0px 0px 24px 0px;
+    left: 0;
+    right: 0;
+    padding: 0px 18px 24px 18px;
     box-sizing: border-box;
     z-index: 9999;
 }
@@ -631,17 +632,17 @@ display:none;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  padding: 22px 16px 26px 16px;
+  padding: 0;
   background: var(--background);
   color: var(--text);
 }
 
 .sektion73-success__top {
     flex-direction: column;
-    justify-content: center;
-    align-items: center;
+    justify-content: start;
+    align-items: start;
     gap: 0;
-    margin-top: 0;
+    margin: 25px 0 32px;
     display: flex;
 }
 
@@ -652,19 +653,20 @@ display:none;
 }
 
 .sektion73-success__title {
-    text-align: center;
-    font-size: 32px;
+    text-align: left;
+    font-size: 26px;
     font-weight: 700;
+    line-height: 1.15;
     font-family: var(--font-heading, ui-sans-serif);
-    margin: 6px 0 0;
+    color: var(--text);
+    margin: 0;
 }
 .sektion73-success__body {
-    opacity: .9;
-    text-align: center;
-    max-width: 520px;
-    margin-top: 7px;
-    font-size: 15px;
-    margin-bottom: 15px;
+    color: var(--text);
+    font-weight: 400;
+    text-align: left;
+    margin: 8px 0 0;
+    font-size: 14px;
 }
 .sektion73-success .sektion73-btn--withTimer {
     justify-content: center;
@@ -725,7 +727,7 @@ display:none;
 .sektion73-timerPuck{
   width: 38px;
   height: 38px;
-  border-radius: 999px;
+  border-radius: var(--button-radius, 999px);
   border: none;
   display: inline-flex;
   align-items: center;
@@ -817,7 +819,7 @@ display:none;
   border-radius: 8px;
   background: #4667D3;
   color: white;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.15);
 }
@@ -894,7 +896,7 @@ display:none;
     background: #4667d3;
     border-radius: 8px;
     padding: 6px 12px;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 500;
     position: absolute;
     bottom: 9px;
