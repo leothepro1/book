@@ -9,7 +9,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
   const { isCollapsed } = useSidebar();
   
   return (
-    <main className={`flex-1 transition-all duration-300 ease-in-out bg-white rounded-tr-[20px] ${
+    <main className={`flex-1 transition-all duration-300 ease-in-out bg-[#FBFAF9] rounded-tr-[20px] overflow-y-auto ${
       isCollapsed ? 'ml-16' : 'ml-64'
     }`}>
       <div className="container mx-auto py-8 px-6">
@@ -27,7 +27,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <Header />
         
         {/* Sidebar + Content - under headern med gap */}
-        <div className="flex flex-1 gap-px pt-px">
+        <div className="flex flex-1 overflow-hidden">
           <Sidebar />
           <LayoutContent>{children}</LayoutContent>
         </div>
