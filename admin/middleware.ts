@@ -22,6 +22,7 @@ export const config = {
     '/(api(?!/webhooks))(.*)',
     '/dashboard(.*)',
     '/design(.*)',
+    '/home(.*)',
     '/sign-in(.*)',
     '/sign-up(.*)',
   ],
