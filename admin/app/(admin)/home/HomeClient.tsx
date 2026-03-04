@@ -182,8 +182,14 @@ const CARD_TYPES = [
   { type: "gallery", label: "Galleri", description: "Bildgalleri", icon: "🖼️" },
 ] as const;
 
+type ModalView = "type" | "form";
+
 function AddCardModal({ existingCount, onAdd, onClose }: { existingCount: number; onAdd: (card: Card) => void; onClose: () => void }) {
-  const [step, setStep] = useState<"type" | "form">("type");
+  const [currentView, setCurrentView] = useState<ModalView>("type");
+  const [previousView, setPreviousView] = useState<ModalView | null>(null);
+  const [direction, setDirection] = useState<"forward" | "back">("forward");
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
   const [selectedType, setSelectedType] = useState<Card["type"] | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -198,6 +204,39 @@ function AddCardModal({ existingCount, onAdd, onClose }: { existingCount: number
   const [imageUrl, setImageUrl] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const navigateTo = useCallback((view: ModalView) => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    setDirection("forward");
+    setPreviousView(currentView);
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        setCurrentView(view);
+        setPreviousView(null);
+        setTimeout(() => setIsTransitioning(false), 350);
+      }, 200);
+    });
+  }, [currentView, isTransitioning]);
+
+  const navigateBack = useCallback(() => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    setDirection("back");
+    setPreviousView(currentView);
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        setCurrentView("type");
+        setPreviousView(null);
+        setTimeout(() => setIsTransitioning(false), 350);
+      }, 200);
+    });
+  }, [currentView, isTransitioning]);
+
+  const exitClass = direction === "forward" ? "modal-view-exit-left" : "modal-view-exit-right";
+  const enterClass = direction === "forward" ? "modal-view-enter-right" : "modal-view-enter-left";
+  const showPrevious = previousView !== null;
+  const activeView = showPrevious ? previousView : currentView;
 
   const handleCoverUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -222,66 +261,105 @@ function AddCardModal({ existingCount, onAdd, onClose }: { existingCount: number
     onAdd(card);
   }, [selectedType, title, description, imageUrl, badge, ctaLabel, url, openMode, slug, content, fileUrl, fileType, existingCount, onAdd]);
 
-  const inputStyle = { width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" as const };
+  const inputStyle: React.CSSProperties = { width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box", outline: "none", fontFamily: "inherit" };
+
+  const TypeView = (
+    <div style={{ display: "grid", gap: 8 }}>
+      {CARD_TYPES.map(({ type, label, description: desc, icon }, i) => (
+        <button key={type} type="button"
+          onClick={() => { setSelectedType(type); navigateTo("form"); }}
+          className="modal-type-row modal-stagger-item"
+          style={{ animationDelay: `${i * 0.04}s` }}>
+          <span style={{ fontSize: 22, width: 36, textAlign: "center", flexShrink: 0 }}>{icon}</span>
+          <div style={{ flex: 1, textAlign: "left" }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>{label}</div>
+            <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{desc}</div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      ))}
+    </div>
+  );
+
+  const FormView = (
+    <div style={{ display: "grid", gap: 14 }}>
+      <button type="button" onClick={navigateBack} className="modal-back-btn modal-stagger-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+        <span className="modal-back-label">{CARD_TYPES.find(t => t.type === selectedType)?.label ?? "Tillbaka"}</span>
+      </button>
+      <div className="modal-stagger-item" style={{ animationDelay: "0.04s" }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Titel *</label>
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="t.ex. Aktiviteter" style={inputStyle} />
+      </div>
+      <div className="modal-stagger-item" style={{ animationDelay: "0.08s" }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Beskrivning</label>
+        <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Kort beskrivning" style={inputStyle} />
+      </div>
+      <div className="modal-stagger-item" style={{ animationDelay: "0.12s" }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Omslagsbild</label>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {imageUrl && <img src={imageUrl} style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8 }} alt="" />}
+          <button type="button" onClick={() => imageInputRef.current?.click()} style={{ padding: "7px 14px", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>
+            {isUploading ? "Laddar upp..." : imageUrl ? "Byt bild" : "+ Ladda upp"}
+          </button>
+          <input ref={imageInputRef} type="file" accept="image/*" onChange={handleCoverUpload} style={{ display: "none" }} />
+        </div>
+      </div>
+      {selectedType === "link" && (
+        <>
+          <div className="modal-stagger-item" style={{ animationDelay: "0.16s" }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>URL *</label>
+            <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." style={inputStyle} />
+          </div>
+          <div className="modal-stagger-item" style={{ animationDelay: "0.20s" }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Öppna som</label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+              {(["external", "iframe", "internal"] as const).map(mode => (
+                <button key={mode} type="button" onClick={() => setOpenMode(mode)}
+                  style={{ padding: "7px 4px", border: `1.5px solid ${openMode === mode ? "#1a1a1a" : "#e0e0e0"}`, borderRadius: 8, background: openMode === mode ? "#f5f5f5" : "none", cursor: "pointer", fontSize: 12, fontWeight: 500 }}>
+                  {mode === "external" ? "Extern" : mode === "iframe" ? "Iframe" : "Intern"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+      {selectedType === "article" && (
+        <div className="modal-stagger-item" style={{ animationDelay: "0.16s" }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Innehåll</label>
+          <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Skriv innehåll..." rows={4} style={{ ...inputStyle, resize: "vertical" }} />
+        </div>
+      )}
+      {selectedType === "download" && (
+        <div className="modal-stagger-item" style={{ animationDelay: "0.16s" }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Fil-URL *</label>
+          <input value={fileUrl} onChange={e => setFileUrl(e.target.value)} placeholder="https://...pdf" style={inputStyle} />
+        </div>
+      )}
+      <div className="modal-stagger-item" style={{ animationDelay: "0.24s", display: "flex", justifyContent: "flex-end", paddingTop: 4 }}>
+        <button type="button" onClick={handleSubmit} disabled={!title.trim()}
+          style={{ padding: "10px 24px", border: "none", borderRadius: 10, background: title.trim() ? "#1a1a1a" : "#e0e0e0", color: title.trim() ? "#fff" : "#aaa", cursor: title.trim() ? "pointer" : "default", fontSize: 13, fontWeight: 600, transition: "background 0.2s" }}>
+          Lägg till
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000 }} />
-      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "#fff", borderRadius: 16, padding: 24, width: "min(480px,90vw)", zIndex: 1001, maxHeight: "80vh", overflowY: "auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <span style={{ fontSize: 16, fontWeight: 700 }}>{step === "type" ? "Välj korttyp" : "Konfigurera kort"}</span>
-          <button type="button" onClick={onClose} style={{ padding: 4, border: "none", background: "none", cursor: "pointer" }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      <div onClick={onClose} className="modal-backdrop" />
+      <div className="modal-container">
+        <div className="modal-header">
+          <span className="modal-title">{activeView === "type" ? "Lägg till kort" : "Konfigurera"}</span>
+          <button type="button" onClick={onClose} className="modal-close-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
         </div>
-        {step === "type" ? (
-          <div style={{ display: "grid", gap: 8 }}>
-            {CARD_TYPES.map(({ type, label, description: desc, icon }) => (
-              <button key={type} type="button" onClick={() => { setSelectedType(type); setStep("form"); }}
-                style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", border: "1.5px solid #eee", borderRadius: 12, background: "none", cursor: "pointer", textAlign: "left" }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = "#1a1a1a")}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = "#eee")}>
-                <span style={{ fontSize: 20 }}>{icon}</span>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{label}</div>
-                  <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{desc}</div>
-                </div>
-              </button>
-            ))}
+        <div className="modal-body">
+          <div key={activeView + (showPrevious ? "-exit" : "-enter")} className={"modal-view " + (showPrevious ? exitClass : enterClass)}>
+            {activeView === "type" ? TypeView : FormView}
           </div>
-        ) : (
-          <div style={{ display: "grid", gap: 14 }}>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Titel *</label><input value={title} onChange={e => setTitle(e.target.value)} placeholder="t.ex. Aktiviteter" style={inputStyle} /></div>
-            <div><label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Beskrivning</label><input value={description} onChange={e => setDescription(e.target.value)} placeholder="Kort beskrivning" style={inputStyle} /></div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Omslagsbild</label>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                {imageUrl && <img src={imageUrl} style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8 }} alt="" />}
-                <button type="button" onClick={() => imageInputRef.current?.click()} style={{ padding: "7px 14px", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>{isUploading ? "Laddar upp..." : imageUrl ? "Byt bild" : "+ Ladda upp"}</button>
-                <input ref={imageInputRef} type="file" accept="image/*" onChange={handleCoverUpload} style={{ display: "none" }} />
-              </div>
-            </div>
-            {selectedType === "link" && (<>
-              <div><label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>URL *</label><input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." style={inputStyle} /></div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Öppna som</label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-                  {(["external", "iframe", "internal"] as const).map(mode => (
-                    <button key={mode} type="button" onClick={() => setOpenMode(mode)} style={{ padding: "7px 4px", border: `1.5px solid ${openMode === mode ? "#1a1a1a" : "#e0e0e0"}`, borderRadius: 8, background: openMode === mode ? "#f5f5f5" : "none", cursor: "pointer", fontSize: 12, fontWeight: 500 }}>
-                      {mode === "external" ? "Extern" : mode === "iframe" ? "Iframe" : "Intern"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>)}
-            {selectedType === "article" && <div><label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Innehåll</label><textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Skriv innehåll..." rows={4} style={{ ...inputStyle, resize: "vertical" }} /></div>}
-            {selectedType === "download" && <div><label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Fil-URL *</label><input value={fileUrl} onChange={e => setFileUrl(e.target.value)} placeholder="https://...pdf" style={inputStyle} /></div>}
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
-              <button type="button" onClick={() => setStep("type")} style={{ padding: "9px 18px", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13 }}>Tillbaka</button>
-              <button type="button" onClick={handleSubmit} disabled={!title.trim()} style={{ padding: "9px 18px", border: "none", borderRadius: 8, background: title.trim() ? "#1a1a1a" : "#e0e0e0", color: title.trim() ? "#fff" : "#aaa", cursor: title.trim() ? "pointer" : "default", fontSize: 13, fontWeight: 600 }}>Lägg till</button>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </>
   );
