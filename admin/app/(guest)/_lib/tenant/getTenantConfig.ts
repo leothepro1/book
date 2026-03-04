@@ -29,18 +29,26 @@ export async function getTenantConfig(
   }
 
   // Prioritize draft if explicitly requested
+  const defaults = getDefaultConfig(tenant.id);
+
   if (useDraft && tenant.draftSettings && typeof tenant.draftSettings === 'object') {
+    const draft = tenant.draftSettings as any;
     return {
+      ...defaults,
+      ...draft,
       tenantId: tenant.id,
-      ...(tenant.draftSettings as any),
+      home: { ...defaults.home, ...(draft.home || {}), cards: draft.home?.cards || defaults.home.cards },
     };
   }
 
   // Use live settings
   if (tenant.settings && typeof tenant.settings === 'object') {
+    const live = tenant.settings as any;
     return {
+      ...defaults,
+      ...live,
       tenantId: tenant.id,
-      ...(tenant.settings as any),
+      home: { ...defaults.home, ...(live.home || {}), cards: live.home?.cards || defaults.home.cards },
     };
   }
 
