@@ -1,0 +1,189 @@
+/* ── Home Page ── */
+
+.home-content {
+  padding: 28px 2.5rem;
+}
+
+.home-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.home-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a1a;
+  font-family: DM Sans, ui-sans-serif, system-ui, sans-serif;
+}
+
+.home-section-sub {
+  font-size: 12px;
+  color: #999;
+  margin-top: 2px;
+}
+
+.home-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #1a1a1a;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: DM Sans, ui-sans-serif, system-ui, sans-serif;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.home-add-btn:hover { background: #333; }
+.home-add-btn:active { transform: scale(0.97); }
+
+.home-card-list { display: flex; flex-direction: column; gap: 8px; }
+
+.home-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: #bbb;
+  font-size: 14px;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px dashed #e5e5e5;
+}
+
+.home-card {
+  display: flex;
+  align-items: stretch;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #ebebeb;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
+}
+.home-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+
+.home-card-drag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  flex-shrink: 0;
+  color: #ccc;
+  cursor: grab;
+  border-right: 1px solid #f0f0f0;
+  background: #fafafa;
+  transition: color 0.2s ease;
+}
+.home-card-drag:hover { color: #999; }
+.home-card-drag:active { cursor: grabbing; }
+
+.home-card-body {
+  flex: 1;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.home-card-row1 { display: flex; align-items: center; gap: 6px; }
+
+.home-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: DM Sans, ui-sans-serif, system-ui, sans-serif;
+}
+
+.home-card-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  background: #f1f0ee;
+  border-radius: 6px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+
+.home-card-row2 { display: flex; align-items: center; gap: 6px; }
+
+.home-card-sub {
+  font-size: 12px;
+  color: #999;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, monospace;
+}
+
+.home-card-row3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.home-card-icons { display: flex; align-items: center; gap: 2px; }
+
+.home-card-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  border-radius: 7px;
+  cursor: pointer;
+  color: #bbb;
+  transition: background 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+.home-card-icon-btn:hover { background: #f1f0ee; color: #555; }
+.home-card-trash:hover { background: #fff0f0; color: #e53e3e; }
+
+.home-card-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  border-left: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.home-toggle {
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  border: none;
+  background: #e0e0e0;
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  transition: background 0.25s ease;
+  flex-shrink: 0;
+}
+.home-toggle-on { background: #22c55e; }
+
+.home-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: block;
+}
+.home-toggle-on .home-toggle-thumb { transform: translateX(18px); }
+
+.home-saving { margin-top: 12px; font-size: 13px; color: #999; text-align: center; }
