@@ -13,7 +13,9 @@ export type PreviewRoute =
   | "/p/[token]/account"   // Account page
   | "/p/[token]/stays"     // Stays page
   | "/check-in"            // Check-in
-  | "/check-out";          // Check-out
+  | "/check-out"           // Check-out
+  | "/p/[token]/help-center" // Help center
+  | "/p/[token]/support";    // Support
 
 /**
  * Props för GuestPreview component
