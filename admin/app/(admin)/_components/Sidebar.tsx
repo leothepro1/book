@@ -90,6 +90,16 @@ export function Sidebar() {
               >
                 Design
               </Link>
+              <Link
+                href="/home"
+                className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                  isActive('/home')
+                    ? 'bg-[#E6E5E3] text-[#7F22FE] font-medium'
+                    : 'text-[#6D6C6B] hover:bg-[#E6E5E3]'
+                }`}
+              >
+                Home
+              </Link>
             </div>
           </div>
         </div>
