@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { prisma } from "./_lib/db/prisma";
 import { BookingStatus } from "./(guest)/_lib/booking";
 import { revalidatePath } from "next/cache";

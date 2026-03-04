@@ -11,7 +11,7 @@ import "./design.css";
 
 /* ── Types ── */
 
-type DesignView = "main" | "colors" | "header" | "wallpaper" | "buttons" | "text";
+type DesignView = "main" | "colors" | "header" | "wallpaper" | "buttons" | "text" | "cards";
 
 interface Props {
   initialConfig: TenantConfig;
@@ -233,6 +233,8 @@ function DesignViewManager({ pushUndo }: { pushUndo: (s: Partial<TenantConfig>) 
           <ButtonsView onBack={navigateBack} pushUndo={pushUndo} />
         ) : activeView === "text" ? (
           <TextView onBack={navigateBack} pushUndo={pushUndo} />
+        ) : activeView === "cards" ? (
+          <CardsView onBack={navigateBack} pushUndo={pushUndo} />
         ) : (
           <PlaceholderView label={activeView} onBack={navigateBack} />
         )}
@@ -266,6 +268,7 @@ function MainView({ onNavigate }: { onNavigate: (v: DesignView) => void }) {
         <DesignRow icon={<ButtonsIcon variant={theme?.buttons?.variant} color={theme?.colors?.buttonBg} />} label="Buttons" value={btnLabel} onClick={() => onNavigate("buttons")} className="design-stagger-item" />
         <DesignRow icon={<TextIcon font={theme?.typography?.headingFont} />} label="Text" value={fontLabel} onClick={() => onNavigate("text")} className="design-stagger-item" />
         <DesignRow icon={<ColorsIcon bg={theme?.colors?.background} accent={theme?.colors?.buttonBg} text={theme?.colors?.text} buttonText={theme?.colors?.buttonText} />} label="Colors" onClick={() => onNavigate("colors")} className="design-stagger-item" />
+        <DesignRow icon={<CardsIcon />} label="Startsida" value={`${config?.home?.cards?.filter((c: any) => c.isActive).length || 0} kort`} onClick={() => onNavigate("cards")} className="design-stagger-item" />
       </div>
     </>
   );
@@ -705,6 +708,391 @@ function ColorsIcon({ bg, accent, text, buttonText }: { bg?: string; accent?: st
       <div style={{ width: 7, height: 20, borderRadius: 2, background: accent || "#8B3DFF" }} />
       <div style={{ width: 7, height: 20, borderRadius: 2, background: buttonText || "#fff" }} />
       <div style={{ width: 7, height: 20, borderRadius: 2, background: text || "#2D2C2B" }} />
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════
+   Cards View
+   ════════════════════════════════════════════ */
+
+import type { Card } from "@/app/(guest)/_lib/portal/homeLinks";
+
+function CardsView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Partial<TenantConfig>) => void }) {
+  const { config } = usePreview();
+  const [showModal, setShowModal] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const cards: Card[] = (config?.home?.cards || []) as Card[];
+
+  const handleAdd = useCallback((newCard: Card) => {
+    const updated = [...cards, newCard];
+    pushUndo({ home: { version: 1, links: config?.home?.links || [], cards } } as any);
+    startTransition(async () => {
+      await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updated } } as any);
+    });
+    setShowModal(false);
+  }, [cards, config, pushUndo]);
+
+  const handleToggle = useCallback((id: string) => {
+    const updated = cards.map(c => c.id === id ? { ...c, isActive: !c.isActive } : c);
+    startTransition(async () => {
+      await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updated } } as any);
+    });
+  }, [cards, config]);
+
+  const handleDelete = useCallback((id: string) => {
+    const updated = cards.filter(c => c.id !== id);
+    pushUndo({ home: { version: 1, links: config?.home?.links || [], cards } } as any);
+    startTransition(async () => {
+      await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updated } } as any);
+    });
+  }, [cards, config, pushUndo]);
+
+  const handleMoveUp = useCallback((id: string) => {
+    const sorted = [...cards].sort((a, b) => a.sortOrder - b.sortOrder);
+    const idx = sorted.findIndex(c => c.id === id);
+    if (idx <= 0) return;
+    const updated = sorted.map((c, i) => {
+      if (i === idx - 1) return { ...c, sortOrder: sorted[idx].sortOrder };
+      if (i === idx) return { ...c, sortOrder: sorted[idx - 1].sortOrder };
+      return c;
+    });
+    startTransition(async () => {
+      await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updated } } as any);
+    });
+  }, [cards, config]);
+
+  const handleMoveDown = useCallback((id: string) => {
+    const sorted = [...cards].sort((a, b) => a.sortOrder - b.sortOrder);
+    const idx = sorted.findIndex(c => c.id === id);
+    if (idx >= sorted.length - 1) return;
+    const updated = sorted.map((c, i) => {
+      if (i === idx + 1) return { ...c, sortOrder: sorted[idx].sortOrder };
+      if (i === idx) return { ...c, sortOrder: sorted[idx + 1].sortOrder };
+      return c;
+    });
+    startTransition(async () => {
+      await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updated } } as any);
+    });
+  }, [cards, config]);
+
+  const sorted = [...cards].sort((a, b) => a.sortOrder - b.sortOrder);
+
+  return (
+    <>
+      <BackButton label="Startsida" onClick={onBack} />
+
+      <div className="design-section design-stagger-item">
+        <div className="design-section-header">
+          <span className="design-section-label">Kort i "Utforska mer"</span>
+        </div>
+
+        {sorted.length === 0 && (
+          <div style={{ padding: "16px 0", color: "#999", fontSize: 13 }}>
+            Inga kort ännu. Klicka på + för att lägga till.
+          </div>
+        )}
+
+        {sorted.map((card, idx) => (
+          <div key={card.id} style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "10px 0", borderBottom: "1px solid #f0f0f0",
+          }}>
+            {card.image ? (
+              <div style={{
+                width: 44, height: 44, borderRadius: 8, flexShrink: 0,
+                backgroundImage: `url(${card.image})`,
+                backgroundSize: "cover", backgroundPosition: "center",
+              }} />
+            ) : (
+              <div style={{
+                width: 44, height: 44, borderRadius: 8, flexShrink: 0,
+                background: "#f3f3f3", display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <svg width="20" height="20" viewBox="0 0 256 256" fill="#ccc">
+                  <path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200Z"/>
+                </svg>
+              </div>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{card.title}</div>
+              <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{card.type}</div>
+            </div>
+            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+              <button type="button" onClick={() => handleMoveUp(card.id)} disabled={idx === 0}
+                style={{ padding: 4, border: "none", background: "none", cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1, color: "#666" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 15l-6-6-6 6"/></svg>
+              </button>
+              <button type="button" onClick={() => handleMoveDown(card.id)} disabled={idx === sorted.length - 1}
+                style={{ padding: 4, border: "none", background: "none", cursor: idx === sorted.length - 1 ? "default" : "pointer", opacity: idx === sorted.length - 1 ? 0.3 : 1, color: "#666" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <button type="button" onClick={() => handleToggle(card.id)}
+                style={{ padding: 4, border: "none", background: "none", cursor: "pointer", color: card.isActive ? "#22c55e" : "#ccc" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+              </button>
+              <button type="button" onClick={() => handleDelete(card.id)}
+                style={{ padding: 4, border: "none", background: "none", cursor: "pointer", color: "#f87171" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+          </div>
+        ))}
+
+        <button type="button" onClick={() => setShowModal(true)}
+          style={{
+            marginTop: 12, width: "100%", padding: "10px 0", border: "1.5px dashed #d0d0d0",
+            borderRadius: 10, background: "none", cursor: "pointer", color: "#888",
+            fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+          }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+          Lägg till kort
+        </button>
+      </div>
+
+      {isPending && <div className="design-saving">Sparar...</div>}
+
+      {showModal && createPortal(
+        <AddCardModal
+          existingCount={cards.length}
+          onAdd={handleAdd}
+          onClose={() => setShowModal(false)}
+        />,
+        document.body
+      )}
+    </>
+  );
+}
+
+/* ════════════════════════════════════════════
+   Add Card Modal
+   ════════════════════════════════════════════ */
+
+const CARD_TYPES = [
+  { type: "link", label: "Länk", description: "Öppnar en URL", icon: "🔗" },
+  { type: "article", label: "Artikel", description: "Intern innehållssida", icon: "📄" },
+  { type: "download", label: "Ladda ner", description: "PDF eller fil", icon: "⬇️" },
+  { type: "gallery", label: "Galleri", description: "Bildgalleri", icon: "🖼️" },
+] as const;
+
+function AddCardModal({ existingCount, onAdd, onClose }: {
+  existingCount: number;
+  onAdd: (card: Card) => void;
+  onClose: () => void;
+}) {
+  const [step, setStep] = useState<"type" | "form">("type");
+  const [selectedType, setSelectedType] = useState<Card["type"] | null>(null);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [badge, setBadge] = useState("");
+  const [ctaLabel, setCtaLabel] = useState("");
+  const [url, setUrl] = useState("");
+  const [openMode, setOpenMode] = useState<"internal" | "iframe" | "external">("external");
+  const [slug, setSlug] = useState("");
+  const [content, setContent] = useState("");
+  const [fileUrl, setFileUrl] = useState("");
+  const [fileType, setFileType] = useState("pdf");
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/tenant/upload", { method: "POST", body: formData });
+      if (res.ok) {
+        const { url: uploadedUrl } = await res.json();
+        setUrl(uploadedUrl);
+      }
+    } finally {
+      setIsUploading(false);
+    }
+    e.target.value = "";
+  }, []);
+
+  const [imageUrl, setImageUrl] = useState("");
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCoverUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/tenant/upload", { method: "POST", body: formData });
+      if (res.ok) {
+        const { url: uploadedUrl } = await res.json();
+        setImageUrl(uploadedUrl);
+      }
+    } finally {
+      setIsUploading(false);
+    }
+    e.target.value = "";
+  }, []);
+
+  const handleSubmit = useCallback(() => {
+    if (!selectedType || !title.trim()) return;
+    const base = {
+      id: `card_${Date.now()}`,
+      sortOrder: existingCount,
+      isActive: true,
+      title: title.trim(),
+      description: description.trim(),
+      image: imageUrl || undefined,
+      badge: badge.trim() || undefined,
+      ctaLabel: ctaLabel.trim() || undefined,
+    };
+    let card: Card;
+    if (selectedType === "link") {
+      card = { ...base, type: "link", url, openMode };
+    } else if (selectedType === "article") {
+      card = { ...base, type: "article", slug: slug || `article-${Date.now()}`, content };
+    } else if (selectedType === "download") {
+      card = { ...base, type: "download", fileUrl: fileUrl || url, fileType };
+    } else {
+      card = { ...base, type: "gallery", images: imageUrl ? [imageUrl] : [] };
+    }
+    onAdd(card);
+  }, [selectedType, title, description, imageUrl, badge, ctaLabel, url, openMode, slug, content, fileUrl, fileType, existingCount, onAdd]);
+
+  return (
+    <>
+      <div className="design-modal-backdrop" onClick={onClose} />
+      <div className="design-modal" style={{ maxHeight: "80vh", overflowY: "auto" }}>
+        <div className="design-modal-header">
+          <span className="design-modal-title">
+            {step === "type" ? "Välj korttyp" : "Konfigurera kort"}
+          </span>
+          <button type="button" className="design-modal-close" onClick={onClose}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        {step === "type" ? (
+          <div style={{ display: "grid", gap: 8, padding: "4px 0" }}>
+            {CARD_TYPES.map(({ type, label, description: desc, icon }) => (
+              <button key={type} type="button"
+                onClick={() => { setSelectedType(type); setStep("form"); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
+                  border: "1.5px solid #eee", borderRadius: 12, background: "none",
+                  cursor: "pointer", textAlign: "left", transition: "border-color 0.15s",
+                }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = "#7F22FE")}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = "#eee")}
+              >
+                <span style={{ fontSize: 24 }}>{icon}</span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>{label}</div>
+                  <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{desc}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: 14, padding: "4px 0" }}>
+            {/* Bas-fält */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Titel *</label>
+              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="t.ex. Aktiviteter"
+                style={{ width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Beskrivning</label>
+              <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Kort beskrivning"
+                style={{ width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Omslagsbild</label>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {imageUrl && <img src={imageUrl} style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8 }} />}
+                <button type="button" onClick={() => imageInputRef.current?.click()}
+                  style={{ padding: "7px 14px", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#555" }}>
+                  {isUploading ? "Laddar upp..." : imageUrl ? "Byt bild" : "+ Ladda upp"}
+                </button>
+                <input ref={imageInputRef} type="file" accept="image/*" onChange={handleCoverUpload} style={{ display: "none" }} />
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Badge (valfri)</label>
+                <input value={badge} onChange={e => setBadge(e.target.value)} placeholder="t.ex. Populärt"
+                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Knapptext (valfri)</label>
+                <input value={ctaLabel} onChange={e => setCtaLabel(e.target.value)} placeholder="t.ex. Läs mer"
+                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
+              </div>
+            </div>
+
+            {/* Typ-specifika fält */}
+            {selectedType === "link" && (
+              <>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>URL *</label>
+                  <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..."
+                    style={{ width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Öppna som</label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                    {(["external", "iframe", "internal"] as const).map(mode => (
+                      <button key={mode} type="button" onClick={() => setOpenMode(mode)}
+                        style={{ padding: "7px 4px", border: `1.5px solid ${openMode === mode ? "#7F22FE" : "#e0e0e0"}`, borderRadius: 8, background: openMode === mode ? "#f5eeff" : "none", cursor: "pointer", fontSize: 12, fontWeight: 500, color: openMode === mode ? "#7F22FE" : "#555" }}>
+                        {mode === "external" ? "Extern" : mode === "iframe" ? "Iframe" : "Intern"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+            {selectedType === "article" && (
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Innehåll</label>
+                <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Skriv artikelns innehåll..."
+                  rows={4} style={{ width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, resize: "vertical", boxSizing: "border-box" }} />
+              </div>
+            )}
+            {selectedType === "download" && (
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Fil-URL *</label>
+                <input value={fileUrl} onChange={e => setFileUrl(e.target.value)} placeholder="https://...pdf"
+                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
+              <button type="button" onClick={() => setStep("type")}
+                style={{ padding: "9px 18px", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#555" }}>
+                Tillbaka
+              </button>
+              <button type="button" onClick={handleSubmit} disabled={!title.trim()}
+                style={{ padding: "9px 18px", border: "none", borderRadius: 8, background: title.trim() ? "#7F22FE" : "#e0e0e0", color: title.trim() ? "#fff" : "#aaa", cursor: title.trim() ? "pointer" : "default", fontSize: 13, fontWeight: 600 }}>
+                Lägg till
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/* ════════════════════════════════════════════
+   Cards Icon
+   ════════════════════════════════════════════ */
+
+function CardsIcon() {
+  return (
+    <div className="design-icon-box">
+      <svg width="20" height="20" viewBox="0 0 256 256" fill="#999">
+        <path d="M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48Zm0,144H32V64H224V192ZM48,136a8,8,0,0,1,8-8H88a8,8,0,0,1,0,16H56A8,8,0,0,1,48,136Zm0,32a8,8,0,0,1,8-8H120a8,8,0,0,1,0,16H56A8,8,0,0,1,48,168Zm160-32a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h32A8,8,0,0,1,208,136Z"/>
+      </svg>
     </div>
   );
 }

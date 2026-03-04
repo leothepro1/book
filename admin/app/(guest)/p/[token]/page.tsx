@@ -297,55 +297,90 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
         })}
       </div>
 
-      {/* Slider section */}
-      <div style={{ marginTop: 28 }}>
-        <h3 style={{ fontSize: 20, fontWeight: "bold", color: "var(--text)", marginBottom: 16, lineHeight: "1em" }}>Upptäck mer</h3>
-        <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4, marginLeft: -17, marginRight: -17, paddingLeft: 17, paddingRight: 17, scrollbarWidth: "none", msOverflowStyle: "none" }}>
-          {[
-            {
-              img: "https://static.wixstatic.com/media/68b2a7_52e3c49890434442b80a60c563124fb5~mv2.jpg/v1/fill/w_1435,h_634,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/68b2a7_52e3c49890434442b80a60c563124fb5~mv2.jpg",
-              title: "Aktiviteter",
-              subtitle: "Inte en lugn stund hos oss",
-            },
-            {
-              img: "https://static.wixstatic.com/media/68b2a7_5338c98eacaf4df18d7f7b8ab3f84d0e~mv2.jpg/v1/fill/w_1435,h_953,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/68b2a7_5338c98eacaf4df18d7f7b8ab3f84d0e~mv2.jpg",
-              title: "Event",
-              subtitle: "Inte en lugn stund",
-            },
-            {
-              img: "https://static.wixstatic.com/media/68b2a7_1acc216be4f0408fbbb5608f8726b5a1~mv2.jpg/v1/fill/w_355,h_498,al_r,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/68b2a7_1acc216be4f0408fbbb5608f8726b5a1~mv2.jpg",
-              title: "Öppetider",
-              subtitle: "Läs om våra öppetider",
-            },
-          ].map((item) => (
-            <div
-              key={item.title}
-              style={{
-                minWidth: "70%",
-                                borderRadius: 12,
-                overflow: "hidden",
-                background: "var(--surface)",
-                boxShadow: "0 0 0 1px #0000000a, 0 2px 4px #0000000f",
-                flexShrink: 0,
-              }}
-            >
-              <div
-                style={{
-                  width: "100%",
-                  aspectRatio: "16 / 10",
-                  backgroundImage: `url("${item.img}")`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                }}
-              />
-              <div style={{ padding: "12px 14px 14px" }}>
-                <div style={{ fontSize: 15, fontWeight: "bold", color: "var(--text)", lineHeight: 1.3 }}>{item.title}</div>
-                <div style={{ fontSize: 13, color: "var(--text)", opacity: 0.55, marginTop: 2, lineHeight: 1.3 }}>{item.subtitle}</div>
-              </div>
-            </div>
-          ))}
+      {/* Cards section */}
+      {config.home.cards && config.home.cards.filter(c => c.isActive).length > 0 && (
+        <div style={{ marginTop: 28 }}>
+          <h3 style={{ fontSize: 20, fontWeight: "bold", color: "var(--text)", marginBottom: 16, lineHeight: "1em" }}>Upptäck mer</h3>
+          <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4, marginLeft: -17, marginRight: -17, paddingLeft: 17, paddingRight: 17, scrollbarWidth: "none", msOverflowStyle: "none" }}>
+            {config.home.cards
+              .filter(c => c.isActive)
+              .sort((a, b) => a.sortOrder - b.sortOrder)
+              .map((card) => {
+                const href =
+                  card.type === "link"
+                    ? card.openMode === "external" ? card.url : card.url
+                    : card.type === "article"
+                    ? `/p/${token}/article/${card.slug}`
+                    : card.type === "download"
+                    ? card.fileUrl
+                    : undefined;
+
+                const cardInner = (
+                  <div
+                    style={{
+                      minWidth: "70%",
+                      borderRadius: 12,
+                      overflow: "hidden",
+                      background: "var(--surface)",
+                      boxShadow: "0 0 0 1px #0000000a, 0 2px 4px #0000000f",
+                      flexShrink: 0,
+                      cursor: href ? "pointer" : "default",
+                    }}
+                  >
+                    {card.image ? (
+                      <div
+                        style={{
+                          width: "100%",
+                          aspectRatio: "16 / 10",
+                          backgroundImage: `url("${card.image}")`,
+                          backgroundSize: "cover",
+                          backgroundPosition: "center",
+                          position: "relative",
+                        }}
+                      >
+                        {card.badge && (
+                          <span style={{
+                            position: "absolute", top: 8, left: 8,
+                            background: "var(--button-bg)", color: "var(--button-fg)",
+                            fontSize: 11, fontWeight: 600, padding: "2px 8px",
+                            borderRadius: 999,
+                          }}>{card.badge}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{
+                        width: "100%", aspectRatio: "16 / 10",
+                        background: "var(--surface)", display: "flex",
+                        alignItems: "center", justifyContent: "center",
+                      }}>
+                        <svg width="32" height="32" viewBox="0 0 256 256" fill="var(--text)" opacity="0.2">
+                          <path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200ZM176,88a16,16,0,1,1-16-16A16,16,0,0,1,176,88Zm44,80a8,8,0,0,1-3.2,6.4l-64,48a8,8,0,0,1-9.6,0L96,189.33,52.8,174.4a8,8,0,0,1,9.6-12.8L96,186.67l46.4-34.8a8,8,0,0,1,9.6,0l64,48A8,8,0,0,1,220,168Z"/>
+                        </svg>
+                      </div>
+                    )}
+                    <div style={{ padding: "12px 14px 14px" }}>
+                      <div style={{ fontSize: 15, fontWeight: "bold", color: "var(--text)", lineHeight: 1.3 }}>{card.title}</div>
+                      <div style={{ fontSize: 13, color: "var(--text)", opacity: 0.55, marginTop: 2, lineHeight: 1.3 }}>{card.description}</div>
+                      {card.ctaLabel && (
+                        <div style={{ marginTop: 8, fontSize: 13, fontWeight: 600, color: "var(--button-bg)" }}>{card.ctaLabel} →</div>
+                      )}
+                    </div>
+                  </div>
+                );
+
+                return href ? (
+                  <a key={card.id} href={href} style={{ textDecoration: "none", flexShrink: 0, minWidth: "70%" }}
+                     target={card.type === "link" && card.openMode === "external" ? "_blank" : undefined}
+                     rel={card.type === "link" && card.openMode === "external" ? "noopener noreferrer" : undefined}>
+                    {cardInner}
+                  </a>
+                ) : (
+                  <div key={card.id} style={{ flexShrink: 0, minWidth: "70%" }}>{cardInner}</div>
+                );
+              })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

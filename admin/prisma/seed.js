@@ -59,6 +59,7 @@ async function main() {
     create: { 
       name: "Apelviken Camping", 
       slug: "apelviken",
+      clerkOrgId: "seed_apelviken_org",
       settings: {
         property: {
           name: "Apelviken Camping",
@@ -107,39 +108,6 @@ async function main() {
           languageSwitcherEnabled: true,
         },
       },
-    },
-  });
-
-  console.log("✅ Tenant:", tenant.name);
-
-  // 2. Skapa default admin user (simulerar Clerk user)
-  // När Clerk är installerat kommer detta synkas via webhook istället
-  const adminUser = await prisma.user.upsert({
-    where: { email: "admin@apelviken.se" },
-    update: {},
-    create: {
-      clerkId: "dev_clerk_id_admin", // Placeholder - ersätts av riktig Clerk ID senare
-      email: "admin@apelviken.se",
-      firstName: "Admin",
-      lastName: "User",
-    },
-  });
-
-  console.log("✅ Admin user:", adminUser.email);
-
-  // 3. Koppla admin till tenant som OWNER
-  const membership = await prisma.tenantMember.upsert({
-    where: {
-      userId_tenantId: {
-        userId: adminUser.id,
-        tenantId: tenant.id,
-      },
-    },
-    update: {},
-    create: {
-      userId: adminUser.id,
-      tenantId: tenant.id,
-      role: "OWNER",
     },
   });
 

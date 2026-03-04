@@ -88,6 +88,7 @@ function getDefaultConfig(tenantId: string): TenantConfig {
     home: {
       version: 1,
       links: [],
+      cards: [],
     },
     footer: {
       version: 1,
