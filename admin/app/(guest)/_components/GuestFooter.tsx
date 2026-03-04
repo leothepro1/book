@@ -72,11 +72,12 @@ export default function GuestFooter({ config }: { config: TenantConfig }) {
 
   const items = useMemo(() => {
     const base = token === "preview" ? "/preview" : token ? `/p/${token}` : "/p";
+    const homeHref = token === "preview" ? "/preview/home" : base;
     return [
       {
         key: "home" as const,
         label: "Home",
-        href: `${base}`,
+        href: token === "preview" ? "/preview/home" : `${base}`,
         IconInactive: HomeInactive,
         IconActive: HomeActive,
       },
