@@ -2,13 +2,28 @@
 import { useCallback, useState, useTransition, useRef } from "react";
 import { createPortal } from "react-dom";
 import { PreviewProvider, usePreview } from "../_components/GuestPreview";
+import { GuestPreviewFrame } from "../_components/GuestPreview";
+import "../_components/GuestPreview/preview.css";
+import "../_components/admin-page.css";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import type { Card } from "@/app/(guest)/_lib/portal/homeLinks";
 import { updateDraft } from "../_lib/tenant/updateDraft";
 export default function HomeClient({ initialConfig }: { initialConfig: TenantConfig }) {
   return (
     <PreviewProvider initialConfig={initialConfig}>
-      <HomePageInner />
+      <div className="admin-page">
+        <div className="admin-editor">
+          <div className="admin-header">
+            <h1 className="admin-title">Startsida</h1>
+          </div>
+          <div className="admin-content">
+            <HomePageInner />
+          </div>
+        </div>
+        <div className="admin-preview">
+          <GuestPreviewFrame route="/p/[token]" className="preview-widget-sticky" />
+        </div>
+      </div>
     </PreviewProvider>
   );
 }
