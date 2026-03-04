@@ -93,3 +93,12 @@ body {
 .animate-slideDown {
   animation: slideDown 0.15s ease-out;
 }
+
+/* Hide scrollbars globally */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
