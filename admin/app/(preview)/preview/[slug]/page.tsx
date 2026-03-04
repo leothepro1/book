@@ -24,9 +24,9 @@ export default async function PreviewPage(props: {
     case "account":
       return <AccountPage params={previewParams} />;
     case "help-center":
-      return <HelpCenterPage params={previewParams} />;
+      return <HelpCenterPage />;
     case "support":
-      return <SupportPage params={previewParams} />;
+      return <SupportPage />;
     case "check-in":
       return <CheckInPage params={previewParams} />;
     default:
