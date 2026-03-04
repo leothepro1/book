@@ -1,0 +1,79 @@
+/* ── Admin Page Layout (shared across all admin pages) ── */
+
+.admin-page {
+  display: grid;
+  grid-template-columns: 1fr 460px;
+  gap: 0;
+  align-items: start;
+  min-height: calc(100vh - 3.5rem);
+  margin: -2rem -1.5rem;
+}
+
+/* ── Left Column: Editor ── */
+
+.admin-editor {
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.admin-header {
+  border-bottom: 1px solid #f1f0ef;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 2.5rem 12px;
+  display: flex;
+}
+
+.admin-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #2d2c2b;
+  font-family: DM Sans, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+}
+
+.admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-content {
+  padding: 0 2.5rem;
+}
+
+/* ── Right Column: Preview ── */
+
+.admin-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 2.5rem;
+  border-left: 1px solid #F1F0EF;
+  height: calc(100vh - 3.5rem);
+  position: sticky;
+  top: 3.5rem;
+  overflow: hidden;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 1200px) {
+  .admin-page { grid-template-columns: 1fr 420px; }
+}
+
+@media (max-width: 1000px) {
+  .admin-page { grid-template-columns: 1fr 380px; }
+  .admin-preview { padding: 2rem 1.5rem; }
+}
+
+@media (max-width: 900px) {
+  .admin-page { grid-template-columns: 1fr; }
+  .admin-preview {
+    order: -1;
+    position: static;
+    border-left: none;
+    border-bottom: 1px solid #F1F0EF;
+    height: auto;
+  }
+}
