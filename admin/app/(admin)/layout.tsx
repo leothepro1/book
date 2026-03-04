@@ -9,7 +9,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
   const { isCollapsed } = useSidebar();
   
   return (
-    <main className={`flex-1 transition-all duration-300 ease-in-out bg-[#FBFAF9] rounded-tr-[20px] overflow-y-auto ${
+    <main className={`flex-1 transition-all duration-300 ease-in-out bg-[#FBFAF9] rounded-tr-[12px] overflow-y-auto ${
       isCollapsed ? 'ml-16' : 'ml-64'
     }`}>
       <div className="container mx-auto py-8 px-6">
