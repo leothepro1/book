@@ -8,6 +8,7 @@ import { updateDraft } from "../_lib/tenant/updateDraft";
 import { publishDraft, discardDraft } from "../_lib/tenant/publishDraft";
 import "../_components/GuestPreview/preview.css";
 import "./design.css";
+import "../_components/admin-page.css";
 
 /* ── Types ── */
 
@@ -149,10 +150,10 @@ function DesignInner() {
   }, [isPublishing]);
 
   return (
-    <div className="design-page">
-      <div className="design-editor">
-        <div className="design-header">
-          <h1 className="design-title">Design</h1>
+    <div className="admin-page">
+      <div className="admin-editor">
+        <div className="admin-header">
+          <h1 className="admin-title">Design</h1>
           <div className={`design-actions ${hasUnsavedChanges ? "design-actions-visible" : ""}`}>
             <div className="design-actions-left">
               <button type="button" className="design-action-icon" onClick={handleUndo} disabled={undoStack.length === 0 || isUndoing} aria-label="Undo">
@@ -170,7 +171,7 @@ function DesignInner() {
         </div>
         <DesignViewManager pushUndo={pushUndo} />
       </div>
-      <div className="design-preview">
+      <div className="admin-preview">
         <GuestPreviewFrame route="/p/[token]" className="preview-widget-sticky" />
       </div>
     </div>

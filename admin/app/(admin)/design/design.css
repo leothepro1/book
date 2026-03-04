@@ -1,38 +1,8 @@
-/* ── Design Page Layout ── */
 
-.design-page {
-  display: grid;
-  grid-template-columns: 1fr 460px;
-  gap: 0;
-  align-items: start;
-  min-height: calc(100vh - 3.5rem);
-  margin: -2rem -1.5rem;
-}
 
-/* ── Left Column: Editor ── */
 
-.design-editor {
-  width: 100%;
-  padding: 0rem 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
 
-.design-header {
-    border-bottom: 1px solid #f1f0ef;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
-    padding: 12px 2.5rem 12px;
-    display: flex;
-}
 
-.design-title {
-    font-size: 22px;
-    font-weight: 700;
-    color: #2d2c2b;
-    font-family: DM Sans, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-}
 /* ── Action Buttons (undo/redo/publish) ── */
 
 .design-actions {
@@ -249,7 +219,7 @@
     font-family: DM Sans, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
     color: #2D2C2B;
     width: 100%;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
     padding: 14px 16px;
     transition: background .35s, border-color .35s, transform .5s cubic-bezier(.16, 1, .3, 1), box-shadow .35s;
     display: flex;
@@ -423,17 +393,7 @@
 
 /* ── Right Column: Preview ── */
 
-.design-preview {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 2.5rem;
-  border-left: 1px solid #F1F0EF;
-  height: calc(100vh - 3.5rem);
-  position: sticky;
-  top: 3.5rem;
-  overflow: hidden;
-}
+
 
 /* ── Saving indicator ── */
 
@@ -455,19 +415,12 @@
 
 @media (max-width: 1000px) {
   .design-page { grid-template-columns: 1fr 380px; }
-  .design-preview { padding: 2rem 1.5rem; }
+  
 }
 
 @media (max-width: 900px) {
   .design-page { grid-template-columns: 1fr; }
-  .design-preview {
-    order: -1;
-    position: static;
-    border-left: none;
-    border-bottom: 1px solid #F1F0EF;
-    min-height: auto;
-    height: auto;
-  }
+  
   .design-preview .preview-widget-sticky { position: static; }
 }
 
