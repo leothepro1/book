@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { GuestPreviewFrame, PreviewProvider } from "./GuestPreview";
+import type { PreviewRoute } from "./GuestPreview/types";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import "./GuestPreview/preview.css";
 import "./admin-page.css";
@@ -11,7 +12,7 @@ interface AdminPageLayoutProps {
   actions?: ReactNode;
   children: ReactNode;
   config: TenantConfig;
-  previewRoute?: string;
+  previewRoute?: PreviewRoute;
 }
 
 export default function AdminPageLayout({
@@ -19,7 +20,7 @@ export default function AdminPageLayout({
   actions,
   children,
   config,
-  previewRoute = "/p/[token]",
+  previewRoute = "/p/[token]" as PreviewRoute,
 }: AdminPageLayoutProps) {
   return (
     <PreviewProvider initialConfig={config} enableRealtime={false}>
