@@ -16,7 +16,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`fixed left-0 top-[calc(3.5rem+1px)] h-[calc(100vh-3.5rem-1px)] bg-[#F1F0EE] rounded-tl-[20px] transition-all duration-300 ease-in-out z-30 flex flex-col ${
+      className={`fixed left-0 top-[3.5rem] h-[calc(100vh-3.5rem)] bg-[#F1F0EE] rounded-tl-[20px] transition-all duration-300 ease-in-out z-30 flex flex-col ${
         isCollapsed ? 'w-16' : 'w-64'
       }`}
     >
