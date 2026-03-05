@@ -97,6 +97,7 @@ function getDefaultConfig(tenantId: string): TenantConfig {
       version: 1,
       links: [],
       cards: [],
+      archivedCards: [],
     },
     footer: {
       version: 1,

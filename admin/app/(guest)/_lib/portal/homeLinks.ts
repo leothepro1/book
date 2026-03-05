@@ -20,6 +20,12 @@ export type HomeLink = {
   visibilityRuleId?: string;
 };
 
+export type ArchivedCard = Card & {
+  archivedAt: string;      // ISO timestamp
+  archivedBy?: string;     // Clerk userId
+  archivedReason?: "manual" | "scheduled";
+};
+
 export type BaseCard = {
   id: string;
   sortOrder: number;
@@ -35,10 +41,21 @@ export type ArticleCard = BaseCard & { type: "article"; slug: string; content: s
 export type LinkCard = BaseCard & { type: "link"; url: string; openMode: "internal" | "iframe" | "external"; };
 export type DownloadCard = BaseCard & { type: "download"; fileUrl: string; fileType: string; fileSize?: string; };
 export type GalleryCard = BaseCard & { type: "gallery"; images: string[]; };
-export type Card = ArticleCard | LinkCard | DownloadCard | GalleryCard;
+
+export type CategoryLayout = "stack" | "grid" | "slider" | "showcase";
+
+export type CategoryCard = BaseCard & {
+  type: "category";
+  layout: CategoryLayout;
+  /** Ordered list of card IDs that belong to this category */
+  cardIds: string[];
+};
+
+export type Card = ArticleCard | LinkCard | DownloadCard | GalleryCard | CategoryCard;
 
 export type HomeConfig = {
   version: 1;
   links: HomeLink[];
   cards: Card[];
+  archivedCards: ArchivedCard[];
 };

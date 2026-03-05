@@ -7,6 +7,7 @@ const isPublicRoute = createRouteMatcher([
   '/check-out(.*)',
   '/preview/(.*)',
   '/api/webhooks/(.*)',
+  ...(process.env.NODE_ENV === 'development' ? ['/(.*)',] : []),
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
@@ -17,7 +18,6 @@ export default clerkMiddleware(async (auth, request) => {
 
 export const config = {
   matcher: [
-    // Only run middleware on admin routes, skip guest portal entirely
     '/(admin)(.*)',
     '/(api(?!/webhooks))(.*)',
     '/dashboard(.*)',

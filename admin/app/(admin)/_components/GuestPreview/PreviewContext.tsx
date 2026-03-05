@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import type { DraftUpdateEvent } from "./types";
+import merge from "deepmerge";
 
 interface PreviewContextValue {
   config: TenantConfig | null;
@@ -18,6 +19,7 @@ interface PreviewContextValue {
   lastUpdated: Date | null;
   refresh: () => void;
   isConnected: boolean;
+  updateConfig: (changes: Partial<TenantConfig>) => void;
 }
 
 const PreviewContext = createContext<PreviewContextValue | null>(null);
@@ -25,6 +27,8 @@ const PreviewContext = createContext<PreviewContextValue | null>(null);
 const SSE_RECONNECT_BASE_MS = 2000;
 const SSE_RECONNECT_MAX_MS = 30000;
 const REFRESH_DEBOUNCE_MS = 300;
+
+const overwriteArrays: merge.Options["arrayMerge"] = (_target, source) => source;
 
 interface PreviewProviderProps {
   children: ReactNode;
@@ -42,25 +46,18 @@ export function PreviewProvider({
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
-  // Abort controller for in-flight fetches
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Fetch draft config with abort + dedup
   const fetchDraft = useCallback(async () => {
-    // Cancel previous in-flight request
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-
     setIsLoading(true);
     try {
-      const res = await fetch("/api/tenant/draft-config", {
-        signal: controller.signal,
-      });
+      const res = await fetch("/api/tenant/draft-config", { signal: controller.signal });
       if (!res.ok) return;
       const data = await res.json();
-      // Only update if this request wasn't aborted
       if (!controller.signal.aborted) {
         setConfig(data.config);
         setLastUpdated(new Date());
@@ -73,13 +70,19 @@ export function PreviewProvider({
     }
   }, []);
 
-  // Debounced refresh — collapses rapid SSE events into single fetch
   const refresh = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(fetchDraft, REFRESH_DEBOUNCE_MS);
   }, [fetchDraft]);
 
-  // SSE with exponential backoff
+  // Optimistic update — mergar changes direkt i lokal state
+  const updateConfig = useCallback((changes: Partial<TenantConfig>) => {
+    setConfig(prev => {
+      if (!prev) return prev;
+      return merge(prev as any, changes as any, { arrayMerge: overwriteArrays }) as TenantConfig;
+    });
+  }, []);
+
   useEffect(() => {
     if (!enableRealtime) return;
 
@@ -93,7 +96,7 @@ export function PreviewProvider({
       eventSource = new EventSource("/api/tenant/preview-stream");
 
       eventSource.onopen = () => {
-        attempt = 0; // reset backoff on success
+        attempt = 0;
         setIsConnected(true);
       };
 
@@ -101,12 +104,7 @@ export function PreviewProvider({
         setIsConnected(false);
         eventSource?.close();
         if (disposed) return;
-
-        // Exponential backoff: 2s, 4s, 8s, ... capped at 30s
-        const delay = Math.min(
-          SSE_RECONNECT_BASE_MS * Math.pow(2, attempt),
-          SSE_RECONNECT_MAX_MS
-        );
+        const delay = Math.min(SSE_RECONNECT_BASE_MS * Math.pow(2, attempt), SSE_RECONNECT_MAX_MS);
         attempt++;
         reconnectTimeout = setTimeout(connect, delay);
       };
@@ -114,13 +112,8 @@ export function PreviewProvider({
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data) as DraftUpdateEvent | { type: string };
-          if (data.type === "draft_updated") {
-            refresh(); // debounced
-          }
-          // heartbeat + connected → no-op (keep connection alive)
-        } catch {
-          // Malformed event — ignore
-        }
+          if (data.type === "draft_updated") refresh();
+        } catch { /* malformed — ignore */ }
       };
     };
 
@@ -136,9 +129,7 @@ export function PreviewProvider({
   }, [enableRealtime, refresh]);
 
   return (
-    <PreviewContext.Provider
-      value={{ config, isLoading, lastUpdated, refresh, isConnected }}
-    >
+    <PreviewContext.Provider value={{ config, isLoading, lastUpdated, refresh, isConnected, updateConfig }}>
       {children}
     </PreviewContext.Provider>
   );
