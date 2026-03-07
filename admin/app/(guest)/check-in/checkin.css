@@ -57,10 +57,11 @@
 }
 .sektion73-muted {
     color: var(--text);
-    font-weight:400;
+    font-weight: 400;
     text-align: left;
     margin: 8px 0 0;
     font-size: 14px;
+    font-family: var(--font-body);
 }
 
 /* Segment control */
@@ -82,7 +83,7 @@
   background: rgba(255,255,255,.06);
   color: rgba(255,255,255,.85);
   transition: transform .12s ease, background .12s ease, border-color .12s ease;
-  font-family: var(--font-body, ui-sans-serif);
+  font-family: var(--font-button, var(--font-heading, ui-sans-serif));
 }
 
 .sektion73-segment__btn:hover{
@@ -178,7 +179,7 @@
     margin-top: 14px;
     padding: 12px;
     font-size: 14px;
-    font-family: Inter, sans-serif;
+    font-family: var(--font-body, ui-sans-serif);
     font-weight: 500;
 }
 /* Actions */
@@ -193,7 +194,7 @@
     -webkit-user-select: none;
     user-select: none;
     font-size: 16px;
-    font-family: var(--font-heading, ui-sans-serif);
+    font-family: var(--font-button, var(--font-heading, ui-sans-serif));
     border-radius: var(--button-radius, 999px);
     padding: 10px 20px;
     transition: transform .12s, opacity .12s;
@@ -206,7 +207,7 @@
 
 .sektion73-btn--primary {
     background: var(--button-bg);
-    color: #fff;
+    color: var(--button-fg);
     border: none;
 }
 
@@ -226,10 +227,10 @@ display:none;
     width: 100%;
     font-size: 15px;
     font-weight: 400;
-    font-family: var(--font-body, ui-sans-serif);
+    font-family: var(--font-button, var(--font-heading, ui-sans-serif));
     color: var(--text);
     background: #ffffff0f;
-    border-radius: 10px;
+    border-radius: var(--button-radius, 999px);
     justify-content: space-between;
     align-items: center;
     gap: 12px;
@@ -329,7 +330,7 @@ display:none;
     font-family: var(--font-heading, ui-sans-serif);
     white-space: nowrap;
     text-overflow: ellipsis;
-    color: #2D2C2B;
+    color: #1a1a1a;
     flex: auto;
     min-width: 0;
     overflow: hidden;
@@ -358,7 +359,7 @@ display:none;
 }
 
 .sektion73-cal__dow {
-    color: #2D2C2B;
+    color: #1a1a1a;
     text-align: center;
     font-size: 12px;
     font-family: var(--font-body, ui-sans-serif);
@@ -376,7 +377,7 @@ display:none;
 
 .sektion73-day {
     cursor: pointer;
-    color: #2D2C2B;
+    color: #1a1a1a;
     height: 40px;
     font-size: 14px;
     font-weight: 400;
@@ -394,12 +395,12 @@ display:none;
 }
 
 .sektion73-day.is-muted {
-    color: #2D2C2B;
+    color: #1a1a1a;
     opacity: 0.45;
 }
 
 .sektion73-day.is-disabled{
-    color: #2D2C2B;
+    color: #1a1a1a;
     opacity: 0.45;
   cursor: not-allowed;
   background:transparent;
@@ -584,7 +585,7 @@ display:none;
     color: var(--text);
     background: #EEEDEC;
     border: none;
-    border-radius: 500px;
+    border-radius: var(--button-radius, 999px);
     place-content: center;
     width: 100%;
     padding: 10px 14px;
@@ -596,6 +597,7 @@ display:none;
     font-size: 15px;
     font-weight: 600;
     text-align: center;
+    font-family: var(--font-button, var(--font-heading, ui-sans-serif));
 }
 .sektion73-choicebtn__sub{ margin-top: 6px; font-size: 12px; opacity: .72; }
 
@@ -667,6 +669,7 @@ display:none;
     text-align: left;
     margin: 8px 0 0;
     font-size: 14px;
+    font-family: var(--font-body);
 }
 .sektion73-success .sektion73-btn--withTimer {
     justify-content: center;
@@ -821,6 +824,7 @@ display:none;
   color: white;
   font-size: 14px;
   font-weight: 700;
+  font-family: var(--font-body);
   box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.15);
 }
 
@@ -842,6 +846,7 @@ display:none;
     font-size: 18px;
     font-weight: 700;
     line-height: 1em;
+    font-family: var(--font-heading);
 }
 
 .booking-card__dates {
@@ -863,12 +868,14 @@ display:none;
   opacity: 0.6;
   margin-bottom: 4px;
   color: var(--text);
+  font-family: var(--font-body);
 }
 
 .booking-card__date-value {
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
+  font-family: var(--font-body);
 }
 
 .booking-card__arrow {
@@ -898,6 +905,7 @@ display:none;
     padding: 6px 12px;
     font-size: 14px;
     font-weight: 500;
+    font-family: var(--font-body);
     position: absolute;
     bottom: 9px;
     right: 12px;
@@ -942,13 +950,15 @@ display:none;
     color: var(--text);
     margin-bottom: 0;
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 500;
+    font-family: var(--font-body);
 }
 
 .booking-card__date-value {
     color: var(--text);
     font-size: 15px;
     font-weight: 400;
+    font-family: var(--font-body);
 }
 
 .booking-card__arrow {
@@ -978,11 +988,12 @@ display:none;
 
 .signature-clear-btn {
     cursor: pointer;
-    color: #2d2c2b;
+    color: var(--text);
     box-shadow: none;
     background: #e6e5e3;
     border: none;
-    border-radius: 8px;
+    border-radius: var(--button-radius, 999px);
+    font-family: var(--font-button, var(--font-heading, ui-sans-serif));
     align-items: center;
     gap: 6px;
     padding: 6px 10px;

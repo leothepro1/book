@@ -1,8 +1,23 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useUser, useClerk } from '@clerk/nextjs';
 import { useSidebar } from './SidebarContext';
+
+const IS_DEV = process.env.NODE_ENV === 'development';
+
+function useClerkUser() {
+  if (IS_DEV) {
+    return {
+      user: { firstName: 'Dev', fullName: 'Dev User', username: 'dev', primaryEmailAddress: { emailAddress: 'dev@localhost' }, imageUrl: '' },
+      signOut: () => {},
+    };
+  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { useUser, useClerk } = require('@clerk/nextjs');
+  const { user } = useUser();
+  const { signOut } = useClerk();
+  return { user, signOut };
+}
 
 interface UserMenuProps {
   inHeader?: boolean;
@@ -10,8 +25,7 @@ interface UserMenuProps {
 
 export function UserMenu({ inHeader = false }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const { user } = useUser();
-  const { signOut } = useClerk();
+  const { user, signOut } = useClerkUser();
   const { isCollapsed } = useSidebar();
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -46,11 +60,17 @@ export function UserMenu({ inHeader = false }: UserMenuProps) {
         }`}
       >
         {/* Avatar */}
-        <img
-          src={imageUrl}
-          alt={fullName}
-          className="w-8 h-8 rounded-full flex-shrink-0"
-        />
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={fullName}
+            className="w-8 h-8 rounded-full flex-shrink-0"
+          />
+        ) : (
+          <div className="w-8 h-8 rounded-full flex-shrink-0 bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
+            {firstName[0]}
+          </div>
+        )}
         {/* Name (endast vid expanded i sidebar, eller alltid i header) */}
         {!inHeader && (
           <span className={`text-sm font-medium whitespace-nowrap overflow-hidden transition-all duration-200 ${
@@ -69,11 +89,17 @@ export function UserMenu({ inHeader = false }: UserMenuProps) {
           {/* User info */}
           <div className="px-4 py-3">
             <div className="flex items-center gap-3 mb-2">
-              <img
-                src={imageUrl}
-                alt={fullName}
-                className="w-10 h-10 rounded-full"
-              />
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={fullName}
+                  className="w-10 h-10 rounded-full"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
+                  {firstName[0]}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-gray-900 truncate">
                   {fullName}

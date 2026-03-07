@@ -2,7 +2,7 @@ import { prisma } from "../../../../_lib/db/prisma";
 import { getTenantConfig } from "../../../_lib/tenant";
 import AccountClient from "./AccountClient";
 import { createGlobalMockBooking } from "@/app/_lib/mockData";
-import { auth } from "@clerk/nextjs/server";
+import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +26,7 @@ export default async function Page(props: {
     
     // Try to get tenant from auth (for preview mode)
     try {
-      let userId: string | null = null; let orgId: string | null = null; try { const a = await auth(); userId = a.userId ?? null; orgId = a.orgId ?? null; } catch {}
+      const { userId, orgId } = await getAuth();
       if (userId && orgId) {
         tenant = await prisma.tenant.findUnique({
           where: { clerkOrgId: orgId },

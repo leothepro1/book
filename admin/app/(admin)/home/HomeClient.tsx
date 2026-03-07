@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useState, useTransition, useRef, useEffect, useLayoutEffect } from "react";
+import React, { useCallback, useState, useTransition, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   DndContext,
@@ -10,6 +10,10 @@ import {
   DragEndEvent,
   DragStartEvent,
   DragOverlay,
+  DragOverEvent,
+  pointerWithin,
+  rectIntersection,
+  useDroppable,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -25,13 +29,58 @@ import "../_components/admin-page.css";
 import "./home.css";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import type { Card, ArchivedCard } from "@/app/(guest)/_lib/portal/homeLinks";
+import { getCardTypeConfig, CARD_TYPE_LIST, isCategoryFriendly } from "@/app/_lib/cardTypes/registry";
+import type { PanelKey as RegistryPanelKey } from "@/app/_lib/cardTypes/registry";
 import { updateDraft } from "../_lib/tenant/updateDraft";
 import { ImageUpload } from "../_components/ImageUpload";
 import { useUpload } from "../_hooks/useUpload";
+import { PublishBarProvider, PublishBar, usePublishBar } from "../_components/PublishBar";
+
+// ── Drop zones ovanför/under kategori-kort ──────────────────────
+function CategoryDropZone({ categoryId, position }: { categoryId: string; position: "above" | "below" }) {
+  const id = position === "above" ? `cat_above_${categoryId}` : `cat_below_${categoryId}`;
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        height: 20,
+        top: position === "above" ? -10 : undefined,
+        bottom: position === "below" ? -10 : undefined,
+        zIndex: 20,
+        // debug: background: isOver ? "rgba(0,100,255,0.15)" : "transparent",
+      }}
+    />
+  );
+}
+// ── State: vilken kategori är drop-zone-aktiv just nu (sätts av handleDragOver) ──
+let _activeCategoryDropZone: string | null = null;
+
+// ── Collision detection ──
+// Princip: closestCenter för stabil sortering, men om drop-zone är aktiv
+// på ett kategori-kort, returnera INTE det kortet (frys det).
+function categoryAwareCollision(args: Parameters<typeof closestCenter>[0]) {
+  const activeId = args.active.id as string;
+
+  if (!_activeCategoryDropZone) {
+    // Ingen drop-zone aktiv — standard closestCenter, alla kort likvärdiga
+    return closestCenter(args);
+  }
+
+  // Drop-zone aktiv — filtrera bort det frysta kategori-kortet och sök bland resten
+  const filtered = args.droppableContainers.filter(
+    c => (c.id as string) !== _activeCategoryDropZone
+  );
+  const result = closestCenter({ ...args, droppableContainers: filtered });
+  return result;
+}
 
 
 function ArchivePageInner() {
-  const { config, updateConfig } = usePreview();
+  const { config, updateConfig, notifyDraftSaved } = usePreview();
   const [isPending, startTransition] = useTransition();
   const cards: Card[] = (config?.home?.cards || []) as Card[];
   const archivedCards: ArchivedCard[] = (config?.home?.archivedCards || []) as ArchivedCard[];
@@ -39,8 +88,8 @@ function ArchivePageInner() {
   const handlePermanentDelete = useCallback((id: string) => {
     const updatedArchive = archivedCards.filter(c => c.id !== id);
     updateConfig({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards: updatedArchive } } as any);
-    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards: updatedArchive } } as any); });
-  }, [cards, archivedCards, config, updateConfig]);
+    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards: updatedArchive } } as any); notifyDraftSaved(); });
+  }, [cards, archivedCards, config, updateConfig, notifyDraftSaved]);
 
   const handleRestore = useCallback((archived: ArchivedCard) => {
     const { archivedAt: _at, archivedBy: _by, archivedReason: _r, ...cardData } = archived as any;
@@ -48,8 +97,8 @@ function ArchivePageInner() {
     const updatedCards = [...cards, restoredCard];
     const updatedArchive = archivedCards.filter(c => c.id !== archived.id);
     updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards: updatedArchive } } as any);
-    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards: updatedArchive } } as any); });
-  }, [cards, archivedCards, config, updateConfig]);
+    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards: updatedArchive } } as any); notifyDraftSaved(); });
+  }, [cards, archivedCards, config, updateConfig, notifyDraftSaved]);
 
   return (
     <div className="home-content">
@@ -79,14 +128,26 @@ function ArchivePageInner() {
 }
 
 export default function HomeClient({ initialConfig }: { initialConfig: TenantConfig }) {
-  const [view, setView] = useState<"home" | "archive">("home");
   return (
     <PreviewProvider initialConfig={initialConfig}>
+      <HomeClientInner />
+    </PreviewProvider>
+  );
+}
+
+function HomeClientInner() {
+  const [view, setView] = useState<"home" | "archive">("home");
+  const { config } = usePreview();
+  const getConfig = useCallback(() => config, [config]);
+
+  return (
+    <PublishBarProvider getConfig={getConfig}>
       <div className="admin-page">
         <div className="admin-editor">
           <div className="admin-header">
             {view === "archive" && <BackButton onClick={() => setView("home")} />}
             <h1 className="admin-title">{view === "archive" ? "Arkiv" : "Startsida"}</h1>
+            <PublishBar />
           </div>
           <div className="admin-content">
             {view === "home" ? <HomePageInner onNavigateToArchive={() => setView("archive")} /> : <ArchivePageInner />}
@@ -96,10 +157,13 @@ export default function HomeClient({ initialConfig }: { initialConfig: TenantCon
           <GuestPreviewFrame route="/p/[token]" className="preview-widget-sticky" />
         </div>
       </div>
-    </PreviewProvider>
+    </PublishBarProvider>
   );
 }
 
+const ChevronIcon = ({ className }: { className?: string }) => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={"sched-chevron" + (className ? " " + className : "")} aria-hidden="true"><path fill="currentColor" d="m1.7 4 .36.35L7.71 10l5.64-5.65.36-.35.7.7-.35.36-6 6h-.7l-6-6L1 4.71 1.7 4Z"/></svg>
+);
 const DragIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path fill="currentColor" d="M5 4a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm1 4a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm0 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm6-5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm-1 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm1-11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/></svg>
 );
@@ -135,7 +199,7 @@ const CalendarIcon = () => (
   </svg>
 );
 const CloseIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 256 256">
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#2d2c2b" viewBox="0 0 256 256">
     <path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/>
   </svg>
 );
@@ -148,20 +212,73 @@ const UploadImageIcon = () => (
   </svg>
 );
 
+// ── Panel Loading Context & Skeleton ─────────────────────────────
+const PanelLoadingContext = React.createContext<{
+  setLoading: (loading: boolean) => void;
+}>({ setLoading: () => {} });
+
+/** Call from any panel body to explicitly control skeleton visibility (e.g. during network requests). */
+const usePanelLoading = () => React.useContext(PanelLoadingContext);
+
+function PanelSkeleton() {
+  return (
+    <div className="panel-skeleton">
+      <div className="panel-skeleton-bar" />
+      <div className="panel-skeleton-bar" />
+      <div className="panel-skeleton-bar" />
+    </div>
+  );
+}
+
+/**
+ * Wraps any panel content with automatic skeleton shimmer.
+ * Skeleton shows on mount until first paint, and panels can
+ * extend loading via usePanelLoading().setLoading(true).
+ */
+function PanelContentWrapper({ children, panelKey }: { children: React.ReactNode; panelKey: string | null }) {
+  const [ready, setReady] = useState(false);
+  const [externalLoading, setExternalLoading] = useState(false);
+
+  useEffect(() => {
+    setReady(false);
+    const frame = requestAnimationFrame(() => {
+      setReady(true);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [panelKey]);
+
+  const isLoading = !ready || externalLoading;
+
+  return (
+    <PanelLoadingContext.Provider value={{ setLoading: setExternalLoading }}>
+      <div className="panel-content-wrap">
+        <div className={"panel-skeleton" + (isLoading ? "" : " panel-skeleton--hidden")}>
+          <div className="panel-skeleton-bar" />
+          <div className="panel-skeleton-bar" />
+          <div className="panel-skeleton-bar" />
+        </div>
+        <div className={"panel-content" + (isLoading ? " panel-content--hidden" : "")}>
+          {children}
+        </div>
+      </div>
+    </PanelLoadingContext.Provider>
+  );
+}
+
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
     <button type="button" role="switch" aria-checked={checked} onClick={onChange}
-      className={"home-toggle" + (checked ? " home-toggle-on" : "")}>
-      <span className="home-toggle-thumb" />
+      className={"admin-toggle" + (checked ? " admin-toggle-on" : "")}>
+      <span className="admin-toggle-thumb" />
     </button>
   );
 }
 
 type PanelKey = "layout" | "image" | "badge" | "schedule" | "delete" | null;
 const PANEL_LABELS: Record<Exclude<PanelKey, null>, string> = {
-  layout: "Layout", image: "Bild", badge: "Badge", schedule: "Schema", delete: "Ta bort",
+  layout: "Layout", image: "Bild", badge: "Badge", schedule: "Schemalägg", delete: "Ta bort",
 };
-type LayoutStyle = "classic" | "featured" | "showcase";
+
 
 const CATEGORY_LAYOUTS: {
   key: import("@/app/(guest)/_lib/portal/homeLinks").CategoryLayout;
@@ -297,69 +414,403 @@ function FeaturedUploadButton() {
   );
 }
 
-function LayoutPanelContent({ card, onChange }: { card: Card; onChange: (layout: LayoutStyle) => void }) {
-  const current: LayoutStyle = (card as any).layoutStyle ?? "classic";
+function LayoutPanelContent({ card, onChange }: { card: Card; onChange: (layout: string) => void }) {
+  const ctConfig = getCardTypeConfig((card as any).cardType);
+  const current: string = (card as any).layoutStyle ?? ctConfig.layouts[0].key;
   const hasImage = !!(card as any).image;
   return (
     <div className="card-panel-body">
       <p className="card-panel-desc">Choose a layout for your link</p>
       <div className="card-panel-options">
-        <button type="button"
-          className={"card-layout-option" + (current === "classic" ? " card-layout-option--active" : "")}
-          onClick={() => onChange("classic")}>
-          <div className="card-layout-option-left">
-            <div className={"card-layout-radio" + (current === "classic" ? " card-layout-radio--checked" : "")}>
-              {current === "classic" && <div className="card-layout-radio-dot" />}
+        {ctConfig.layouts.map((layout) => (
+          <button key={layout.key} type="button"
+            className={"card-layout-option" + (current === layout.key ? " card-layout-option--active" : "")}
+            onClick={() => onChange(layout.key)}>
+            <div className="card-layout-option-left">
+              <div className={"card-layout-radio" + (current === layout.key ? " card-layout-radio--checked" : "")}>
+                {current === layout.key && <div className="card-layout-radio-dot" />}
+              </div>
+              <div>
+                <div className="card-layout-option-title">{layout.label}</div>
+                <div className="card-layout-option-sub">{layout.description}</div>
+                {layout.needsImage && !hasImage && <FeaturedUploadButton />}
+              </div>
             </div>
-            <div>
-              <div className="card-layout-option-title">Classic</div>
-              <div className="card-layout-option-sub">Efficient, direct and compact.</div>
-            </div>
-          </div>
-          <div className="card-layout-preview card-layout-preview--classic" />
-        </button>
-        <button type="button"
-          className={"card-layout-option card-layout-option--featured" + (current === "featured" ? " card-layout-option--active" : "")}
-          onClick={() => onChange("featured")}>
-          <div className="card-layout-option-left">
-            <div className={"card-layout-radio" + (current === "featured" ? " card-layout-radio--checked" : "")}>
-              {current === "featured" && <div className="card-layout-radio-dot" />}
-            </div>
-            <div className="card-layout-featured-text">
-              <div className="card-layout-option-title">Featured</div>
-              <div className="card-layout-option-sub">Make your link stand out with a larger, more attractive display.</div>
-              <FeaturedUploadButton />
-            </div>
-          </div>
-          <div className="card-layout-preview card-layout-preview--featured" />
-        </button>
-        <button type="button"
-          className={"card-layout-option" + (current === "showcase" ? " card-layout-option--active" : "")}
-          onClick={() => onChange("showcase")}>
-          <div className="card-layout-option-left">
-            <div className={"card-layout-radio" + (current === "showcase" ? " card-layout-radio--checked" : "")}>
-              {current === "showcase" && <div className="card-layout-radio-dot" />}
-            </div>
-            <div>
-              <div className="card-layout-option-title">Showcase</div>
-              <div className="card-layout-option-sub">Full image with title beneath — clean, editorial look.</div>
-            </div>
-          </div>
-          <div className="card-layout-preview card-layout-preview--showcase" />
-        </button>
+            <img src={layout.previewImage} alt={layout.label} className="card-layout-preview" />
+          </button>
+        ))}
       </div>
     </div>
   );
 }
 
-function ImagePanelContent({ card, onUpdate }: { card: Card; onUpdate: (updated: Card) => void }) {
+function TextLayoutPanel({ card, onUpdate }: { card: Card; onUpdate: (updated: Card) => void }) {
+  const [tab, setTab] = useState<"settings" | "layout">("settings");
+  const ctConfig = getCardTypeConfig((card as any).cardType);
+  const current: string = (card as any).layoutStyle ?? ctConfig.layouts[0].key;
+  const hasImage = !!(card as any).image;
+
+  const content: string = (card as any).content ?? "";
+  const ctaLabel: string = card.ctaLabel ?? "";
+  const ctaUrl: string = (card as any).ctaUrl ?? "";
+  const MAX_CHARS = 1000;
+
   return (
     <div className="card-panel-body">
+      <div className="card-panel-tabs">
+        <button type="button"
+          className={"card-panel-tab" + (tab === "settings" ? " card-panel-tab--active" : "")}
+          onClick={() => setTab("settings")}>
+          Inställningar
+        </button>
+        <button type="button"
+          className={"card-panel-tab" + (tab === "layout" ? " card-panel-tab--active" : "")}
+          onClick={() => setTab("layout")}>
+          Layout
+        </button>
+      </div>
+
+      {tab === "settings" && (
+        <div className="card-panel-tab-content">
+          <h3 className="card-panel-title">Text</h3>
+          <p className="card-panel-desc">Skriv texten du vill visa</p>
+          <div className="tp-textarea-wrap">
+            <textarea
+              className="tp-textarea"
+              value={content}
+              maxLength={MAX_CHARS}
+              onChange={e => onUpdate({ ...card, content: e.target.value } as any)}
+              rows={4}
+            />
+            <span className="tp-textarea-count">{content.length}/{MAX_CHARS}</span>
+          </div>
+
+          <h3 className="card-panel-title" style={{ marginTop: 24 }}>Knapp (valfritt)</h3>
+          <p className="card-panel-desc">Lägg till en knapp som länkar till en URL</p>
+          <div className="tp-fields">
+            <div className="tp-float-field">
+              <input
+                className="tp-float-input"
+                value={ctaLabel}
+                placeholder=" "
+                onChange={e => onUpdate({ ...card, ctaLabel: e.target.value || undefined } as any)}
+              />
+              <label className="tp-float-label">Button title</label>
+            </div>
+            <div className="tp-float-field">
+              <input
+                className="tp-float-input"
+                value={ctaUrl}
+                placeholder=" "
+                onChange={e => onUpdate({ ...card, ctaUrl: e.target.value || undefined } as any)}
+              />
+              <label className="tp-float-label">Button URL</label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "layout" && (
+        <div className="card-panel-tab-content">
+          <div className="card-panel-options">
+            {ctConfig.layouts.map((layout) => (
+              <button key={layout.key} type="button"
+                className={"card-layout-option" + (current === layout.key ? " card-layout-option--active" : "")}
+                onClick={() => onUpdate({ ...card, layoutStyle: layout.key } as any)}>
+                <div className="card-layout-option-left">
+                  <div className={"card-layout-radio" + (current === layout.key ? " card-layout-radio--checked" : "")}>
+                    {current === layout.key && <div className="card-layout-radio-dot" />}
+                  </div>
+                  <div>
+                    <div className="card-layout-option-title">{layout.label}</div>
+                    <div className="card-layout-option-sub">{layout.description}</div>
+                    {layout.needsImage && !hasImage && <FeaturedUploadButton />}
+                  </div>
+                </div>
+                <img src={layout.previewImage} alt={layout.label} className="card-layout-preview" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocumentLayoutPanel({ card, onUpdate }: { card: Card; onUpdate: (updated: Card) => void }) {
+  const [tab, setTab] = useState<"settings" | "layout">("settings");
+  const ctConfig = getCardTypeConfig((card as any).cardType);
+  const current: string = (card as any).layoutStyle ?? ctConfig.layouts[0].key;
+  const hasImage = !!(card as any).image;
+
+  const fileUrl: string = (card as any).fileUrl ?? "";
+  const fileName: string = (card as any).fileName ?? "";
+  const fileDescription: string = (card as any).fileDescription ?? "";
+  const DESC_MAX = 240;
+
+  const [modalOpen, setModalOpen] = useState(false);
+
+  return (
+    <div className="card-panel-body">
+      <div className="card-panel-tabs">
+        <button type="button"
+          className={"card-panel-tab" + (tab === "settings" ? " card-panel-tab--active" : "")}
+          onClick={() => setTab("settings")}>
+          Inställningar
+        </button>
+        <button type="button"
+          className={"card-panel-tab" + (tab === "layout" ? " card-panel-tab--active" : "")}
+          onClick={() => setTab("layout")}>
+          Layout
+        </button>
+      </div>
+
+      {tab === "settings" && (
+        <div className="card-panel-tab-content">
+          <h3 className="card-panel-title">Dokument</h3>
+          <p className="card-panel-desc">Visa en nedladdningsbar PDF-fil med en beskrivning.</p>
+
+          <h3 className="card-panel-title" style={{ marginTop: 24 }}>Ladda upp fil</h3>
+          <button
+            type="button"
+            className="doc-file-btn"
+            onClick={() => setModalOpen(true)}
+          >
+            {fileUrl ? (
+              <>
+                <svg width="20" height="20" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path fillRule="evenodd" clipRule="evenodd" d="M8.33365 0.5C8.5821 0.5 8.7835 0.701408 8.7835 0.949858V4.13881C8.7835 4.23094 8.8201 4.3193 8.88525 4.38445C8.9504 4.44959 9.03875 4.48619 9.13089 4.48619H12.3198C12.5683 4.48619 12.7697 4.6876 12.7697 4.93605C12.7697 5.1845 12.5683 5.38591 12.3198 5.38591H9.13089C8.80013 5.38591 8.48293 5.25452 8.24906 5.02064C8.01518 4.78676 7.88379 4.46956 7.88379 4.13881V0.949858C7.88379 0.701408 8.0852 0.5 8.33365 0.5Z" fill="currentColor" />
+                  <path fillRule="evenodd" clipRule="evenodd" d="M2.75283 1.39972C2.44926 1.39972 2.15812 1.52031 1.94346 1.73497C1.72881 1.94962 1.60821 2.24076 1.60821 2.54433V8.125C1.60821 8.37345 1.4068 8.57486 1.15835 8.57486C0.909904 8.57486 0.708496 8.37345 0.708496 8.125V2.54433C0.708496 2.00214 0.923881 1.48216 1.30727 1.09877C1.69065 0.715384 2.21064 0.5 2.75283 0.5H8.3335C8.45281 0.5 8.56723 0.547396 8.6516 0.63176L12.6378 4.61795C12.7222 4.70232 12.7695 4.81674 12.7695 4.93605V8.125C12.7695 8.37345 12.5681 8.57486 12.3197 8.57486C12.0712 8.57486 11.8698 8.37345 11.8698 8.125V5.12239L8.14716 1.39972H2.75283Z" fill="currentColor" />
+                  <path fillRule="evenodd" clipRule="evenodd" d="M0.708496 10.5167C0.708496 10.2683 0.909904 10.0669 1.15835 10.0669H2.35421C2.79068 10.0669 3.20928 10.2402 3.51791 10.5489C3.82654 10.8575 3.99993 11.2761 3.99993 11.7126C3.99993 12.149 3.82654 12.5676 3.51791 12.8763C3.20928 13.1849 2.79068 13.3583 2.35421 13.3583H1.60821V15.3001C1.60821 15.5486 1.4068 15.75 1.15835 15.75C0.909904 15.75 0.708496 15.5486 0.708496 15.3001V10.5167Z" fill="currentColor" />
+                  <path fillRule="evenodd" clipRule="evenodd" d="M5.49194 10.5167C5.49194 10.2683 5.69335 10.0669 5.9418 10.0669H6.73904C7.28123 10.0669 7.80121 10.2822 8.1846 10.6656C8.56799 11.049 8.78337 11.569 8.78337 12.1112V13.7057C8.78337 14.2479 8.56799 14.7678 8.1846 15.1512C7.80121 15.5346 7.28123 15.75 6.73904 15.75H5.9418C5.69335 15.75 5.49194 15.5486 5.49194 15.3001V10.5167Z" fill="currentColor" />
+                  <path fillRule="evenodd" clipRule="evenodd" d="M10.2754 10.5167C10.2754 10.2683 10.4768 10.0669 10.7252 10.0669H13.117C13.3654 10.0669 13.5668 10.2683 13.5668 10.5167C13.5668 10.7652 13.3654 10.9666 13.117 10.9666H11.1751V15.3001C11.1751 15.5486 10.9737 15.75 10.7252 15.75C10.4768 15.75 10.2754 15.5486 10.2754 15.3001V10.5167Z" fill="currentColor" />
+                </svg>
+                <span className="doc-file-btn__name">{fileName}</span>
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#687584" strokeLinecap="round">
+                  <line x1="0.5" y1="11.5" x2="23.5" y2="11.5" />
+                  <line x1="12.5" y1="0.5" x2="12.5" y2="23.5" />
+                </svg>
+                <span>Välj fil...</span>
+              </>
+            )}
+          </button>
+
+          <h3 className="card-panel-title" style={{ marginTop: 24 }}>Beskrivning</h3>
+          <p className="card-panel-desc">Lägg till en beskrivning som visas under din PDF förhandsvisning</p>
+          <div className="tp-textarea-wrap" style={{ marginTop: 12 }}>
+            <input
+              className="tp-float-input"
+              style={{ padding: "12px" }}
+              value={fileDescription}
+              maxLength={DESC_MAX}
+              onChange={e => onUpdate({ ...card, fileDescription: e.target.value || undefined } as any)}
+            />
+            <span className="tp-textarea-count">{fileDescription.length}/{DESC_MAX}</span>
+          </div>
+
+          {modalOpen && typeof window !== "undefined" && createPortal(
+            <DocUploadModal
+              fileUrl={fileUrl}
+              fileName={fileName}
+              onUpload={(url, name, publicId) => {
+                onUpdate({ ...card, fileUrl: url, fileName: name, filePublicId: publicId } as any);
+              }}
+              onClear={() => {
+                onUpdate({ ...card, fileUrl: undefined, fileName: undefined, filePublicId: undefined } as any);
+              }}
+              onClose={() => setModalOpen(false)}
+            />,
+            document.body
+          )}
+        </div>
+      )}
+
+      {tab === "layout" && (
+        <div className="card-panel-tab-content">
+          <div className="card-panel-options">
+            {ctConfig.layouts.map((layout) => (
+              <button key={layout.key} type="button"
+                className={"card-layout-option" + (current === layout.key ? " card-layout-option--active" : "")}
+                onClick={() => onUpdate({ ...card, layoutStyle: layout.key } as any)}>
+                <div className="card-layout-option-left">
+                  <div className={"card-layout-radio" + (current === layout.key ? " card-layout-radio--checked" : "")}>
+                    {current === layout.key && <div className="card-layout-radio-dot" />}
+                  </div>
+                  <div>
+                    <div className="card-layout-option-title">{layout.label}</div>
+                    <div className="card-layout-option-sub">{layout.description}</div>
+                    {layout.needsImage && !hasImage && <FeaturedUploadButton />}
+                  </div>
+                </div>
+                <img src={layout.previewImage} alt={layout.label} className="card-layout-preview" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocUploadModal({ fileUrl, fileName, onUpload, onClear, onClose }: {
+  fileUrl: string;
+  fileName: string;
+  onUpload: (url: string, name: string, publicId: string) => void;
+  onClear: () => void;
+  onClose: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { upload, isUploading, error } = useUpload("hospitality/documents");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(
+    fileUrl ? fileUrl.replace("/upload/", "/upload/pg_1,w_600,f_jpg/") : null
+  );
+  const [currentName, setCurrentName] = useState(fileName);
+  const [isDragging, setIsDragging] = useState(false);
+  // Pending upload — not yet confirmed via "Välj fil"
+  const [pending, setPending] = useState<{ url: string; name: string; publicId: string } | null>(null);
+
+  const alreadySaved = !!fileUrl;
+  const hasPreview = !!previewUrl;
+  const hasPending = !!pending;
+
+  const handleFile = useCallback(async (file: File) => {
+    setCurrentName(file.name);
+    await upload(
+      file,
+      (preview) => setPreviewUrl(preview),
+      (result) => {
+        const preview = result.url.replace("/upload/", "/upload/pg_1,w_600,f_jpg/");
+        setPreviewUrl(preview);
+        setPending({ url: result.url, name: file.name, publicId: result.publicId });
+      },
+    );
+  }, [upload]);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    handleFile(file);
+  }, [handleFile]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type === "application/pdf") handleFile(file);
+  }, [handleFile]);
+
+  const handleConfirm = useCallback(() => {
+    if (alreadySaved) {
+      // "Byt fil" — open file picker
+      inputRef.current?.click();
+    } else if (pending) {
+      // "Välj fil" — confirm pending upload
+      onUpload(pending.url, pending.name, pending.publicId);
+      onClose();
+    }
+  }, [alreadySaved, pending, onUpload, onClose]);
+
+  return (
+    <div className="doc-modal-backdrop" onClick={onClose}>
+      <div className="doc-modal" onClick={e => e.stopPropagation()}>
+        <div className="doc-modal__header">
+          <h3 className="doc-modal__title">Ladda upp PDF</h3>
+          <button type="button" className="doc-modal__close" onClick={onClose} aria-label="Stäng">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path fill="currentColor" d="m13.63 3.12.37-.38-.74-.74-.38.37.75.75ZM2.37 12.89l-.37.37.74.74.38-.37-.75-.75Zm.75-10.52L2.74 2 2 2.74l.37.38.75-.75Zm9.76 11.26.38.37.74-.74-.37-.38-.75.75Zm0-11.26L2.38 12.9l.74.74 10.5-10.51-.74-.75Zm-10.5.75 10.5 10.5.75-.73L3.12 2.37l-.75.75Z" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="doc-modal__body">
+          <input
+            ref={inputRef}
+            type="file"
+            accept="application/pdf"
+            onChange={handleChange}
+            style={{ display: "none" }}
+          />
+
+          {hasPreview ? (
+            <div className="doc-modal__preview">
+              <img
+                src={previewUrl ?? ""}
+                alt="PDF preview"
+                className="doc-modal__preview-img"
+              />
+              <span className="doc-modal__preview-name">{currentName}</span>
+            </div>
+          ) : (
+            <div
+              className={"doc-modal__dropzone" + (isDragging ? " doc-modal__dropzone--drag" : "")}
+              onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              onClick={() => !isUploading && inputRef.current?.click()}
+            >
+              {isUploading ? (
+                <>
+                  <span className="doc-modal__spinner" />
+                  <span className="doc-modal__dropzone-text">Laddar upp...</span>
+                </>
+              ) : (
+                <>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path fillRule="evenodd" d="M3.5 0 3 .5v23l.5.5h17l.5-.5v-16l-.15-.35-7-7L13.5 0h-10ZM4 23V1h9v6.5l.5.5H20v15H4ZM19.3 7 14 1.7V7h5.3Z" fill="currentColor" />
+                  </svg>
+                  <span className="doc-modal__dropzone-text">
+                    Välj fil att ladda upp<br />eller dra och släpp.
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+
+          {error && <p className="img-upload-error" style={{ marginTop: 8 }}>{error}</p>}
+        </div>
+
+        <div className="doc-modal__actions">
+          <button
+            type="button"
+            className="doc-modal__btn doc-modal__btn--clear"
+            disabled={!hasPreview}
+            onClick={() => { onClear(); setPreviewUrl(null); setCurrentName(""); setPending(null); }}
+          >
+            Ta bort
+          </button>
+          <button
+            type="button"
+            className={"doc-modal__btn doc-modal__btn--upload" + (alreadySaved || hasPending ? " doc-modal__btn--upload-active" : "")}
+            disabled={!alreadySaved && !hasPending}
+            onClick={handleConfirm}
+          >
+            {alreadySaved ? "Byt fil" : "Välj fil"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Custom layout panel components, keyed by CardTypeConfig.layoutPanelKey */
+const CUSTOM_LAYOUT_PANELS: Record<string, (props: { card: Card; onUpdate: (updated: Card) => void }) => React.ReactNode> = {
+  text: ({ card, onUpdate }) => <TextLayoutPanel card={card} onUpdate={onUpdate} />,
+  document: ({ card, onUpdate }) => <DocumentLayoutPanel card={card} onUpdate={onUpdate} />,
+};
+
+function ImagePanelContent({ card, onUpdate }: { card: Card; onUpdate: (updated: Card) => void }) {
+  return (
+    <div className="card-panel-body card-panel-body--image">
       <p className="card-panel-desc">Omslagsbild som visas på kortet för gästerna.</p>
       <ImageUpload
         value={(card as any).image}
         folder="cards"
         shape="wide"
+        variant="compact"
         onChange={(url) => onUpdate({ ...card, image: url } as Card)}
         onRemove={() => onUpdate({ ...card, image: undefined } as Card)}
       />
@@ -379,7 +830,14 @@ function BadgePanelContent({ card, onChange }: { card: Card; onChange: (badge: s
         {PRESETS.map(p => (
           <button key={p} type="button"
             className={"card-panel-preset" + (badge === p ? " card-panel-preset--active" : "")}
-            onClick={() => onChange(badge === p ? "" : p)}>{p}</button>
+            onClick={() => { if (badge !== p) onChange(p); }}>
+            <span>{p}</span>
+            {badge === p && (
+              <span className="card-panel-preset-clear" onClick={e => { e.stopPropagation(); onChange(""); }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 256 256"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg>
+              </span>
+            )}
+          </button>
         ))}
       </div>
     </div>
@@ -392,7 +850,7 @@ const DAYS_SV = ["Sön","Mån","Tis","Ons","Tor","Fre","Lör"];
 function getDaysInMonth(year: number, month: number) { return new Date(year, month + 1, 0).getDate(); }
 function getFirstDayOfMonth(year: number, month: number) { return new Date(year, month, 1).getDay(); }
 
-type ScheduleDate = { year: number; month: number; day: number; hour: number; minute: number; ampm: "AM" | "PM" } | null;
+type ScheduleDate = { year: number; month: number; day: number; hour: number; minute: number } | null;
 
 function CalendarPopup({ value, min, onSelect, onClose, anchorRect }: {
   value: ScheduleDate; min?: ScheduleDate; onSelect: (d: ScheduleDate) => void; onClose: () => void; anchorRect: DOMRect | null;
@@ -405,8 +863,9 @@ function CalendarPopup({ value, min, onSelect, onClose, anchorRect }: {
   const [selDay, setSelDay] = useState(value?.day ?? null as number | null);
   const [hour, setHour] = useState(value?.hour ?? 12);
   const [minute, setMinute] = useState(value?.minute ?? 0);
-  const [ampm, setAmpm] = useState<"AM"|"PM">(value?.ampm ?? "AM");
   const ref = useRef<HTMLDivElement>(null);
+
+  const [dropUp, setDropUp] = useState(false);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
@@ -414,8 +873,21 @@ function CalendarPopup({ value, min, onSelect, onClose, anchorRect }: {
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
 
+  useLayoutEffect(() => {
+    if (!ref.current || !anchorRect) return;
+    const popupH = ref.current.offsetHeight;
+    const spaceBelow = window.innerHeight - anchorRect.bottom - 6;
+    const spaceAbove = anchorRect.top - 6;
+    setDropUp(spaceBelow < popupH && spaceAbove > spaceBelow);
+  }, [anchorRect, viewMonth, viewYear, showMonthPicker, showYearPicker]);
+
   const style: React.CSSProperties = anchorRect ? {
-    position: "fixed", top: anchorRect.bottom + 6, left: anchorRect.left, zIndex: 9999,
+    position: "fixed",
+    left: anchorRect.left,
+    zIndex: 9999,
+    ...(dropUp
+      ? { bottom: window.innerHeight - anchorRect.top + 6 }
+      : { top: anchorRect.bottom + 6 }),
   } : { position: "fixed", top: 100, left: 100, zIndex: 9999 };
 
   const daysInMonth = getDaysInMonth(viewYear, viewMonth);
@@ -433,7 +905,7 @@ function CalendarPopup({ value, min, onSelect, onClose, anchorRect }: {
   const handleDayClick = (day: number) => {
     if (isDisabled(day)) return;
     setSelDay(day);
-    onSelect({ year: viewYear, month: viewMonth, day, hour, minute, ampm });
+    onSelect({ year: viewYear, month: viewMonth, day, hour, minute });
     onClose();
   };
 
@@ -445,20 +917,20 @@ function CalendarPopup({ value, min, onSelect, onClose, anchorRect }: {
     <div className="sched-popup" ref={ref} style={style}>
       <div className="sched-popup-header">
         <button type="button" className="sched-nav-btn" onClick={prevMonth}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+          <ChevronIcon className="sched-chevron--left" />
         </button>
         <div className="sched-popup-title">
           <button type="button" className="sched-month-btn" onClick={() => { setShowMonthPicker(p => !p); setShowYearPicker(false); }}>
             {MONTHS_SV[viewMonth]}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+            <ChevronIcon />
           </button>
           <button type="button" className="sched-month-btn" onClick={() => { setShowYearPicker(p => !p); setShowMonthPicker(false); }}>
             {viewYear}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+            <ChevronIcon />
           </button>
         </div>
         <button type="button" className="sched-nav-btn" onClick={nextMonth}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+          <ChevronIcon className="sched-chevron--right" />
         </button>
       </div>
       {showMonthPicker && (
@@ -493,16 +965,18 @@ function CalendarPopup({ value, min, onSelect, onClose, anchorRect }: {
         })}
       </div>
       <div className="sched-time">
-        <select className="sched-time-select" value={hour} onChange={e => setHour(Number(e.target.value))}>
-          {Array.from({ length: 12 }, (_, i) => i + 1).map(h => <option key={h} value={h}>{String(h).padStart(2,"0")}</option>)}
-        </select>
-        <select className="sched-time-select" value={minute} onChange={e => setMinute(Number(e.target.value))}>
-          {[0,15,30,45].map(m => <option key={m} value={m}>{String(m).padStart(2,"0")}</option>)}
-        </select>
-        <select className="sched-time-select" value={ampm} onChange={e => setAmpm(e.target.value as "AM"|"PM")}>
-          <option value="AM">FM</option>
-          <option value="PM">EM</option>
-        </select>
+        <div className="sched-time-wrap">
+          <select className="sched-time-select" value={hour} onChange={e => setHour(Number(e.target.value))}>
+            {Array.from({ length: 24 }, (_, i) => i).map(h => <option key={h} value={h}>{String(h).padStart(2,"0")}</option>)}
+          </select>
+          <ChevronIcon className="sched-time-chevron" />
+        </div>
+        <div className="sched-time-wrap">
+          <select className="sched-time-select" value={minute} onChange={e => setMinute(Number(e.target.value))}>
+            {[0,15,30,45].map(m => <option key={m} value={m}>{String(m).padStart(2,"0")}</option>)}
+          </select>
+          <ChevronIcon className="sched-time-chevron" />
+        </div>
       </div>
     </div>
   );
@@ -510,14 +984,55 @@ function CalendarPopup({ value, min, onSelect, onClose, anchorRect }: {
 
 function formatScheduleDate(d: ScheduleDate): string {
   if (!d) return "";
-  return `${d.day} ${MONTHS_SV[d.month].slice(0,3)} ${d.year}, ${String(d.hour).padStart(2,"0")}:${String(d.minute).padStart(2,"0")} ${d.ampm === "AM" ? "FM" : "EM"}`;
+  return `${d.day} ${MONTHS_SV[d.month].slice(0,3)} ${d.year}, ${String(d.hour).padStart(2,"0")}:${String(d.minute).padStart(2,"0")}`;
 }
 
-function SchedulePanelContent() {
-  const [showFrom, setShowFrom] = useState<ScheduleDate>(null);
-  const [hideFrom, setHideFrom] = useState<ScheduleDate>(null);
+/** Convert ScheduleDate to ISO string in Europe/Stockholm timezone */
+function scheduleToISO(d: ScheduleDate): string | undefined {
+  if (!d) return undefined;
+  // Build a date string and format it as Stockholm time
+  // Pad to ISO-like format, then use the known UTC offset for Stockholm
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const localStr = `${d.year}-${pad(d.month + 1)}-${pad(d.day)}T${pad(d.hour)}:${pad(d.minute)}:00`;
+  // Create date interpreted as Stockholm time by using Intl to find the offset
+  const probe = new Date(localStr + "Z"); // treat as UTC temporarily
+  const fmt = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", timeZoneName: "shortOffset" });
+  const parts = fmt.formatToParts(probe);
+  const tzPart = parts.find(p => p.type === "timeZoneName")?.value ?? "+01";
+  // Parse offset like "GMT+1" or "GMT+2"
+  const match = tzPart.match(/([+-]?\d+)/);
+  const offsetH = match ? parseInt(match[1], 10) : 1;
+  // Build proper ISO: subtract offset to get UTC
+  const utc = new Date(new Date(localStr).getTime());
+  utc.setHours(utc.getHours() - offsetH);
+  return utc.toISOString();
+}
+
+/** Convert ISO string to ScheduleDate for display */
+function isoToSchedule(iso: string | undefined): ScheduleDate {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  // Convert to Stockholm time
+  const sthlm = new Date(d.toLocaleString("en-US", { timeZone: "Europe/Stockholm" }));
+  return {
+    year: sthlm.getFullYear(),
+    month: sthlm.getMonth(),
+    day: sthlm.getDate(),
+    hour: sthlm.getHours(),
+    minute: sthlm.getMinutes(),
+  };
+}
+
+function SchedulePanelContent({ card, onUpdate }: { card: Card; onUpdate: (updated: Card) => void }) {
+  const isScheduled = !!(card.scheduledShow || card.scheduledHide);
+  const initialShowRef = useRef<ScheduleDate>(isoToSchedule(card.scheduledShow));
+  const initialHideRef = useRef<ScheduleDate>(isoToSchedule(card.scheduledHide));
+  const [showFrom, setShowFrom] = useState<ScheduleDate>(() => initialShowRef.current);
+  const [hideFrom, setHideFrom] = useState<ScheduleDate>(() => initialHideRef.current);
   const [openPicker, setOpenPicker] = useState<"show"|"hide"|null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  const [saving, setSaving] = useState(false);
   const showRef = useRef<HTMLButtonElement>(null);
   const hideRef = useRef<HTMLButtonElement>(null);
 
@@ -526,22 +1041,63 @@ function SchedulePanelContent() {
     if (openPicker === "hide" && hideRef.current) setAnchorRect(hideRef.current.getBoundingClientRect());
   }, [openPicker]);
 
+  const scheduleDatesEqual = (a: ScheduleDate, b: ScheduleDate) => {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    return a.year === b.year && a.month === b.month && a.day === b.day && a.hour === b.hour && a.minute === b.minute;
+  };
+
   const hasDate = !!(showFrom || hideFrom);
+  const hasChanges = !scheduleDatesEqual(showFrom, initialShowRef.current)
+    || !scheduleDatesEqual(hideFrom, initialHideRef.current);
+
+  const doSave = (updated: Card) => {
+    setSaving(true);
+    setTimeout(() => { onUpdate(updated); setSaving(false); }, 600);
+  };
+
+  const handleSave = () => {
+    const updated = { ...card } as any;
+    const showISO = scheduleToISO(showFrom);
+    const hideISO = scheduleToISO(hideFrom);
+    if (showISO) updated.scheduledShow = showISO; else delete updated.scheduledShow;
+    if (hideISO) updated.scheduledHide = hideISO; else delete updated.scheduledHide;
+    if (showISO) updated.isActive = true;
+    doSave(updated as Card);
+  };
+
+  const handleCancel = () => {
+    const updated = { ...card } as any;
+    delete updated.scheduledShow;
+    delete updated.scheduledHide;
+    setSaving(true);
+    setTimeout(() => {
+      onUpdate(updated as Card);
+      setShowFrom(null);
+      setHideFrom(null);
+      setSaving(false);
+    }, 600);
+  };
+
   return (
     <div className="card-panel-body">
+      <h3 className="card-panel-title">Schemalägg länk</h3>
       <p className="card-panel-desc">Välj datum för att visa eller dölja kortet för gäster.</p>
       <div className="sched-row">
         <div className="sched-picker-wrap">
           <button type="button"
             className={"sched-trigger" + (openPicker === "show" ? " sched-trigger--open" : "") + (showFrom ? " sched-trigger--set" : "")}
             ref={showRef} onClick={() => setOpenPicker(p => p === "show" ? null : "show")}>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" width="15" height="15">
-              <g><path fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" d="M3.5.5v2M10.5.5v2M11.5 9.5v2h2"/>
-              <circle cx="11.5" cy="11.5" r="4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/>
-              <path fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" d="M13.5 5.85V2.5a1 1 0 00-1-1h-11a1 1 0 00-1 1v10a1 1 0 001 1h4.351"/></g>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="#2d2c2b" viewBox="0 0 16 16" width="16" height="16">
+              <g><path fill="none" stroke="#2d2c2b" strokeLinecap="round" strokeLinejoin="round" d="M3.5.5v2M10.5.5v2M11.5 9.5v2h2"/>
+              <circle cx="11.5" cy="11.5" r="4" fill="none" stroke="#2d2c2b" strokeLinecap="round" strokeLinejoin="round"/>
+              <path fill="none" stroke="#2d2c2b" strokeLinecap="round" strokeLinejoin="round" d="M13.5 5.85V2.5a1 1 0 00-1-1h-11a1 1 0 00-1 1v10a1 1 0 001 1h4.351"/></g>
             </svg>
-            <span>{showFrom ? formatScheduleDate(showFrom) : "Visa från"}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+            <span className="sched-trigger-text">
+              {showFrom && <span className="sched-trigger-label">Visa från</span>}
+              <span className="sched-trigger-value">{showFrom ? formatScheduleDate(showFrom) : "Visa från"}</span>
+            </span>
+            <ChevronIcon />
           </button>
           {openPicker === "show" && typeof window !== "undefined" && createPortal(
             <CalendarPopup value={showFrom} anchorRect={anchorRect} onSelect={d => { setShowFrom(d); setOpenPicker(null); }} onClose={() => setOpenPicker(null)} />,
@@ -552,13 +1108,16 @@ function SchedulePanelContent() {
           <button type="button"
             className={"sched-trigger" + (openPicker === "hide" ? " sched-trigger--open" : "") + (hideFrom ? " sched-trigger--set" : "")}
             ref={hideRef} onClick={() => setOpenPicker(p => p === "hide" ? null : "hide")}>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" width="15" height="15">
-              <g><path fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" d="M3.5.5v2M10.5.5v2M11.5 9.5v2h2"/>
-              <circle cx="11.5" cy="11.5" r="4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/>
-              <path fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" d="M13.5 5.85V2.5a1 1 0 00-1-1h-11a1 1 0 00-1 1v10a1 1 0 001 1h4.351"/></g>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="#2d2c2b" viewBox="0 0 16 16" width="16" height="16">
+              <g><path fill="none" stroke="#2d2c2b" strokeLinecap="round" strokeLinejoin="round" d="M3.5.5v2M10.5.5v2M11.5 9.5v2h2"/>
+              <circle cx="11.5" cy="11.5" r="4" fill="none" stroke="#2d2c2b" strokeLinecap="round" strokeLinejoin="round"/>
+              <path fill="none" stroke="#2d2c2b" strokeLinecap="round" strokeLinejoin="round" d="M13.5 5.85V2.5a1 1 0 00-1-1h-11a1 1 0 00-1 1v10a1 1 0 001 1h4.351"/></g>
             </svg>
-            <span>{hideFrom ? formatScheduleDate(hideFrom) : "Dölj från"}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+            <span className="sched-trigger-text">
+              {hideFrom && <span className="sched-trigger-label">Dölj från</span>}
+              <span className="sched-trigger-value">{hideFrom ? formatScheduleDate(hideFrom) : "Dölj från"}</span>
+            </span>
+            <ChevronIcon />
           </button>
           {openPicker === "hide" && typeof window !== "undefined" && createPortal(
             <CalendarPopup value={hideFrom} min={showFrom ?? undefined} anchorRect={anchorRect} onSelect={d => { setHideFrom(d); setOpenPicker(null); }} onClose={() => setOpenPicker(null)} />,
@@ -566,9 +1125,37 @@ function SchedulePanelContent() {
           )}
         </div>
       </div>
-      <button type="button" className={"sched-save-btn" + (hasDate ? " sched-save-btn--active" : "")} disabled={!hasDate}>
-        Schemalägg
-      </button>
+      {isScheduled ? (
+        <div className="sched-actions">
+          <button type="button"
+            className={"sched-save-btn" + (hasChanges ? " sched-save-btn--active" : "")}
+            disabled={!hasChanges || saving}
+            style={saving ? { pointerEvents: "none" } : undefined}
+            onClick={handleSave}>
+            {saving && <span className="sched-spinner" />}
+            Spara ändringar
+          </button>
+          <button type="button"
+            className="sched-cancel-btn"
+            disabled={saving}
+            style={saving ? { pointerEvents: "none" } : undefined}
+            onClick={handleCancel}>
+            {saving && <span className="sched-spinner sched-spinner--dark" />}
+            Avbryt schemaläggning
+          </button>
+        </div>
+      ) : (
+        <div className="sched-actions">
+          <button type="button"
+            className={"sched-save-btn" + (hasDate && hasChanges ? " sched-save-btn--active" : "")}
+            disabled={!hasDate || !hasChanges || saving}
+            style={saving ? { pointerEvents: "none" } : undefined}
+            onClick={handleSave}>
+            {saving && <span className="sched-spinner" />}
+            Schemalägg
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -676,7 +1263,8 @@ function ArchivedCardItem({ card, onDelete, onRestore }: {
   card: ArchivedCard; onDelete: () => void; onRestore: () => void;
 }) {
   const [openPanel, setOpenPanel] = useState<"delete" | "restore" | null>(null);
-  const sub = (card as any).url || (card as any).fileUrl || card.type;
+  const ctConfig = getCardTypeConfig((card as any).cardType);
+  const sub = ctConfig.adminSubText?.(card) ?? "";
   return (
     <div className={"home-card" + (openPanel ? " home-card--expanded" : "")}>
       <div className="home-card-top">
@@ -712,8 +1300,10 @@ function ArchivedCardItem({ card, onDelete, onRestore }: {
               <CloseIcon />
             </button>
           </div>
-          {openPanel === "delete" && <DeletePanelContent onDelete={onDelete} onArchive={() => setOpenPanel(null)} />}
-          {openPanel === "restore" && <RestorePanelContent onRestore={onRestore} onCancel={() => setOpenPanel(null)} />}
+          <PanelContentWrapper panelKey={openPanel}>
+            {openPanel === "delete" && <DeletePanelContent onDelete={onDelete} onArchive={() => setOpenPanel(null)} />}
+            {openPanel === "restore" && <RestorePanelContent onRestore={onRestore} onCancel={() => setOpenPanel(null)} />}
+          </PanelContentWrapper>
         </div>
       </div>
     </div>
@@ -770,82 +1360,184 @@ function CardItem({ card, onToggle, onDelete, onArchive, onUpdate, openPanel, on
 }) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingUrl, setEditingUrl] = useState(false);
-  const [titleVal, setTitleVal] = useState(card.title);
-  const [urlVal, setUrlVal] = useState((card as any).url ?? (card as any).fileUrl ?? "");
-  const titleInputRef = useRef<HTMLInputElement>(null);
-  const urlInputRef = useRef<HTMLInputElement>(null);
+  const titleInputRef = useRef<HTMLSpanElement>(null);
+  const urlInputRef = useRef<HTMLSpanElement>(null);
+  const panelContentRef = useRef<HTMLDivElement>(null);
+  const [panelHeight, setPanelHeight] = useState<number | undefined>();
+  const panelReadyRef = useRef(false);
 
-  const sub = (card as any).url || (card as any).fileUrl || card.type;
+  useEffect(() => {
+    const el = panelContentRef.current;
+    if (!el || !openPanel) {
+      setPanelHeight(undefined);
+      panelReadyRef.current = false;
+      return;
+    }
+    if (panelReadyRef.current) {
+      // Panel already open, switching content — measure immediately
+      setPanelHeight(el.scrollHeight);
+      const ro = new ResizeObserver(() => setPanelHeight(el.scrollHeight));
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+    // Initial open — wait for grid animation before measuring
+    let ro: ResizeObserver | null = null;
+    const timeout = setTimeout(() => {
+      panelReadyRef.current = true;
+      setPanelHeight(el.scrollHeight);
+      ro = new ResizeObserver(() => setPanelHeight(el.scrollHeight));
+      ro.observe(el);
+    }, 500);
+    return () => { clearTimeout(timeout); ro?.disconnect(); };
+  }, [openPanel]);
+
+  const ctConfig = getCardTypeConfig((card as any).cardType);
+  const sub = ctConfig.adminSubText?.(card) ?? "";
 
   const handleTitleBlur = () => {
     setEditingTitle(false);
-    if (titleVal.trim() && titleVal.trim() !== card.title)
-      onUpdate({ ...card, title: titleVal.trim() });
-    else setTitleVal(card.title);
+    const el = titleInputRef.current;
+    const newVal = (el?.textContent ?? "").trim();
+    if (newVal && newVal !== card.title) {
+      onUpdate({ ...card, title: newVal });
+    } else if (el) {
+      el.textContent = card.title;
+    }
   };
 
   const handleUrlBlur = () => {
     setEditingUrl(false);
+    const el = urlInputRef.current;
+    const newVal = (el?.textContent ?? "").trim();
     const key = card.type === "download" ? "fileUrl" : "url";
-    if (urlVal.trim() !== ((card as any)[key] ?? ""))
-      onUpdate({ ...card, [key]: urlVal.trim() } as Card);
+    if (newVal !== ((card as any)[key] ?? "")) {
+      onUpdate({ ...card, [key]: newVal } as Card);
+    } else if (el) {
+      el.textContent = sub;
+    }
   };
 
+  const cardTypeConfig = getCardTypeConfig((card as any).cardType);
+
+  const layoutPanel = cardTypeConfig.layoutPanelKey
+    ? (CUSTOM_LAYOUT_PANELS[cardTypeConfig.layoutPanelKey]?.({ card, onUpdate }) ?? <LayoutPanelContent card={card} onChange={l => onUpdate({ ...card, layoutStyle: l } as any)} />)
+    : <LayoutPanelContent card={card} onChange={l => onUpdate({ ...card, layoutStyle: l } as any)} />;
+
   const panelContent =
-    openPanel === "layout"   ? <LayoutPanelContent card={card} onChange={l => onUpdate({ ...card, layoutStyle: l } as any)} /> :
+    openPanel === "layout"   ? layoutPanel :
     openPanel === "image"    ? <ImagePanelContent card={card} onUpdate={onUpdate} /> :
     openPanel === "badge"    ? <BadgePanelContent card={card} onChange={b => onUpdate({ ...card, badge: b || undefined })} /> :
-    openPanel === "schedule" ? <SchedulePanelContent /> :
+    openPanel === "schedule" ? <SchedulePanelContent card={card} onUpdate={onUpdate} /> :
     openPanel === "delete"   ? <DeletePanelContent onDelete={onDelete} onArchive={onArchive} /> : null;
 
-  const iconDefs: { key: Exclude<PanelKey, null>; icon: React.ReactNode }[] = [
-    { key: "layout",   icon: <LayoutIcon /> },
-    { key: "image",    icon: <ImageIcon /> },
-    { key: "badge",    icon: <StarIcon /> },
-    { key: "schedule", icon: <CalendarIcon /> },
-  ];
+  const PANEL_ICON_MAP: Record<string, React.ReactNode> = {
+    layout: <LayoutIcon />, image: <ImageIcon />, badge: <StarIcon />, schedule: <CalendarIcon />,
+  };
+  const iconDefs: { key: Exclude<PanelKey, null>; icon: React.ReactNode }[] =
+    cardTypeConfig.adminPanels
+      .filter((k): k is Exclude<PanelKey, null> & RegistryPanelKey => k !== "delete" && k in PANEL_ICON_MAP)
+      .map(k => ({ key: k as Exclude<PanelKey, null>, icon: cardTypeConfig.panelIcons?.[k] ?? PANEL_ICON_MAP[k] }));
+
+  const isHeader = (card as any).cardType === "header";
+  const titlePlaceholder = isHeader ? "Skriv rubrik här" : "Rubrik";
+  const titleMaxLen = isHeader ? 35 : undefined;
 
   return (
-    <div className={"home-card" + (openPanel ? " home-card--expanded" : "")}>
+    <div className={"home-card" + (openPanel ? " home-card--expanded" : "") + (isHeader ? " home-card--header" : "")}>
       <div className="home-card-top">
         <div className="home-card-drag" {...(dragHandleProps ?? {})} title="Dra för att sortera">
           <DragIcon />
         </div>
         <div className="home-card-body">
           <div className="home-card-row1">
-            {editingTitle ? (
-              <input ref={titleInputRef} className="home-card-inline-input home-card-inline-input--title"
-                value={titleVal} onChange={e => setTitleVal(e.target.value)}
-                onBlur={handleTitleBlur}
-                onKeyDown={e => { if (e.key === "Enter") titleInputRef.current?.blur(); if (e.key === "Escape") { setTitleVal(card.title); setEditingTitle(false); } }} />
-            ) : (
-              <span className="home-card-title">{card.title}</span>
-            )}
+            <span
+              ref={titleInputRef}
+              className={"home-card-title" + (!card.title ? " home-card-title--empty" : "")}
+              contentEditable={editingTitle}
+              suppressContentEditableWarning
+              data-placeholder={titlePlaceholder}
+              onBlur={handleTitleBlur}
+              onKeyDown={e => {
+                if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLElement).blur(); return; }
+                if (e.key === "Escape") { (e.target as HTMLElement).textContent = card.title; setEditingTitle(false); return; }
+                if (titleMaxLen && !e.ctrlKey && !e.metaKey && e.key.length === 1) {
+                  const text = (e.target as HTMLElement).textContent ?? "";
+                  const sel = window.getSelection();
+                  const hasSelection = sel && sel.rangeCount > 0 && !sel.isCollapsed;
+                  if (text.length >= titleMaxLen && !hasSelection) e.preventDefault();
+                }
+              }}
+              onInput={titleMaxLen ? (e => {
+                const el = e.currentTarget;
+                if ((el.textContent ?? "").length > titleMaxLen) {
+                  el.textContent = (el.textContent ?? "").slice(0, titleMaxLen);
+                  // Move cursor to end
+                  const range = document.createRange();
+                  range.selectNodeContents(el);
+                  range.collapse(false);
+                  const sel = window.getSelection();
+                  sel?.removeAllRanges();
+                  sel?.addRange(range);
+                }
+              }) : undefined}
+            >{card.title}</span>
             {(card as any).badge && !editingTitle && <span className="home-card-badge">{(card as any).badge}</span>}
-            <button type="button" className="home-card-icon-btn" aria-label="Redigera titel"
-              onClick={() => { setEditingTitle(true); setTimeout(() => titleInputRef.current?.focus(), 0); }}>
-              <PenIcon />
-            </button>
-          </div>
-          <div className="home-card-row2">
-            {editingUrl ? (
-              <input ref={urlInputRef} className="home-card-inline-input home-card-inline-input--url"
-                value={urlVal} onChange={e => setUrlVal(e.target.value)}
-                onBlur={handleUrlBlur}
-                onKeyDown={e => { if (e.key === "Enter") urlInputRef.current?.blur(); if (e.key === "Escape") setEditingUrl(false); }} />
-            ) : (
-              <span className="home-card-sub">{sub}</span>
+            {!editingTitle && (
+              <button type="button" className="home-card-icon-btn" aria-label="Redigera titel"
+                onClick={() => { setEditingTitle(true); setTimeout(() => { const el = titleInputRef.current; if (el) { el.focus(); const range = document.createRange(); range.selectNodeContents(el); const sel = window.getSelection(); sel?.removeAllRanges(); sel?.addRange(range); } }, 0); }}>
+                <PenIcon />
+              </button>
             )}
-            <button type="button" className="home-card-icon-btn" aria-label="Redigera URL"
-              onClick={() => { setEditingUrl(true); setUrlVal((card as any).url ?? (card as any).fileUrl ?? ""); setTimeout(() => urlInputRef.current?.focus(), 0); }}>
-              <PenIcon />
-            </button>
           </div>
+          {cardTypeConfig.showAdminSubRow !== false && (
+          <div className="home-card-row2">
+            <span
+              ref={urlInputRef}
+              className={"home-card-sub" + (!sub ? " home-card-sub--empty" : "")}
+              contentEditable={editingUrl}
+              suppressContentEditableWarning
+              data-placeholder="URL"
+              onBlur={handleUrlBlur}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLElement).blur(); } if (e.key === "Escape") { (e.target as HTMLElement).textContent = sub; setEditingUrl(false); } }}
+            >{sub}</span>
+            {!editingUrl && (
+              <button type="button" className="home-card-icon-btn" aria-label="Redigera URL"
+                onClick={() => { setEditingUrl(true); setUrlVal((card as any).url ?? (card as any).fileUrl ?? ""); setTimeout(() => { const el = urlInputRef.current; if (el) { el.focus(); const range = document.createRange(); range.selectNodeContents(el); const sel = window.getSelection(); sel?.removeAllRanges(); sel?.addRange(range); } }, 0); }}>
+                <PenIcon />
+              </button>
+            )}
+          </div>
+          )}
+          {(() => {
+            const now = Date.now();
+            const showTime = card.scheduledShow ? new Date(card.scheduledShow).getTime() : null;
+            const hideTime = card.scheduledHide ? new Date(card.scheduledHide).getTime() : null;
+            const isCurrentlyShowing = !showTime || showTime <= now;
+            const expiresWithin2Days = hideTime && hideTime > now && (hideTime - now) <= 2 * 24 * 60 * 60 * 1000;
+
+            if (isCurrentlyShowing && expiresWithin2Days) {
+              return (
+                <div className="home-card-schedule-badge home-card-schedule-badge--expiring">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fillRule="evenodd" d="M5 .5V0H4v2H.5l-.5.5v12l.5.5h15l.5-.5v-12l-.5-.5H12V0h-1v2H5V.5ZM4 3v1h1V3h6v1h1V3h3v3H1V3h3ZM1 7v7h14V7H1Z" fill="currentColor"/></svg>
+                  <span>Slutar att visas {formatScheduleDate(isoToSchedule(card.scheduledHide))}</span>
+                </div>
+              );
+            }
+            if (card.scheduledShow && showTime && showTime > now) {
+              return (
+                <div className="home-card-schedule-badge">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fillRule="evenodd" d="M5 .5V0H4v2H.5l-.5.5v12l.5.5h15l.5-.5v-12l-.5-.5H12V0h-1v2H5V.5ZM4 3v1h1V3h6v1h1V3h3v3H1V3h3ZM1 7v7h14V7H1Z" fill="currentColor"/></svg>
+                  <span>Schemalagd {formatScheduleDate(isoToSchedule(card.scheduledShow))}</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
           <div className="home-card-row3">
             <div className="home-card-icons">
               {iconDefs.map(({ key, icon }) => (
                 <button key={key} type="button"
-                  className={"home-card-icon-btn" + (openPanel === key ? " home-card-icon-btn--active" : "")}
+                  className={"home-card-icon-btn" + (openPanel === key ? " home-card-icon-btn--active" : "") + (key === "image" && (card as any).image ? " home-card-icon-btn--has-image" : "")}
                   title={PANEL_LABELS[key]} onClick={() => onPanelToggle(card.id, key)}>
                   {icon}
                 </button>
@@ -861,28 +1553,36 @@ function CardItem({ card, onToggle, onDelete, onArchive, onUpdate, openPanel, on
         </div>
       </div>
       <div className={"home-card-panel" + (openPanel ? " home-card-panel--open" : "")}>
-        <div className="home-card-panel-inner">
-          <div className="home-card-panel-header">
-            <div style={{ width: 26, flexShrink: 0 }} />
-            <span className="home-card-panel-label">{openPanel ? PANEL_LABELS[openPanel] : ""}</span>
-            <button type="button" className="home-card-panel-close"
-              onClick={() => { if (openPanel) onPanelToggle(card.id, openPanel as Exclude<PanelKey, null>); }}>
-              <CloseIcon />
-            </button>
+        <div className="home-card-panel-inner" style={openPanel && panelHeight != null ? { height: panelHeight } : undefined}>
+          <div ref={panelContentRef}>
+            <div className="home-card-panel-header">
+              <div style={{ width: 26, flexShrink: 0 }} />
+              <span className="home-card-panel-label">{openPanel ? PANEL_LABELS[openPanel] : ""}</span>
+              <button type="button" className="home-card-panel-close"
+                onClick={() => { if (openPanel) onPanelToggle(card.id, openPanel as Exclude<PanelKey, null>); }}>
+                <CloseIcon />
+              </button>
+            </div>
+            <PanelContentWrapper panelKey={openPanel}>
+              {panelContent}
+            </PanelContentWrapper>
           </div>
-          {panelContent}
         </div>
       </div>
     </div>
   );
 }
 
-function SortableCategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards }: {
+const SortableCategoryCardItem = React.memo(function SortableCategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, onDelete, onArchive, onUngroup, onDeleteCategory }: {
   card: Card;
   onToggle: () => void;
   onUpdate: (updated: Card) => void;
   onAddCard: () => void;
   allCards: Card[];
+  onDelete: (id: string) => void;
+  onArchive: (id: string) => void;
+  onUngroup: () => void;
+  onDeleteCategory: () => void;
 }) {
   const {
     attributes,
@@ -892,6 +1592,19 @@ function SortableCategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCard
     transition,
     isDragging,
   } = useSortable({ id: card.id });
+
+  const wasDraggingRef = useRef(false);
+  const [expanding, setExpanding] = useState(false);
+
+  useLayoutEffect(() => {
+    if (wasDraggingRef.current && !isDragging) {
+      setExpanding(true);
+      const t = setTimeout(() => setExpanding(false), 250);
+      return () => clearTimeout(t);
+    }
+    wasDraggingRef.current = isDragging;
+  }, [isDragging]);
+
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -903,41 +1616,83 @@ function SortableCategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCard
     <div ref={setNodeRef} style={style}>
       <CategoryCardItem
         card={card}
+        collapsed={isDragging}
+        expanding={expanding}
         onToggle={onToggle}
         onUpdate={onUpdate}
         onAddCard={onAddCard}
         allCards={allCards}
+        onDelete={onDelete}
+        onArchive={onArchive}
+        onUngroup={onUngroup}
+        onDeleteCategory={onDeleteCategory}
         dragHandleProps={{ ...attributes, ...listeners }}
       />
     </div>
   );
-}
+});
 
-function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, dragHandleProps }: {
+function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, onDelete, onArchive, onUngroup, onDeleteCategory, dragHandleProps, collapsed, expanding }: {
   card: Card;
   onToggle: () => void;
   onUpdate: (updated: Card) => void;
   onAddCard: () => void;
   allCards?: Card[];
+  onDelete?: (id: string) => void;
+  onArchive?: (id: string) => void;
+  onUngroup?: () => void;
+  onDeleteCategory?: () => void;
   dragHandleProps?: Record<string, unknown>;
+  collapsed?: boolean;
+  expanding?: boolean;
 }) {
   const [editingTitle, setEditingTitle] = useState(false);
-  const [titleVal, setTitleVal] = useState((card as any).title ?? "");
   const [layoutOpen, setLayoutOpen] = useState(false);
-  const titleInputRef = useRef<HTMLInputElement>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [moreClosing, setMoreClosing] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<"ungroup" | "delete" | null>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const closeMore = useCallback(() => {
+    setMoreClosing(true);
+    setTimeout(() => { setMoreOpen(false); setMoreClosing(false); }, 150);
+  }, []);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) closeMore();
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [moreOpen, closeMore]);
+  const [activeChildCard, setActiveChildCard] = useState<string | null>(null);
+  const [activeChildPanel, setActiveChildPanel] = useState<PanelKey>(null);
+  const handleChildPanelToggle = useCallback((id: string, key: Exclude<PanelKey, null>) => {
+    if (activeChildCard === id && activeChildPanel === key) {
+      setActiveChildPanel(null);
+      setActiveChildCard(null);
+    } else {
+      setActiveChildCard(id);
+      setActiveChildPanel(key);
+    }
+  }, [activeChildCard, activeChildPanel]);
+  const titleInputRef = useRef<HTMLSpanElement>(null);
 
   const currentLayout = (card as any).layout ?? "stack";
   const currentLayoutDef = CATEGORY_LAYOUTS.find(l => l.key === currentLayout) ?? CATEGORY_LAYOUTS[0];
 
   const handleTitleBlur = () => {
     setEditingTitle(false);
-    if (titleVal.trim() && titleVal.trim() !== card.title)
-      onUpdate({ ...card, title: titleVal.trim() } as Card);
-    else setTitleVal(card.title);
+    const el = titleInputRef.current;
+    const newVal = (el?.textContent ?? "").trim();
+    if (newVal && newVal !== card.title) {
+      onUpdate({ ...card, title: newVal } as Card);
+    } else if (el) {
+      el.textContent = card.title || "Kategorinamn";
+    }
   };
 
   return (
-    <div className="home-category-card">
+    <div className={"home-category-card" + (collapsed ? " home-category-card--collapsed" : "") + (expanding ? " home-category-card--expanding" : "")} data-category-id={(card as any).id}>
       {/* ── Header ── */}
       <div className="home-category-card-header">
 
@@ -958,31 +1713,23 @@ function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, dragH
 
         {/* Center: category name */}
         <div className="home-category-card-center">
-          {editingTitle ? (
-            <input
-              ref={titleInputRef}
-              className="home-card-inline-input home-card-inline-input--title home-category-title-input"
-              value={titleVal}
-              placeholder="Kategorinamn"
-              onChange={e => setTitleVal(e.target.value)}
-              onBlur={handleTitleBlur}
-              onKeyDown={e => {
-                if (e.key === "Enter") titleInputRef.current?.blur();
-                if (e.key === "Escape") { setTitleVal(card.title); setEditingTitle(false); }
-              }}
-            />
-          ) : (
-            <span
-              className={"home-category-title" + (!card.title ? " home-category-title--placeholder" : "")}
-              onClick={() => { setEditingTitle(true); setTimeout(() => titleInputRef.current?.focus(), 0); }}
-            >
-              {card.title || "Kategorinamn"}
-            </span>
+          <span
+            ref={titleInputRef}
+            className={"home-category-title" + (!card.title && !editingTitle ? " home-category-title--placeholder" : "")}
+            contentEditable={editingTitle}
+            suppressContentEditableWarning
+            onBlur={handleTitleBlur}
+            onKeyDown={e => {
+              if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLElement).blur(); }
+              if (e.key === "Escape") { (e.target as HTMLElement).textContent = card.title || "Kategorinamn"; setEditingTitle(false); }
+            }}
+          >{card.title || "Kategorinamn"}</span>
+          {!editingTitle && (
+            <button type="button" className="home-card-icon-btn" aria-label="Redigera kategorinamn"
+              onClick={() => { setEditingTitle(true); setTimeout(() => { const el = titleInputRef.current; if (el) { if (!card.title) el.textContent = ""; el.focus(); const range = document.createRange(); range.selectNodeContents(el); const sel = window.getSelection(); sel?.removeAllRanges(); sel?.addRange(range); } }, 0); }}>
+              <PenIcon />
+            </button>
           )}
-          <button type="button" className="home-card-icon-btn" aria-label="Redigera kategorinamn"
-            onClick={() => { setEditingTitle(true); setTimeout(() => titleInputRef.current?.focus(), 0); }}>
-            <PenIcon />
-          </button>
         </div>
 
         {/* Right: add, more, toggle */}
@@ -993,11 +1740,25 @@ function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, dragH
               <line x1="128" y1="40" x2="128" y2="216" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16"/>
             </svg>
           </button>
-          <button type="button" className="home-card-icon-btn" aria-label="Fler alternativ">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256">
-              <path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm12-88a12,12,0,1,1-12-12A12,12,0,0,1,140,128Zm44,0a12,12,0,1,1-12-12A12,12,0,0,1,184,128Zm-88,0a12,12,0,1,1-12-12A12,12,0,0,1,96,128Z"/>
-            </svg>
-          </button>
+          <div className="home-category-more-wrap" ref={moreRef}>
+            <button type="button" className="home-card-icon-btn" aria-label="Fler alternativ" onClick={() => moreOpen ? closeMore() : setMoreOpen(true)}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256">
+                <path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm12-88a12,12,0,1,1-12-12A12,12,0,0,1,140,128Zm44,0a12,12,0,1,1-12-12A12,12,0,0,1,184,128Zm-88,0a12,12,0,1,1-12-12A12,12,0,0,1,96,128Z"/>
+              </svg>
+            </button>
+            {moreOpen && (
+              <div className={"home-category-more-popup" + (moreClosing ? " home-category-more-popup--closing" : "")}>
+                <button type="button" className="home-category-more-item" onClick={() => { closeMore(); setConfirmAction("ungroup"); }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 256 256"><path d="M224,160V96a8,8,0,0,0-8-8H168V40a8,8,0,0,0-8-8H40a8,8,0,0,0-8,8V160a8,8,0,0,0,8,8H88v48a8,8,0,0,0,8,8H216a8,8,0,0,0,8-8V160Zm-60.69,48-40-40h33.38l40,40ZM168,156.69V123.31l40,40v33.38Zm40-16L171.31,104H208ZM48,48H152v56h0v48H48Zm56,123.31L140.69,208H104Z"/></svg>
+                  Avgruppera
+                </button>
+                <button type="button" className="home-category-more-item" onClick={() => { closeMore(); setConfirmAction("delete"); }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 256 256"><path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"/></svg>
+                  Ta bort
+                </button>
+              </div>
+            )}
+          </div>
           <div className="home-card-toggle">
             <Toggle checked={card.isActive} onChange={onToggle} />
           </div>
@@ -1010,15 +1771,16 @@ function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, dragH
           <span className="home-category-layout-picker-title">Visa som</span>
           <div className="home-category-layout-picker-options">
             {CATEGORY_LAYOUTS.map(l => (
-              <button
-                key={l.key}
-                type="button"
-                className={"home-category-layout-option" + (currentLayout === l.key ? " home-category-layout-option--active" : "")}
-                onClick={() => { onUpdate({ ...card, layout: l.key } as any); }}
-              >
-                <div className="home-category-layout-option-icon">{l.icon}</div>
+              <div key={l.key} className={"home-category-layout-option" + (currentLayout === l.key ? " home-category-layout-option--active" : "")}>
+                <button
+                  type="button"
+                  className="home-category-layout-option-btn"
+                  onClick={() => { onUpdate({ ...card, layout: l.key } as any); }}
+                >
+                  <div className="home-category-layout-option-icon">{l.icon}</div>
+                </button>
                 <span className="home-category-layout-option-label">{l.label}</span>
-              </button>
+              </div>
             ))}
           </div>
           <div className="home-category-layout-picker-divider" />
@@ -1047,40 +1809,96 @@ function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, dragH
           }
 
           return (
-            <div className="home-category-card-items">
-              {childCards.map(child => (
-                <div key={child.id} className="home-category-card-item">
-                  <CardItem
+            <SortableContext items={childCards.map(c => c.id)} strategy={verticalListSortingStrategy}>
+              <div className="home-category-card-items">
+                {childCards.map(child => (
+                  <SortableCardItem
+                    key={child.id}
                     card={child}
-                    openPanel={null}
-                    onPanelToggle={() => {}}
-                    onToggle={() => {}}
-                    onDelete={() => {}}
-                    onArchive={() => {}}
+                    openPanel={activeChildCard === child.id ? activeChildPanel : null}
+                    onPanelToggle={handleChildPanelToggle}
+                    onToggle={() => onToggle()}
+                    onDelete={() => onDelete?.(child.id)}
+                    onArchive={() => onArchive?.(child.id)}
                     onUpdate={onUpdate}
                   />
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </SortableContext>
           );
         })()}
       </div>
+
+      {/* ── Confirm modal ── */}
+      {confirmAction && createPortal(
+        <div className="home-confirm-overlay" onClick={() => setConfirmAction(null)}>
+          <div className="home-confirm-modal" onClick={e => e.stopPropagation()}>
+            <h3 className="home-confirm-title">
+              {confirmAction === "ungroup" ? "Ta bort gruppering?" : "Ta bort samling?"}
+            </h3>
+            <p className="home-confirm-body">
+              {confirmAction === "ungroup"
+                ? "Detta tar bort alla objekt i samlingen. Objekten återgår till den klassiska staplade layouten."
+                : "Alla objekt i samlingen flyttas till ditt arkiv."}
+            </p>
+            <div className="home-confirm-actions">
+              <button type="button" className="home-confirm-btn home-confirm-btn--cancel" onClick={() => setConfirmAction(null)}>
+                Avbryt
+              </button>
+              <button type="button" className="home-confirm-btn home-confirm-btn--confirm" onClick={() => {
+                if (confirmAction === "ungroup") onUngroup?.();
+                else onDeleteCategory?.();
+                setConfirmAction(null);
+              }}>
+                {confirmAction === "ungroup" ? "Ta bort gruppering" : "Ta bort samling och arkivera objekt"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+// ── Card Divider (add-between) ────────────────────────────────────
+function CardDivider({ onClick }: { onClick: () => void }) {
+  return (
+    <div className="home-card-divider">
+      <div className="home-card-divider-line" />
+      <button type="button" className="home-card-divider-btn" onClick={onClick} aria-label="Lägg till kort här">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none">
+          <path fill="currentColor" d="M0 10C0 4.477 4.477 0 10 0s10 4.477 10 10-4.477 10-10 10S0 15.523 0 10Z"/>
+          <path stroke="#fff" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.33" d="M10 5.333v9.334M5.333 10h9.334"/>
+        </svg>
+      </button>
+      <div className="home-card-divider-line" />
     </div>
   );
 }
 
 function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => void }) {
-  const { config, updateConfig } = usePreview();
+  const { config, updateConfig, notifyDraftSaved } = usePreview();
+  const { pushUndo } = usePublishBar();
   const [showModal, setShowModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [addToCategoryId, setAddToCategoryId] = useState<string | null>(null);
+  const [insertAtIndex, setInsertAtIndex] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
   const [activeCard, setActiveCard] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<PanelKey>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const dragOverCategoryIdRef = useRef<string | null>(null);
+  const cardsBeforeDragRef = useRef<Card[] | null>(null);
+  const pointerYRef = useRef<number | null>(null);
+  const dropZoneCooldownCatRef = useRef<string | null>(null); // which category is on cooldown
 
   const cards: Card[] = (config?.home?.cards || []) as Card[];
   const sorted = [...cards].sort((a, b) => a.sortOrder - b.sortOrder);
+  const childCardIds = new Set(
+    cards.filter(c => c.type === "category").flatMap(c => (c as any).cardIds ?? [])
+  );
+  const rootSorted = sorted.filter(c => !childCardIds.has(c.id));
   const archivedCards: ArchivedCard[] = (config?.home?.archivedCards || []) as ArchivedCard[];
 
   const handlePanelToggle = useCallback((id: string, key: Exclude<PanelKey, null>) => {
@@ -1094,32 +1912,317 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
   }, [activeCard, activePanel]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
+  // ── Helpers ──────────────────────────────────────────────────────
+  const homeSnapshot = useCallback(() =>
+    ({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards } } as any),
+  [config, cards, archivedCards]);
+
+  /** Save cards with undo snapshot + optimistic update + server persist. */
+  const saveHome = useCallback((newCards: Card[], newArchive?: ArchivedCard[]) => {
+    pushUndo(homeSnapshot());
+    const archive = newArchive ?? archivedCards;
+    console.log(`[saveHome] Saving ${newCards.length} cards (active: ${newCards.filter(c => c.isActive).length})`);
+    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: newCards, archivedCards: archive } } as any);
+    startTransition(async () => {
+      const result = await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: newCards, archivedCards: archive } } as any);
+      console.log(`[saveHome] updateDraft result:`, result);
+      notifyDraftSaved();
+    });
+  }, [config, archivedCards, updateConfig, notifyDraftSaved, pushUndo, homeSnapshot]);
+
+  // Alias for drag-and-drop (no archive change)
+  const save = saveHome;
+
+  const getParentCategory = useCallback((cardId: string) =>
+    cards.find(c => c.type === "category" && ((c as any).cardIds ?? []).includes(cardId)) as (Card & { cardIds: string[] }) | undefined,
+  [cards]);
+
+  // ── Root-level drag (toppnivå + drag-in/ut) ──────────────────────
+  const activeDragIdRef = useRef<string | null>(null);
+
   const handleDragStart = useCallback((event: DragStartEvent) => {
-    setActiveDragId(event.active.id as string);
+    const dragId = event.active.id as string;
+    setActiveDragId(dragId);
+    activeDragIdRef.current = dragId;
+    cardsBeforeDragRef.current = cards;
+    dropZoneCooldownCatRef.current = null;
+
+    // Continuous pointer tracking + drop-zone check via native event
+    const onPointerMove = (e: PointerEvent) => {
+      pointerYRef.current = e.clientY;
+      const pointerY = e.clientY;
+      const wasActive = dragOverCategoryIdRef.current;
+
+      let newDropTarget: string | null = null;
+      const dragCard = cards.find(c => c.id === dragId);
+      const isChildOfCategory = cards.some(c => c.type === "category" && ((c as any).cardIds ?? []).includes(dragId));
+      const canDropIntoCategory = !dragId.startsWith("cat_") && !isChildOfCategory && isCategoryFriendly((dragCard as any)?.cardType);
+      if (canDropIntoCategory) {
+        const allCatEls = document.querySelectorAll('[data-category-id]');
+        allCatEls.forEach(el => {
+          const id = el.getAttribute('data-category-id');
+          if (id === dragId) return;
+          const catRect = el.getBoundingClientRect();
+          const catHeight = catRect.bottom - catRect.top;
+          const baseInset = Math.max(10, Math.min(40, catHeight * 0.15));
+          const inset = (wasActive === id) ? Math.min(baseInset, 10) : baseInset;
+
+          if (pointerY >= catRect.top + inset && pointerY <= catRect.bottom - inset) {
+            // Blocked: denna kategori är på cooldown (pekaren har inte lämnat den helt)
+            if (dropZoneCooldownCatRef.current === id) return;
+            newDropTarget = id;
+          } else {
+            // Pekaren är utanför denna kategori — rensa cooldown om det var denna
+            if (dropZoneCooldownCatRef.current === id) {
+              dropZoneCooldownCatRef.current = null;
+            }
+          }
+        });
+      }
+
+      // Om drop-zone avaktiveras, lägg kategorin på cooldown
+      // Den kan inte återaktiveras förrän pekaren helt lämnat dess bounds
+      if (wasActive && !newDropTarget) {
+        dropZoneCooldownCatRef.current = wasActive;
+      }
+
+      if (newDropTarget !== wasActive) {
+        dragOverCategoryIdRef.current = newDropTarget;
+        _activeCategoryDropZone = newDropTarget;
+        setDomDropTarget(newDropTarget);
+      }
+    };
+
+    pointerYRef.current = (event.activatorEvent as PointerEvent)?.clientY ?? null;
+    window.addEventListener('pointermove', onPointerMove);
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', cleanup);
+    };
+    window.addEventListener('pointerup', cleanup);
+  }, [cards]);
+
+  const setDomDropTarget = useCallback((id: string | null) => {
+    document.querySelectorAll('.home-category-card--drop-target').forEach(el => {
+      el.classList.remove('home-category-card--drop-target');
+    });
+    if (id) {
+      const el = document.querySelector(`[data-category-id="${id}"]`);
+      el?.classList.add('home-category-card--drop-target');
+    }
   }, []);
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    setActiveDragId(null);
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = sorted.findIndex(c => c.id === active.id);
-    const newIndex = sorted.findIndex(c => c.id === over.id);
-    const reordered = arrayMove(sorted, oldIndex, newIndex).map((c, i) => ({ ...c, sortOrder: i }));
-    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: reordered } } as any);
-    startTransition(async () => {
-      await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: reordered } } as any);
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    const activeId = event.active.id as string;
+
+    // Drop-zone hanteras av pointermove-listenern i handleDragStart.
+    // Här hanterar vi bara cross-container ejection.
+    if (dragOverCategoryIdRef.current) return; // drop-zone aktiv → vänta
+
+    const activeParent = getParentCategory(activeId);
+    if (!activeParent) return; // redan root-nivå
+
+    const overId = event.over?.id as string | undefined;
+    if (!overId) return;
+    const overCard = cards.find(c => c.id === overId);
+    const overParent = getParentCategory(overId);
+    if (overParent || overCard?.type === "category") return;
+
+    // Ejekta: ta bort från föräldra-kategori
+    const newCardIds = activeParent.cardIds.filter((id: string) => id !== activeId);
+    let updated = cards.map(c =>
+      c.id === activeParent.id ? { ...c, cardIds: newCardIds } as Card : c
+    );
+
+    // Beräkna root-sortOrder med ejekterat kort nära over-kortet
+    const childIds = new Set(
+      updated.filter(c => c.type === "category").flatMap(c => (c as any).cardIds ?? [])
+    );
+    const rootCards = updated.filter(c => !childIds.has(c.id)).sort((a, b) => a.sortOrder - b.sortOrder);
+    const overIdx = rootCards.findIndex(c => c.id === overId);
+    const withoutActive = rootCards.filter(c => c.id !== activeId);
+    const insertAt = overIdx >= 0 ? overIdx : withoutActive.length;
+    const reinserted = [
+      ...withoutActive.slice(0, insertAt),
+      updated.find(c => c.id === activeId)!,
+      ...withoutActive.slice(insertAt),
+    ];
+    updated = updated.map(c => {
+      const idx = reinserted.findIndex(r => r.id === c.id);
+      return idx >= 0 ? { ...c, sortOrder: idx } : c;
     });
-  }, [sorted, config, updateConfig]);
+
+    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: updated, archivedCards } } as any);
+  }, [cards, config, archivedCards, updateConfig, getParentCategory, setDomDropTarget]);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const activeId = event.active.id as string;
+
+    // Använd den aktiva drop-zone från handleDragOver (redan validerad med hysteresis)
+    let dropIntoCategoryId = dragOverCategoryIdRef.current;
+
+    // Fallback: kolla pekarposition vid release
+    const activeCard = cards.find(c => c.id === activeId);
+    if (!dropIntoCategoryId && !activeId.startsWith("cat_") && isCategoryFriendly((activeCard as any)?.cardType)) {
+      const pointerY = pointerYRef.current;
+      if (pointerY !== null) {
+        const allCatEls = document.querySelectorAll('[data-category-id]');
+        allCatEls.forEach(el => {
+          const id = el.getAttribute('data-category-id');
+          if (id === activeId) return;
+          const catRect = el.getBoundingClientRect();
+          const catHeight = catRect.bottom - catRect.top;
+          const inset = Math.max(10, Math.min(40, catHeight * 0.15));
+          if (pointerY >= catRect.top + inset && pointerY <= catRect.bottom - inset) {
+            dropIntoCategoryId = id;
+          }
+        });
+      }
+    }
+
+    setActiveDragId(null);
+    activeDragIdRef.current = null;
+    setDomDropTarget(null);
+    dragOverCategoryIdRef.current = null;
+    _activeCategoryDropZone = null;
+    pointerYRef.current = null;
+    dropZoneCooldownCatRef.current = null;
+    const wasEjected = cardsBeforeDragRef.current !== null &&
+      cardsBeforeDragRef.current !== cards;
+    cardsBeforeDragRef.current = null;
+
+    const { over } = event;
+    const parent = getParentCategory(activeId);
+
+    // CASE A: Löst kort → in i kategori (50%+ fysisk överlapp)
+    if (!parent && dropIntoCategoryId && dropIntoCategoryId !== activeId && isCategoryFriendly((activeCard as any)?.cardType)) {
+      const updated = cards.map(c =>
+        c.id === dropIntoCategoryId
+          ? { ...c, cardIds: [...((c as any).cardIds ?? []), activeId] } as Card
+          : c
+      );
+      save(updated);
+      return;
+    }
+
+    if (!over) {
+      // Om kortet ejekterades under drag, spara nuvarande state
+      if (wasEjected) save(cards);
+      return;
+    }
+    let overId = over.id as string;
+    if (activeId === overId) {
+      if (wasEjected) save(cards);
+      return;
+    }
+
+    // CASE B: Barn-kort — omsortera inom kategori eller dra ut
+    if (parent) {
+      const overParent = getParentCategory(overId);
+      const sameCategory = overParent?.id === parent.id;
+      if (sameCategory) {
+        // Omsortera inom samma kategori
+        const cardIds: string[] = (parent as any).cardIds ?? [];
+        const oldIdx = cardIds.indexOf(activeId);
+        const newIdx = cardIds.indexOf(overId);
+        if (oldIdx === -1 || newIdx === -1) return;
+        const reorderedIds = arrayMove(cardIds, oldIdx, newIdx);
+        const updated = cards.map(c =>
+          c.id === parent.id ? { ...c, cardIds: reorderedIds } as Card : c
+        );
+        save(updated);
+        return;
+      } else {
+        const newCardIds = parent.cardIds.filter((id: string) => id !== activeId);
+        const step1 = cards.map(c =>
+          c.id === parent.id ? { ...c, cardIds: newCardIds } as Card : c
+        );
+        const rootCards = step1.filter(c => !getParentCategory(c.id) || c.id === activeId);
+        const activeCardObj = cards.find(c => c.id === activeId)!;
+        const overRootIdx = rootCards.findIndex(c => c.id === overId);
+        const withoutActive = rootCards.filter(c => c.id !== activeId);
+        const insertAt = overRootIdx >= 0 ? overRootIdx : withoutActive.length;
+        const reinserted = [...withoutActive.slice(0, insertAt), activeCardObj, ...withoutActive.slice(insertAt)];
+        const childIds = new Set(
+          step1.filter(c => c.type === "category").flatMap(c => (c as any).cardIds ?? [])
+        );
+        childIds.delete(activeId);
+        const finalCards = step1.map(c => {
+          if (childIds.has(c.id)) return c;
+          const idx = reinserted.findIndex(r => r.id === c.id);
+          return idx >= 0 ? { ...c, sortOrder: idx } : c;
+        });
+        const activeInRoot = reinserted.findIndex(r => r.id === activeId);
+        const merged = finalCards.map(c => c.id === activeId ? { ...c, sortOrder: activeInRoot } : c);
+        save(merged);
+        return;
+      }
+    }
+
+    // CASE C: Toppnivå-omsortering (kategori-kort och vanliga kort identiskt)
+    const rootSorted = sorted.filter(c => !getParentCategory(c.id));
+    const oldIndex = rootSorted.findIndex(c => c.id === activeId);
+    const newIndex = rootSorted.findIndex(c => c.id === overId);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(rootSorted, oldIndex, newIndex);
+    const childIds = new Set(
+      cards.filter(c => c.type === "category").flatMap(c => (c as any).cardIds ?? [])
+    );
+    let rootIdx = 0;
+    const updated = sorted.map(c => {
+      if (childIds.has(c.id)) return c;
+      const newOrder = reordered.findIndex(r => r.id === c.id);
+      return { ...c, sortOrder: newOrder >= 0 ? newOrder : rootIdx++ };
+    });
+    save(updated);
+  }, [sorted, cards, getParentCategory, save]);
+
+  const handleDragCancel = useCallback(() => {
+    setActiveDragId(null);
+    activeDragIdRef.current = null;
+    setDomDropTarget(null);
+    dragOverCategoryIdRef.current = null;
+    _activeCategoryDropZone = null;
+    pointerYRef.current = null;
+    dropZoneCooldownCatRef.current = null;
+    if (cardsBeforeDragRef.current) {
+      updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: cardsBeforeDragRef.current, archivedCards } } as any);
+      cardsBeforeDragRef.current = null;
+    }
+  }, [config, archivedCards, updateConfig, setDomDropTarget]);
 
   const handleAdd = useCallback((newCard: Card) => {
-    const updated = [...cards, newCard];
-    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: updated } } as any);
-    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updated } } as any); });
+    let updated: Card[];
+    if (insertAtIndex !== null) {
+      const newRoot = [...rootSorted];
+      newRoot.splice(insertAtIndex, 0, newCard);
+      const orderMap = new Map(newRoot.map((c, i) => [c.id, i]));
+      updated = [
+        ...cards.map(c => {
+          const order = orderMap.get(c.id);
+          return order !== undefined ? { ...c, sortOrder: order } : c;
+        }),
+        { ...newCard, sortOrder: orderMap.get(newCard.id)! },
+      ];
+    } else {
+      // Insert at top: new card gets sortOrder 0, shift all root cards down
+      const shifted = cards.map(c => ({ ...c, sortOrder: c.sortOrder + 1 }));
+      updated = [{ ...newCard, sortOrder: 0 }, ...shifted];
+    }
+    saveHome(updated);
     setShowModal(false);
-  }, [cards, config, updateConfig]);
+    setInsertAtIndex(null);
+
+    // Auto-open the first panel if the card type requests it
+    const ctConfig = getCardTypeConfig((newCard as any).cardType);
+    if (ctConfig.autoOpenPanel) {
+      setActiveCard(newCard.id);
+      setActivePanel(ctConfig.autoOpenPanel as Exclude<PanelKey, null>);
+    }
+  }, [cards, rootSorted, insertAtIndex, saveHome]);
 
   const handleAddToCategory = useCallback((categoryId: string, newCard: Card) => {
     const updatedCards = [...cards, newCard];
@@ -1128,52 +2231,86 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
         ? { ...c, cardIds: [...((c as any).cardIds ?? []), newCard.id] } as Card
         : c
     );
-    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: updatedWithCategory, archivedCards } } as any);
-    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updatedWithCategory, archivedCards } } as any); });
-  }, [cards, archivedCards, config, updateConfig]);
+    saveHome(updatedWithCategory);
+  }, [cards, saveHome]);
 
   const handleToggle = useCallback((id: string) => {
     const updated = cards.map(c => c.id === id ? { ...c, isActive: !c.isActive } : c);
-    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: updated } } as any);
-    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updated } } as any); });
-  }, [cards, config, updateConfig]);
+    saveHome(updated);
+  }, [cards, saveHome]);
 
   const handleDelete = useCallback((id: string) => {
-    const updatedCards = cards.filter(c => c.id !== id);
-    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards } } as any);
-    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards } } as any); });
-  }, [cards, archivedCards, config, updateConfig]);
+    const updatedCards = cards
+      .filter(c => c.id !== id)
+      .map(c => c.type === "category" && (c as any).cardIds
+        ? { ...c, cardIds: (c as any).cardIds.filter((cid: string) => cid !== id) }
+        : c);
+    saveHome(updatedCards);
+  }, [cards, saveHome]);
+
+  const handleUngroup = useCallback((categoryId: string) => {
+    const cat = cards.find(c => c.id === categoryId);
+    if (!cat) return;
+    const childIds: string[] = (cat as any).cardIds ?? [];
+    // Remove the category card, keep child cards as loose root cards
+    const catSortOrder = cat.sortOrder;
+    const updatedCards = cards
+      .filter(c => c.id !== categoryId)
+      .map((c, _i) => {
+        const childIdx = childIds.indexOf(c.id);
+        if (childIdx >= 0) {
+          // Place child cards at the category's old sort position
+          return { ...c, sortOrder: catSortOrder + childIdx * 0.01 };
+        }
+        return c;
+      });
+    // Normalize sort orders
+    const sorted = [...updatedCards].sort((a, b) => a.sortOrder - b.sortOrder);
+    const normalized = sorted.map((c, i) => ({ ...c, sortOrder: i }));
+    save(normalized);
+  }, [cards, save]);
+
+  const handleDeleteCategory = useCallback((categoryId: string) => {
+    const cat = cards.find(c => c.id === categoryId);
+    if (!cat) return;
+    const childIds: string[] = (cat as any).cardIds ?? [];
+    const childCards = childIds.map(id => cards.find(c => c.id === id)).filter((c): c is Card => !!c);
+    const newArchived = childCards.map(c => ({ ...c, archivedAt: new Date().toISOString(), archivedReason: "manual" }) as ArchivedCard);
+    const updatedCards = cards.filter(c => c.id !== categoryId && !childIds.includes(c.id));
+    const updatedArchive = [...archivedCards, ...newArchived];
+    saveHome(updatedCards, updatedArchive);
+  }, [cards, archivedCards, saveHome]);
 
   const handleArchive = useCallback((id: string) => {
     const card = cards.find(c => c.id === id);
     if (!card) return;
     const archivedCard: ArchivedCard = { ...card, archivedAt: new Date().toISOString(), archivedReason: "manual" };
-    const updatedCards = cards.filter(c => c.id !== id);
+    const updatedCards = cards
+      .filter(c => c.id !== id)
+      .map(c => c.type === "category" && (c as any).cardIds
+        ? { ...c, cardIds: (c as any).cardIds.filter((cid: string) => cid !== id) }
+        : c);
     const updatedArchive = [...archivedCards, archivedCard];
-    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards: updatedArchive } } as any);
-    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards: updatedArchive } } as any); });
-  }, [cards, archivedCards, config, updateConfig]);
+    saveHome(updatedCards, updatedArchive);
+  }, [cards, archivedCards, saveHome]);
 
   const handleRestore = useCallback((archived: ArchivedCard) => {
     const { archivedAt: _at, archivedBy: _by, archivedReason: _r, ...cardData } = archived as any;
     const restoredCard: Card = { ...cardData, isActive: false, sortOrder: cards.length };
     const updatedCards = [...cards, restoredCard];
     const updatedArchive = archivedCards.filter(c => c.id !== archived.id);
-    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards: updatedArchive } } as any);
-    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards: updatedArchive } } as any); });
-  }, [cards, archivedCards, config, updateConfig]);
+    saveHome(updatedCards, updatedArchive);
+  }, [cards, archivedCards, saveHome]);
 
   const handlePermanentDelete = useCallback((id: string) => {
     const updatedArchive = archivedCards.filter(c => c.id !== id);
-    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards: updatedArchive } } as any);
-    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards: updatedArchive } } as any); });
-  }, [cards, archivedCards, config, updateConfig]);
+    saveHome(cards, updatedArchive);
+  }, [cards, archivedCards, saveHome]);
 
   const handleUpdate = useCallback((updated: Card) => {
     const newCards = cards.map(c => c.id === updated.id ? updated : c);
-    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: newCards } } as any);
-    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: newCards } } as any); });
-  }, [cards, config, updateConfig]);
+    saveHome(newCards);
+  }, [cards, saveHome]);
 
   const handleAddCategory = useCallback(() => {
     const newCategory: Card = {
@@ -1187,9 +2324,8 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
       cardIds: [],
     } as any;
     const updatedCards = [...cards, newCategory];
-    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards } } as any);
-    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards } } as any); });
-  }, [cards, archivedCards, config, updateConfig]);
+    saveHome(updatedCards);
+  }, [cards, saveHome]);
 
   const activeDragCard = sorted.find(c => c.id === activeDragId) ?? null;
 
@@ -1200,60 +2336,80 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
           <div className="home-section-title">Kort</div>
           <div className="home-section-sub">{sorted.filter(c => c.isActive).length} aktiva</div>
         </div>
-        {archivedCards.length > 0 && (
-          <button type="button" className="home-archive-btn" onClick={onNavigateToArchive}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/>
-            </svg>
-            <span>Arkiv</span>
-            <span className="archive-count">{archivedCards.length}</span>
-          </button>
-        )}
       </div>
-      <div className="home-add-row">
-        <button type="button" className="home-add-row-btn" onClick={() => setShowModal(true)}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
-          Lägg till kort
+      <button type="button" className="home-add-btn-full" onClick={() => setShowModal(true)}>
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256">
+          <rect width="256" height="256" fill="none"/>
+          <line x1="40" y1="128" x2="216" y2="128" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16"/>
+          <line x1="128" y1="40" x2="128" y2="216" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16"/>
+        </svg>
+        Lägg till
+      </button>
+      <div className="home-secondary-row">
+        <button type="button" className="home-secondary-btn" onClick={handleAddCategory}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path fillRule="evenodd" clipRule="evenodd" d="M0.5 -0.000244141H0V0.999755L0.5 0.999756L15.4999 0.999775L15.9999 0.999776L15.9999 -0.000224382L15.4999 -0.000225008L0.5 -0.000244141ZM0.500074 3.99976L7.37309e-05 4.49975L0 15.4998L0.5 15.9998H15.5L16 15.4998V4.49977L15.5 3.99977L0.500074 3.99976ZM1 14.9998L1.00007 4.99976L15 4.99977V14.9998H1Z" fill="currentColor"/>
+          </svg>
+          Lägg till samling
         </button>
-        <button type="button" className="home-add-row-btn home-add-row-btn--category" onClick={handleAddCategory}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 256 256"><path d="M208,136H48a16,16,0,0,0-16,16v40a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V152A16,16,0,0,0,208,136Zm0,56H48V152H208v40Zm0-144H48A16,16,0,0,0,32,64v40a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V64A16,16,0,0,0,208,48Zm0,56H48V64H208v40Z"/></svg>
-          Lägg till kategori
+        <button type="button" className="home-secondary-btn home-secondary-btn--plain" onClick={onNavigateToArchive}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path stroke="currentColor" d="M1.65 4.25v10.67h12.7c-.02-3.55 0-7.11 0-10.67M15.5 1.08H.5v2.88h15V1.08ZM5 6.5h6"/>
+          </svg>
+          Visa arkiv
+          <ChevronIcon className="sched-chevron--right" />
         </button>
       </div>
       <DndContext
+        id="root-dnd"
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={categoryAwareCollision}
         onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
       >
-        <SortableContext items={sorted.map(c => c.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext
+          items={rootSorted.map(c => c.id)}
+          strategy={verticalListSortingStrategy}
+        >
           <div className="home-card-list">
-            {sorted.length === 0 ? (
+            {rootSorted.length === 0 ? (
               <div className="home-empty">Inga kort ännu. Lägg till ett för att komma igång.</div>
             ) : (
-              sorted.map(card =>
-                card.type === "category" ? (
-                  <SortableCategoryCardItem
-                    key={card.id}
-                    card={card}
-                    onToggle={() => handleToggle(card.id)}
-                    onUpdate={handleUpdate}
-                    onAddCard={() => setAddToCategoryId(card.id)}
-                    allCards={cards}
-                  />
-                ) : (
-                  <SortableCardItem
-                    key={card.id}
-                    card={card}
-                    openPanel={activeCard === card.id ? activePanel : null}
-                    onPanelToggle={handlePanelToggle}
-                    onToggle={() => handleToggle(card.id)}
-                    onDelete={() => handleDelete(card.id)}
-                    onArchive={() => handleArchive(card.id)}
-                    onUpdate={handleUpdate}
-                  />
-                )
-              )
+              rootSorted.map((card, index) => (
+                <React.Fragment key={card.id}>
+                  {index === 0 && !activeDragId && (
+                    <CardDivider onClick={() => { setInsertAtIndex(0); setShowModal(true); }} />
+                  )}
+                  {card.type === "category" ? (
+                    <SortableCategoryCardItem
+                      card={card}
+                      onToggle={() => handleToggle(card.id)}
+                      onUpdate={handleUpdate}
+                      onAddCard={() => setAddToCategoryId(card.id)}
+                      allCards={cards}
+                      onDelete={handleDelete}
+                      onArchive={handleArchive}
+                      onUngroup={() => handleUngroup(card.id)}
+                      onDeleteCategory={() => handleDeleteCategory(card.id)}
+                    />
+                  ) : (
+                    <SortableCardItem
+                      card={card}
+                      openPanel={activeCard === card.id ? activePanel : null}
+                      onPanelToggle={handlePanelToggle}
+                      onToggle={() => handleToggle(card.id)}
+                      onDelete={() => handleDelete(card.id)}
+                      onArchive={() => handleArchive(card.id)}
+                      onUpdate={handleUpdate}
+                    />
+                  )}
+                  {!activeDragId && (
+                    <CardDivider onClick={() => { setInsertAtIndex(index + 1); setShowModal(true); }} />
+                  )}
+                </React.Fragment>
+              ))
             )}
           </div>
         </SortableContext>
@@ -1263,6 +2419,7 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
               {activeDragCard.type === "category" ? (
                 <CategoryCardItem
                   card={activeDragCard}
+                  collapsed
                   onToggle={() => {}}
                   onUpdate={() => {}}
                   onAddCard={() => {}}
@@ -1286,7 +2443,7 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
 
       {isPending && <div className="home-saving">Sparar...</div>}
       {showModal && createPortal(
-        <AddCardModal existingCount={cards.length} onAdd={handleAdd} onClose={() => setShowModal(false)} />,
+        <AddCardModal existingCount={cards.length} onAdd={handleAdd} onClose={() => { setShowModal(false); setInsertAtIndex(null); }} />,
         document.body
       )}
       {addToCategoryId && createPortal(
@@ -1301,211 +2458,38 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
   );
 }
 
-const CARD_TYPES = [
-  {
-    type: "link", label: "Länk", description: "Öppnar en URL",
-    color: "rgba(255,255,255,0.85)", bg: "#0061EF",
-    icon: <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14.99 17.5h1.51c3.02 0 5.5-2.47 5.5-5.5 0-3.02-2.47-5.5-5.5-5.5h-1.51M9 6.5H7.5A5.51 5.51 0 0 0 2 12c0 3.02 2.47 5.5 5.5 5.5H9M8 12h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>,
-  },
-  {
-    type: "article", label: "Artikel", description: "Intern innehållssida",
-    color: "rgba(255,255,255,0.85)", bg: "#FF7300",
-    icon: <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.5 18V7c0-4 1-5 5-5h7c4 0 5 1 5 5v10c0 .14 0 .28-.01.42" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M6.35 15H20.5v3.5c0 1.93-1.57 3.5-3.5 3.5H7c-1.93 0-3.5-1.57-3.5-3.5v-.65C3.5 16.28 4.78 15 6.35 15M8 7h8m-8 3.5h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>,
-  },
-  {
-    type: "download", label: "Ladda ner", description: "PDF eller fil",
-    color: "rgba(255,255,255,0.85)", bg: "#9E65C6",
-    icon: <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M16.44 8.9c3.6.31 5.07 2.16 5.07 6.21v.13c0 4.47-1.79 6.26-6.26 6.26H8.74c-4.47 0-6.26-1.79-6.26-6.26v-.13c0-4.02 1.45-5.87 4.99-6.2M12 2v12.88" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M15.35 12.65 12 16l-3.35-3.35" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>,
-  },
-  {
-    type: "gallery", label: "Galleri", description: "Bildgalleri",
-    color: "rgba(255,255,255,0.85)", bg: "#01A652",
-    icon: <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22 9v6c0 .23 0 .45-.02.67-.04-.06-.09-.12-.14-.17-.01-.01-.02-.03-.03-.04-.81-.9-2-1.46-3.31-1.46-1.26 0-2.41.52-3.23 1.36a4.5 4.5 0 0 0-.62 5.46c.22.37.5.71.82.99.02.01.03.02.04.03.05.05.1.09.16.14-.21.02-.44.02-.67.02H9c-5 0-7-2-7-7V9c0-5 2-7 7-7h6c5 0 7 2 7 7M2.52 7.11h18.96m-12.96-5v4.86m6.96-4.86v4.41" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M23 18.5c0 .36-.04.71-.13 1.05-.11.45-.29.88-.52 1.27A4.49 4.49 0 0 1 18.5 23a4.35 4.35 0 0 1-2.82-1.02h-.01c-.06-.05-.11-.09-.16-.14a.1.1 0 0 0-.04-.03c-.32-.28-.6-.62-.82-.99a4.5 4.5 0 0 1 .62-5.46c.82-.84 1.97-1.36 3.23-1.36 1.31 0 2.5.56 3.31 1.46.01.01.02.03.03.04.05.05.1.11.14.17.64.77 1.02 1.76 1.02 2.83m-2.82-.02h-3.36m1.68-1.64v3.36" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/></svg>,
-  },
-] as const;
-
-type ModalView = "type" | "form";
-
 function AddCardModal({ existingCount, onAdd, onClose }: { existingCount: number; onAdd: (card: Card) => void; onClose: () => void }) {
-  const [currentView, setCurrentView] = useState<ModalView>("type");
-  const [previousView, setPreviousView] = useState<ModalView | null>(null);
-  const [direction, setDirection] = useState<"forward" | "back">("forward");
-  const [isTransitioning, setIsTransitioning] = useState(false);
   const [hasMounted, setHasMounted] = useState(false);
   useEffect(() => { const t = setTimeout(() => setHasMounted(true), 400); return () => clearTimeout(t); }, []);
-  const [selectedType, setSelectedType] = useState<Card["type"] | null>(null);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [badge, setBadge] = useState("");
-  const [ctaLabel, setCtaLabel] = useState("");
-  const [url, setUrl] = useState("");
-  const [openMode, setOpenMode] = useState<"internal" | "iframe" | "external">("external");
-  const [slug, setSlug] = useState("");
-  const [content, setContent] = useState("");
-  const [fileUrl, setFileUrl] = useState("");
-  const [fileType] = useState("pdf");
-  const [imageUrl, setImageUrl] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
-  const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const navigateTo = useCallback((view: ModalView) => {
-    if (isTransitioning) return;
-    setIsTransitioning(true); setDirection("forward"); setPreviousView(currentView);
-    requestAnimationFrame(() => { setTimeout(() => { setCurrentView(view); setPreviousView(null); setTimeout(() => setIsTransitioning(false), 350); }, 200); });
-  }, [currentView, isTransitioning]);
-
-  const navigateBack = useCallback(() => {
-    if (isTransitioning) return;
-    setIsTransitioning(true); setDirection("back"); setPreviousView(currentView);
-    requestAnimationFrame(() => { setTimeout(() => { setCurrentView("type"); setPreviousView(null); setTimeout(() => setIsTransitioning(false), 350); }, 200); });
-  }, [currentView, isTransitioning]);
-
-  const exitClass  = direction === "forward" ? "modal-view-exit-left"  : "modal-view-exit-right";
-  const enterClass = direction === "forward" ? "modal-view-enter-right" : "modal-view-enter-left";
-  const showPrevious = previousView !== null;
-  const activeView = showPrevious ? previousView : currentView;
-
-  const handleCoverUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (!file) return;
-    setIsUploading(true);
-    try {
-      const formData = new FormData(); formData.append("file", file);
-      const res = await fetch("/api/tenant/upload", { method: "POST", body: formData });
-      if (res.ok) { const { url: u } = await res.json(); setImageUrl(u); }
-    } finally { setIsUploading(false); e.target.value = ""; }
-  }, []);
-
-  const handleSubmit = useCallback(() => {
-    if (!selectedType || !title.trim()) return;
-    const base = { id: `card_${Date.now()}`, sortOrder: existingCount, isActive: true, title: title.trim(), description: description.trim(), image: imageUrl || undefined, badge: badge.trim() || undefined, ctaLabel: ctaLabel.trim() || undefined };
-    let card: Card;
-    if      (selectedType === "link")     card = { ...base, type: "link", url, openMode };
-    else if (selectedType === "article")  card = { ...base, type: "article", slug: slug || `article-${Date.now()}`, content };
-    else if (selectedType === "download") card = { ...base, type: "download", fileUrl: fileUrl || url, fileType };
-    else                                  card = { ...base, type: "gallery", images: imageUrl ? [imageUrl] : [] };
-    onAdd(card);
-  }, [selectedType, title, description, imageUrl, badge, ctaLabel, url, openMode, slug, content, fileUrl, fileType, existingCount, onAdd]);
-
-  const inputStyle: React.CSSProperties = { width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box", outline: "none", fontFamily: "inherit" };
-
-  const TypeView = (
-    <div style={{ display: "grid", gap: 8 }}>
-      {CARD_TYPES.map(({ type, label, description: desc, icon, color, bg }) => (
-        <button key={type} type="button" onClick={() => { setSelectedType(type); navigateTo("form"); }}
-          className="modal-type-row">
-          <div className="modal-type-icon" style={{ color, background: bg }}>{icon}</div>
-          <div style={{ flex: 1, textAlign: "left" }}>
-            <div style={{ fontSize: 16, fontWeight: 600, color: "2D2C2B" }}>{label}</div>
-            <div style={{ fontSize: 14, fontWeight: 400, color: "#666", marginTop: 2 }}>{desc}</div>
-          </div>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6D6C6B" strokeWidth="1.5"><path d="M9 18l6-6-6-6"/></svg>
-        </button>
-      ))}
-    </div>
-  );
-
-  const FormView = (
-    <div className="modal-form">
-
-      {/* ── Omslagsbild (alla typer) ── */}
-      <div className="modal-form-field modal-stagger-item" style={{ animationDelay: "0.04s" }}>
-        <label className="modal-form-label">Omslagsbild</label>
-        <ImageUpload
-          value={imageUrl || undefined}
-          folder="cards"
-          shape="wide"
-          onChange={(url) => setImageUrl(url)}
-          onRemove={() => setImageUrl("")}
-        />
-      </div>
-
-      {/* ── Titel (alla typer) ── */}
-      <div className="modal-form-field modal-stagger-item" style={{ animationDelay: "0.08s" }}>
-        <label className="modal-form-label">Titel *</label>
-        <input className="modal-form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="t.ex. Aktiviteter" />
-      </div>
-
-      {/* ── Länk ── */}
-      {selectedType === "link" && (<>
-        <div className="modal-form-field modal-stagger-item" style={{ animationDelay: "0.12s" }}>
-          <label className="modal-form-label">URL *</label>
-          <input className="modal-form-input" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." />
-        </div>
-        <div className="modal-form-field modal-stagger-item" style={{ animationDelay: "0.16s" }}>
-          <label className="modal-form-label">Öppna som</label>
-          <div className="modal-form-segmented modal-form-segmented--2col">
-            {(["external", "internal"] as const).map(mode => (
-              <button key={mode} type="button"
-                className={"modal-form-segment" + (openMode === mode ? " modal-form-segment--active" : "")}
-                onClick={() => setOpenMode(mode)}>
-                {mode === "external" ? "Extern" : "Intern"}
-              </button>
-            ))}
-          </div>
-        </div>
-      </>)}
-
-      {/* ── Artikel ── */}
-      {selectedType === "article" && (<>
-        <div className="modal-form-field modal-stagger-item" style={{ animationDelay: "0.12s" }}>
-          <label className="modal-form-label">Innehåll</label>
-          <textarea className="modal-form-input modal-form-textarea" value={content} onChange={e => setContent(e.target.value)} placeholder="Skriv innehåll..." rows={4} />
-        </div>
-        <div className="modal-form-field modal-stagger-item" style={{ animationDelay: "0.16s" }}>
-          <label className="modal-form-label">Länk</label>
-          <input className="modal-form-input" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..." />
-        </div>
-        <div className="modal-form-field modal-stagger-item" style={{ animationDelay: "0.20s" }}>
-          <label className="modal-form-label">Knapptext</label>
-          <input className="modal-form-input" value={ctaLabel} onChange={e => setCtaLabel(e.target.value)} placeholder="t.ex. Läs mer" />
-        </div>
-      </>)}
-
-      {/* ── Ladda ner ── */}
-      {selectedType === "download" && (
-        <div className="modal-form-field modal-stagger-item" style={{ animationDelay: "0.12s" }}>
-          <label className="modal-form-label">Fil</label>
-          <ImageUpload
-            value={fileUrl || undefined}
-            folder="cards/files"
-            shape="wide"
-            placeholder="Ladda upp fil"
-            onChange={(url) => setFileUrl(url)}
-            onRemove={() => setFileUrl("")}
-          />
-        </div>
-      )}
-
-      {/* ── Skicka ── */}
-      <div className="modal-form-field modal-stagger-item" style={{ animationDelay: "0.24s" }}>
-        <button type="button" className={"modal-form-submit" + (title.trim() ? " modal-form-submit--active" : "")}
-          onClick={handleSubmit} disabled={!title.trim()}>
-          Lägg till
-        </button>
-      </div>
-    </div>
-  );
+  const handlePick = useCallback((config: import("@/app/_lib/cardTypes/registry").CardTypeConfig) => {
+    onAdd(config.createEmpty(existingCount));
+  }, [existingCount, onAdd]);
 
   return (
     <>
       <div onClick={onClose} className="modal-backdrop" />
-      <div className="modal-container" style={{ height: currentView === "form" ? "min(600px, 82vh)" : undefined }}>
+      <div className="modal-container">
         <div className="modal-header">
-          {activeView === "type" ? (
-            <span className="modal-title">Lägg till kort</span>
-          ) : (
-            <button type="button" onClick={navigateBack} className="modal-back-btn" style={{margin:0}}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
-              <span className="modal-back-label">{CARD_TYPES.find(t => t.type === selectedType)?.label ?? ""}</span>
-            </button>
-          )}
+          <span className="modal-title">Lägg till kort</span>
           <button type="button" onClick={onClose} className="modal-close-btn">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
         </div>
         <div className="modal-body">
-          <div key={activeView + (showPrevious ? "-exit" : "-enter")} className={"modal-view " + (showPrevious ? exitClass : enterClass)}>
-            {activeView === "type" ? TypeView : FormView}
+          <div className="modal-view modal-view-enter-right">
+            <div style={{ display: "grid", gap: 8 }}>
+              {CARD_TYPE_LIST.map((ct) => (
+                <button key={ct.key} type="button" onClick={() => handlePick(ct)}
+                  className="modal-type-row">
+                  <div className="modal-type-icon" style={{ color: ct.iconColor, background: ct.iconBg }}>{ct.icon}</div>
+                  <div style={{ flex: 1, textAlign: "left" }}>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: "#2D2C2B" }}>{ct.label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 400, color: "#666", marginTop: 2 }}>{ct.description}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

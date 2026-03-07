@@ -1,0 +1,177 @@
+/* ── Unsaved Changes Modal ── */
+
+.nav-guard-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(0, 0, 0, 0);
+  transition: background 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.nav-guard-overlay--open {
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+}
+
+.nav-guard-modal {
+  position: fixed;
+  z-index: 9999;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.nav-guard-modal--open {
+  pointer-events: auto;
+}
+
+.nav-guard-content {
+  position: relative;
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  width: 520px;
+  max-width: calc(100vw - 40px);
+  opacity: 0;
+  transform: translateY(12px) scale(0.97);
+  transition:
+    opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nav-guard-modal--open .nav-guard-content {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.nav-guard-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #6D6C6B;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.nav-guard-close:hover:not(:disabled) {
+  background: #f5f5f5;
+  color: #1a1a1a;
+}
+
+.nav-guard-close:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.nav-guard-title {
+    color: #1a1a1a;
+    margin: 0 0 16px;
+    font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.nav-guard-description {
+  font-size: 1.1rem;
+  color: #1a1a1a;
+  margin: 0 0 27px;
+  text-align:center;
+  font-weight:450;
+  line-height: 1.5;
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+}
+
+.nav-guard-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nav-guard-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 16px;
+  border-radius: 14px;
+  border: none;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.2s ease;
+}
+
+.nav-guard-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.nav-guard-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.nav-guard-btn--save {
+    color: #fff;
+    border: 1.5px solid #1a1a1a;
+    background: #1a1a1a;
+}
+
+.nav-guard-btn--save:hover:not(:disabled) {
+  background: #444;
+}
+
+/* Discard button - red outline */
+.nav-guard-btn--discard {
+  background: transparent;
+  color: #C2030A;
+  border: 1.5px solid #C2030A;
+}
+
+.nav-guard-btn--discard:hover:not(:disabled) {
+  background: #fdf2f2;
+  border-color: #C2030A;
+}
+
+/* Continue editing - subtle ghost */
+.nav-guard-btn--cancel {
+  background: transparent;
+  color: #6D6C6B;
+}
+
+.nav-guard-btn--cancel:hover:not(:disabled) {
+  background: #f5f5f5;
+  color: #1a1a1a;
+}
+
+.nav-guard-spinner {
+  animation: navGuardSpin 0.8s linear infinite;
+}
+
+@keyframes navGuardSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-guard-overlay,
+  .nav-guard-content {
+    transition: none !important;
+  }
+}

@@ -16,6 +16,8 @@ export default async function PreviewPage(props: {
   const params = await props.params;
   const previewParams = Promise.resolve({ token: PREVIEW_TOKEN });
 
+  console.log(`[PreviewPage] Rendering slug="${params.slug}" at ${new Date().toISOString()}`);
+
   switch (params.slug) {
     case "home":
       return <PortalHomePage params={previewParams} />;

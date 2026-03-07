@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
+import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
 import { cloudinary } from "@/app/_lib/cloudinary/server";
 import type { CloudinaryUploadResult } from "@/app/_lib/cloudinary/server";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"];
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif", "application/pdf"];
 
 export async function POST(req: NextRequest) {
   try {
-    // Auth check
-    const { userId } = await auth();
+    const { userId } = await getAuth();
     const tenantData = await getCurrentTenant();
     if (!tenantData) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -35,15 +34,30 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    const isPdf = file.type === "application/pdf";
+
+    // Wallpaper images: aggressive optimization (max 2000px, strip metadata)
+    // Card images: standard quality optimization
+    const isWallpaper = folder === "wallpaper";
+    const transformation = isPdf ? undefined : isWallpaper
+      ? [
+          { width: 2000, crop: "limit" as const },
+          { quality: "auto:low" as const, fetch_format: "auto" as const },
+          { flags: "strip_profile" as const },
+        ]
+      : [{ quality: "auto" as const, fetch_format: "auto" as const }];
+
     // Upload to Cloudinary
     const result = await new Promise<CloudinaryUploadResult>((resolve, reject) => {
       cloudinary.uploader.upload_stream(
         {
           folder: `hospitality/${tenant.slug}/${folder}`,
           resource_type: "image",
-          transformation: [
-            { quality: "auto", fetch_format: "auto" },
-          ],
+          ...(transformation && { transformation }),
+          ...(isWallpaper && { eager: [
+            { width: 1200, crop: "limit", quality: "auto:low", fetch_format: "auto" },
+            { width: 640, crop: "limit", quality: "auto:low", fetch_format: "auto" },
+          ]}),
           tags: [tenant.slug, folder, userId ?? "dev"],
         },
         (error, result) => {

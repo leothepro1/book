@@ -3,7 +3,7 @@ import { cardImageUrl } from "./cardImage";
 
 export function FeaturedCard({
   card,
-  aspectRatio = "5 / 4",
+  aspectRatio = "5 / 3.5",
 }: {
   card: LooseCard;
   aspectRatio?: string;
@@ -19,8 +19,8 @@ export function FeaturedCard({
         className="guest-featured-card__bg"
         style={{
           backgroundImage: imgUrl
-            ? `linear-gradient(rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.72) 100%), url("${imgUrl}")`
-            : `linear-gradient(rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.72) 100%)`,
+            ? `linear-gradient(rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.80) 100%), url("${imgUrl}")`
+            : `linear-gradient(rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.80) 100%)`,
         }}
       />
       <div className="guest-featured-card__content">

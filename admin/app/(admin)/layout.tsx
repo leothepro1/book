@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Sidebar } from "./_components/Sidebar";
 import { SidebarProvider, useSidebar } from "./_components/SidebarContext";
 import { Header } from "./_components/Header";
+import { NavigationGuardProvider, UnsavedChangesModal } from "./_components/NavigationGuard";
 
 function LayoutContent({ children }: { children: ReactNode }) {
   const { isCollapsed } = useSidebar();
@@ -22,16 +23,19 @@ function LayoutContent({ children }: { children: ReactNode }) {
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider>
-      <div className="flex flex-col min-h-screen bg-[#1A1A1A]">
-        {/* Header - över ALLT */}
-        <Header />
-        
-        {/* Sidebar + Content - under headern med gap */}
-        <div className="flex flex-1 overflow-hidden">
-          <Sidebar />
-          <LayoutContent>{children}</LayoutContent>
+      <NavigationGuardProvider>
+        <div className="flex flex-col min-h-screen bg-[#1A1A1A]">
+          {/* Header - över ALLT */}
+          <Header />
+
+          {/* Sidebar + Content - under headern med gap */}
+          <div className="flex flex-1 overflow-hidden">
+            <Sidebar />
+            <LayoutContent>{children}</LayoutContent>
+          </div>
         </div>
-      </div>
+        <UnsavedChangesModal />
+      </NavigationGuardProvider>
     </SidebarProvider>
   );
 }

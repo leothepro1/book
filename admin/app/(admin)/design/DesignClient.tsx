@@ -4,15 +4,19 @@ import { useCallback, useState, useTransition, useRef } from "react";
 import { createPortal } from "react-dom";
 import { PreviewProvider, GuestPreviewFrame, usePreview } from "../_components/GuestPreview";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
-import { updateDraft } from "../_lib/tenant/updateDraft";
-import { publishDraft, discardDraft } from "../_lib/tenant/publishDraft";
+import type { BackgroundMode, GradientDirection, ThemeConfig } from "@/app/(guest)/_lib/theme/types";
+import { backgroundStyle } from "@/app/(guest)/_lib/theme/background";
+import { useDraftUpdate } from "../_hooks/useDraftUpdate";
+import { useUpload } from "../_hooks/useUpload";
+import { ColorPickerPopup } from "../_components/ColorPicker";
+import { PublishBarProvider, PublishBar, usePublishBar } from "../_components/PublishBar";
 import "../_components/GuestPreview/preview.css";
 import "./design.css";
 import "../_components/admin-page.css";
 
 /* ── Types ── */
 
-type DesignView = "main" | "colors" | "header" | "wallpaper" | "buttons" | "text" | "cards";
+type DesignView = "main" | "colors" | "header" | "wallpaper" | "buttons" | "text" | "tiles";
 
 interface Props {
   initialConfig: TenantConfig;
@@ -20,35 +24,18 @@ interface Props {
 
 /* ── Font Options ── */
 
-const FONT_OPTIONS: { key: string; label: string; family: string }[] = [
-  { key: "albert_sans", label: "Albert Sans", family: "Albert Sans, sans-serif" },
-  { key: "dm_sans", label: "DM Sans", family: "DM Sans, sans-serif" },
-  { key: "epilogue", label: "Epilogue", family: "Epilogue, sans-serif" },
-  { key: "ibm_plex_sans", label: "IBM Plex Sans", family: "IBM Plex Sans, sans-serif" },
-  { key: "inter", label: "Inter", family: "Inter, sans-serif" },
-  { key: "link_sans", label: "Link Sans", family: "Link Sans, sans-serif" },
-  { key: "manrope", label: "Manrope", family: "Manrope, sans-serif" },
-  { key: "oxanium", label: "Oxanium", family: "Oxanium, sans-serif" },
-  { key: "poppins", label: "Poppins", family: "Poppins, sans-serif" },
-  { key: "red_hat_display", label: "Red Hat Display", family: "Red Hat Display, sans-serif" },
-  { key: "roboto", label: "Roboto", family: "Roboto, sans-serif" },
-  { key: "rubik", label: "Rubik", family: "Rubik, sans-serif" },
-  { key: "space_grotesk", label: "Space Grotesk", family: "Space Grotesk, sans-serif" },
-  { key: "syne", label: "Syne", family: "Syne, sans-serif" },
-  { key: "biorhyme", label: "BioRhyme", family: "BioRhyme, serif" },
-  { key: "bitter", label: "Bitter", family: "Bitter, serif" },
-  { key: "caudex", label: "Caudex", family: "Caudex, serif" },
-  { key: "corben", label: "Corben", family: "Corben, serif" },
-  { key: "domine", label: "Domine", family: "Domine, serif" },
-  { key: "hahmlet", label: "Hahmlet", family: "Hahmlet, serif" },
-  { key: "avenir", label: "Avenir", family: "Avenir, sans-serif" },
-  { key: "playfair", label: "Playfair Display", family: "Playfair Display, serif" },
-];
+import { FONT_CATALOG, batchFontsUrl } from "@/app/_lib/fonts/catalog";
 
-const MODAL_FONTS_URL = "https://fonts.googleapis.com/css2?" +
-  FONT_OPTIONS.filter(f => f.key !== "avenir" && f.key !== "link_sans")
-    .map(f => "family=" + f.label.replace(/ /g, "+") + ":wght@400;600")
-    .join("&") + "&display=swap";
+const FONTS_PER_PAGE = 30;
+
+const FONT_OPTIONS = FONT_CATALOG.map((f) => ({
+  key: f.key,
+  label: f.label,
+  family: `${f.label}, ${f.serif ? "serif" : "sans-serif"}`,
+}));
+
+/** Pre-compute the initial batch URL (loaded with modal open) */
+const INITIAL_BATCH_URL = batchFontsUrl(FONT_CATALOG.slice(0, FONTS_PER_PAGE));
 
 /* ── Button Options ── */
 
@@ -56,15 +43,26 @@ type ButtonVariantOption = "solid" | "outline";
 type ButtonRadiusOption = "square" | "rounded" | "round" | "rounder" | "full";
 
 const VARIANT_OPTIONS: { key: ButtonVariantOption; label: string }[] = [
-  { key: "solid", label: "Solid" },
-  { key: "outline", label: "Outline" },
+  { key: "solid", label: "Fylld" },
+  { key: "outline", label: "Kontur" },
 ];
 
 const RADIUS_OPTIONS: { key: ButtonRadiusOption; label: string; icon: React.ReactNode }[] = [
-  { key: "square", label: "Square", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 20V4H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> },
-  { key: "round", label: "Round", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 20V6C4 4.89543 4.89543 4 6 4H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> },
-  { key: "rounder", label: "Rounder", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 20V8C4 5.79086 5.79086 4 8 4H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> },
-  { key: "full", label: "Full", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 20V12C4 7.58172 7.58172 4 12 4H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> },
+  { key: "square", label: "Skarp", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 20V4H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> },
+  { key: "round", label: "Rund", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 20V6C4 4.89543 4.89543 4 6 4H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> },
+  { key: "rounder", label: "Rundare", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 20V8C4 5.79086 5.79086 4 8 4H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> },
+  { key: "full", label: "Helt rund", icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M4 20V12C4 7.58172 7.58172 4 12 4H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> },
+];
+
+/* ── Tile Shadow Options ── */
+
+type TileShadowOption = "none" | "soft" | "strong" | "hard";
+
+const TILE_SHADOW_OPTIONS: { key: TileShadowOption; label: string }[] = [
+  { key: "none", label: "Ingen" },
+  { key: "soft", label: "Mjuk" },
+  { key: "strong", label: "Medium" },
+  { key: "hard", label: "Stark" },
 ];
 
 /* ── Color Fields Config ── */
@@ -72,10 +70,10 @@ const RADIUS_OPTIONS: { key: ButtonRadiusOption; label: string; icon: React.Reac
 type ColorKey = "background" | "buttonBg" | "buttonText" | "text";
 
 const COLOR_FIELDS: { key: ColorKey; label: string }[] = [
-  { key: "background", label: "Background" },
-  { key: "buttonBg", label: "Buttons" },
-  { key: "buttonText", label: "Button text" },
-  { key: "text", label: "Page text" },
+  { key: "background", label: "Bakgrund" },
+  { key: "buttonBg", label: "Knappar" },
+  { key: "buttonText", label: "Knapptext" },
+  { key: "text", label: "Sidtext" },
 ];
 
 /* ════════════════════════════════════════════
@@ -91,83 +89,29 @@ export default function DesignClient({ initialConfig }: Props) {
 }
 
 /* ════════════════════════════════════════════
-   Design Inner (undo/redo/publish)
+   Design Inner (publish bar + views)
    ════════════════════════════════════════════ */
 
 function DesignInner() {
-  const [undoStack, setUndoStack] = useState<Partial<TenantConfig>[]>([]);
-  const [redoStack, setRedoStack] = useState<Partial<TenantConfig>[]>([]);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [isUndoing, setIsUndoing] = useState(false);
   const { config } = usePreview();
+  const getConfig = useCallback(() => config, [config]);
 
-  const pushUndo = useCallback((snapshot: Partial<TenantConfig>) => {
-    setUndoStack(prev => [...prev, snapshot]);
-    setRedoStack([]);
-    setHasUnsavedChanges(true);
-  }, []);
+  return (
+    <PublishBarProvider getConfig={getConfig}>
+      <DesignInnerContent />
+    </PublishBarProvider>
+  );
+}
 
-  const handleUndo = useCallback(async () => {
-    if (undoStack.length === 0 || isUndoing) return;
-    setIsUndoing(true);
-    const previousSnapshot = undoStack[undoStack.length - 1];
-    if (config) setRedoStack(prev => [...prev, { theme: config.theme } as Partial<TenantConfig>]);
-    setUndoStack(prev => prev.slice(0, -1));
-    const result = await updateDraft(previousSnapshot);
-    if (!result.success) console.error("[Undo] Failed:", result.error);
-    if (undoStack.length <= 1) {
-      await discardDraft();
-      setHasUnsavedChanges(false);
-    }
-    setIsUndoing(false);
-  }, [undoStack, config, isUndoing]);
-
-  const handleRedo = useCallback(async () => {
-    if (redoStack.length === 0 || isUndoing) return;
-    setIsUndoing(true);
-    const redoSnapshot = redoStack[redoStack.length - 1];
-    if (config) setUndoStack(prev => [...prev, { theme: config.theme } as Partial<TenantConfig>]);
-    setRedoStack(prev => prev.slice(0, -1));
-    const result = await updateDraft(redoSnapshot);
-    if (!result.success) console.error("[Redo] Failed:", result.error);
-    setHasUnsavedChanges(true);
-    setIsUndoing(false);
-  }, [redoStack, config, isUndoing]);
-
-  const handlePublish = useCallback(async () => {
-    if (isPublishing) return;
-    setIsPublishing(true);
-    const result = await publishDraft();
-    if (result.success) {
-      setUndoStack([]);
-      setRedoStack([]);
-      setHasUnsavedChanges(false);
-    } else {
-      console.error("[Publish] Failed:", result.error);
-    }
-    setIsPublishing(false);
-  }, [isPublishing]);
+function DesignInnerContent() {
+  const { pushUndo } = usePublishBar();
 
   return (
     <div className="admin-page">
       <div className="admin-editor">
         <div className="admin-header">
           <h1 className="admin-title">Design</h1>
-          <div className={`design-actions ${hasUnsavedChanges ? "design-actions-visible" : ""}`}>
-            <div className="design-actions-left">
-              <button type="button" className="design-action-icon" onClick={handleUndo} disabled={undoStack.length === 0 || isUndoing} aria-label="Undo">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M232,184a8,8,0,0,1-16,0A88,88,0,0,0,65.78,121.78L43.4,144H88a8,8,0,0,1,0,16H24a8,8,0,0,1-8-8V88a8,8,0,0,1,16,0v44.77l22.48-22.33A104,104,0,0,1,232,184Z" /></svg>
-              </button>
-              <button type="button" className="design-action-icon" onClick={handleRedo} disabled={redoStack.length === 0 || isUndoing} aria-label="Redo">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M240,88v64a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h44.6l-22.36-22.21A88,88,0,0,0,40,184a8,8,0,0,1-16,0,104,104,0,0,1,177.54-73.54L224,132.77V88a8,8,0,0,1,16,0Z" /></svg>
-              </button>
-            </div>
-            <button type="button" className="design-publish-btn" onClick={handlePublish} disabled={isPublishing}>
-              {isPublishing && <SpinnerIcon />}
-              <span>Spara</span>
-            </button>
-          </div>
+          <PublishBar />
         </div>
         <DesignViewManager pushUndo={pushUndo} />
       </div>
@@ -175,14 +119,6 @@ function DesignInner() {
         <GuestPreviewFrame route="/p/[token]" className="preview-widget-sticky" />
       </div>
     </div>
-  );
-}
-
-function SpinnerIcon() {
-  return (
-    <svg className="design-spinner" width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="32" strokeDashoffset="12" />
-    </svg>
   );
 }
 
@@ -195,9 +131,11 @@ function DesignViewManager({ pushUndo }: { pushUndo: (s: Partial<TenantConfig>) 
   const [previousView, setPreviousView] = useState<DesignView | null>(null);
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const hasNavigated = useRef(false);
 
   const navigateTo = useCallback((view: DesignView) => {
     if (isTransitioning) return;
+    hasNavigated.current = true;
     setIsTransitioning(true);
     setDirection("forward");
     setPreviousView(currentView);
@@ -217,7 +155,7 @@ function DesignViewManager({ pushUndo }: { pushUndo: (s: Partial<TenantConfig>) 
   }, [currentView, isTransitioning]);
 
   const exitClass = direction === "forward" ? "design-view-exit-left" : "design-view-exit-right";
-  const enterClass = direction === "forward" ? "design-view-enter-right" : "design-view-enter-left";
+  const enterClass = (direction === "forward" ? "design-view-enter-right" : "design-view-enter-left") + (hasNavigated.current ? " design-view-fast" : "");
   const showPrevious = previousView !== null;
   const activeView = showPrevious ? previousView : currentView;
 
@@ -234,8 +172,10 @@ function DesignViewManager({ pushUndo }: { pushUndo: (s: Partial<TenantConfig>) 
           <ButtonsView onBack={navigateBack} pushUndo={pushUndo} />
         ) : activeView === "text" ? (
           <TextView onBack={navigateBack} pushUndo={pushUndo} />
-        ) : activeView === "cards" ? (
-          <CardsView onBack={navigateBack} pushUndo={pushUndo} />
+        ) : activeView === "wallpaper" ? (
+          <WallpaperView onBack={navigateBack} pushUndo={pushUndo} />
+        ) : activeView === "tiles" ? (
+          <TilesView onBack={navigateBack} pushUndo={pushUndo} />
         ) : (
           <PlaceholderView label={activeView} onBack={navigateBack} />
         )}
@@ -252,24 +192,24 @@ function MainView({ onNavigate }: { onNavigate: (v: DesignView) => void }) {
   const { config } = usePreview();
   const theme = config?.theme;
 
-  const bgLabel = theme?.background?.mode === "gradient" ? "Gradient" : theme?.background?.mode === "image" ? "Image" : theme?.background?.mode === "blur" ? "Blur" : "Fill";
-  const btnLabel = (theme?.buttons?.variant === "outline" ? "Outline" : "Solid") + " · " + ((theme?.buttons?.radius || "rounder").charAt(0).toUpperCase() + (theme?.buttons?.radius || "rounder").slice(1));
+  const bgLabel = theme?.background?.mode === "gradient" ? "Gradient" : theme?.background?.mode === "image" ? "Bild" : "Enfärgad";
+  const btnLabel = theme?.buttons?.variant === "outline" ? "Kontur" : "Fylld";
   const fontLabel = FONT_OPTIONS.find(f => f.key === theme?.typography?.headingFont)?.label || "Inter";
 
   return (
     <>
       <div className="design-section">
-        <div className="design-section-header"><span className="design-section-label design-stagger-item">Theme</span></div>
-        <DesignRow icon={<ThemeIcon />} label="Theme" value="Custom" className="design-stagger-item" />
+        <div className="design-section-header"><span className="design-section-label design-stagger-item">Tema</span></div>
+        <DesignRow icon={<ThemeIcon theme={theme} />} label="" value="Anpassat" className="design-stagger-item design-row--theme" />
       </div>
       <div className="design-section">
-        <div className="design-section-header"><span className="design-section-label design-stagger-item">Customize theme</span></div>
-        <DesignRow icon={<HeaderIcon logoUrl={theme?.header?.logoUrl} />} label="Header" value={theme?.header?.logoUrl ? "Logo uploaded" : "No logo"} onClick={() => onNavigate("header")} className="design-stagger-item" />
-        <DesignRow icon={<WallpaperIcon />} label="Wallpaper" value={bgLabel} onClick={() => onNavigate("wallpaper")} className="design-stagger-item" />
-        <DesignRow icon={<ButtonsIcon variant={theme?.buttons?.variant} color={theme?.colors?.buttonBg} />} label="Buttons" value={btnLabel} onClick={() => onNavigate("buttons")} className="design-stagger-item" />
-        <DesignRow icon={<TextIcon font={theme?.typography?.headingFont} />} label="Text" value={fontLabel} onClick={() => onNavigate("text")} className="design-stagger-item" />
-        <DesignRow icon={<ColorsIcon bg={theme?.colors?.background} accent={theme?.colors?.buttonBg} text={theme?.colors?.text} buttonText={theme?.colors?.buttonText} />} label="Colors" onClick={() => onNavigate("colors")} className="design-stagger-item" />
-        <DesignRow icon={<CardsIcon />} label="Startsida" value={`${config?.home?.cards?.filter((c: any) => c.isActive).length || 0} kort`} onClick={() => onNavigate("cards")} className="design-stagger-item" />
+        <div className="design-section-header"><span className="design-section-label design-stagger-item">Anpassa tema</span></div>
+        <DesignRow icon={<HeaderIcon logoUrl={theme?.header?.logoUrl} bg={theme?.background} bgColor={theme?.colors?.background} />} label="Logotyp" value={theme?.header?.logoUrl ? "Logotyp uppladdad" : "Ingen logotyp"} onClick={() => onNavigate("header")} className="design-stagger-item" />
+        <DesignRow icon={<WallpaperIcon bg={theme?.background} bgColor={theme?.colors?.background} />} label="Bakgrund" value={bgLabel} onClick={() => onNavigate("wallpaper")} className="design-stagger-item" />
+        <DesignRow icon={<ButtonsIcon variant={theme?.buttons?.variant} color={theme?.colors?.buttonBg} radius={theme?.buttons?.radius} />} label="Knappar" value={btnLabel} onClick={() => onNavigate("buttons")} className="design-stagger-item" />
+        <DesignRow icon={<TextIcon font={theme?.typography?.headingFont} />} label="Typsnitt" value={fontLabel} onClick={() => onNavigate("text")} className="design-stagger-item" />
+        <DesignRow icon={<ColorsIcon bg={theme?.colors?.background} accent={theme?.colors?.buttonBg} />} label="Färger" onClick={() => onNavigate("colors")} className="design-stagger-item" />
+        <DesignRow icon={<TilesIcon bg={theme?.tiles?.background} radius={theme?.tiles?.radius} />} label="Snabblänkar" value={theme?.tiles?.background?.toUpperCase() || "#F1F0EE"} onClick={() => onNavigate("tiles")} className="design-stagger-item" />
       </div>
     </>
   );
@@ -291,14 +231,22 @@ function BackButton({ label, onClick }: { label: string; onClick: () => void }) 
 function ColorField({ label, value, onChange, onPickerChange, className = "" }: {
   label: string; value: string; onChange: (v: string) => void; onPickerChange: (v: string) => void; className?: string;
 }) {
-  const pickerRef = useRef<HTMLInputElement>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const swatchRef = useRef<HTMLDivElement>(null);
   return (
     <div className={"design-color-field " + className}>
       <span className="design-field-label">{label}</span>
       <div className="design-color-input-row">
         <input type="text" value={value.toUpperCase()} onChange={(e) => onChange(e.target.value)} className="design-color-input" spellCheck={false} autoComplete="off" />
-        <div className="design-color-swatch" style={{ background: value }} onClick={() => pickerRef.current?.click()} />
-        <input ref={pickerRef} type="color" value={value.length === 7 ? value : "#000000"} onChange={(e) => onPickerChange(e.target.value)} className="design-color-picker-hidden" tabIndex={-1} aria-hidden="true" />
+        <div ref={swatchRef} className="design-color-swatch" style={{ background: value }} onClick={() => setPickerOpen(!pickerOpen)} />
+        {pickerOpen && (
+          <ColorPickerPopup
+            value={value}
+            onChange={onPickerChange}
+            onClose={() => setPickerOpen(false)}
+            anchorRef={swatchRef}
+          />
+        )}
       </div>
     </div>
   );
@@ -306,6 +254,7 @@ function ColorField({ label, value, onChange, onPickerChange, className = "" }: 
 
 function useColorEditor(pushUndo: (s: Partial<TenantConfig>) => void, snapshotFn: () => Partial<TenantConfig>, themeColors: any) {
   const [isPending, startTransition] = useTransition();
+  const saveDraft = useDraftUpdate();
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [localColors, setLocalColors] = useState<Record<string, string>>({});
 
@@ -316,11 +265,11 @@ function useColorEditor(pushUndo: (s: Partial<TenantConfig>) => void, snapshotFn
     debounceTimers.current[key] = setTimeout(() => {
       pushUndo(snapshotFn());
       startTransition(async () => {
-        const result = await updateDraft({ theme: { colors: { [key]: value } } } as any);
+        const result = await saveDraft({ theme: { colors: { [key]: value } } } as any);
         if (!result.success) console.error("[Color] Save failed:", result.error);
       });
     }, 500);
-  }, [pushUndo, snapshotFn]);
+  }, [pushUndo, snapshotFn, saveDraft]);
 
   const handleChange = useCallback((key: string, value: string) => {
     let n = value.trim();
@@ -353,13 +302,13 @@ function ColorsView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Pa
 
   return (
     <>
-      <BackButton label="Colors" onClick={onBack} />
+      <BackButton label="Färger" onClick={onBack} />
       <div className="design-color-fields">
         {COLOR_FIELDS.map(({ key, label }) => (
           <ColorField key={key} label={label} value={getColor(key)} onChange={(v) => handleChange(key, v)} onPickerChange={(v) => handlePicker(key, v)} className="design-stagger-item" />
         ))}
       </div>
-      {isPending && <div className="design-saving">Saving...</div>}
+      {isPending && <div className="design-saving">Sparar...</div>}
     </>
   );
 }
@@ -370,14 +319,16 @@ function ColorsView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Pa
 
 function HeaderView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Partial<TenantConfig>) => void }) {
   const { config } = usePreview();
+  const saveDraft = useDraftUpdate();
   const theme = config?.theme;
   const [isPending, startTransition] = useTransition();
-  const [isUploading, setIsUploading] = useState(false);
   const [showLogoModal, setShowLogoModal] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const { upload, isUploading } = useUpload("hospitality/logos");
 
-  const currentLogoUrl = theme?.header?.logoUrl || "";
+  const currentLogoUrl = previewUrl || theme?.header?.logoUrl || "";
   const currentLogoWidth = theme?.header?.logoWidth ?? 120;
   const [localWidth, setLocalWidth] = useState<number>(currentLogoWidth);
   const widthTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -390,21 +341,19 @@ function HeaderView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Pa
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setIsUploading(true);
-    pushUndo(snapshotHeader());
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/tenant/upload", { method: "POST", body: formData });
-      if (!res.ok) { console.error("[Header] Upload failed"); setIsUploading(false); return; }
-      const { url } = await res.json();
-      startTransition(async () => {
-        await updateDraft({ theme: { header: { logoUrl: url } } } as any);
-        setIsUploading(false);
-      });
-    } catch (err) { console.error("[Header] Upload error:", err); setIsUploading(false); }
     e.target.value = "";
-  }, [pushUndo, snapshotHeader]);
+    pushUndo(snapshotHeader());
+    await upload(
+      file,
+      (localUrl) => setPreviewUrl(localUrl),
+      (result) => {
+        setPreviewUrl(null);
+        startTransition(async () => {
+          await saveDraft({ theme: { header: { logoUrl: result.url } } } as any);
+        });
+      },
+    );
+  }, [pushUndo, snapshotHeader, saveDraft, upload]);
 
   const handleWidthChange = useCallback((value: number) => {
     setLocalWidth(value);
@@ -412,20 +361,20 @@ function HeaderView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Pa
     widthTimerRef.current = setTimeout(() => {
       pushUndo(snapshotHeader());
       startTransition(async () => {
-        await updateDraft({ theme: { header: { logoWidth: value } } } as any);
+        await saveDraft({ theme: { header: { logoWidth: value } } } as any);
       });
     }, 300);
-  }, [pushUndo, snapshotHeader]);
+  }, [pushUndo, snapshotHeader, saveDraft]);
 
   const handleRemoveLogo = useCallback(async () => {
     if (isRemoving) return;
     setIsRemoving(true);
     pushUndo(snapshotHeader());
-    const result = await updateDraft({ theme: { header: { logoUrl: "" } } } as any);
+    const result = await saveDraft({ theme: { header: { logoUrl: "" } } } as any);
     if (!result.success) console.error("[Header] Remove failed:", result.error);
     setIsRemoving(false);
     setShowLogoModal(false);
-  }, [isRemoving, pushUndo, snapshotHeader]);
+  }, [isRemoving, pushUndo, snapshotHeader, saveDraft]);
 
   const handleEditClick = useCallback(() => {
     if (currentLogoUrl) {
@@ -437,27 +386,31 @@ function HeaderView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Pa
 
   return (
     <>
-      <BackButton label="Header" onClick={onBack} />
+      <BackButton label="Logotyp" onClick={onBack} />
 
       <div className="design-field-group design-stagger-item">
-        <span className="design-field-label">Profile image</span>
+        <span className="design-field-label">Logotyp</span>
         <div className="design-logo-upload">
           <div className={"design-logo-avatar " + (isUploading ? "design-logo-shimmer" : "")}>
             {currentLogoUrl && !isUploading ? (
-              <img src={currentLogoUrl} alt="Logo" className="design-logo-img" />
+              <img src={currentLogoUrl} alt="Logotyp" className="design-logo-img" />
             ) : !isUploading ? (
-              <svg width="40" height="40" viewBox="0 0 256 256" fill="#ccc"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88.11,88.11,0,0,1-71.87-37.27,64,64,0,0,1,143.74,0A88.11,88.11,0,0,1,128,216Zm0-104a32,32,0,1,0-32-32A32,32,0,0,0,128,112Z" /></svg>
+              <svg className="design-logo-placeholder" viewBox="0 0 145 144" fill="none" xmlns="http://www.w3.org/2000/svg"><g clipPath="url(#clip0_logo)"><rect width="145" height="146" fill="#A8AAA2" /><circle cx="72.396" cy="53.896" r="31.396" fill="#F6F7F5" /><ellipse cx="72.5" cy="150.5" rx="63.5" ry="59" fill="#F6F7F5" /></g><defs><clipPath id="clip0_logo"><rect width="145" height="146" fill="white" /></clipPath></defs></svg>
             ) : null}
           </div>
           <button type="button" className={"design-logo-btn " + (currentLogoUrl ? "design-logo-btn-edit" : "")} onClick={handleEditClick}>
-            {currentLogoUrl ? <span>Edit</span> : <><span className="design-logo-btn-plus">+</span><span>Add</span></>}
+            {currentLogoUrl ? (
+              <><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z" /></svg><span>Ändra</span></>
+            ) : (
+              <><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z" /></svg><span>Ladda upp</span></>
+            )}
           </button>
           <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" onChange={handleUpload} className="design-file-hidden" aria-hidden="true" />
         </div>
       </div>
 
       <div className="design-field-group design-stagger-item">
-        <span className="design-field-label">Logo width</span>
+        <span className="design-field-label">Bredd på logotyp</span>
         <div className="design-slider-row">
           <input type="range" min={40} max={300} step={1} value={localWidth} onChange={(e) => handleWidthChange(Number(e.target.value))} className="design-slider" />
           <div className="design-slider-input-wrap">
@@ -467,16 +420,16 @@ function HeaderView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Pa
         </div>
       </div>
 
-      {isPending && <div className="design-saving">Saving...</div>}
+      {isPending && <div className="design-saving">Sparar...</div>}
 
       {showLogoModal && createPortal(
         <>
           <div className="design-modal-backdrop" onClick={() => setShowLogoModal(false)} />
           <div className="design-modal design-modal-sm">
-            <button type="button" className="design-logo-modal-btn design-logo-modal-primary" onClick={() => { setShowLogoModal(false); fileInputRef.current?.click(); }}>Edit logo</button>
+            <button type="button" className="design-logo-modal-btn design-logo-modal-primary" onClick={() => { setShowLogoModal(false); fileInputRef.current?.click(); }}>Ändra logotyp</button>
             <button type="button" className="design-logo-modal-btn design-logo-modal-danger" onClick={handleRemoveLogo} disabled={isRemoving}>
               {isRemoving && <SpinnerIcon />}
-              <span>Remove logo</span>
+              <span>Ta bort logotyp</span>
             </button>
           </div>
         </>,
@@ -492,6 +445,7 @@ function HeaderView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Pa
 
 function ButtonsView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Partial<TenantConfig>) => void }) {
   const { config } = usePreview();
+  const saveDraft = useDraftUpdate();
   const theme = config?.theme;
   const [isPending, startTransition] = useTransition();
 
@@ -505,16 +459,16 @@ function ButtonsView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: P
   const saveButtonProp = useCallback((prop: string, value: string) => {
     pushUndo(snapshotButtons());
     startTransition(async () => {
-      await updateDraft({ theme: { buttons: { [prop]: value } } } as any);
+      await saveDraft({ theme: { buttons: { [prop]: value } } } as any);
     });
-  }, [pushUndo, snapshotButtons]);
+  }, [pushUndo, snapshotButtons, saveDraft]);
 
   return (
     <>
-      <BackButton label="Buttons" onClick={onBack} />
+      <BackButton label="Knappar" onClick={onBack} />
 
       <div className="design-field-group design-stagger-item">
-        <span className="design-field-label">Button style</span>
+        <span className="design-field-label">Knappstil</span>
         <div className="design-toggle-row design-toggle-2col">
           {VARIANT_OPTIONS.map(({ key, label }) => (
             <button key={key} type="button" className={"design-toggle-card " + (currentVariant === key ? "design-toggle-active" : "")} onClick={() => saveButtonProp("variant", key)}>
@@ -528,7 +482,7 @@ function ButtonsView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: P
       </div>
 
       <div className="design-field-group design-stagger-item">
-        <span className="design-field-label">Corner roundness</span>
+        <span className="design-field-label">Hörnrundning</span>
         <div className="design-toggle-row design-toggle-4col">
           {RADIUS_OPTIONS.map(({ key, label, icon }) => (
             <button key={key} type="button" className={"design-toggle-card " + (currentRadius === key ? "design-toggle-active" : "")} onClick={() => saveButtonProp("radius", key)}>
@@ -539,10 +493,10 @@ function ButtonsView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: P
         </div>
       </div>
 
-      <ColorField label="Button color" value={getColor("buttonBg")} onChange={(v) => handleChange("buttonBg", v)} onPickerChange={(v) => handlePicker("buttonBg", v)} className="design-stagger-item" />
-      <ColorField label="Button text color" value={getColor("buttonText")} onChange={(v) => handleChange("buttonText", v)} onPickerChange={(v) => handlePicker("buttonText", v)} className="design-stagger-item" />
+      <ColorField label="Knappfärg" value={getColor("buttonBg")} onChange={(v) => handleChange("buttonBg", v)} onPickerChange={(v) => handlePicker("buttonBg", v)} className="design-stagger-item" />
+      <ColorField label="Knapptextfärg" value={getColor("buttonText")} onChange={(v) => handleChange("buttonText", v)} onPickerChange={(v) => handlePicker("buttonText", v)} className="design-stagger-item" />
 
-      {(isPending || colorPending) && <div className="design-saving">Saving...</div>}
+      {(isPending || colorPending) && <div className="design-saving">Sparar...</div>}
     </>
   );
 }
@@ -553,64 +507,552 @@ function ButtonsView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: P
 
 function TextView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Partial<TenantConfig>) => void }) {
   const { config } = usePreview();
+  const saveDraft = useDraftUpdate();
   const theme = config?.theme;
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal] = useState<"heading" | "body" | "button" | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const currentFont = theme?.typography?.headingFont || "inter";
-  const currentLabel = FONT_OPTIONS.find(f => f.key === currentFont)?.label || "Inter";
-  const currentFamily = FONT_OPTIONS.find(f => f.key === currentFont)?.family || "Inter, sans-serif";
+  const headingFont = theme?.typography?.headingFont || "inter";
+  const headingLabel = FONT_OPTIONS.find(f => f.key === headingFont)?.label || "Inter";
+  const headingFamily = FONT_OPTIONS.find(f => f.key === headingFont)?.family || "Inter, sans-serif";
+
+  const bodyFont = theme?.typography?.bodyFont || headingFont;
+  const bodyLabel = FONT_OPTIONS.find(f => f.key === bodyFont)?.label || headingLabel;
+  const bodyFamily = FONT_OPTIONS.find(f => f.key === bodyFont)?.family || headingFamily;
+
+  const buttonFont = theme?.typography?.buttonFont;
+  const hasCustomButtonFont = !!buttonFont;
+  const buttonFontLabel = buttonFont ? (FONT_OPTIONS.find(f => f.key === buttonFont)?.label || headingLabel) : headingLabel;
+  const buttonFontFamily = buttonFont ? (FONT_OPTIONS.find(f => f.key === buttonFont)?.family || headingFamily) : headingFamily;
 
   const snapshotTypography = useCallback(() => ({ theme: { typography: { ...theme?.typography }, colors: { ...theme?.colors } } } as Partial<TenantConfig>), [theme?.typography, theme?.colors]);
   const { getColor, handleChange, handlePicker, isPending: colorPending } = useColorEditor(pushUndo, snapshotTypography, theme?.colors);
 
   const handleFontSelect = useCallback((fontKey: string) => {
+    const target = showModal;
     pushUndo(snapshotTypography());
-    setShowModal(false);
+    setShowModal(null);
     startTransition(async () => {
-      await updateDraft({ theme: { typography: { headingFont: fontKey, bodyFont: fontKey } } } as any);
+      if (target === "heading") {
+        await saveDraft({ theme: { typography: { headingFont: fontKey } } } as any);
+      } else if (target === "body") {
+        await saveDraft({ theme: { typography: { bodyFont: fontKey } } } as any);
+      } else if (target === "button") {
+        await saveDraft({ theme: { typography: { buttonFont: fontKey } } } as any);
+      }
     });
-  }, [pushUndo, snapshotTypography]);
+  }, [showModal, pushUndo, snapshotTypography, saveDraft]);
+
+  const handleButtonFontToggle = useCallback(() => {
+    pushUndo(snapshotTypography());
+    startTransition(async () => {
+      if (hasCustomButtonFont) {
+        // Turn off: clear buttonFont (inherit heading)
+        await saveDraft({ theme: { typography: { buttonFont: null } } } as any);
+      } else {
+        // Turn on: set buttonFont to current heading font as starting point
+        await saveDraft({ theme: { typography: { buttonFont: headingFont } } } as any);
+      }
+    });
+  }, [hasCustomButtonFont, headingFont, pushUndo, snapshotTypography, saveDraft]);
 
   return (
     <>
-      <BackButton label="Text" onClick={onBack} />
+      <BackButton label="Typsnitt" onClick={onBack} />
 
       <div className="design-field-group design-stagger-item">
-        <span className="design-field-label">Title font</span>
-        <button type="button" className="design-font-selector" onClick={() => setShowModal(true)}>
-          <span className="design-font-selector-name" style={{ fontFamily: currentFamily }}>{currentLabel}</span>
+        <span className="design-field-label">Titeltypsnitt</span>
+        <button type="button" className="design-font-selector" onClick={() => setShowModal("heading")}>
+          <span className="design-font-selector-name" style={{ fontFamily: headingFamily }}>{headingLabel}</span>
           <ChevronRight />
         </button>
       </div>
 
-      <ColorField label="Page text color" value={getColor("text")} onChange={(v) => handleChange("text", v)} onPickerChange={(v) => handlePicker("text", v)} className="design-stagger-item" />
-      <ColorField label="Title color" value={getColor("buttonBg")} onChange={(v) => handleChange("buttonBg", v)} onPickerChange={(v) => handlePicker("buttonBg", v)} className="design-stagger-item" />
+      <div className="design-field-group design-stagger-item">
+        <span className="design-field-label">Brödtypsnitt</span>
+        <button type="button" className="design-font-selector" onClick={() => setShowModal("body")}>
+          <span className="design-font-selector-name" style={{ fontFamily: bodyFamily }}>{bodyLabel}</span>
+          <ChevronRight />
+        </button>
+      </div>
 
-      {(isPending || colorPending) && <div className="design-saving">Saving...</div>}
+      <div className="design-field-group design-stagger-item">
+        <div className="design-switch-row">
+          <div>
+            <span className="design-field-label">Eget knapptypsnitt</span>
+            <span className="design-field-hint">Knappar ärver titeltypsnitt som standard</span>
+          </div>
+          <button type="button" role="switch" aria-checked={hasCustomButtonFont} onClick={handleButtonFontToggle}
+            className={"admin-toggle" + (hasCustomButtonFont ? " admin-toggle-on" : "")}>
+            <span className="admin-toggle-thumb" />
+          </button>
+        </div>
+        {hasCustomButtonFont && (
+          <button type="button" className="design-font-selector" onClick={() => setShowModal("button")}>
+            <span className="design-font-selector-name" style={{ fontFamily: buttonFontFamily }}>{buttonFontLabel}</span>
+            <ChevronRight />
+          </button>
+        )}
+      </div>
+
+      <ColorField label="Sidtextfärg" value={getColor("text")} onChange={(v) => handleChange("text", v)} onPickerChange={(v) => handlePicker("text", v)} className="design-stagger-item" />
+      <ColorField label="Titelfärg" value={getColor("buttonBg")} onChange={(v) => handleChange("buttonBg", v)} onPickerChange={(v) => handlePicker("buttonBg", v)} className="design-stagger-item" />
+
+      {(isPending || colorPending) && <div className="design-saving">Sparar...</div>}
 
       {showModal && createPortal(
-        <>
-          <link rel="stylesheet" href={MODAL_FONTS_URL} />
-          <div className="design-modal-backdrop" onClick={() => setShowModal(false)} />
-          <div className="design-modal">
-            <div className="design-modal-header">
-              <span className="design-modal-title">Page font</span>
-              <button type="button" className="design-modal-close" onClick={() => setShowModal(false)} aria-label="Close">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+        <FontPickerModal
+          currentFont={showModal === "heading" ? headingFont : showModal === "body" ? bodyFont : (buttonFont || headingFont)}
+          onSelect={handleFontSelect}
+          onClose={() => setShowModal(null)}
+        />,
+        document.body
+      )}
+    </>
+  );
+}
+
+/* ── Font Picker Modal (paginated) ── */
+
+function FontPickerModal({ currentFont, onSelect, onClose }: {
+  currentFont: string;
+  onSelect: (key: string) => void;
+  onClose: () => void;
+}) {
+  const [visibleCount, setVisibleCount] = useState(FONTS_PER_PAGE);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  // Track which URLs are already loaded (initial batch is loaded via JSX <link>)
+  const loadedUrlsRef = useRef<Set<string>>(new Set(INITIAL_BATCH_URL ? [INITIAL_BATCH_URL] : []));
+
+  const isSearching = search.trim().length > 0;
+
+  // When searching: show ALL matching fonts (load their CSS). When browsing: paginate.
+  const searchResults = isSearching
+    ? FONT_OPTIONS.filter(f => f.label.toLowerCase().includes(search.trim().toLowerCase()))
+    : null;
+
+  const displayFonts = searchResults ?? FONT_OPTIONS.slice(0, visibleCount);
+  const hasMore = !isSearching && visibleCount < FONT_OPTIONS.length;
+
+  // Load CSS for search results that haven't been loaded yet
+  const loadFontsForSearch = useCallback((fonts: typeof FONT_OPTIONS) => {
+    const catalogEntries = fonts.map(f => FONT_CATALOG.find(c => c.key === f.key)!).filter(Boolean);
+    const url = batchFontsUrl(catalogEntries);
+    if (!url || loadedUrlsRef.current.has(url)) return;
+    loadedUrlsRef.current.add(url);
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = url;
+    document.head.appendChild(link);
+  }, []);
+
+  // When search results change, ensure their fonts are loaded
+  if (searchResults && searchResults.length > 0) {
+    loadFontsForSearch(searchResults);
+  }
+
+  const handleShowMore = useCallback(() => {
+    setLoadingMore(true);
+
+    // Pre-load the next batch CSS, then reveal after fonts start loading
+    const nextEnd = Math.min(visibleCount + FONTS_PER_PAGE, FONT_CATALOG.length);
+    const batch = FONT_CATALOG.slice(visibleCount, nextEnd);
+    const url = batchFontsUrl(batch);
+
+    if (url && !loadedUrlsRef.current.has(url)) {
+      loadedUrlsRef.current.add(url);
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = url;
+
+      link.onload = () => {
+        setVisibleCount(nextEnd);
+        setLoadingMore(false);
+      };
+      link.onerror = () => {
+        setVisibleCount(nextEnd);
+        setLoadingMore(false);
+      };
+
+      document.head.appendChild(link);
+    } else {
+      setVisibleCount(nextEnd);
+      setLoadingMore(false);
+    }
+  }, [visibleCount]);
+
+  return (
+    <>
+      {INITIAL_BATCH_URL && <link rel="stylesheet" href={INITIAL_BATCH_URL} />}
+      <div className="design-modal-backdrop" onClick={onClose} />
+      <div className="design-modal">
+        <div className="design-modal-header">
+          <div className="design-modal-header-top">
+            <span className="design-modal-title">Typsnitt</span>
+            <button type="button" className="design-modal-close" onClick={onClose} aria-label="Stäng">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+            </button>
+          </div>
+          <div className="design-modal-search">
+            <svg className="design-modal-search-icon" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <input
+              ref={searchRef}
+              type="text"
+              className="design-modal-search-input"
+              placeholder="Sök efter typsnitt"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="design-modal-grid">
+          {displayFonts.map(({ key, label, family }) => (
+            <button key={key} type="button" className={"design-font-option " + (currentFont === key ? "design-font-option-active" : "")} onClick={() => onSelect(key)} style={{ fontFamily: family }}>
+              {label}
+            </button>
+          ))}
+          {isSearching && displayFonts.length === 0 && (
+            <div className="design-modal-empty">Inga typsnitt hittades</div>
+          )}
+          {hasMore && (
+            <div className="design-modal-load-more">
+              <button
+                type="button"
+                className="design-show-more-btn"
+                onClick={handleShowMore}
+                disabled={loadingMore}
+              >
+                {loadingMore && (
+                  <svg className="design-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" opacity="0.3" />
+                    <path d="M12 2v4" />
+                  </svg>
+                )}
+                Visa fler
               </button>
+              <span className="design-modal-count">Visar {visibleCount} av {FONT_OPTIONS.length}</span>
             </div>
-            <div className="design-modal-grid">
-              {FONT_OPTIONS.map(({ key, label, family }) => (
-                <button key={key} type="button" className={"design-font-option " + (currentFont === key ? "design-font-option-active" : "")} onClick={() => handleFontSelect(key)} style={{ fontFamily: family }}>
-                  {label}
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ════════════════════════════════════════════
+   Wallpaper View
+   ════════════════════════════════════════════ */
+
+const BG_MODES: { key: BackgroundMode; label: string }[] = [
+  { key: "fill", label: "Enfärgad" },
+  { key: "gradient", label: "Gradient" },
+  { key: "image", label: "Bild" },
+];
+
+const GRADIENT_DIRS: { key: GradientDirection; label: string }[] = [
+  { key: "down", label: "Uppåt → Ner" },
+  { key: "up", label: "Ner → Upp" },
+];
+
+
+function WallpaperView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Partial<TenantConfig>) => void }) {
+  const { config } = usePreview();
+  const saveDraft = useDraftUpdate();
+  const theme = config?.theme;
+  const bg: ThemeConfig["background"] = theme?.background || { mode: "fill" };
+  const [isPending, startTransition] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const snapshot = useCallback(() => ({ theme: { background: { ...bg }, colors: { ...theme?.colors } } } as Partial<TenantConfig>), [bg, theme?.colors]);
+
+  // Background color (colors.background) — editable from wallpaper view
+  const { getColor: getBgColor, handleChange: _bgChange, handlePicker: _bgPicker } = useColorEditor(pushUndo, snapshot, theme?.colors);
+  const bgColor = getBgColor("background");
+  const handleBgColorChange = useCallback((v: string) => _bgChange("background", v), [_bgChange]);
+  const handleBgColorPicker = useCallback((v: string) => _bgPicker("background", v), [_bgPicker]);
+
+  const saveBg = useCallback((changes: Partial<ThemeConfig["background"]>) => {
+    pushUndo(snapshot());
+    startTransition(async () => {
+      await saveDraft({ theme: { background: { ...bg, ...changes } } } as any);
+    });
+  }, [bg, pushUndo, snapshot, saveDraft]);
+
+  const saveMode = useCallback((mode: BackgroundMode) => {
+    pushUndo(snapshot());
+    const base: ThemeConfig["background"] = { mode };
+    if (mode === "gradient") {
+      base.gradientDirection = bg.gradientDirection || "down";
+    } else if (mode === "image") {
+      base.imageUrl = bg.imageUrl;
+      base.overlayOpacity = bg.overlayOpacity ?? 0.3;
+    }
+    startTransition(async () => {
+      await saveDraft({ theme: { background: base } } as any);
+    });
+  }, [bg, theme?.colors, pushUndo, snapshot, saveDraft]);
+
+
+  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "wallpaper");
+      const res = await fetch("/api/tenant/upload", { method: "POST", body: formData });
+      if (res.ok) {
+        const { url } = await res.json();
+        saveBg({ imageUrl: url });
+      }
+    } finally {
+      setIsUploading(false);
+    }
+    e.target.value = "";
+  }, [saveBg]);
+
+  const overlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [localOverlay, setLocalOverlay] = useState(bg.overlayOpacity ?? 0.3);
+  const prevOverlay = useRef(bg.overlayOpacity);
+  if (bg.overlayOpacity !== prevOverlay.current) { prevOverlay.current = bg.overlayOpacity; setLocalOverlay(bg.overlayOpacity ?? 0.3); }
+
+  const handleOverlayChange = useCallback((value: number) => {
+    setLocalOverlay(value);
+    if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
+    overlayTimerRef.current = setTimeout(() => saveBg({ overlayOpacity: value }), 200);
+  }, [saveBg]);
+
+  return (
+    <>
+      <BackButton label="Bakgrund" onClick={onBack} />
+
+      {/* Mode selector */}
+      <div className="design-field-group design-stagger-item">
+        <span className="design-field-label">Bakgrundstyp</span>
+        <div className="design-toggle-row design-toggle-3col">
+          {BG_MODES.map(({ key, label }) => {
+            const previewStyle = wallpaperPreviewStyle(key, bgColor, bg);
+            return (
+              <button key={key} type="button" className={"design-toggle-card " + (bg.mode === key ? "design-toggle-active" : "")} onClick={() => saveMode(key)}>
+                <div className="design-toggle-icon design-toggle-icon--preview" style={previewStyle}>
+                  {key === "image" && !bg.imageUrl && (
+                    <svg width="20" height="20" viewBox="0 0 256 256" fill="#bbb" style={{ opacity: 0.6 }}>
+                      <path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200ZM176,88a16,16,0,1,1-16-16A16,16,0,0,1,176,88Z" />
+                    </svg>
+                  )}
+                </div>
+                <span className="design-toggle-label">{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Background color — shared by fill and gradient */}
+      {(bg.mode === "fill" || bg.mode === "gradient") && (
+        <ColorField label="Färg" value={bgColor} onChange={(v) => handleBgColorChange(v)} onPickerChange={(v) => handleBgColorPicker(v)} className="design-stagger-item" />
+      )}
+
+      {/* Gradient options */}
+      {bg.mode === "gradient" && (
+        <>
+          <div className="design-field-group design-stagger-item">
+            <span className="design-field-label">Riktning</span>
+            <div className="design-toggle-row design-toggle-2col">
+              {GRADIENT_DIRS.map(({ key, label }) => (
+                <button key={key} type="button" className={"design-toggle-card " + ((bg.gradientDirection || "down") === key ? "design-toggle-active" : "")} onClick={() => saveBg({ gradientDirection: key })}>
+                  <div className="design-toggle-icon">
+                    <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      {key === "down" ? <path d="M12 5v14M19 12l-7 7-7-7" /> : <path d="M12 19V5M5 12l7-7 7 7" />}
+                    </svg>
+                  </div>
+                  <span className="design-toggle-label">{label}</span>
                 </button>
               ))}
             </div>
           </div>
-        </>,
-        document.body
+        </>
       )}
+
+      {/* Image options */}
+      {bg.mode === "image" && (
+        <>
+          <div className="design-field-group design-stagger-item">
+            <span className="design-field-label">Bakgrundsbild</span>
+            {bg.imageUrl ? (
+              <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: "1px solid #e5e5e5" }}>
+                <div style={{
+                  height: 120, backgroundImage: `url(${bg.imageUrl})`,
+                  backgroundSize: "cover", backgroundPosition: "center",
+                }} />
+                <div style={{ position: "absolute", bottom: 8, right: 8, display: "flex", gap: 6 }}>
+                  <button type="button" onClick={() => fileInputRef.current?.click()} style={{
+                    padding: "5px 12px", borderRadius: 6, border: "none",
+                    background: "rgba(255,255,255,0.9)", fontSize: 12, fontWeight: 600,
+                    cursor: "pointer", color: "#1a1a1a",
+                  }}>Byt</button>
+                  <button type="button" onClick={() => saveBg({ imageUrl: undefined })} style={{
+                    padding: "5px 12px", borderRadius: 6, border: "none",
+                    background: "rgba(0,0,0,0.6)", fontSize: 12, fontWeight: 600,
+                    cursor: "pointer", color: "#fff",
+                  }}>Ta bort</button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" onClick={() => fileInputRef.current?.click()} className={isUploading ? "design-logo-shimmer" : ""} style={{
+                width: "100%", height: 100, border: "1.5px dashed #d0d0d0",
+                borderRadius: 10, background: "none", cursor: "pointer",
+                display: "flex", flexDirection: "column", alignItems: "center",
+                justifyContent: "center", gap: 6, color: "#888", fontSize: 13,
+              }}>
+                {isUploading ? "Laddar upp..." : (
+                  <>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
+                    Ladda upp bild
+                  </>
+                )}
+              </button>
+            )}
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} style={{ display: "none" }} />
+          </div>
+
+          <div className="design-field-group design-stagger-item">
+            <span className="design-field-label">Mörkläggning</span>
+            <div className="design-slider-row">
+              <input type="range" min={0} max={80} step={1} value={Math.round(localOverlay * 100)} onChange={(e) => handleOverlayChange(Number(e.target.value) / 100)} className="design-slider" />
+              <div className="design-slider-input-wrap">
+                <input type="number" min={0} max={80} value={Math.round(localOverlay * 100)} onChange={(e) => handleOverlayChange(Math.min(0.8, Math.max(0, Number(e.target.value) / 100)))} className="design-slider-input" />
+                <span className="design-slider-unit">%</span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {isPending && <div className="design-saving">Sparar...</div>}
+    </>
+  );
+}
+
+function wallpaperPreviewStyle(
+  mode: BackgroundMode,
+  bgColor: string,
+  bg: ThemeConfig["background"],
+): React.CSSProperties {
+  const colors = { background: bgColor, text: "", buttonBg: "", buttonText: "" };
+  switch (mode) {
+    case "fill":
+      return { background: bgColor };
+    case "gradient":
+      return backgroundStyle(
+        { mode: "gradient", gradientDirection: bg.gradientDirection || "down" },
+        colors,
+      );
+    case "image": {
+      if (!bg.imageUrl) return {};
+      return backgroundStyle(
+        { mode: "image", imageUrl: bg.imageUrl, overlayOpacity: bg.overlayOpacity },
+        colors,
+      );
+    }
+    default:
+      return {};
+  }
+}
+
+/* ════════════════════════════════════════════
+   Tiles View (Snabblänkar)
+   ════════════════════════════════════════════ */
+
+function TilesView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Partial<TenantConfig>) => void }) {
+  const { config } = usePreview();
+  const saveDraft = useDraftUpdate();
+  const theme = config?.theme;
+  const [isPending, startTransition] = useTransition();
+
+  const currentRadius = theme?.tiles?.radius || "round";
+  const currentShadow = theme?.tiles?.shadow || "none";
+
+  const snapshotTiles = useCallback(() => ({ theme: { tiles: { ...theme?.tiles } } } as Partial<TenantConfig>), [theme?.tiles]);
+
+  // Color editor for tile background
+  const tileColors = { background: theme?.tiles?.background || "#F1F0EE" };
+  const [localBg, setLocalBg] = useState(tileColors.background);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const prevBg = useRef(tileColors.background);
+  if (tileColors.background !== prevBg.current) { prevBg.current = tileColors.background; setLocalBg(tileColors.background); }
+
+  const saveTileBg = useCallback((value: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      pushUndo(snapshotTiles());
+      startTransition(async () => {
+        await saveDraft({ theme: { tiles: { background: value, radius: currentRadius, shadow: currentShadow } } } as any);
+      });
+    }, 500);
+  }, [pushUndo, snapshotTiles, saveDraft, currentRadius, currentShadow]);
+
+  const handleBgChange = useCallback((value: string) => {
+    let n = value.trim();
+    if (n && !n.startsWith("#")) n = "#" + n;
+    setLocalBg(n);
+    if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(n)) saveTileBg(n);
+  }, [saveTileBg]);
+
+  const handleBgPicker = useCallback((value: string) => {
+    setLocalBg(value);
+    saveTileBg(value);
+  }, [saveTileBg]);
+
+  const saveTileProp = useCallback((prop: string, value: string) => {
+    pushUndo(snapshotTiles());
+    startTransition(async () => {
+      await saveDraft({ theme: { tiles: { ...theme?.tiles, background: theme?.tiles?.background || "#F1F0EE", radius: theme?.tiles?.radius || "round", shadow: theme?.tiles?.shadow || "none", [prop]: value } } } as any);
+    });
+  }, [pushUndo, snapshotTiles, saveDraft, theme?.tiles]);
+
+  return (
+    <>
+      <BackButton label="Snabblänkar" onClick={onBack} />
+
+      <ColorField label="Bakgrundsfärg" value={localBg.toUpperCase()} onChange={handleBgChange} onPickerChange={handleBgPicker} className="design-stagger-item" />
+
+      <div className="design-field-group design-stagger-item">
+        <span className="design-field-label">Hörnrundning</span>
+        <div className="design-toggle-row design-toggle-4col">
+          {RADIUS_OPTIONS.map(({ key, label, icon }) => (
+            <button key={key} type="button" className={"design-toggle-card " + (currentRadius === key ? "design-toggle-active" : "")} onClick={() => saveTileProp("radius", key)}>
+              <div className="design-toggle-icon">{icon}</div>
+              <span className="design-toggle-label">{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="design-field-group design-stagger-item">
+        <span className="design-field-label">Skugga</span>
+        <div className="design-toggle-row design-toggle-4col">
+          {TILE_SHADOW_OPTIONS.map(({ key, label }) => (
+            <button key={key} type="button" className={"design-toggle-card " + (currentShadow === key ? "design-toggle-active" : "")} onClick={() => saveTileProp("shadow", key)}>
+              <div className="design-toggle-icon">
+                <div style={{
+                  width: 28, height: 28, borderRadius: 6,
+                  background: "#D7D4CE",
+                  boxShadow: key === "none" ? "none" : key === "soft" ? "0 1px 3px rgba(0,0,0,0.15)" : key === "strong" ? "0 4px 12px rgba(0,0,0,0.2)" : "0 8px 24px rgba(0,0,0,0.25)",
+                }} />
+              </div>
+              <span className="design-toggle-label">{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {isPending && <div className="design-saving">Sparar...</div>}
     </>
   );
 }
@@ -623,7 +1065,7 @@ function PlaceholderView({ label, onBack }: { label: string; onBack: () => void 
   return (
     <>
       <BackButton label={label.charAt(0).toUpperCase() + label.slice(1)} onClick={onBack} />
-      <div className="design-stagger-item" style={{ padding: "24px 0", color: "#999", fontSize: "0.9rem" }}>Coming soon...</div>
+      <div className="design-stagger-item" style={{ padding: "24px 0", color: "#999", fontSize: "0.9rem" }}>Kommer snart...</div>
     </>
   );
 }
@@ -642,30 +1084,62 @@ function DesignRow({ icon, label, value, onClick, className = "" }: { icon: Reac
 }
 
 function ChevronRight() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>;
+  return <svg className="design-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z" /></svg>;
+}
+
+function SpinnerIcon() {
+  return (
+    <svg className="design-spinner" width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="32" strokeDashoffset="12" />
+    </svg>
+  );
 }
 
 /* ════════════════════════════════════════════
    Icons (config-driven)
    ════════════════════════════════════════════ */
 
-function ThemeIcon() {
+function ThemeIcon({ theme }: { theme?: ThemeConfig }) {
+  const bgColor = theme?.colors?.background || "#ffffff";
+  const textColor = theme?.colors?.text || "#1a1a1a";
+  const buttonBg = theme?.colors?.buttonBg || "#8B3DFF";
+  const buttonText = theme?.colors?.buttonText || "#fff";
+  const isOutline = theme?.buttons?.variant === "outline";
+  const radius = theme?.buttons?.radius;
+  const btnR = radius === "square" ? "0px" : radius === "rounded" ? "3px" : radius === "round" ? "4px" : radius === "full" ? "999px" : "5px";
+  const family = FONT_OPTIONS.find(f => f.key === theme?.typography?.headingFont)?.family || "Inter, sans-serif";
+  const bgMode = theme?.background?.mode || "fill";
+  const previewBg = wallpaperPreviewStyle(bgMode, bgColor, theme?.background || { mode: "fill" });
+
   return (
-    <div className="design-icon-box">
-      <svg width="20" height="20" viewBox="0 0 256 256" fill="#7F22FE">
-        <path d="M200,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V40A16,16,0,0,0,200,24Zm0,192H56V40H200V216ZM176,68a12,12,0,1,1-12-12A12,12,0,0,1,176,68Z" />
-      </svg>
+    <div className="design-icon-box design-icon-box--fill design-icon-box--theme">
+      <div style={{ ...previewBg, position: "absolute", inset: 0, borderRadius: "inherit" }} />
+      <span style={{
+        position: "absolute", top: 12, left: 9,
+        fontSize: 22, fontWeight: 700, fontFamily: family, lineHeight: 1,
+        color: textColor,
+      }}>Aa</span>
+      <div style={{
+        position: "absolute", bottom: 25, left: 12, right: -15,
+        height: 20, borderRadius: btnR,
+        background: isOutline ? "transparent" : buttonBg,
+        border: isOutline ? `1.5px solid ${buttonBg}` : "none",
+      }} />
     </div>
   );
 }
 
-function HeaderIcon({ logoUrl }: { logoUrl?: string }) {
+function HeaderIcon({ logoUrl, bg, bgColor }: { logoUrl?: string; bg?: ThemeConfig["background"]; bgColor?: string }) {
+  const mode = bg?.mode || "fill";
+  const color = bgColor || "#ffffff";
+  const style = wallpaperPreviewStyle(mode, color, bg || { mode: "fill" });
   return (
-    <div className="design-icon-box">
+    <div className="design-icon-box design-icon-box--fill">
+      <div style={{ ...style, position: "absolute", inset: 0, borderRadius: "inherit" }} />
       {logoUrl ? (
-        <img src={logoUrl} alt="" style={{ width: 24, height: 24, objectFit: "contain", borderRadius: 4 }} />
+        <img src={logoUrl} alt="" style={{ position: "absolute", inset: 12, width: "calc(100% - 24px)", height: "calc(100% - 24px)", objectFit: "contain" }} />
       ) : (
-        <svg width="20" height="20" viewBox="0 0 256 256" fill="#999">
+        <svg style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", opacity: 0.4 }} width="20" height="20" viewBox="0 0 256 256" fill="#999">
           <path d="M224,48H32A8,8,0,0,0,24,56v56a8,8,0,0,0,8,8H224a8,8,0,0,0,8-8V56A8,8,0,0,0,224,48Zm-8,56H40V64H216Zm8,40H32a8,8,0,0,0-8,8v48a8,8,0,0,0,8,8H224a8,8,0,0,0,8-8V152A8,8,0,0,0,224,144Zm-8,48H40V160H216Z" />
         </svg>
       )}
@@ -673,22 +1147,28 @@ function HeaderIcon({ logoUrl }: { logoUrl?: string }) {
   );
 }
 
-function WallpaperIcon() {
+function WallpaperIcon({ bg, bgColor }: { bg?: ThemeConfig["background"]; bgColor?: string }) {
+  const mode = bg?.mode || "fill";
+  const color = bgColor || "#ffffff";
+  const style = wallpaperPreviewStyle(mode, color, bg || { mode: "fill" });
   return (
-    <div className="design-icon-box">
-      <svg width="20" height="20" viewBox="0 0 256 256" fill="#999">
-        <path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200ZM176,88a16,16,0,1,1-16-16A16,16,0,0,1,176,88Zm44,80a8,8,0,0,1-3.2,6.4l-64,48a8,8,0,0,1-9.6,0L96,189.33,52.8,174.4a8,8,0,0,1,9.6-12.8L96,186.67l46.4-34.8a8,8,0,0,1,9.6,0l64,48A8,8,0,0,1,220,168Z" />
-      </svg>
+    <div className="design-icon-box design-icon-box--fill">
+      <div style={{ ...style, position: "absolute", inset: 0, borderRadius: "inherit" }} />
     </div>
   );
 }
 
-function ButtonsIcon({ variant, color }: { variant?: string; color?: string }) {
+function ButtonsIcon({ variant, color, radius }: { variant?: string; color?: string; radius?: string }) {
   const bg = color || "#8B3DFF";
   const isOutline = variant === "outline";
+  const r = radius === "square" ? "0px" : radius === "rounded" ? "4px" : radius === "round" ? "6px" : radius === "full" ? "999px" : "8px";
   return (
     <div className="design-icon-box">
-      <div style={{ width: 28, height: 14, borderRadius: 4, background: isOutline ? "transparent" : bg, border: isOutline ? "2px solid " + bg : "none" }} />
+      <div style={{
+        width: 32, height: 32, borderRadius: r,
+        background: isOutline ? "transparent" : bg,
+        border: isOutline ? `2px solid ${bg}` : "none",
+      }} />
     </div>
   );
 }
@@ -697,403 +1177,36 @@ function TextIcon({ font }: { font?: string }) {
   const family = FONT_OPTIONS.find(f => f.key === font)?.family || "Inter, sans-serif";
   return (
     <div className="design-icon-box">
-      <span style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", fontFamily: family, lineHeight: 1 }}>Aa</span>
+      <span style={{ fontSize: 23, fontWeight: 700, color: "#1a1a1a", fontFamily: family, lineHeight: 1 }}>Aa</span>
     </div>
   );
 }
 
-function ColorsIcon({ bg, accent, text, buttonText }: { bg?: string; accent?: string; text?: string; buttonText?: string }) {
+function ColorsIcon({ bg, accent }: { bg?: string; accent?: string }) {
   return (
-    <div className="design-icon-box" style={{ display: "flex", gap: 2, alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: 7, height: 20, borderRadius: 2, background: bg || "#fff" }} />
-      <div style={{ width: 7, height: 20, borderRadius: 2, background: accent || "#8B3DFF" }} />
-      <div style={{ width: 7, height: 20, borderRadius: 2, background: buttonText || "#fff" }} />
-      <div style={{ width: 7, height: 20, borderRadius: 2, background: text || "#2D2C2B" }} />
+    <div className="design-icon-box" style={{ display: "flex", gap: 2, padding: 8, alignItems: "stretch", width: 48, height: 48 }}>
+      <div style={{
+        flex: 1, borderRadius: "6px 0 0 6px",
+        background: bg || "#fff",
+        border: "1px solid rgba(0,0,0,0.08)",
+      }} />
+      <div style={{
+        flex: 1, borderRadius: "0 6px 6px 0",
+        background: accent || "#8B3DFF",
+      }} />
     </div>
   );
 }
 
-/* ════════════════════════════════════════════
-   Cards View
-   ════════════════════════════════════════════ */
-
-import type { Card } from "@/app/(guest)/_lib/portal/homeLinks";
-
-function CardsView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Partial<TenantConfig>) => void }) {
-  const { config } = usePreview();
-  const [showModal, setShowModal] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const cards: Card[] = (config?.home?.cards || []) as Card[];
-
-  const handleAdd = useCallback((newCard: Card) => {
-    const updated = [...cards, newCard];
-    pushUndo({ home: { version: 1, links: config?.home?.links || [], cards } } as any);
-    startTransition(async () => {
-      await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updated } } as any);
-    });
-    setShowModal(false);
-  }, [cards, config, pushUndo]);
-
-  const handleToggle = useCallback((id: string) => {
-    const updated = cards.map(c => c.id === id ? { ...c, isActive: !c.isActive } : c);
-    startTransition(async () => {
-      await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updated } } as any);
-    });
-  }, [cards, config]);
-
-  const handleDelete = useCallback((id: string) => {
-    const updated = cards.filter(c => c.id !== id);
-    pushUndo({ home: { version: 1, links: config?.home?.links || [], cards } } as any);
-    startTransition(async () => {
-      await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updated } } as any);
-    });
-  }, [cards, config, pushUndo]);
-
-  const handleMoveUp = useCallback((id: string) => {
-    const sorted = [...cards].sort((a, b) => a.sortOrder - b.sortOrder);
-    const idx = sorted.findIndex(c => c.id === id);
-    if (idx <= 0) return;
-    const updated = sorted.map((c, i) => {
-      if (i === idx - 1) return { ...c, sortOrder: sorted[idx].sortOrder };
-      if (i === idx) return { ...c, sortOrder: sorted[idx - 1].sortOrder };
-      return c;
-    });
-    startTransition(async () => {
-      await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updated } } as any);
-    });
-  }, [cards, config]);
-
-  const handleMoveDown = useCallback((id: string) => {
-    const sorted = [...cards].sort((a, b) => a.sortOrder - b.sortOrder);
-    const idx = sorted.findIndex(c => c.id === id);
-    if (idx >= sorted.length - 1) return;
-    const updated = sorted.map((c, i) => {
-      if (i === idx + 1) return { ...c, sortOrder: sorted[idx].sortOrder };
-      if (i === idx) return { ...c, sortOrder: sorted[idx + 1].sortOrder };
-      return c;
-    });
-    startTransition(async () => {
-      await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updated } } as any);
-    });
-  }, [cards, config]);
-
-  const sorted = [...cards].sort((a, b) => a.sortOrder - b.sortOrder);
-
-  return (
-    <>
-      <BackButton label="Startsida" onClick={onBack} />
-
-      <div className="design-section design-stagger-item">
-        <div className="design-section-header">
-          <span className="design-section-label">Kort i "Utforska mer"</span>
-        </div>
-
-        {sorted.length === 0 && (
-          <div style={{ padding: "16px 0", color: "#999", fontSize: 13 }}>
-            Inga kort ännu. Klicka på + för att lägga till.
-          </div>
-        )}
-
-        {sorted.map((card, idx) => (
-          <div key={card.id} style={{
-            display: "flex", alignItems: "center", gap: 10,
-            padding: "10px 0", borderBottom: "1px solid #f0f0f0",
-          }}>
-            {card.image ? (
-              <div style={{
-                width: 44, height: 44, borderRadius: 8, flexShrink: 0,
-                backgroundImage: `url(${card.image})`,
-                backgroundSize: "cover", backgroundPosition: "center",
-              }} />
-            ) : (
-              <div style={{
-                width: 44, height: 44, borderRadius: 8, flexShrink: 0,
-                background: "#f3f3f3", display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <svg width="20" height="20" viewBox="0 0 256 256" fill="#ccc">
-                  <path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200Z"/>
-                </svg>
-              </div>
-            )}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{card.title}</div>
-              <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{card.type}</div>
-            </div>
-            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-              <button type="button" onClick={() => handleMoveUp(card.id)} disabled={idx === 0}
-                style={{ padding: 4, border: "none", background: "none", cursor: idx === 0 ? "default" : "pointer", opacity: idx === 0 ? 0.3 : 1, color: "#666" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 15l-6-6-6 6"/></svg>
-              </button>
-              <button type="button" onClick={() => handleMoveDown(card.id)} disabled={idx === sorted.length - 1}
-                style={{ padding: 4, border: "none", background: "none", cursor: idx === sorted.length - 1 ? "default" : "pointer", opacity: idx === sorted.length - 1 ? 0.3 : 1, color: "#666" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
-              </button>
-              <button type="button" onClick={() => handleToggle(card.id)}
-                style={{ padding: 4, border: "none", background: "none", cursor: "pointer", color: card.isActive ? "#22c55e" : "#ccc" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
-              </button>
-              <button type="button" onClick={() => handleDelete(card.id)}
-                style={{ padding: 4, border: "none", background: "none", cursor: "pointer", color: "#f87171" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-              </button>
-            </div>
-          </div>
-        ))}
-
-        <button type="button" onClick={() => setShowModal(true)}
-          style={{
-            marginTop: 12, width: "100%", padding: "10px 0", border: "1.5px dashed #d0d0d0",
-            borderRadius: 10, background: "none", cursor: "pointer", color: "#888",
-            fontSize: 13, fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-          }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
-          Lägg till kort
-        </button>
-      </div>
-
-      {isPending && <div className="design-saving">Sparar...</div>}
-
-      {showModal && createPortal(
-        <AddCardModal
-          existingCount={cards.length}
-          onAdd={handleAdd}
-          onClose={() => setShowModal(false)}
-        />,
-        document.body
-      )}
-    </>
-  );
-}
-
-/* ════════════════════════════════════════════
-   Add Card Modal
-   ════════════════════════════════════════════ */
-
-const CARD_TYPES = [
-  { type: "link", label: "Länk", description: "Öppnar en URL", icon: "🔗" },
-  { type: "article", label: "Artikel", description: "Intern innehållssida", icon: "📄" },
-  { type: "download", label: "Ladda ner", description: "PDF eller fil", icon: "⬇️" },
-  { type: "gallery", label: "Galleri", description: "Bildgalleri", icon: "🖼️" },
-] as const;
-
-function AddCardModal({ existingCount, onAdd, onClose }: {
-  existingCount: number;
-  onAdd: (card: Card) => void;
-  onClose: () => void;
-}) {
-  const [step, setStep] = useState<"type" | "form">("type");
-  const [selectedType, setSelectedType] = useState<Card["type"] | null>(null);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [badge, setBadge] = useState("");
-  const [ctaLabel, setCtaLabel] = useState("");
-  const [url, setUrl] = useState("");
-  const [openMode, setOpenMode] = useState<"internal" | "iframe" | "external">("external");
-  const [slug, setSlug] = useState("");
-  const [content, setContent] = useState("");
-  const [fileUrl, setFileUrl] = useState("");
-  const [fileType, setFileType] = useState("pdf");
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/tenant/upload", { method: "POST", body: formData });
-      if (res.ok) {
-        const { url: uploadedUrl } = await res.json();
-        setUrl(uploadedUrl);
-      }
-    } finally {
-      setIsUploading(false);
-    }
-    e.target.value = "";
-  }, []);
-
-  const [imageUrl, setImageUrl] = useState("");
-  const imageInputRef = useRef<HTMLInputElement>(null);
-
-  const handleCoverUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/tenant/upload", { method: "POST", body: formData });
-      if (res.ok) {
-        const { url: uploadedUrl } = await res.json();
-        setImageUrl(uploadedUrl);
-      }
-    } finally {
-      setIsUploading(false);
-    }
-    e.target.value = "";
-  }, []);
-
-  const handleSubmit = useCallback(() => {
-    if (!selectedType || !title.trim()) return;
-    const base = {
-      id: `card_${Date.now()}`,
-      sortOrder: existingCount,
-      isActive: true,
-      title: title.trim(),
-      description: description.trim(),
-      image: imageUrl || undefined,
-      badge: badge.trim() || undefined,
-      ctaLabel: ctaLabel.trim() || undefined,
-    };
-    let card: Card;
-    if (selectedType === "link") {
-      card = { ...base, type: "link", url, openMode };
-    } else if (selectedType === "article") {
-      card = { ...base, type: "article", slug: slug || `article-${Date.now()}`, content };
-    } else if (selectedType === "download") {
-      card = { ...base, type: "download", fileUrl: fileUrl || url, fileType };
-    } else {
-      card = { ...base, type: "gallery", images: imageUrl ? [imageUrl] : [] };
-    }
-    onAdd(card);
-  }, [selectedType, title, description, imageUrl, badge, ctaLabel, url, openMode, slug, content, fileUrl, fileType, existingCount, onAdd]);
-
-  return (
-    <>
-      <div className="design-modal-backdrop" onClick={onClose} />
-      <div className="design-modal" style={{ maxHeight: "80vh", overflowY: "auto" }}>
-        <div className="design-modal-header">
-          <span className="design-modal-title">
-            {step === "type" ? "Välj korttyp" : "Konfigurera kort"}
-          </span>
-          <button type="button" className="design-modal-close" onClick={onClose}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-          </button>
-        </div>
-
-        {step === "type" ? (
-          <div style={{ display: "grid", gap: 8, padding: "4px 0" }}>
-            {CARD_TYPES.map(({ type, label, description: desc, icon }) => (
-              <button key={type} type="button"
-                onClick={() => { setSelectedType(type); setStep("form"); }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
-                  border: "1.5px solid #eee", borderRadius: 12, background: "none",
-                  cursor: "pointer", textAlign: "left", transition: "border-color 0.15s",
-                }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = "#7F22FE")}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = "#eee")}
-              >
-                <span style={{ fontSize: 24 }}>{icon}</span>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "#1a1a1a" }}>{label}</div>
-                  <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{desc}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div style={{ display: "grid", gap: 14, padding: "4px 0" }}>
-            {/* Bas-fält */}
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Titel *</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="t.ex. Aktiviteter"
-                style={{ width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Beskrivning</label>
-              <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Kort beskrivning"
-                style={{ width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Omslagsbild</label>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                {imageUrl && <img src={imageUrl} style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8 }} />}
-                <button type="button" onClick={() => imageInputRef.current?.click()}
-                  style={{ padding: "7px 14px", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#555" }}>
-                  {isUploading ? "Laddar upp..." : imageUrl ? "Byt bild" : "+ Ladda upp"}
-                </button>
-                <input ref={imageInputRef} type="file" accept="image/*" onChange={handleCoverUpload} style={{ display: "none" }} />
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Badge (valfri)</label>
-                <input value={badge} onChange={e => setBadge(e.target.value)} placeholder="t.ex. Populärt"
-                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Knapptext (valfri)</label>
-                <input value={ctaLabel} onChange={e => setCtaLabel(e.target.value)} placeholder="t.ex. Läs mer"
-                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
-              </div>
-            </div>
-
-            {/* Typ-specifika fält */}
-            {selectedType === "link" && (
-              <>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>URL *</label>
-                  <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://..."
-                    style={{ width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Öppna som</label>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-                    {(["external", "iframe", "internal"] as const).map(mode => (
-                      <button key={mode} type="button" onClick={() => setOpenMode(mode)}
-                        style={{ padding: "7px 4px", border: `1.5px solid ${openMode === mode ? "#7F22FE" : "#e0e0e0"}`, borderRadius: 8, background: openMode === mode ? "#f5eeff" : "none", cursor: "pointer", fontSize: 12, fontWeight: 500, color: openMode === mode ? "#7F22FE" : "#555" }}>
-                        {mode === "external" ? "Extern" : mode === "iframe" ? "Iframe" : "Intern"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-            {selectedType === "article" && (
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Innehåll</label>
-                <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Skriv artikelns innehåll..."
-                  rows={4} style={{ width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, resize: "vertical", boxSizing: "border-box" }} />
-              </div>
-            )}
-            {selectedType === "download" && (
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Fil-URL *</label>
-                <input value={fileUrl} onChange={e => setFileUrl(e.target.value)} placeholder="https://...pdf"
-                  style={{ width: "100%", padding: "8px 12px", border: "1px solid #e0e0e0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }} />
-              </div>
-            )}
-
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
-              <button type="button" onClick={() => setStep("type")}
-                style={{ padding: "9px 18px", border: "1px solid #e0e0e0", borderRadius: 8, background: "none", cursor: "pointer", fontSize: 13, color: "#555" }}>
-                Tillbaka
-              </button>
-              <button type="button" onClick={handleSubmit} disabled={!title.trim()}
-                style={{ padding: "9px 18px", border: "none", borderRadius: 8, background: title.trim() ? "#7F22FE" : "#e0e0e0", color: title.trim() ? "#fff" : "#aaa", cursor: title.trim() ? "pointer" : "default", fontSize: 13, fontWeight: 600 }}>
-                Lägg till
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
-
-/* ════════════════════════════════════════════
-   Cards Icon
-   ════════════════════════════════════════════ */
-
-function CardsIcon() {
+function TilesIcon({ bg, radius }: { bg?: string; radius?: string }) {
+  const r = radius === "square" ? "0px" : radius === "rounded" ? "4px" : radius === "round" ? "6px" : radius === "full" ? "999px" : "8px";
+  const color = bg || "#F1F0EE";
   return (
     <div className="design-icon-box">
-      <svg width="20" height="20" viewBox="0 0 256 256" fill="#999">
-        <path d="M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48Zm0,144H32V64H224V192ZM48,136a8,8,0,0,1,8-8H88a8,8,0,0,1,0,16H56A8,8,0,0,1,48,136Zm0,32a8,8,0,0,1,8-8H120a8,8,0,0,1,0,16H56A8,8,0,0,1,48,168Zm160-32a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h32A8,8,0,0,1,208,136Z"/>
-      </svg>
+      <div style={{
+        width: 32, height: 32, borderRadius: r,
+        background: color,
+      }} />
     </div>
   );
 }

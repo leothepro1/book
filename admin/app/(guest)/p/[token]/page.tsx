@@ -103,6 +103,10 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
   const isPreview = token === "preview" || token === "test";
   const config = await getTenantConfig(booking.tenantId ?? "default", { preferDraft: isPreview });
 
+  if (isPreview) {
+    console.log(`[PortalHome] Preview render: ${(config.home?.cards as any[])?.length ?? 0} cards, draft=${isPreview}`);
+  }
+
   const now = new Date();
   const departure = new Date(booking.departure);
   const bookingStatus = getBookingStatus(booking);
@@ -199,8 +203,8 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
             color: "white",
           }}
         >
-          <div style={{ fontSize: 23, fontWeight: "bold", lineHeight: "1.1em", opacity: 1 }}>{title}</div>
-          <div style={{ fontSize: 14, lineHeight: 1.35, opacity: 0.92 }}>{subtitle}</div>
+          <div style={{ fontSize: 23, fontWeight: 700, lineHeight: "1.1em", opacity: 1, fontFamily: "var(--font-heading)" }}>{title}</div>
+          <div style={{ fontSize: 14, lineHeight: 1.35, opacity: 0.92, fontFamily: "var(--font-body)", fontWeight: 400 }}>{subtitle}</div>
         </div>
       </div>
 
@@ -247,15 +251,15 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
               style={{
                 width: "100%",
                 height: "100%",
-                borderRadius: 12,
+                borderRadius: "var(--tile-radius)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 opacity: disabled ? 0.55 : 1,
                 cursor: disabled ? "not-allowed" : "pointer",
                 aspectRatio: "5 / 4",
-                boxShadow: "none",
-                background: "#F1F0EE",
+                boxShadow: "var(--tile-shadow)",
+                background: "var(--tile-bg)",
               }}
             >
               <div
@@ -287,12 +291,13 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
 
               <div
                 style={{
-                  fontWeight: "bold",
+                  fontWeight: 600,
                   fontSize: 13,
                   lineHeight: "1.2em",
                   color: "var(--text)",
                   textAlign: "center",
                   marginBottom: 10,
+                  fontFamily: "var(--font-body)",
                 }}
               >
                 {tile.label}

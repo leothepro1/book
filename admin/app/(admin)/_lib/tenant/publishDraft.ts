@@ -1,6 +1,5 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/app/_lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { getCurrentTenant } from "./getCurrentTenant";

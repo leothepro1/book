@@ -60,6 +60,7 @@
     text-align: center;
     margin: 8px 0 0;
     font-size: 14px;
+    font-family: var(--font-body);
 }
 
 /* Segment control */
@@ -72,7 +73,7 @@
 
 .sektion73-segment__btn{
   width: 100%;
-  border-radius: 999px;
+  border-radius: var(--button-radius, 999px);
   padding: 10px 10px;
   font-size: 13px;
   font-weight: 800;
@@ -81,7 +82,7 @@
   background: rgba(255,255,255,.06);
   color: rgba(255,255,255,.85);
   transition: transform .12s ease, background .12s ease, border-color .12s ease;
-  font-family: var(--font-body, ui-sans-serif);
+  font-family: var(--font-button, var(--font-heading, ui-sans-serif));
 }
 
 .sektion73-segment__btn:hover{
@@ -192,8 +193,8 @@
     user-select: none;
     font-size: 16px;
     font-weight: 700;
-    font-family: var(--font-heading, ui-sans-serif);
-    border-radius: 999px;
+    font-family: var(--font-button, var(--font-heading, ui-sans-serif));
+    border-radius: var(--button-radius, 999px);
     padding: 10px 20px;
     transition: transform .12s, opacity .12s;
     width: 100%;
@@ -204,8 +205,8 @@
 }
 
 .sektion73-btn--primary {
-    background: #8b3dff;
-    color: #fff;
+    background: var(--button-bg);
+    color: var(--button-fg);
     border: none;
 }
 
@@ -225,10 +226,10 @@ display:none;
     width: 100%;
     font-size: 15px;
     font-weight: 400;
-    font-family: var(--font-body, ui-sans-serif);
+    font-family: var(--font-button, var(--font-heading, ui-sans-serif));
     color: var(--text);
     background: #ffffff0f;
-    border-radius: 10px;
+    border-radius: var(--button-radius, 999px);
     justify-content: space-between;
     align-items: center;
     gap: 12px;
@@ -328,7 +329,7 @@ display:none;
     font-family: var(--font-heading, ui-sans-serif);
     white-space: nowrap;
     text-overflow: ellipsis;
-    color: #2D2C2B;
+    color: #1a1a1a;
     flex: auto;
     min-width: 0;
     overflow: hidden;
@@ -343,7 +344,7 @@ display:none;
 .sektion73-cal__navbtn{
   width: 34px;
   height: 34px;
-  border-radius: 999px;
+  border-radius: var(--button-radius, 999px);
   border: 1px solid rgba(255,255,255,.14);
   background: rgba(255,255,255,.06);
   cursor:pointer;
@@ -357,7 +358,7 @@ display:none;
 }
 
 .sektion73-cal__dow {
-    color: #2D2C2B;
+    color: #1a1a1a;
     text-align: center;
     font-size: 12px;
     font-family: var(--font-body, ui-sans-serif);
@@ -375,7 +376,7 @@ display:none;
 
 .sektion73-day {
     cursor: pointer;
-    color: #2D2C2B;
+    color: #1a1a1a;
     height: 40px;
     font-size: 14px;
     font-weight: 400;
@@ -393,12 +394,12 @@ display:none;
 }
 
 .sektion73-day.is-muted {
-    color: #2D2C2B;
+    color: #1a1a1a;
     opacity: 0.45;
 }
 
 .sektion73-day.is-disabled{
-    color: #2D2C2B;
+    color: #1a1a1a;
     opacity: 0.45;
   cursor: not-allowed;
   background:transparent;
@@ -534,7 +535,7 @@ display:none;
     cursor: pointer;
     background: #EEEDEC;
     border: none;
-    border-radius: 999px;
+    border-radius: var(--button-radius, 999px);
     flex: none;
     justify-content: center;
     align-items: center;
@@ -583,7 +584,7 @@ display:none;
     color: var(--text);
     background: #EEEDEC;
     border: none;
-    border-radius: 500px;
+    border-radius: var(--button-radius, 999px);
     place-content: center;
     width: 100%;
     padding: 10px 14px;
@@ -595,6 +596,7 @@ display:none;
     font-size: 15px;
     font-weight: 600;
     text-align: center;
+    font-family: var(--font-button, var(--font-heading, ui-sans-serif));
 }
 .sektion73-choicebtn__sub{ margin-top: 6px; font-size: 12px; opacity: .72; }
 
@@ -665,6 +667,7 @@ display:none;
     margin-top: 7px;
     font-size: 15px;
     margin-bottom: 15px;
+    font-family: var(--font-body);
 }
 .sektion73-success .sektion73-btn--withTimer {
     justify-content: center;
@@ -725,7 +728,7 @@ display:none;
 .sektion73-timerPuck{
   width: 38px;
   height: 38px;
-  border-radius: 999px;
+  border-radius: var(--button-radius, 999px);
   border: none;
   display: inline-flex;
   align-items: center;

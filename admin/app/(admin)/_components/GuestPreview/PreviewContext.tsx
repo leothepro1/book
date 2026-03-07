@@ -20,6 +20,10 @@ interface PreviewContextValue {
   refresh: () => void;
   isConnected: boolean;
   updateConfig: (changes: Partial<TenantConfig>) => void;
+  /** Call after updateDraft() completes to trigger content refresh in iframe */
+  notifyDraftSaved: () => void;
+  /** Increments each time a draft is persisted to DB */
+  draftVersion: number;
 }
 
 const PreviewContext = createContext<PreviewContextValue | null>(null);
@@ -45,6 +49,7 @@ export function PreviewProvider({
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [draftVersion, setDraftVersion] = useState(0);
 
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -81,6 +86,12 @@ export function PreviewProvider({
       if (!prev) return prev;
       return merge(prev as any, changes as any, { arrayMerge: overwriteArrays }) as TenantConfig;
     });
+  }, []);
+
+  // Signal that updateDraft() has persisted to DB — triggers content refresh in iframe
+  const notifyDraftSaved = useCallback(() => {
+    setDraftVersion(v => v + 1);
+    setLastUpdated(new Date());
   }, []);
 
   useEffect(() => {
@@ -129,7 +140,7 @@ export function PreviewProvider({
   }, [enableRealtime, refresh]);
 
   return (
-    <PreviewContext.Provider value={{ config, isLoading, lastUpdated, refresh, isConnected, updateConfig }}>
+    <PreviewContext.Provider value={{ config, isLoading, lastUpdated, refresh, isConnected, updateConfig, notifyDraftSaved, draftVersion }}>
       {children}
     </PreviewContext.Provider>
   );

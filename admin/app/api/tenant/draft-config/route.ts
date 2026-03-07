@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/app/_lib/db/prisma";
-
-const DEV_ORG_ID = "org_3AWnuzCOl4ZbDw2zTDUi84uqOMO";
+import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
 
 export async function GET() {
   try {
-    const { userId, orgId: clerkOrgId } = await auth();
-    const orgId = clerkOrgId ?? (process.env.NODE_ENV === "development" ? DEV_ORG_ID : null);
+    const { orgId } = await getAuth();
 
     if (!orgId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

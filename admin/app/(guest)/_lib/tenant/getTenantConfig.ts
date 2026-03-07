@@ -92,6 +92,11 @@ function getDefaultConfig(tenantId: string): TenantConfig {
         bodyFont: "inter",
         mutedOpacity: 0.72,
       },
+      tiles: {
+        background: "#F1F0EE",
+        radius: "round",
+        shadow: "none",
+      },
     },
     home: {
       version: 1,

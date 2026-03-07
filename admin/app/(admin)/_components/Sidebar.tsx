@@ -1,18 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { t, type AdminLocale } from '../_lib/i18n';
 import { useSidebar } from './SidebarContext';
+import { useNavigationGuard } from './NavigationGuard';
 
 export function Sidebar() {
   const { isCollapsed, setIsCollapsed } = useSidebar();
   const [isPortalOpen, setIsPortalOpen] = useState(true);
   const pathname = usePathname();
   const locale: AdminLocale = 'sv';
+  const { navigate, isGuarded } = useNavigationGuard();
 
   const isActive = (path: string) => pathname === path;
+
+  /** When guarded, intercept link clicks and use guarded navigation. */
+  const guardedClick = (e: MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (isGuarded) {
+      e.preventDefault();
+      navigate(href);
+    }
+  };
 
   return (
     <aside
@@ -62,6 +72,7 @@ export function Sidebar() {
             <div className="mx-4 border-l border-[#E6E5E3] pl-4 space-y-1">
               <Link
                 href="/dashboard"
+                onClick={(e) => guardedClick(e, '/dashboard')}
                 className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
                   isActive('/dashboard')
                     ? 'bg-[#E6E5E3] text-[#7F22FE] font-medium'
@@ -72,6 +83,7 @@ export function Sidebar() {
               </Link>
               <Link
                 href="/dashboard/account"
+                onClick={(e) => guardedClick(e, '/dashboard/account')}
                 className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
                   isActive('/dashboard/account')
                     ? 'bg-[#E6E5E3] text-[#7F22FE] font-medium'
@@ -82,6 +94,7 @@ export function Sidebar() {
               </Link>
               <Link
                 href="/design"
+                onClick={(e) => guardedClick(e, '/design')}
                 className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
                   isActive('/design')
                     ? 'bg-[#E6E5E3] text-[#7F22FE] font-medium'
@@ -92,6 +105,7 @@ export function Sidebar() {
               </Link>
               <Link
                 href="/home"
+                onClick={(e) => guardedClick(e, '/home')}
                 className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
                   isActive('/home')
                     ? 'bg-[#E6E5E3] text-[#7F22FE] font-medium'
@@ -107,6 +121,7 @@ export function Sidebar() {
         {/* Gäster */}
         <Link
           href="/dashboard/guests"
+          onClick={(e) => guardedClick(e, '/dashboard/guests')}
           className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${
             isActive('/dashboard/guests')
               ? 'bg-[#E6E5E3] text-[#7F22FE]'
@@ -126,6 +141,7 @@ export function Sidebar() {
         {/* Organisation */}
         <Link
           href="/dashboard/organization"
+          onClick={(e) => guardedClick(e, '/dashboard/organization')}
           className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${
             isActive('/dashboard/organization')
               ? 'bg-[#E6E5E3] text-[#7F22FE]'
@@ -155,6 +171,7 @@ export function Sidebar() {
           {/* Analyser */}
           <Link
             href="/dashboard/analytics"
+            onClick={(e) => guardedClick(e, '/dashboard/analytics')}
             className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${
               isActive('/dashboard/analytics')
                 ? 'bg-[#E6E5E3] text-[#7F22FE]'
@@ -174,6 +191,7 @@ export function Sidebar() {
           {/* Integrationer */}
           <Link
             href="/dashboard/integrations"
+            onClick={(e) => guardedClick(e, '/dashboard/integrations')}
             className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${
               isActive('/dashboard/integrations')
                 ? 'bg-[#E6E5E3] text-[#7F22FE]'

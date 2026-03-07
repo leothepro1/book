@@ -35,12 +35,21 @@ export type BaseCard = {
   image?: string;
   badge?: string;
   ctaLabel?: string;
+  /** Specialised card type key — controls admin panels and guest rendering */
+  cardType?: import("@/app/_lib/cardTypes/registry").CardTypeKey;
+  /** ISO 8601 timestamp — card becomes visible at this time (Europe/Stockholm) */
+  scheduledShow?: string;
+  /** ISO 8601 timestamp — card becomes hidden at this time (Europe/Stockholm) */
+  scheduledHide?: string;
 };
 
 export type ArticleCard = BaseCard & { type: "article"; slug: string; content: string; gallery?: string[]; };
 export type LinkCard = BaseCard & { type: "link"; url: string; openMode: "internal" | "iframe" | "external"; };
 export type DownloadCard = BaseCard & { type: "download"; fileUrl: string; fileType: string; fileSize?: string; };
 export type GalleryCard = BaseCard & { type: "gallery"; images: string[]; };
+export type TextCard = BaseCard & { type: "text"; content?: string; ctaUrl?: string };
+export type HeaderCard = BaseCard & { type: "header" };
+export type DocumentCard = BaseCard & { type: "document"; fileUrl?: string; fileName?: string; filePublicId?: string; fileDescription?: string };
 
 export type CategoryLayout = "stack" | "grid" | "slider" | "showcase";
 
@@ -51,7 +60,7 @@ export type CategoryCard = BaseCard & {
   cardIds: string[];
 };
 
-export type Card = ArticleCard | LinkCard | DownloadCard | GalleryCard | CategoryCard;
+export type Card = ArticleCard | LinkCard | DownloadCard | GalleryCard | TextCard | HeaderCard | DocumentCard | CategoryCard;
 
 export type HomeConfig = {
   version: 1;

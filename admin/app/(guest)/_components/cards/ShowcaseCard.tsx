@@ -3,7 +3,7 @@ import { cardImageUrl } from "./cardImage";
 
 export function ShowcaseCard({
   card,
-  aspectRatio = "5 / 4",
+  aspectRatio = "5 / 3.5",
 }: {
   card: LooseCard;
   aspectRatio?: string;

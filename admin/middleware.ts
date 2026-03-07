@@ -1,4 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 const isPublicRoute = createRouteMatcher([
   '/',
@@ -7,14 +9,18 @@ const isPublicRoute = createRouteMatcher([
   '/check-out(.*)',
   '/preview/(.*)',
   '/api/webhooks/(.*)',
-  ...(process.env.NODE_ENV === 'development' ? ['/(.*)',] : []),
 ]);
 
-export default clerkMiddleware(async (auth, request) => {
-  if (!isPublicRoute(request)) {
-    await auth.protect();
-  }
-});
+// I dev: skippa Clerk helt — ingen handshake, ingen redirect
+const middleware = process.env.NODE_ENV === 'development'
+  ? (_request: NextRequest) => NextResponse.next()
+  : clerkMiddleware(async (auth, request) => {
+      if (!isPublicRoute(request)) {
+        await auth.protect();
+      }
+    });
+
+export default middleware;
 
 export const config = {
   matcher: [

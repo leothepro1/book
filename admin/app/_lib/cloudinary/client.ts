@@ -26,6 +26,14 @@ export function isCloudinaryUrl(url: string): boolean {
 }
 
 export function extractPublicId(cloudinaryUrl: string): string {
-  const match = cloudinaryUrl.match(/\/upload\/(?:[^/]+\/)*(.+?)(?:\.[^.]+)?$/);
-  return match?.[1] ?? cloudinaryUrl;
+  // Strip everything up to and including /upload/, then remove version prefix (v123...)
+  // and file extension, keeping folder paths intact (e.g. "cards/abc123")
+  const afterUpload = cloudinaryUrl.split("/upload/")[1];
+  if (!afterUpload) return cloudinaryUrl;
+
+  // Remove leading version segment (v followed by digits)
+  const withoutVersion = afterUpload.replace(/^v\d+\//, "");
+
+  // Remove file extension
+  return withoutVersion.replace(/\.[^.]+$/, "");
 }

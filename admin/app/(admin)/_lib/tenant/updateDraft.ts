@@ -1,8 +1,8 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/app/_lib/db/prisma";
 import { getCurrentTenant } from "./getCurrentTenant";
+import { getAuth } from "../auth/devAuth";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import merge from "deepmerge";
 
@@ -12,7 +12,7 @@ export async function updateDraft(
   changes: Partial<TenantConfig>
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { userId } = await auth();
+    const { userId } = await getAuth();
     const tenantData = await getCurrentTenant();
 
     if (!tenantData) {
@@ -27,6 +27,12 @@ export async function updateDraft(
       arrayMerge: overwriteArrays,
     });
 
+    // DEBUG: log card count before/after merge
+    const beforeCards = (baseConfig as any)?.home?.cards?.length ?? 0;
+    const afterCards = (updatedDraft as any)?.home?.cards?.length ?? 0;
+    const changesCards = (changes as any)?.home?.cards?.length ?? 0;
+    console.log(`[updateDraft] cards: base=${beforeCards}, changes=${changesCards}, merged=${afterCards}`);
+
     await prisma.tenant.update({
       where: { id: tenant.id },
       data: {
@@ -36,6 +42,7 @@ export async function updateDraft(
       },
     });
 
+    console.log(`[updateDraft] SUCCESS — saved ${afterCards} cards to DB`);
     return { success: true };
   } catch (error) {
     console.error("updateDraft error:", error);

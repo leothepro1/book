@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
+import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
 import { cloudinary } from "@/app/_lib/cloudinary/server";
 
 export async function DELETE(req: NextRequest) {
   try {
-    const { userId } = await auth();
+    const { userId } = await getAuth();
     const tenantData = await getCurrentTenant();
     if (!tenantData) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

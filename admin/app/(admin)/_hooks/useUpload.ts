@@ -45,6 +45,7 @@ function uploadDirect(
     formData.append("upload_preset", UPLOAD_PRESET);
     formData.append("folder", folder);
 
+    // Always use image/upload — Cloudinary handles PDFs as images (renders first page)
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, true);
 
@@ -81,20 +82,29 @@ export function useUpload(folder = "hospitality/cards") {
     setError(null);
 
     try {
-      const thumbBlob = await makeThumbBlob(file, 400);
-      const localUrl = URL.createObjectURL(thumbBlob);
-      onPreview(localUrl);
-
-      const thumbResult = await uploadDirect(thumbBlob, folder + "/thumbs");
-      URL.revokeObjectURL(localUrl);
-      onPreview(thumbResult.url);
-      onComplete(thumbResult);
-      setIsUploading(false);
-
-      uploadDirect(file, folder).then((result) => {
+      if (!file.type.startsWith("image/")) {
+        // Non-image files (e.g. PDF): upload directly, no thumbnail
+        // Cloudinary renders PDF first page — construct preview URL
+        const result = await uploadDirect(file, folder);
+        const previewUrl = result.url.replace("/upload/", "/upload/pg_1,w_600,f_jpg/");
+        onPreview(previewUrl);
         onComplete(result);
-      }).catch(() => {});
+        setIsUploading(false);
+      } else {
+        const thumbBlob = await makeThumbBlob(file, 400);
+        const localUrl = URL.createObjectURL(thumbBlob);
+        onPreview(localUrl);
 
+        const thumbResult = await uploadDirect(thumbBlob, folder + "/thumbs");
+        URL.revokeObjectURL(localUrl);
+        onPreview(thumbResult.url);
+        onComplete(thumbResult);
+        setIsUploading(false);
+
+        uploadDirect(file, folder).then((result) => {
+          onComplete(result);
+        }).catch(() => {});
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Upload failed";
       setError(msg);

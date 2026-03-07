@@ -3,6 +3,8 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { usePreview } from "./PreviewContext";
 import type { GuestPreviewProps } from "./types";
+import type { ParentToPreviewMessage } from "@/app/(preview)/_lib/previewMessages";
+import "./preview-spinner.css";
 
 const ROUTE_TO_SLUG: Readonly<Record<string, string>> = {
   "/p/[token]": "home",
@@ -23,40 +25,74 @@ function GuestPreviewFrame({
   route,
   className = "",
 }: Omit<GuestPreviewProps, "device">) {
-  const { lastUpdated } = usePreview();
+  const { config, draftVersion } = usePreview();
   const [copied, setCopied] = useState(false);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const previewSlug = ROUTE_TO_SLUG[route] || "home";
-  const baseSrc = `/preview/${previewSlug}?draft=1`;
+  const iframeSrc = `/preview/${previewSlug}?draft=1`;
 
-  // Simple approach: single iframe, swap src when loaded
-  const visibleRef = useRef<HTMLIFrameElement>(null);
-  const hiddenRef = useRef<HTMLIFrameElement>(null);
-  const [visibleSrc, setVisibleSrc] = useState(baseSrc);
-  const [hiddenSrc, setHiddenSrc] = useState<string | null>(null);
-  const isFirstUpdate = useRef(true);
+  // Reset loading state when src changes
+  const prevSrcRef = useRef(iframeSrc);
+  if (iframeSrc !== prevSrcRef.current) {
+    prevSrcRef.current = iframeSrc;
+    setIframeLoaded(false);
+  }
 
-  // When draft updates, load new content in hidden iframe
+  // ── PostMessage — fire-and-forget, no ready gate ─────────────
+  const postToPreview = useCallback((message: ParentToPreviewMessage) => {
+    try {
+      const w = iframeRef.current?.contentWindow;
+      if (w) {
+        console.log("[GuestPreview] Sending:", message.type);
+        w.postMessage(message, window.location.origin);
+      } else {
+        console.log("[GuestPreview] No contentWindow for:", message.type);
+      }
+    } catch (e) {
+      console.log("[GuestPreview] postMessage failed:", e);
+    }
+  }, []);
+
+  // ── When bridge signals ready, push full current theme ───────
   useEffect(() => {
-    if (!lastUpdated) return;
-    if (isFirstUpdate.current) {
-      isFirstUpdate.current = false;
-      return;
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === "preview-ready") {
+        console.log("[GuestPreview] Received preview-ready from iframe");
+        if (config?.theme) {
+          const w = iframeRef.current?.contentWindow;
+          if (w) w.postMessage({ type: "theme-update", theme: config.theme } satisfies ParentToPreviewMessage, window.location.origin);
+        }
+      }
     }
-    const bust = `_t=${Date.now()}`;
-    setHiddenSrc(`${baseSrc}?${bust}`);
-  }, [lastUpdated, baseSrc]);
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [config]);
 
-  // When hidden iframe loads, swap to visible
-  const handleHiddenLoad = useCallback(() => {
-    if (hiddenSrc) {
-      setVisibleSrc(hiddenSrc);
-      setHiddenSrc(null);
-    }
-  }, [hiddenSrc]);
+  // ── Theme updates → instant CSS vars in iframe ───────────────
+  const prevThemeJson = useRef("");
+  useEffect(() => {
+    if (!config?.theme) return;
+    const json = JSON.stringify(config.theme);
+    if (json === prevThemeJson.current) return;
+    prevThemeJson.current = json;
+    console.log("[GuestPreview] Theme changed, posting to iframe");
+    postToPreview({ type: "theme-update", theme: config.theme });
+  }, [config?.theme, postToPreview]);
 
-  // Copy handler
+  // ── Content refresh → after draft persisted to DB ────────────
+  const prevDraftVersion = useRef(draftVersion);
+  useEffect(() => {
+    if (draftVersion === 0 || draftVersion === prevDraftVersion.current) return;
+    prevDraftVersion.current = draftVersion;
+    console.log("[GuestPreview] Draft saved, sending content-refresh");
+    postToPreview({ type: "content-refresh" });
+  }, [draftVersion, postToPreview]);
+
+  // ── Copy handler ─────────────────────────────────────────────
   useEffect(() => {
     return () => {
       if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
@@ -100,27 +136,19 @@ function GuestPreviewFrame({
 
         {/* Mobile iframe */}
         <div style={iframeContainerStyle}>
-          {/* Visible iframe */}
+          {!iframeLoaded && (
+            <div className="preview-spinner-overlay">
+              <div className="preview-spinner" />
+            </div>
+          )}
           <iframe
-            ref={visibleRef}
-            src={visibleSrc}
+            ref={iframeRef}
+            src={iframeSrc}
             style={iframeStyle}
             title="Guest Portal Preview"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            onLoad={() => setIframeLoaded(true)}
           />
-
-          {/* Hidden iframe for preloading next version */}
-          {hiddenSrc && (
-            <iframe
-              ref={hiddenRef}
-              src={hiddenSrc}
-              onLoad={handleHiddenLoad}
-              style={hiddenIframeStyle}
-              title="Guest Portal Preview (loading)"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-              aria-hidden="true"
-            />
-          )}
         </div>
       </div>
     </div>
@@ -192,17 +220,6 @@ const iframeStyle: React.CSSProperties = {
   height: "100%",
   border: "none",
   background: "white",
-};
-
-const hiddenIframeStyle: React.CSSProperties = {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  width: "100%",
-  height: "100%",
-  border: "none",
-  opacity: 0,
-  pointerEvents: "none",
 };
 
 const CheckIcon = memo(function CheckIcon() {

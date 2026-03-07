@@ -1,15 +1,13 @@
-export type BackgroundMode = "fill" | "gradient" | "blur" | "image";
+import type { CatalogFontKey } from "@/app/_lib/fonts/catalog";
 
+export type BackgroundMode = "fill" | "gradient" | "image";
+
+export type GradientDirection = "up" | "down";
 export type ButtonVariant = "solid" | "outline";
 export type ButtonRadius = "square" | "rounded" | "round" | "rounder" | "full";
 export type ButtonShadow = "none" | "soft" | "strong" | "hard";
 
-export type FontKey =
-  | "albert_sans" | "dm_sans" | "epilogue" | "ibm_plex_sans" | "inter"
-  | "link_sans" | "manrope" | "oxanium" | "poppins" | "red_hat_display"
-  | "roboto" | "rubik" | "space_grotesk" | "syne"
-  | "biorhyme" | "bitter" | "caudex" | "corben" | "domine" | "hahmlet"
-  | "avenir" | "playfair" | "system";
+export type FontKey = CatalogFontKey | "system";
 
 export type ThemeConfig = {
   version: 1;
@@ -28,10 +26,14 @@ export type ThemeConfig = {
 
   background: {
     mode: BackgroundMode;
-    gradientId?: "g1" | "g2" | "g3" | "g4" | "g5" | "g6";
+    // Fill: uses colors.background directly
+
+    // Gradient
+    gradientDirection?: GradientDirection;
+
+    // Image
     imageUrl?: string;
-    overlayOpacity?: number; // 0..0.7
-    blurStrength?: 0 | 8 | 16 | 24;
+    overlayOpacity?: number; // 0..1
   };
 
   buttons: {
@@ -43,6 +45,13 @@ export type ThemeConfig = {
   typography: {
     headingFont: FontKey;
     bodyFont: FontKey;
+    buttonFont?: FontKey; // undefined = inherits headingFont
     mutedOpacity: number;
+  };
+
+  tiles?: {
+    background: string;       // hex color  → --tile-bg
+    radius: ButtonRadius;     // reuses button radius type → --tile-radius
+    shadow: ButtonShadow;     // reuses button shadow type → --tile-shadow
   };
 };

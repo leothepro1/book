@@ -1,0 +1,196 @@
+"use client";
+
+import {
+  createContext,
+  useContext,
+  useCallback,
+  useState,
+  useEffect,
+  useRef,
+  type ReactNode,
+} from "react";
+import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
+import { updateDraft } from "../../_lib/tenant/updateDraft";
+import { publishDraft, discardDraft } from "../../_lib/tenant/publishDraft";
+import { useNavigationGuard } from "../NavigationGuard";
+
+/* ── Context value ── */
+
+interface PublishBarContextValue {
+  /** Push a snapshot before making a change (for undo). */
+  pushUndo: (snapshot: Partial<TenantConfig>) => void;
+  /** Whether there are unsaved (unpublished) changes. */
+  hasUnsavedChanges: boolean;
+  /** Mark changes as present without pushing undo (e.g. after external mutation). */
+  markDirty: () => void;
+}
+
+const PublishBarContext = createContext<PublishBarContextValue | null>(null);
+
+/* ── Hook ── */
+
+export function usePublishBar(): PublishBarContextValue {
+  const ctx = useContext(PublishBarContext);
+  if (!ctx) throw new Error("usePublishBar must be used within PublishBarProvider");
+  return ctx;
+}
+
+/* ── Internal context for the bar UI ── */
+
+interface PublishBarInternalValue {
+  undoStack: Partial<TenantConfig>[];
+  redoStack: Partial<TenantConfig>[];
+  isUndoing: boolean;
+  isPublishing: boolean;
+  hasUnsavedChanges: boolean;
+  handleUndo: () => Promise<void>;
+  handleRedo: () => Promise<void>;
+  handlePublish: () => Promise<void>;
+}
+
+const PublishBarInternalContext = createContext<PublishBarInternalValue | null>(null);
+
+export function usePublishBarInternal(): PublishBarInternalValue {
+  const ctx = useContext(PublishBarInternalContext);
+  if (!ctx) throw new Error("usePublishBarInternal must be used within PublishBarProvider");
+  return ctx;
+}
+
+/* ── Provider ── */
+
+interface PublishBarProviderProps {
+  children: ReactNode;
+  /** Supply current config so undo/redo can snapshot properly. */
+  getConfig: () => TenantConfig | null;
+}
+
+export function PublishBarProvider({ children, getConfig }: PublishBarProviderProps) {
+  const [undoStack, setUndoStack] = useState<Partial<TenantConfig>[]>([]);
+  const [redoStack, setRedoStack] = useState<Partial<TenantConfig>[]>([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
+
+  const pushUndo = useCallback((snapshot: Partial<TenantConfig>) => {
+    setUndoStack(prev => [...prev, snapshot]);
+    setRedoStack([]);
+    setHasUnsavedChanges(true);
+  }, []);
+
+  const markDirty = useCallback(() => {
+    setHasUnsavedChanges(true);
+  }, []);
+
+  const handleUndo = useCallback(async () => {
+    if (undoStack.length === 0 || isUndoing) return;
+    setIsUndoing(true);
+
+    const previousSnapshot = undoStack[undoStack.length - 1];
+    const config = getConfig();
+    if (config) {
+      // Snapshot current state for redo — use the keys from the undo snapshot
+      const redoSnapshot: Partial<TenantConfig> = {};
+      for (const key of Object.keys(previousSnapshot) as (keyof TenantConfig)[]) {
+        (redoSnapshot as any)[key] = (config as any)[key];
+      }
+      setRedoStack(prev => [...prev, redoSnapshot]);
+    }
+
+    setUndoStack(prev => prev.slice(0, -1));
+    await updateDraft(previousSnapshot);
+
+    if (undoStack.length <= 1) {
+      await discardDraft();
+      setHasUnsavedChanges(false);
+    }
+    setIsUndoing(false);
+  }, [undoStack, isUndoing, getConfig]);
+
+  const handleRedo = useCallback(async () => {
+    if (redoStack.length === 0 || isUndoing) return;
+    setIsUndoing(true);
+
+    const redoSnapshot = redoStack[redoStack.length - 1];
+    const config = getConfig();
+    if (config) {
+      const undoSnapshot: Partial<TenantConfig> = {};
+      for (const key of Object.keys(redoSnapshot) as (keyof TenantConfig)[]) {
+        (undoSnapshot as any)[key] = (config as any)[key];
+      }
+      setUndoStack(prev => [...prev, undoSnapshot]);
+    }
+
+    setRedoStack(prev => prev.slice(0, -1));
+    await updateDraft(redoSnapshot);
+    setHasUnsavedChanges(true);
+    setIsUndoing(false);
+  }, [redoStack, isUndoing, getConfig]);
+
+  const handlePublish = useCallback(async () => {
+    if (isPublishing) return;
+    setIsPublishing(true);
+    const result = await publishDraft();
+    if (result.success) {
+      setUndoStack([]);
+      setRedoStack([]);
+      setHasUnsavedChanges(false);
+    } else {
+      console.error("[Publish] Failed:", result.error);
+    }
+    setIsPublishing(false);
+  }, [isPublishing]);
+
+  // Warn on window close with unsaved changes
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedChanges]);
+
+  // Register/unregister navigation guard
+  const { registerGuard, unregisterGuard } = useNavigationGuard();
+  const handlePublishRef = useRef(handlePublish);
+  handlePublishRef.current = handlePublish;
+
+  useEffect(() => {
+    if (hasUnsavedChanges) {
+      registerGuard({
+        onSave: async () => {
+          await handlePublishRef.current();
+          return true;
+        },
+        onDiscard: async () => {
+          await discardDraft();
+          setUndoStack([]);
+          setRedoStack([]);
+          setHasUnsavedChanges(false);
+          return true;
+        },
+      });
+    } else {
+      unregisterGuard();
+    }
+  }, [hasUnsavedChanges, registerGuard, unregisterGuard]);
+
+  return (
+    <PublishBarContext.Provider value={{ pushUndo, hasUnsavedChanges, markDirty }}>
+      <PublishBarInternalContext.Provider
+        value={{
+          undoStack,
+          redoStack,
+          isUndoing,
+          isPublishing,
+          hasUnsavedChanges,
+          handleUndo,
+          handleRedo,
+          handlePublish,
+        }}
+      >
+        {children}
+      </PublishBarInternalContext.Provider>
+    </PublishBarContext.Provider>
+  );
+}

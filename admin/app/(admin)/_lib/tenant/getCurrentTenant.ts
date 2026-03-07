@@ -1,24 +1,10 @@
 "use server";
 
-import { auth } from '@clerk/nextjs/server';
 import { prisma } from "@/app/_lib/db/prisma";
+import { getAuth } from "../auth/devAuth";
 
 export async function getCurrentTenant() {
-  const { userId, orgId } = await auth();
-
-  // Dev fallback — använd seed-tenant utan inloggning
-  if (process.env.NODE_ENV === 'development' && !orgId) {
-    const tenant = await prisma.tenant.findUnique({
-      where: { clerkOrgId: 'org_3ARDCw7QTcQ0s1v0KCbF1DSrLip' },
-    });
-    if (tenant) {
-      return {
-        tenant,
-        clerkUserId: userId ?? 'dev_user',
-        clerkOrgId: 'org_3ARDCw7QTcQ0s1v0KCbF1DSrLip',
-      };
-    }
-  }
+  const { userId, orgId } = await getAuth();
 
   if (!userId || !orgId) return null;
 

@@ -10,6 +10,9 @@ type ImageUploadProps = {
   folder?: string;
   shape?: "square" | "wide";
   placeholder?: string;
+  variant?: "default" | "compact";
+  /** File accept attribute (default: images only) */
+  accept?: string;
 };
 
 export function ImageUpload({
@@ -19,6 +22,8 @@ export function ImageUpload({
   folder = "hospitality/cards",
   shape = "square",
   placeholder = "Välj fil...",
+  variant = "default",
+  accept = "image/jpeg,image/png,image/webp,image/avif",
 }: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { upload, isUploading, error } = useUpload(folder);
@@ -66,7 +71,7 @@ export function ImageUpload({
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/avif"
+          accept={accept}
           onChange={handleChange}
           style={{ display: "none" }}
         />
@@ -121,12 +126,35 @@ export function ImageUpload({
   }
 
   // ── Empty state ──
+  if (variant === "compact") {
+    return (
+      <div className="img-upload">
+        <input
+          ref={inputRef}
+          type="file"
+          accept={accept}
+          onChange={handleChange}
+          style={{ display: "none" }}
+        />
+        <button
+          type="button"
+          className="img-upload-cta-btn"
+          onClick={() => inputRef.current?.click()}
+          disabled={isUploading}
+        >
+          {isUploading ? "Laddar upp..." : placeholder}
+        </button>
+        {error && <p className="img-upload-error">{error}</p>}
+      </div>
+    );
+  }
+
   return (
     <div className="img-upload">
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/avif"
+        accept={accept}
         onChange={handleChange}
         style={{ display: "none" }}
       />

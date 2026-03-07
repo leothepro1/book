@@ -29,8 +29,8 @@ export default function BookingStatusCard({
   if (booking.status === BookingStatus.PRE_CHECKIN) {
     return (
       <div style={{ display: "grid", gap: 8 }}>
-        <div style={{ fontWeight: "bold", lineHeight: "1.2em" }}>Incheckning från</div>
-        <div style={{ opacity: mutedOpacity }}>
+        <div style={{ fontWeight: 700, lineHeight: "1.2em", fontFamily: "var(--font-heading)" }}>Incheckning från</div>
+        <div style={{ opacity: mutedOpacity, fontFamily: "var(--font-body)", fontWeight: 400 }}>
           {formatDateLongSv(arrival)} {checkInTime}
         </div>
       </div>
@@ -41,8 +41,8 @@ export default function BookingStatusCard({
   if (booking.status === BookingStatus.ACTIVE) {
     return (
       <div style={{ display: "grid", gap: 8 }}>
-        <div style={{ fontWeight: "bold", lineHeight: "1.2em" }}>Utcheckning senast</div>
-        <div style={{ opacity: mutedOpacity }}>
+        <div style={{ fontWeight: 700, lineHeight: "1.2em", fontFamily: "var(--font-heading)" }}>Utcheckning senast</div>
+        <div style={{ opacity: mutedOpacity, fontFamily: "var(--font-body)", fontWeight: 400 }}>
           {formatDateLongSv(departure)} {checkOutTime}
         </div>
       </div>
@@ -55,8 +55,8 @@ export default function BookingStatusCard({
 
     return (
       <div style={{ display: "grid", gap: 8 }}>
-        <div style={{ fontWeight: "bold", lineHeight: "1.2em" }}>Utcheckad</div>
-        <div style={{ opacity: mutedOpacity }}>
+        <div style={{ fontWeight: 700, lineHeight: "1.2em", fontFamily: "var(--font-heading)" }}>Utcheckad</div>
+        <div style={{ opacity: mutedOpacity, fontFamily: "var(--font-body)", fontWeight: 400 }}>
           {out ? formatDateLongSv(out) : "—"}
         </div>
       </div>

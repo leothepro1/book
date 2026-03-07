@@ -8,7 +8,7 @@ import GuestFooter from "./_components/GuestFooter";
 export default async function GuestLayout({ children }: { children: ReactNode }) {
   const config = await getTenantConfig("apelviken");
   const cssVars = themeToStyleAttr(config.theme);
-  const bgStyle = backgroundStyle(config.theme.background);
+  const bgStyle = backgroundStyle(config.theme.background, config.theme.colors);
 
   return (
     <div style={cssVars} className="g-body">
