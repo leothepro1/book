@@ -50,6 +50,21 @@ export type GalleryCard = BaseCard & { type: "gallery"; images: string[]; };
 export type TextCard = BaseCard & { type: "text"; content?: string; ctaUrl?: string };
 export type HeaderCard = BaseCard & { type: "header" };
 export type DocumentCard = BaseCard & { type: "document"; fileUrl?: string; fileName?: string; filePublicId?: string; fileDescription?: string };
+export type FaqItem = { id: string; question: string; answer: string; isActive: boolean };
+export type FaqCard = BaseCard & { type: "faq"; faqs?: FaqItem[] };
+export type EmailCard = BaseCard & { type: "email"; email: string; openMode: "external" };
+export type PhoneCard = BaseCard & { type: "phone"; phone: string; openMode: "external" };
+export type ContactCard = BaseCard & {
+  type: "contact";
+  contactName?: string;
+  phone1Prefix?: string; phone1Number?: string;
+  phone2Prefix?: string; phone2Number?: string;
+  fax1Prefix?: string; fax1Number?: string;
+  fax2Prefix?: string; fax2Number?: string;
+  addressLine1?: string; addressLine2?: string; addressLine3?: string;
+  city?: string; country?: string; state?: string; zip?: string;
+  notes?: string;
+};
 
 export type CategoryLayout = "stack" | "grid" | "slider" | "showcase";
 
@@ -60,7 +75,7 @@ export type CategoryCard = BaseCard & {
   cardIds: string[];
 };
 
-export type Card = ArticleCard | LinkCard | DownloadCard | GalleryCard | TextCard | HeaderCard | DocumentCard | CategoryCard;
+export type Card = ArticleCard | LinkCard | DownloadCard | GalleryCard | TextCard | HeaderCard | DocumentCard | FaqCard | EmailCard | PhoneCard | ContactCard | CategoryCard;
 
 export type HomeConfig = {
   version: 1;

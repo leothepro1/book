@@ -33,7 +33,7 @@
   background: #fff;
   border-radius: 16px;
   padding: 24px;
-  width: 520px;
+  width: 500px;
   max-width: calc(100vw - 40px);
   opacity: 0;
   transform: translateY(12px) scale(0.97);
@@ -78,8 +78,8 @@
     color: #1a1a1a;
     margin: 0 0 16px;
     font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-    font-size: 1.1rem;
-    font-weight: 700;
+    font-size: 1.2rem;
+    font-weight: 600;
     text-align: center;
 }
 
@@ -88,7 +88,7 @@
   color: #1a1a1a;
   margin: 0 0 27px;
   text-align:center;
-  font-weight:450;
+  font-weight:400;
   line-height: 1.5;
   font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
 }
@@ -96,7 +96,7 @@
 .nav-guard-actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .nav-guard-btn {
@@ -105,10 +105,10 @@
   justify-content: center;
   gap: 8px;
   width: 100%;
-  padding: 11px 16px;
-  border-radius: 14px;
+  padding: 10px 16px;
+  border-radius: 10px;
   border: none;
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: 600;
   font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
   cursor: pointer;
@@ -129,19 +129,18 @@
 
 .nav-guard-btn--save {
     color: #fff;
-    border: 1.5px solid #1a1a1a;
-    background: #1a1a1a;
+    border: 1px solid #0075DE;
+    background: #0075DE;
 }
 
 .nav-guard-btn--save:hover:not(:disabled) {
-  background: #444;
+  background: #2774DE;
 }
 
-/* Discard button - red outline */
 .nav-guard-btn--discard {
-  background: transparent;
-  color: #C2030A;
-  border: 1.5px solid #C2030A;
+    color: #c2030a;
+    background: none;
+    border: 1px solid #c2030a;
 }
 
 .nav-guard-btn--discard:hover:not(:disabled) {

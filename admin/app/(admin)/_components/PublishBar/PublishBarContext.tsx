@@ -42,6 +42,7 @@ interface PublishBarInternalValue {
   redoStack: Partial<TenantConfig>[];
   isUndoing: boolean;
   isPublishing: boolean;
+  isLingeringAfterPublish: boolean;
   hasUnsavedChanges: boolean;
   handleUndo: () => Promise<void>;
   handleRedo: () => Promise<void>;
@@ -126,18 +127,31 @@ export function PublishBarProvider({ children, getConfig }: PublishBarProviderPr
     setIsUndoing(false);
   }, [redoStack, isUndoing, getConfig]);
 
+  const [isLingeringAfterPublish, setIsLingeringAfterPublish] = useState(false);
+  const lingerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handlePublish = useCallback(async () => {
     if (isPublishing) return;
     setIsPublishing(true);
+    const startTime = Date.now();
     const result = await publishDraft();
+    const elapsed = Date.now() - startTime;
+    const remaining = Math.max(0, 2000 - elapsed);
+    await new Promise(resolve => setTimeout(resolve, remaining));
     if (result.success) {
       setUndoStack([]);
       setRedoStack([]);
-      setHasUnsavedChanges(false);
+      setIsPublishing(false);
+      setIsLingeringAfterPublish(true);
+      if (lingerTimer.current) clearTimeout(lingerTimer.current);
+      lingerTimer.current = setTimeout(() => {
+        setIsLingeringAfterPublish(false);
+        setHasUnsavedChanges(false);
+      }, 1000);
     } else {
       console.error("[Publish] Failed:", result.error);
+      setIsPublishing(false);
     }
-    setIsPublishing(false);
   }, [isPublishing]);
 
   // Warn on window close with unsaved changes
@@ -183,6 +197,7 @@ export function PublishBarProvider({ children, getConfig }: PublishBarProviderPr
           redoStack,
           isUndoing,
           isPublishing,
+          isLingeringAfterPublish,
           hasUnsavedChanges,
           handleUndo,
           handleRedo,

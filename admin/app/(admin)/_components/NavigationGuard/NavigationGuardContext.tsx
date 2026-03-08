@@ -78,6 +78,7 @@ export function NavigationGuardProvider({ children }: { children: ReactNode }) {
     isSaving: false,
     isDiscarding: false,
   });
+  const pendingHrefRef = useRef<string | null>(null);
 
   const registerGuard = useCallback((callbacks: GuardCallbacks) => {
     guardRef.current = callbacks;
@@ -92,6 +93,7 @@ export function NavigationGuardProvider({ children }: { children: ReactNode }) {
   const navigate = useCallback((href: string) => {
     if (guardRef.current) {
       // Guard active — show modal instead of navigating
+      pendingHrefRef.current = href;
       setModal({ isOpen: true, pendingHref: href, isSaving: false, isDiscarding: false });
     } else {
       router.push(href);
@@ -99,35 +101,37 @@ export function NavigationGuardProvider({ children }: { children: ReactNode }) {
   }, [router]);
 
   const closeModal = useCallback(() => {
+    pendingHrefRef.current = null;
     setModal({ isOpen: false, pendingHref: null, isSaving: false, isDiscarding: false });
   }, []);
 
   const handleSave = useCallback(async () => {
-    if (!guardRef.current || modal.isSaving) return;
-    setModal(prev => ({ ...prev, isSaving: true }));
+    if (!guardRef.current) return;
+    setModal(prev => { if (prev.isSaving) return prev; return { ...prev, isSaving: true }; });
     const success = await guardRef.current.onSave();
-    if (success && modal.pendingHref) {
-      const href = modal.pendingHref;
+    const href = pendingHrefRef.current;
+    if (success && href) {
       closeModal();
-      // Small delay so state settles before navigation
       requestAnimationFrame(() => router.push(href));
     } else {
       setModal(prev => ({ ...prev, isSaving: false }));
     }
-  }, [modal.pendingHref, modal.isSaving, router, closeModal]);
+  }, [router, closeModal]);
 
-  const handleDiscard = useCallback(async () => {
-    if (!guardRef.current || modal.isDiscarding) return;
-    setModal(prev => ({ ...prev, isDiscarding: true }));
-    const success = await guardRef.current.onDiscard();
-    if (success && modal.pendingHref) {
-      const href = modal.pendingHref;
-      closeModal();
-      requestAnimationFrame(() => router.push(href));
+  const handleDiscard = useCallback(() => {
+    const href = pendingHrefRef.current;
+    console.log("[NavGuard] handleDiscard called, href:", href, "guardRef:", !!guardRef.current);
+    if (href) {
+      guardRef.current = null;
+      setIsGuarded(false);
+      pendingHrefRef.current = null;
+      setModal({ isOpen: false, pendingHref: null, isSaving: false, isDiscarding: false });
+      console.log("[NavGuard] navigating to:", href);
+      router.push(href);
     } else {
-      setModal(prev => ({ ...prev, isDiscarding: false }));
+      closeModal();
     }
-  }, [modal.pendingHref, modal.isDiscarding, router, closeModal]);
+  }, [router, closeModal]);
 
   const handleCancel = useCallback(() => {
     if (modal.isSaving || modal.isDiscarding) return;

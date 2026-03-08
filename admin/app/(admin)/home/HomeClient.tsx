@@ -36,6 +36,35 @@ import { ImageUpload } from "../_components/ImageUpload";
 import { useUpload } from "../_hooks/useUpload";
 import { PublishBarProvider, PublishBar, usePublishBar } from "../_components/PublishBar";
 
+/**
+ * Holds a local copy of the card for responsive inputs.
+ * Updates local state immediately; debounces onUpdate to parent.
+ */
+function useBufferedCard(card: Card, onUpdate: (c: Card) => void, delay = 300) {
+  const [local, setLocal] = useState(card);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+  const prevIdRef = useRef(card.id);
+
+  // Sync from parent when card identity changes (different card selected)
+  if (card.id !== prevIdRef.current) {
+    prevIdRef.current = card.id;
+    setLocal(card);
+  }
+
+  const bufferedUpdate = useCallback((updated: Card) => {
+    setLocal(updated);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => onUpdateRef.current(updated), delay);
+  }, [delay]);
+
+  // Flush on unmount
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
+  return [local, bufferedUpdate] as const;
+}
+
 // ── Drop zones ovanför/under kategori-kort ──────────────────────
 function CategoryDropZone({ categoryId, position }: { categoryId: string; position: "above" | "below" }) {
   const id = position === "above" ? `cat_above_${categoryId}` : `cat_below_${categoryId}`;
@@ -122,8 +151,7 @@ function ArchivePageInner() {
           ))
         )}
       </div>
-      {isPending && <div className="home-saving">Sparar...</div>}
-    </div>
+          </div>
   );
 }
 
@@ -146,7 +174,7 @@ function HomeClientInner() {
         <div className="admin-editor">
           <div className="admin-header">
             {view === "archive" && <BackButton onClick={() => setView("home")} />}
-            <h1 className="admin-title">{view === "archive" ? "Arkiv" : "Startsida"}</h1>
+            <h1 className="admin-title">{view === "archive" ? "Arkiv" : "Länkar"}</h1>
             <PublishBar />
           </div>
           <div className="admin-content">
@@ -444,7 +472,8 @@ function LayoutPanelContent({ card, onChange }: { card: Card; onChange: (layout:
   );
 }
 
-function TextLayoutPanel({ card, onUpdate }: { card: Card; onUpdate: (updated: Card) => void }) {
+function TextLayoutPanel({ card: cardProp, onUpdate: onUpdateProp }: { card: Card; onUpdate: (updated: Card) => void }) {
+  const [card, onUpdate] = useBufferedCard(cardProp, onUpdateProp);
   const [tab, setTab] = useState<"settings" | "layout">("settings");
   const ctConfig = getCardTypeConfig((card as any).cardType);
   const current: string = (card as any).layoutStyle ?? ctConfig.layouts[0].key;
@@ -468,6 +497,7 @@ function TextLayoutPanel({ card, onUpdate }: { card: Card; onUpdate: (updated: C
           onClick={() => setTab("layout")}>
           Layout
         </button>
+        <div className={"card-panel-tab-indicator" + (tab === "layout" ? " card-panel-tab-indicator--right" : "")} />
       </div>
 
       {tab === "settings" && (
@@ -537,7 +567,8 @@ function TextLayoutPanel({ card, onUpdate }: { card: Card; onUpdate: (updated: C
   );
 }
 
-function DocumentLayoutPanel({ card, onUpdate }: { card: Card; onUpdate: (updated: Card) => void }) {
+function DocumentLayoutPanel({ card: cardProp, onUpdate: onUpdateProp }: { card: Card; onUpdate: (updated: Card) => void }) {
+  const [card, onUpdate] = useBufferedCard(cardProp, onUpdateProp);
   const [tab, setTab] = useState<"settings" | "layout">("settings");
   const ctConfig = getCardTypeConfig((card as any).cardType);
   const current: string = (card as any).layoutStyle ?? ctConfig.layouts[0].key;
@@ -563,6 +594,7 @@ function DocumentLayoutPanel({ card, onUpdate }: { card: Card; onUpdate: (update
           onClick={() => setTab("layout")}>
           Layout
         </button>
+        <div className={"card-panel-tab-indicator" + (tab === "layout" ? " card-panel-tab-indicator--right" : "")} />
       </div>
 
       {tab === "settings" && (
@@ -796,10 +828,446 @@ function DocUploadModal({ fileUrl, fileName, onUpload, onClear, onClose }: {
   );
 }
 
+function FaqEditModal({ initial, onSave, onClose }: {
+  initial?: { question: string; answer: string };
+  onSave: (question: string, answer: string) => void;
+  onClose: () => void;
+}) {
+  const [question, setQuestion] = useState(initial?.question ?? "");
+  const [answer, setAnswer] = useState(initial?.answer ?? "");
+  const Q_MAX = 200;
+  const A_MAX = 800;
+  const canSave = question.trim().length > 0 && answer.trim().length > 0;
+  const isEdit = !!initial;
+
+  return (
+    <div className="doc-modal-backdrop" onClick={onClose}>
+      <div className="doc-modal" onClick={e => e.stopPropagation()}>
+        <div className="doc-modal__header">
+          <h3 className="doc-modal__title">{isEdit ? "Redigera fråga" : "Lägg till fråga"}</h3>
+          <button type="button" className="doc-modal__close" onClick={onClose} aria-label="Stäng">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path fill="currentColor" d="m13.63 3.12.37-.38-.74-.74-.38.37.75.75ZM2.37 12.89l-.37.37.74.74.38-.37-.75-.75Zm.75-10.52L2.74 2 2 2.74l.37.38.75-.75Zm9.76 11.26.38.37.74-.74-.37-.38-.75.75Zm0-11.26L2.38 12.9l.74.74 10.5-10.51-.74-.75Zm-10.5.75 10.5 10.5.75-.73L3.12 2.37l-.75.75Z" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="doc-modal__body">
+          <div className="tp-textarea-wrap">
+            <label className="tp-field-label" htmlFor="faq-question">Fråga</label>
+            <input
+              id="faq-question"
+              className="tp-float-input"
+              style={{ padding: "12px" }}
+              value={question}
+              maxLength={Q_MAX}
+              placeholder=" "
+              onChange={e => setQuestion(e.target.value)}
+            />
+            <span className="tp-textarea-count">{question.length}/{Q_MAX}</span>
+          </div>
+
+          <div className="tp-textarea-wrap" style={{ marginTop: 16 }}>
+            <label className="tp-field-label" htmlFor="faq-answer">Svar</label>
+            <textarea
+              id="faq-answer"
+              className="tp-textarea"
+              value={answer}
+              maxLength={A_MAX}
+              rows={4}
+              onChange={e => setAnswer(e.target.value)}
+            />
+            <span className="tp-textarea-count">{answer.length}/{A_MAX}</span>
+          </div>
+        </div>
+
+        <div className="doc-modal__actions">
+          <button
+            type="button"
+            className={"doc-modal__btn doc-modal__btn--upload" + (canSave ? " doc-modal__btn--upload-active" : "")}
+            disabled={!canSave}
+            style={{ flex: "none", width: "100%" }}
+            onClick={() => { onSave(question.trim(), answer.trim()); onClose(); }}
+          >
+            Spara
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type FaqItemData = { id: string; question: string; answer: string; isActive: boolean };
+
+function SortableFaqItem({ faq, onEdit, onToggle, dragHandleProps }: {
+  faq: FaqItemData;
+  onEdit: () => void;
+  onToggle: () => void;
+  dragHandleProps: Record<string, any>;
+}) {
+  return (
+    <div className={"faq-list-item" + (!faq.isActive ? " faq-list-item--inactive" : "")}>
+      <div className="faq-list-item__drag" {...dragHandleProps} title="Dra för att sortera">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path fill="currentColor" d="M5 4a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm1 4a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm0 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm6-5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm-1 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm1-11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/></svg>
+      </div>
+      <div className="faq-list-item__text">
+        <span className="faq-list-item__q">{faq.question}</span>
+      </div>
+      <button type="button" className="faq-list-item__edit" onClick={onEdit} aria-label="Redigera">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path fillRule="evenodd" d="M2 14v-2.3l7.5-7.5 2.3 2.3L4.3 14H2Zm10.5-8.2 1.3-1.3-2.3-2.3-1.3 1.3 2.3 2.3Zm-1.35-4.65-10 10-.15.35v3l.5.5h3l.35-.15 10-10v-.7l-3-3h-.7Z" fill="currentColor"/></svg>
+      </button>
+      <button type="button" role="switch" aria-checked={faq.isActive} onClick={onToggle}
+        className={"admin-toggle" + (faq.isActive ? " admin-toggle-on" : "")}>
+        <span className="admin-toggle-thumb" />
+      </button>
+    </div>
+  );
+}
+
+function SortableFaqItemWrapper({ faq, onEdit, onToggle }: {
+  faq: FaqItemData;
+  onEdit: () => void;
+  onToggle: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: faq.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      <SortableFaqItem faq={faq} onEdit={onEdit} onToggle={onToggle} dragHandleProps={{ ...attributes, ...listeners }} />
+    </div>
+  );
+}
+
+function FaqLayoutPanel({ card: cardProp, onUpdate: onUpdateProp }: { card: Card; onUpdate: (updated: Card) => void }) {
+  const [card, onUpdate] = useBufferedCard(cardProp, onUpdateProp);
+  const [tab, setTab] = useState<"questions" | "layout">("questions");
+  const ctConfig = getCardTypeConfig((card as any).cardType);
+  const current: string = (card as any).layoutStyle ?? ctConfig.layouts[0].key;
+  const hasImage = !!(card as any).image;
+
+  const faqs: FaqItemData[] = ((card as any).faqs ?? []).map((f: any) => ({
+    id: f.id ?? `faq_${Math.random().toString(36).slice(2, 9)}`,
+    question: f.question,
+    answer: f.answer,
+    isActive: f.isActive !== false,
+  }));
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+
+  const faqSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const handleFaqDragEnd = useCallback((e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const oldIdx = faqs.findIndex(f => f.id === active.id);
+    const newIdx = faqs.findIndex(f => f.id === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
+    const reordered = arrayMove(faqs, oldIdx, newIdx);
+    onUpdate({ ...card, faqs: reordered } as any);
+  }, [faqs, card, onUpdate]);
+
+  const handleToggleFaq = useCallback((id: string) => {
+    const updated = faqs.map(f => f.id === id ? { ...f, isActive: !f.isActive } : f);
+    onUpdate({ ...card, faqs: updated } as any);
+  }, [faqs, card, onUpdate]);
+
+  const handleSaveFaq = useCallback((index: number | null, question: string, answer: string) => {
+    if (index !== null) {
+      const updated = faqs.map((f, i) => i === index ? { ...f, question, answer } : f);
+      onUpdate({ ...card, faqs: updated } as any);
+    } else {
+      const newFaq: FaqItemData = { id: `faq_${Date.now()}`, question, answer, isActive: true };
+      onUpdate({ ...card, faqs: [...faqs, newFaq] } as any);
+    }
+  }, [faqs, card, onUpdate]);
+
+  return (
+    <div className="card-panel-body">
+      <div className="card-panel-tabs">
+        <button type="button"
+          className={"card-panel-tab" + (tab === "questions" ? " card-panel-tab--active" : "")}
+          onClick={() => setTab("questions")}>
+          Frågor
+        </button>
+        <button type="button"
+          className={"card-panel-tab" + (tab === "layout" ? " card-panel-tab--active" : "")}
+          onClick={() => setTab("layout")}>
+          Layout
+        </button>
+        <div className={"card-panel-tab-indicator" + (tab === "layout" ? " card-panel-tab-indicator--right" : "")} />
+      </div>
+
+      {tab === "questions" && (
+        <div className="card-panel-tab-content">
+          <h3 className="card-panel-title">Vanliga frågor</h3>
+          <p className="card-panel-desc">Hjälp era gäster med ge svar på deras vanliga frågor</p>
+
+          {faqs.length > 0 && (
+            <DndContext
+              id={`faq-dnd-${card.id}`}
+              sensors={faqSensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleFaqDragEnd}
+            >
+              <SortableContext items={faqs.map(f => f.id)} strategy={verticalListSortingStrategy}>
+                <div className="faq-list">
+                  {faqs.map((faq, i) => (
+                    <SortableFaqItemWrapper
+                      key={faq.id}
+                      faq={faq}
+                      onEdit={() => { setEditingIndex(i); setModalOpen(true); }}
+                      onToggle={() => handleToggleFaq(faq.id)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
+
+          <button
+            type="button"
+            className="home-add-btn-full"
+            style={{ marginTop: 16 }}
+            onClick={() => { setEditingIndex(null); setModalOpen(true); }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256">
+              <rect width="256" height="256" fill="none"/>
+              <line x1="40" y1="128" x2="216" y2="128" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16"/>
+              <line x1="128" y1="40" x2="128" y2="216" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16"/>
+            </svg>
+            Lägg till en fråga
+          </button>
+
+          {modalOpen && typeof window !== "undefined" && createPortal(
+            <FaqEditModal
+              initial={editingIndex !== null ? faqs[editingIndex] : undefined}
+              onSave={(q, a) => handleSaveFaq(editingIndex, q, a)}
+              onClose={() => { setModalOpen(false); setEditingIndex(null); }}
+            />,
+            document.body
+          )}
+        </div>
+      )}
+
+      {tab === "layout" && (
+        <div className="card-panel-tab-content">
+          <div className="card-panel-options">
+            {ctConfig.layouts.map((layout) => (
+              <button key={layout.key} type="button"
+                className={"card-layout-option" + (current === layout.key ? " card-layout-option--active" : "")}
+                onClick={() => onUpdate({ ...card, layoutStyle: layout.key } as any)}>
+                <div className="card-layout-option-left">
+                  <div className={"card-layout-radio" + (current === layout.key ? " card-layout-radio--checked" : "")}>
+                    {current === layout.key && <div className="card-layout-radio-dot" />}
+                  </div>
+                  <div>
+                    <div className="card-layout-option-title">{layout.label}</div>
+                    <div className="card-layout-option-sub">{layout.description}</div>
+                    {layout.needsImage && !hasImage && <FeaturedUploadButton />}
+                  </div>
+                </div>
+                <img src={layout.previewImage} alt={layout.label} className="card-layout-preview" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const COUNTRIES = [
+  "Afghanistan","Albanien","Algeriet","Andorra","Angola","Argentina","Armenien","Australien","Azerbajdzjan",
+  "Bahamas","Bahrain","Bangladesh","Barbados","Belgien","Belize","Benin","Bhutan","Bolivia","Bosnien och Hercegovina",
+  "Botswana","Brasilien","Brunei","Bulgarien","Burkina Faso","Burundi","Chile","Colombia","Costa Rica","Cypern",
+  "Danmark","Dominikanska republiken","Ecuador","Egypten","El Salvador","Elfenbenskusten","Eritrea","Estland","Etiopien",
+  "Fiji","Filippinerna","Finland","Frankrike","Förenade Arabemiraten","Gabon","Georgien","Ghana","Grekland","Guatemala",
+  "Guinea","Haiti","Honduras","Indien","Indonesien","Irak","Iran","Irland","Island","Israel","Italien",
+  "Jamaica","Japan","Jordanien","Kambodja","Kamerun","Kanada","Kap Verde","Kazakstan","Kenya","Kina","Kroatien","Kuba",
+  "Kuwait","Laos","Lettland","Libanon","Libyen","Liechtenstein","Litauen","Luxemburg","Madagaskar","Malawi","Malaysia",
+  "Maldiverna","Mali","Malta","Marocko","Mexiko","Moldavien","Monaco","Mongoliet","Montenegro","Moçambique","Myanmar",
+  "Namibia","Nepal","Nederländerna","Nicaragua","Niger","Nigeria","Nordmakedonien","Norge","Nya Zeeland","Oman",
+  "Pakistan","Palestina","Panama","Paraguay","Peru","Polen","Portugal","Qatar","Rumänien","Rwanda","Ryssland",
+  "Saudiarabien","Schweiz","Senegal","Serbien","Singapore","Slovakien","Slovenien","Somalia","Spanien","Sri Lanka",
+  "Storbritannien","Sudan","Sverige","Sydafrika","Sydkorea","Syrien","Tajikistan","Tanzania","Thailand","Tjeckien",
+  "Togo","Trinidad och Tobago","Tunisien","Turkiet","Turkmenistan","Tyskland","Uganda","Ukraina","Ungern","Uruguay",
+  "USA","Uzbekistan","Venezuela","Vietnam","Vitryssland","Zambia","Zimbabwe","Österrike",
+];
+
+function ContactLayoutPanel({ card: cardProp, onUpdate: onUpdateProp }: { card: Card; onUpdate: (updated: Card) => void }) {
+  const [card, onUpdate] = useBufferedCard(cardProp, onUpdateProp);
+  const [tab, setTab] = useState<"settings" | "layout">("settings");
+  const ctConfig = getCardTypeConfig((card as any).cardType);
+  const current: string = (card as any).layoutStyle ?? ctConfig.layouts[0].key;
+  const hasImage = !!(card as any).image;
+
+  const f = (key: string): string => (card as any)[key] ?? "";
+  const set = (key: string, val: string) => onUpdate({ ...card, [key]: val || undefined } as any);
+  const NOTES_MAX = 240;
+
+  const ChevronDown = () => (
+    <svg className="contact-select__chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path fill="currentColor" d="m1.7 4 .36.35L7.71 10l5.64-5.65.36-.35.7.7-.35.36-6 6h-.7l-6-6L1 4.71 1.7 4Z" />
+    </svg>
+  );
+
+  return (
+    <div className="card-panel-body">
+      <div className="card-panel-tabs">
+        <button type="button"
+          className={"card-panel-tab" + (tab === "settings" ? " card-panel-tab--active" : "")}
+          onClick={() => setTab("settings")}>
+          Inställningar
+        </button>
+        <button type="button"
+          className={"card-panel-tab" + (tab === "layout" ? " card-panel-tab--active" : "")}
+          onClick={() => setTab("layout")}>
+          Layout
+        </button>
+        <div className={"card-panel-tab-indicator" + (tab === "layout" ? " card-panel-tab-indicator--right" : "")} />
+      </div>
+
+      {tab === "settings" && (
+        <div className="card-panel-tab-content">
+          <h3 className="card-panel-title">Kontaktuppgifter</h3>
+          <p className="card-panel-desc">Visa dina kontaktuppgifter för besökare. Endast den information du anger kommer att visas.</p>
+
+          {/* Namn */}
+          <div className="tp-fields">
+            <div className="tp-float-field">
+              <input className="tp-float-input" placeholder=" " value={f("contactName")} onChange={e => set("contactName", e.target.value)} />
+              <label className="tp-float-label">Namn</label>
+            </div>
+          </div>
+
+          {/* E-post */}
+          <label className="tp-field-label" style={{ marginTop: 20 }}>E-post</label>
+          <div className="contact-row">
+            <div className="tp-float-field contact-input--prefix">
+              <input className="tp-float-input" placeholder=" " value={f("phone1Prefix")} onChange={e => set("phone1Prefix", e.target.value)} />
+              <label className="tp-float-label">Avdelning</label>
+            </div>
+            <div className="tp-float-field contact-input--number">
+              <input className="tp-float-input" placeholder=" " value={f("phone1Number")} onChange={e => set("phone1Number", e.target.value)} />
+              <label className="tp-float-label">E-post</label>
+            </div>
+          </div>
+          <div className="contact-row">
+            <div className="tp-float-field contact-input--prefix">
+              <input className="tp-float-input" placeholder=" " value={f("phone2Prefix")} onChange={e => set("phone2Prefix", e.target.value)} />
+              <label className="tp-float-label">Avdelning</label>
+            </div>
+            <div className="tp-float-field contact-input--number">
+              <input className="tp-float-input" placeholder=" " value={f("phone2Number")} onChange={e => set("phone2Number", e.target.value)} />
+              <label className="tp-float-label">E-post</label>
+            </div>
+          </div>
+
+          {/* Telefon */}
+          <label className="tp-field-label" style={{ marginTop: 20 }}>Telefon</label>
+          <div className="contact-row">
+            <div className="tp-float-field contact-input--prefix">
+              <input className="tp-float-input" placeholder=" " value={f("fax1Prefix")} onChange={e => set("fax1Prefix", e.target.value)} />
+              <label className="tp-float-label">Avdelning</label>
+            </div>
+            <div className="tp-float-field contact-input--number">
+              <input className="tp-float-input" placeholder=" " value={f("fax1Number")} onChange={e => set("fax1Number", e.target.value)} />
+              <label className="tp-float-label">Telefonnummer</label>
+            </div>
+          </div>
+          <div className="contact-row">
+            <div className="tp-float-field contact-input--prefix">
+              <input className="tp-float-input" placeholder=" " value={f("fax2Prefix")} onChange={e => set("fax2Prefix", e.target.value)} />
+              <label className="tp-float-label">Avdelning</label>
+            </div>
+            <div className="tp-float-field contact-input--number">
+              <input className="tp-float-input" placeholder=" " value={f("fax2Number")} onChange={e => set("fax2Number", e.target.value)} />
+              <label className="tp-float-label">Telefonnummer</label>
+            </div>
+          </div>
+
+          {/* Adress */}
+          <label className="tp-field-label" style={{ marginTop: 20 }}>Adress</label>
+          <div className="tp-fields">
+            <div className="tp-float-field">
+              <input className="tp-float-input" placeholder=" " value={f("addressLine1")} onChange={e => set("addressLine1", e.target.value)} />
+              <label className="tp-float-label">Gatuadress</label>
+            </div>
+            <div className="tp-float-field">
+              <input className="tp-float-input" placeholder=" " value={f("addressLine2")} onChange={e => set("addressLine2", e.target.value)} />
+              <label className="tp-float-label">Gatuadress rad 2</label>
+            </div>
+          </div>
+          <div className="contact-row contact-row--half">
+            <div className="tp-float-field">
+              <input className="tp-float-input" placeholder=" " value={f("zip")} onChange={e => set("zip", e.target.value)} />
+              <label className="tp-float-label">Postnummer</label>
+            </div>
+            <div className="tp-float-field">
+              <input className="tp-float-input" placeholder=" " value={f("city")} onChange={e => set("city", e.target.value)} />
+              <label className="tp-float-label">Ort</label>
+            </div>
+          </div>
+          <div className="tp-fields">
+            <div className="tp-float-field">
+              <input className="tp-float-input" placeholder=" " value={f("country")} onChange={e => set("country", e.target.value)} />
+              <label className="tp-float-label">Land</label>
+            </div>
+          </div>
+
+          {/* Öppettider */}
+          <label className="tp-field-label" style={{ marginTop: 20 }}>Öppettider</label>
+          <div className="tp-textarea-wrap">
+            <textarea
+              className="tp-textarea"
+              placeholder="När har ni öppet?"
+              value={f("notes")}
+              maxLength={NOTES_MAX}
+              rows={3}
+              onChange={e => set("notes", e.target.value)}
+            />
+            <span className="tp-textarea-count">{f("notes").length}/{NOTES_MAX}</span>
+          </div>
+        </div>
+      )}
+
+      {tab === "layout" && (
+        <div className="card-panel-tab-content">
+          <div className="card-panel-options">
+            {ctConfig.layouts.map((layout) => (
+              <button key={layout.key} type="button"
+                className={"card-layout-option" + (current === layout.key ? " card-layout-option--active" : "")}
+                onClick={() => onUpdate({ ...card, layoutStyle: layout.key } as any)}>
+                <div className="card-layout-option-left">
+                  <div className={"card-layout-radio" + (current === layout.key ? " card-layout-radio--checked" : "")}>
+                    {current === layout.key && <div className="card-layout-radio-dot" />}
+                  </div>
+                  <div>
+                    <div className="card-layout-option-title">{layout.label}</div>
+                    <div className="card-layout-option-sub">{layout.description}</div>
+                    {layout.needsImage && !hasImage && <FeaturedUploadButton />}
+                  </div>
+                </div>
+                <img src={layout.previewImage} alt={layout.label} className="card-layout-preview" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Custom layout panel components, keyed by CardTypeConfig.layoutPanelKey */
 const CUSTOM_LAYOUT_PANELS: Record<string, (props: { card: Card; onUpdate: (updated: Card) => void }) => React.ReactNode> = {
   text: ({ card, onUpdate }) => <TextLayoutPanel card={card} onUpdate={onUpdate} />,
   document: ({ card, onUpdate }) => <DocumentLayoutPanel card={card} onUpdate={onUpdate} />,
+  faq: ({ card, onUpdate }) => <FaqLayoutPanel card={card} onUpdate={onUpdate} />,
+  contact: ({ card, onUpdate }) => <ContactLayoutPanel card={card} onUpdate={onUpdate} />,
 };
 
 function ImagePanelContent({ card, onUpdate }: { card: Card; onUpdate: (updated: Card) => void }) {
@@ -1409,7 +1877,7 @@ function CardItem({ card, onToggle, onDelete, onArchive, onUpdate, openPanel, on
     setEditingUrl(false);
     const el = urlInputRef.current;
     const newVal = (el?.textContent ?? "").trim();
-    const key = card.type === "download" ? "fileUrl" : "url";
+    const key = card.type === "download" ? "fileUrl" : card.type === "email" ? "email" : card.type === "phone" ? "phone" : "url";
     if (newVal !== ((card as any)[key] ?? "")) {
       onUpdate({ ...card, [key]: newVal } as Card);
     } else if (el) {
@@ -1496,13 +1964,13 @@ function CardItem({ card, onToggle, onDelete, onArchive, onUpdate, openPanel, on
               className={"home-card-sub" + (!sub ? " home-card-sub--empty" : "")}
               contentEditable={editingUrl}
               suppressContentEditableWarning
-              data-placeholder="URL"
+              data-placeholder={cardTypeConfig.adminSubPlaceholder ?? "URL"}
               onBlur={handleUrlBlur}
               onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLElement).blur(); } if (e.key === "Escape") { (e.target as HTMLElement).textContent = sub; setEditingUrl(false); } }}
             >{sub}</span>
             {!editingUrl && (
               <button type="button" className="home-card-icon-btn" aria-label="Redigera URL"
-                onClick={() => { setEditingUrl(true); setUrlVal((card as any).url ?? (card as any).fileUrl ?? ""); setTimeout(() => { const el = urlInputRef.current; if (el) { el.focus(); const range = document.createRange(); range.selectNodeContents(el); const sel = window.getSelection(); sel?.removeAllRanges(); sel?.addRange(range); } }, 0); }}>
+                onClick={() => { setEditingUrl(true); setUrlVal((card as any).url ?? (card as any).fileUrl ?? (card as any).email ?? (card as any).phone ?? ""); setTimeout(() => { const el = urlInputRef.current; if (el) { el.focus(); const range = document.createRange(); range.selectNodeContents(el); const sel = window.getSelection(); sel?.removeAllRanges(); sel?.addRange(range); } }, 0); }}>
                 <PenIcon />
               </button>
             )}
@@ -1575,7 +2043,7 @@ function CardItem({ card, onToggle, onDelete, onArchive, onUpdate, openPanel, on
 
 const SortableCategoryCardItem = React.memo(function SortableCategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, onDelete, onArchive, onUngroup, onDeleteCategory }: {
   card: Card;
-  onToggle: () => void;
+  onToggle: (id: string) => void;
   onUpdate: (updated: Card) => void;
   onAddCard: () => void;
   allCards: Card[];
@@ -1634,7 +2102,7 @@ const SortableCategoryCardItem = React.memo(function SortableCategoryCardItem({ 
 
 function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, onDelete, onArchive, onUngroup, onDeleteCategory, dragHandleProps, collapsed, expanding }: {
   card: Card;
-  onToggle: () => void;
+  onToggle: (id: string) => void;
   onUpdate: (updated: Card) => void;
   onAddCard: () => void;
   allCards?: Card[];
@@ -1760,7 +2228,7 @@ function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, onDel
             )}
           </div>
           <div className="home-card-toggle">
-            <Toggle checked={card.isActive} onChange={onToggle} />
+            <Toggle checked={card.isActive} onChange={() => onToggle(card.id)} />
           </div>
         </div>
       </div>
@@ -1817,7 +2285,7 @@ function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, onDel
                     card={child}
                     openPanel={activeChildCard === child.id ? activeChildPanel : null}
                     onPanelToggle={handleChildPanelToggle}
-                    onToggle={() => onToggle()}
+                    onToggle={() => onToggle(child.id)}
                     onDelete={() => onDelete?.(child.id)}
                     onArchive={() => onArchive?.(child.id)}
                     onUpdate={onUpdate}
@@ -1920,18 +2388,31 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
     ({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards } } as any),
   [config, cards, archivedCards]);
 
-  /** Save cards with undo snapshot + optimistic update + server persist. */
+  /** Save cards with undo snapshot + optimistic update + debounced server persist. */
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const DRAFT_DEBOUNCE_MS = 600;
+
   const saveHome = useCallback((newCards: Card[], newArchive?: ArchivedCard[]) => {
     pushUndo(homeSnapshot());
     const archive = newArchive ?? archivedCards;
-    console.log(`[saveHome] Saving ${newCards.length} cards (active: ${newCards.filter(c => c.isActive).length})`);
-    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: newCards, archivedCards: archive } } as any);
-    startTransition(async () => {
-      const result = await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: newCards, archivedCards: archive } } as any);
-      console.log(`[saveHome] updateDraft result:`, result);
-      notifyDraftSaved();
-    });
+    const payload = { home: { version: 1, links: config?.home?.links || [], cards: newCards, archivedCards: archive } } as any;
+
+    // Instant optimistic update (local state only — no server call, no iframe refresh)
+    updateConfig(payload);
+
+    // Debounced server persist + iframe content refresh
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      startTransition(async () => {
+        const result = await updateDraft(payload);
+        console.log(`[saveHome] updateDraft result:`, result);
+        notifyDraftSaved();
+      });
+    }, DRAFT_DEBOUNCE_MS);
   }, [config, archivedCards, updateConfig, notifyDraftSaved, pushUndo, homeSnapshot]);
+
+  // Flush pending draft on unmount
+  useEffect(() => () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current); }, []);
 
   // Alias for drag-and-drop (no archive change)
   const save = saveHome;
@@ -2235,8 +2716,19 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
   }, [cards, saveHome]);
 
   const handleToggle = useCallback((id: string) => {
-    const updated = cards.map(c => c.id === id ? { ...c, isActive: !c.isActive } : c);
-    saveHome(updated);
+    const target = cards.find(c => c.id === id);
+    if (!target) return;
+    const newActive = !target.isActive;
+    if (target.type === "category") {
+      const childIds = new Set((target as any).cardIds || []);
+      const updated = cards.map(c =>
+        c.id === id || childIds.has(c.id) ? { ...c, isActive: newActive } : c
+      );
+      saveHome(updated);
+    } else {
+      const updated = cards.map(c => c.id === id ? { ...c, isActive: newActive } : c);
+      saveHome(updated);
+    }
   }, [cards, saveHome]);
 
   const handleDelete = useCallback((id: string) => {
@@ -2385,7 +2877,7 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
                   {card.type === "category" ? (
                     <SortableCategoryCardItem
                       card={card}
-                      onToggle={() => handleToggle(card.id)}
+                      onToggle={handleToggle}
                       onUpdate={handleUpdate}
                       onAddCard={() => setAddToCategoryId(card.id)}
                       allCards={cards}
@@ -2441,8 +2933,7 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
         </DragOverlay>
       </DndContext>
 
-      {isPending && <div className="home-saving">Sparar...</div>}
-      {showModal && createPortal(
+            {showModal && createPortal(
         <AddCardModal existingCount={cards.length} onAdd={handleAdd} onClose={() => { setShowModal(false); setInsertAtIndex(null); }} />,
         document.body
       )}

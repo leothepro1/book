@@ -64,15 +64,7 @@ export function UnsavedChangesModal() {
               disabled={busy}
             >
               {modal.isDiscarding ? <Spinner /> : null}
-              Ångra ändringar
-            </button>
-
-            <button
-              className="nav-guard-btn nav-guard-btn--cancel"
-              onClick={handleCancel}
-              disabled={busy}
-            >
-              Fortsätt redigera
+              Ignorera ändringar
             </button>
           </div>
         </div>

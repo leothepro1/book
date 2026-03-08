@@ -10,8 +10,8 @@
   display: grid;
   grid-template-columns: 1fr 460px;
   gap: 0;
-  align-items: start;
-  min-height: calc(100vh - 3.5rem);
+  height: calc(100vh - 3.5rem);
+  overflow: hidden;
 }
 
 /* ── Left Column: Editor ── */
@@ -20,9 +20,7 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 3.5rem);
-  position: sticky;
-  top: 3.5rem;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -51,6 +49,7 @@
 .admin-content {
   padding: 0;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -59,13 +58,9 @@
 
 .admin-preview {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 2.5rem;
+  flex-direction: column;
   border-left: 1px solid #F1F0EF;
-  height: calc(100vh - 3.5rem);
-  position: sticky;
-  top: 3.5rem;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -93,7 +88,7 @@
 
 /* ── Shared Toggle (iOS-style) ── */
 
-.admin-toggle { width: 38px; height: 20px; border-radius: 999px; border: none; background: #e0e0e0; cursor: pointer; padding: 0; position: relative; transition: background 0.25s ease; flex-shrink: 0; }
+.admin-toggle { width: 32px; height: 20px; border-radius: 999px; border: none; background: #A8AAA2; cursor: pointer; padding: 0; position: relative; transition: background 0.25s ease; flex-shrink: 0; }
 .admin-toggle-on { background: #016E1A; }
 .admin-toggle-thumb { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1); display: block; }
-.admin-toggle-on .admin-toggle-thumb { transform: translateX(18px); }
+.admin-toggle-on .admin-toggle-thumb { transform: translateX(12px); }

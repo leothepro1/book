@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback, useRef, useLayoutEffect, type ReactNode } from "react";
+import { useState, useCallback, useRef, useLayoutEffect, useEffect, type ReactNode } from "react";
 
-export type Phase = "closed" | "morph-in" | "open" | "morph-out";
+export type Phase = "closed" | "morph-in" | "open" | "pre-close" | "morph-out";
 
 const OPEN_DURATION  = "0.32s";
 const CLOSE_DURATION = "0.4s";
@@ -10,6 +10,7 @@ const OPEN_EASE  = "cubic-bezier(0.4, 0, 0.2, 1)";
 const CLOSE_EASE = "cubic-bezier(0.36, 0, 0.06, 1)";
 
 const CARD_SHADOW = "0 0 0 1px #0000000a, 0 2px 4px #0000000f";
+const MODAL_SHADOW = "0 8px 32px rgba(0,0,0,0.12)";
 
 export function MorphModal({
   title,
@@ -19,7 +20,7 @@ export function MorphModal({
   ctaLabel,
   ctaUrl,
   footerExtra,
-  closeTitleStyle,
+  closeTitleStyle: _closeTitleStyle,
   imageGhost,
 }: {
   title: string;
@@ -34,8 +35,12 @@ export function MorphModal({
   imageGhost?: (opts: { isAtCard: boolean; isClosing: boolean; duration: string; ease: string }) => ReactNode;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<Phase>("closed");
   const [cardRect, setCardRect] = useState<DOMRect | null>(null);
+  const [modalRect, setModalRect] = useState<DOMRect | null>(null);
+
+  /* ── handlers ──────────────────────────────────────────── */
 
   const handleOpen = useCallback(() => {
     if (!cardRef.current) return;
@@ -44,76 +49,161 @@ export function MorphModal({
   }, []);
 
   const handleClose = useCallback(() => {
-    if (cardRef.current) {
-      setCardRect(cardRef.current.getBoundingClientRect());
-    }
-    setPhase("morph-out");
+    if (cardRef.current) setCardRect(cardRef.current.getBoundingClientRect());
+    if (modalRef.current) setModalRect(modalRef.current.getBoundingClientRect());
+    setPhase("pre-close");
   }, []);
 
   useLayoutEffect(() => {
-    if (phase === "morph-in") {
+    if (phase === "morph-in" || phase === "pre-close") {
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => setPhase("open"));
+        requestAnimationFrame(() =>
+          setPhase(phase === "morph-in" ? "open" : "morph-out"),
+        );
       });
     }
   }, [phase]);
 
+  /* Lock scroll during close animation so the card target doesn't drift */
+  useEffect(() => {
+    if (phase !== "pre-close" && phase !== "morph-out") return;
+    const scrollY = window.scrollY;
+    const onScroll = () => window.scrollTo(0, scrollY);
+    window.addEventListener("scroll", onScroll, { passive: false });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [phase]);
+
   const handleTransitionEnd = useCallback((e: React.TransitionEvent) => {
-    if (e.propertyName !== "height") return;
-    if (phase === "morph-out") {
+    // Only respond to the outer container's transition, not the inner freeze layer
+    if (phase === "morph-out" && e.propertyName === "height" && e.target === modalRef.current) {
       setPhase("closed");
       setCardRect(null);
+      setModalRect(null);
     }
   }, [phase]);
 
+  /* ── derived state ─────────────────────────────────────── */
+
   const isVisible = phase !== "closed";
-  const isAtCard = phase === "morph-in" || phase === "morph-out";
-  const isClosing = phase === "morph-out";
+  const isOpening = phase === "morph-in";
+  const isClosing = phase === "pre-close" || phase === "morph-out";
+  const isMorphingOut = phase === "morph-out";
 
-  const duration = isClosing ? CLOSE_DURATION : OPEN_DURATION;
-  const ease     = isClosing ? CLOSE_EASE    : OPEN_EASE;
-  const transition = `top ${duration} ${ease}, left ${duration} ${ease}, width ${duration} ${ease}, height ${duration} ${ease}, border-radius ${duration} ${ease}, box-shadow ${duration} ${ease}`;
+  /* ── OUTER CONTAINER: position / size ──────────────────── */
+  /*  Entrance: card rect → modal rect (position-based)      */
+  /*  Close:    modal rect → card rect (position-based)       */
+  /*  The outer rect defines the visible clipping area.       */
 
-  const modalStyle: React.CSSProperties = isVisible && cardRect ? {
+  const openTransition = `top ${OPEN_DURATION} ${OPEN_EASE}, left ${OPEN_DURATION} ${OPEN_EASE}, width ${OPEN_DURATION} ${OPEN_EASE}, height ${OPEN_DURATION} ${OPEN_EASE}, border-radius ${OPEN_DURATION} ${OPEN_EASE}, box-shadow ${OPEN_DURATION} ${OPEN_EASE}`;
+  const closeTransition = `top ${CLOSE_DURATION} ${CLOSE_EASE}, left ${CLOSE_DURATION} ${CLOSE_EASE}, width ${CLOSE_DURATION} ${CLOSE_EASE}, height ${CLOSE_DURATION} ${CLOSE_EASE}, border-radius ${CLOSE_DURATION} ${CLOSE_EASE}, box-shadow ${CLOSE_DURATION} ${CLOSE_EASE}`;
+
+  const base: React.CSSProperties = {
     position: "fixed",
-    top:    isAtCard ? cardRect.top    : 14,
-    left:   isAtCard ? cardRect.left   : 14,
-    width:  isAtCard ? cardRect.width  : "calc(100% - 28px)" as any,
-    height: isAtCard ? cardRect.height : "calc(100% - 28px)" as any,
-    borderRadius: isAtCard ? 14 : 20,
-    boxShadow: isAtCard ? CARD_SHADOW : "0 8px 32px rgba(0,0,0,0.12)",
-    transition,
     zIndex: 1001,
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
     background: "var(--surface, #fff)",
-  } : {};
+  };
 
+  let modalStyle: React.CSSProperties = {};
+
+  if (isVisible && cardRect) {
+    if (isOpening) {
+      // Entrance: start at card position (unchanged)
+      modalStyle = {
+        ...base,
+        top: cardRect.top, left: cardRect.left,
+        width: cardRect.width, height: cardRect.height,
+        borderRadius: 14, boxShadow: CARD_SHADOW,
+        transition: openTransition,
+      };
+    } else if (isClosing && modalRect) {
+      // Close: outer shrinks from modal rect → card rect
+      modalStyle = {
+        ...base,
+        top:    isMorphingOut ? cardRect.top    : modalRect.top,
+        left:   isMorphingOut ? cardRect.left   : modalRect.left,
+        width:  isMorphingOut ? cardRect.width  : modalRect.width,
+        height: isMorphingOut ? cardRect.height : modalRect.height,
+        borderRadius: isMorphingOut ? 14 : "1.5rem",
+        boxShadow: isMorphingOut ? CARD_SHADOW : MODAL_SHADOW,
+        transition: closeTransition,
+        willChange: "top, left, width, height",
+      };
+    } else {
+      // Open: full modal position
+      modalStyle = {
+        ...base,
+        top: 14, left: 14,
+        width: "calc(100% - 28px)" as any,
+        height: "calc(100% - 28px)" as any,
+        borderRadius: "1.5rem", boxShadow: MODAL_SHADOW,
+        transition: openTransition,
+      };
+    }
+  }
+
+  /* ── INNER FREEZE LAYER ────────────────────────────────── */
+  /*  During close the freeze layer keeps modal dimensions    */
+  /*  and applies a uniform scale (width-ratio only) so       */
+  /*  content shrinks without distortion. The outer container */
+  /*  clips any excess with overflow:hidden.                  */
+
+  const uniformScale = (isClosing && modalRect && cardRect)
+    ? cardRect.width / modalRect.width
+    : 1;
+
+  const freezeStyle: React.CSSProperties = isClosing && modalRect ? {
+    width: modalRect.width,
+    height: modalRect.height,
+    flexShrink: 0,
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+    transformOrigin: "0 0",
+    transform: isMorphingOut ? `scale(${uniformScale})` : "scale(1)",
+    transition: `transform ${CLOSE_DURATION} ${CLOSE_EASE}`,
+    willChange: "transform",
+  } : {
+    // Normal (non-closing): transparent wrapper that fills the modal
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    minHeight: 0,
+  };
+
+  /* ── backdrop ──────────────────────────────────────────── */
+  const duration = isClosing ? CLOSE_DURATION : OPEN_DURATION;
+  const ease     = isClosing ? CLOSE_EASE    : OPEN_EASE;
   const backdropStyle: React.CSSProperties = isVisible ? {
-    opacity: isAtCard ? 0 : 1,
+    opacity: (isOpening || isMorphingOut) ? 0 : 1,
     transition: `opacity ${duration} ${ease}`,
   } : {};
 
-  const titleStyle: React.CSSProperties = {
-    opacity: 1,
-    transition: "opacity 0.15s ease",
-  };
-
+  /* ── body: modal-only content fades out on close ───────── */
   const bodyVisible = phase === "open";
   const bodyStyle: React.CSSProperties = {
     opacity: bodyVisible ? 1 : 0,
-    transition: bodyVisible ? "opacity 0.18s 0.15s ease" : "opacity 0.1s ease",
+    transition: bodyVisible ? "opacity 0.18s 0.15s ease" : "opacity 0.12s ease",
     flex: 1,
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
   };
 
+  const titleStyle: React.CSSProperties = {
+    opacity: 1,
+    transition: "opacity 0.15s ease",
+  };
+
   const cardWrapStyle: React.CSSProperties = {
     cursor: "pointer",
     visibility: isVisible ? "hidden" : "visible",
   };
+
+  /* ── render ────────────────────────────────────────────── */
 
   return (
     <>
@@ -123,63 +213,56 @@ export function MorphModal({
 
       {isVisible && (
         <>
-          <div
-            className="morph-modal-backdrop"
-            style={backdropStyle}
-            onClick={handleClose}
-          />
+          <div className="morph-modal-backdrop" style={backdropStyle} onClick={handleClose} />
 
           <div
+            ref={modalRef}
             style={modalStyle}
             onTransitionEnd={handleTransitionEnd}
             onClick={e => e.stopPropagation()}
           >
-            {imageGhost?.({ isAtCard, isClosing, duration, ease })}
+            <div style={freezeStyle}>
+              {imageGhost?.({ isAtCard: isOpening || isClosing, isClosing, duration, ease })}
 
-            <div className="morph-modal__header" style={{
-              ...titleStyle,
-              ...(isClosing ? { textAlign: closeTitleStyle?.textAlign } : {}),
-            }}>
-              <span
-                className="morph-modal__title"
-                style={isClosing ? closeTitleStyle : undefined}
-              >{title}</span>
-              {subtitle && (
-                <span className="morph-modal__subtitle">{subtitle}</span>
-              )}
-            </div>
-
-            <div style={bodyStyle}>
-              <div className="morph-modal__divider" />
-              <div className="morph-modal__body">
-                {bodyContent}
+              <div className="morph-modal__header" style={titleStyle}>
+                <span className="morph-modal__title">{title}</span>
+                {subtitle && (
+                  <span className="morph-modal__subtitle">{subtitle}</span>
+                )}
               </div>
-              <div className="morph-modal__footer">
-                {footerExtra}
-                <div className="morph-modal__footer-actions">
-                <div className="morph-modal__footer-left">
-                  {ctaLabel && (
-                    ctaUrl ? (
-                      <a
-                        href={ctaUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="morph-modal__cta"
-                      >
-                        {ctaLabel}
-                      </a>
-                    ) : (
-                      <span className="morph-modal__cta morph-modal__cta--disabled">
-                        {ctaLabel}
-                      </span>
-                    )
-                  )}
+
+              <div style={bodyStyle}>
+                <div className="morph-modal__divider" />
+                <div className="morph-modal__body">
+                  {bodyContent}
                 </div>
-                <button type="button" className="morph-modal__close" onClick={handleClose} aria-label="Stäng">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path fill="currentColor" d="m13.63 3.12.37-.38-.74-.74-.38.37.75.75ZM2.37 12.89l-.37.37.74.74.38-.37-.75-.75Zm.75-10.52L2.74 2 2 2.74l.37.38.75-.75Zm9.76 11.26.38.37.74-.74-.37-.38-.75.75Zm0-11.26L2.38 12.9l.74.74 10.5-10.51-.74-.75Zm-10.5.75 10.5 10.5.75-.73L3.12 2.37l-.75.75Z" />
-                  </svg>
-                </button>
+                <div className="morph-modal__footer">
+                  {footerExtra}
+                  <div className="morph-modal__footer-actions">
+                  <div className="morph-modal__footer-left">
+                    {ctaLabel && (
+                      ctaUrl ? (
+                        <a
+                          href={ctaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="morph-modal__cta"
+                        >
+                          {ctaLabel}
+                        </a>
+                      ) : (
+                        <span className="morph-modal__cta morph-modal__cta--disabled">
+                          {ctaLabel}
+                        </span>
+                      )
+                    )}
+                  </div>
+                  <button type="button" className="morph-modal__close" onClick={handleClose} aria-label="Stäng">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path fill="currentColor" d="m13.63 3.12.37-.38-.74-.74-.38.37.75.75ZM2.37 12.89l-.37.37.74.74.38-.37-.75-.75Zm.75-10.52L2.74 2 2 2.74l.37.38.75-.75Zm9.76 11.26.38.37.74-.74-.37-.38-.75.75Zm0-11.26L2.38 12.9l.74.74 10.5-10.51-.74-.75Zm-10.5.75 10.5 10.5.75-.73L3.12 2.37l-.75.75Z" />
+                    </svg>
+                  </button>
+                  </div>
                 </div>
               </div>
             </div>

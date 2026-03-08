@@ -98,10 +98,11 @@ export function ImageUpload({
             ) : (
               <button
                 type="button"
-                className="img-upload-replace-btn"
+                className="design-logo-btn design-logo-btn-edit"
                 onClick={() => inputRef.current?.click()}
               >
-                Ersätt fil
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z" /></svg>
+                <span>Ändra</span>
               </button>
             )}
           </div>
@@ -167,18 +168,11 @@ export function ImageUpload({
         style={{ cursor: isUploading ? "not-allowed" : "pointer", opacity: isUploading ? 0.7 : 1 }}
       >
         <svg className="img-upload-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M18.22 20.75H5.78A2.64 2.64 0 0 1 3.25 18v-3a.75.75 0 1 1 1.5 0v3a1.16 1.16 0 0 0 1 1.25h12.47a1.16 1.16 0 0 0 1-1.25v-3a.75.75 0 1 1 1.5 0v3a2.64 2.64 0 0 1-2.5 2.75M16 8.75a.74.74 0 0 1-.53-.22L12 5.06 8.53 8.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 1.06 0l4 4A.75.75 0 0 1 16 8.75" fill="currentColor"/>
-          <path d="M12 15.75a.76.76 0 0 1-.75-.75V4a.75.75 0 1 1 1.5 0v11a.76.76 0 0 1-.75.75" fill="currentColor"/>
+          <path fillRule="evenodd" d="M3.5 0 3 .5v23l.5.5h17l.5-.5v-16l-.15-.35-7-7L13.5 0h-10ZM4 23V1h9v6.5l.5.5H20v15H4ZM19.3 7 14 1.7V7h5.3Z" fill="currentColor" />
         </svg>
-        <button
-          type="button"
-          className="img-upload-cta-btn"
-          onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}
-          disabled={isUploading}
-        >
-          {isUploading ? "Laddar upp..." : placeholder}
-        </button>
-        <span className="img-upload-empty-sub">eller, dra och släpp här</span>
+        <span className="img-upload-empty-text">
+          {isUploading ? "Laddar upp..." : (<>Välj fil att ladda upp,<br />eller dra och släpp här</>)}
+        </span>
       </div>
       {error && <p className="img-upload-error">{error}</p>}
     </div>

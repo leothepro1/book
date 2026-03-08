@@ -18,7 +18,7 @@
 import type { ReactNode } from "react";
 import type { Card } from "@/app/(guest)/_lib/portal/homeLinks";
 
-export type CardTypeKey = "link" | "text" | "header" | "document";
+export type CardTypeKey = "link" | "text" | "header" | "document" | "faq" | "email" | "phone" | "contact";
 
 /** Panel keys that can appear in the admin card row */
 export type PanelKey = "layout" | "image" | "badge" | "schedule" | "delete";
@@ -60,6 +60,8 @@ export type CardTypeConfig = {
   categoryFriendly?: boolean;
   /** Resolve the sub-text shown in the admin card row (e.g. URL, file path) */
   adminSubText?: (card: Card) => string;
+  /** Placeholder shown in the admin sub-row input when empty (default: "URL") */
+  adminSubPlaceholder?: string;
   /** Whether to show the editable sub-row (URL/file) in the admin card. Default true. */
   showAdminSubRow?: boolean;
   /** When set, this panel auto-opens immediately after the card is created */
@@ -131,6 +133,115 @@ export const CARD_TYPE_REGISTRY: Record<CardTypeKey, CardTypeConfig> = {
     }),
     adminSubText: (card) => (card as any).url ?? "",
     resolveHref: (card) => (card as any).url || undefined,
+  },
+
+  email: {
+    key: "email",
+    label: "Email",
+    description: "Öppnar enhetens e-postklient",
+    adminPanels: ["layout", "image", "badge", "schedule"],
+    categoryFriendly: true,
+    layouts: [
+      {
+        key: "showcase",
+        label: "Classic",
+        description: "Full image with title beneath — clean, editorial look.",
+        previewImage: "https://assets.production.linktr.ee/mfe-link-editor/latest/images/visual-link-preview-text-and-media-featured-text.eb566b94.webp",
+        needsImage: true,
+      },
+      {
+        key: "featured",
+        label: "Featured",
+        description: "Make your link stand out with a larger, more attractive display.",
+        previewImage: "https://assets.production.linktr.ee/mfe-link-editor/latest/images/visual-link-preview-classic-featured.c4a5e9d6.webp",
+        needsImage: true,
+      },
+      {
+        key: "classic",
+        label: "Compact",
+        description: "Efficient, direct and compact.",
+        previewImage: "https://assets.production.linktr.ee/mfe-link-editor/latest/images/visual-link-preview-text-and-media-featured-text.eb566b94.webp",
+      },
+    ],
+    iconBg: "#E67E22",
+    iconColor: "rgba(255,255,255,0.9)",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 7l8 5 8-5M4 7v10h16V7M4 7h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+    createEmpty: (sortOrder) => ({
+      id: `card_${Date.now()}`,
+      sortOrder,
+      isActive: true,
+      title: "",
+      description: "",
+      cardType: "email",
+      type: "email",
+      email: "",
+      openMode: "external",
+    }),
+    adminSubText: (card) => (card as any).email ?? "",
+    adminSubPlaceholder: "Email",
+    resolveHref: (card) => {
+      const email = (card as any).email;
+      return email ? `mailto:${email}` : undefined;
+    },
+  },
+
+  phone: {
+    key: "phone",
+    label: "Telefon",
+    description: "Ringer ett telefonnummer",
+    adminPanels: ["layout", "image", "badge", "schedule"],
+    categoryFriendly: true,
+    layouts: [
+      {
+        key: "showcase",
+        label: "Classic",
+        description: "Full image with title beneath — clean, editorial look.",
+        previewImage: "https://assets.production.linktr.ee/mfe-link-editor/latest/images/visual-link-preview-text-and-media-featured-text.eb566b94.webp",
+        needsImage: true,
+      },
+      {
+        key: "featured",
+        label: "Featured",
+        description: "Make your link stand out with a larger, more attractive display.",
+        previewImage: "https://assets.production.linktr.ee/mfe-link-editor/latest/images/visual-link-preview-classic-featured.c4a5e9d6.webp",
+        needsImage: true,
+      },
+      {
+        key: "classic",
+        label: "Compact",
+        description: "Efficient, direct and compact.",
+        previewImage: "https://assets.production.linktr.ee/mfe-link-editor/latest/images/visual-link-preview-text-and-media-featured-text.eb566b94.webp",
+      },
+    ],
+    iconBg: "#27AE60",
+    iconColor: "rgba(255,255,255,0.9)",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.68 2.35a2 2 0 0 1-.45 2.11L8.09 9.43a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.75.32 1.54.55 2.35.68a2 2 0 0 1 1.72 2.03Z"
+          stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+    createEmpty: (sortOrder) => ({
+      id: `card_${Date.now()}`,
+      sortOrder,
+      isActive: true,
+      title: "",
+      description: "",
+      cardType: "phone",
+      type: "phone",
+      phone: "",
+      openMode: "external",
+    }),
+    adminSubText: (card) => (card as any).phone ?? "",
+    adminSubPlaceholder: "Telefonnummer",
+    resolveHref: (card) => {
+      const phone = (card as any).phone;
+      return phone ? `tel:${phone}` : undefined;
+    },
   },
 
   text: {
@@ -262,6 +373,108 @@ export const CARD_TYPE_REGISTRY: Record<CardTypeKey, CardTypeConfig> = {
       description: "",
       cardType: "document",
       type: "document",
+    }),
+    showAdminSubRow: false,
+    autoOpenPanel: "layout",
+    resolveHref: () => undefined,
+  },
+
+  faq: {
+    key: "faq",
+    label: "FAQs",
+    description: "Vanliga frågor och svar",
+    adminPanels: ["layout", "image", "schedule"],
+    categoryFriendly: true,
+    layoutPanelKey: "faq",
+    panelIcons: {
+      layout: (
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path fill="currentColor" d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm7.75-3c-.35 0-.68.12-.91.32A.9.9 0 0 0 6.5 6h-1c0-.56.26-1.07.69-1.44A2.4 2.4 0 0 1 7.75 4h.5c.57 0 1.14.2 1.56.56.43.36.69.87.69 1.43a2 2 0 0 1-.33 1.2 2.2 2.2 0 0 1-.58.53 4.93 4.93 0 0 1-.32.2l-.02.01h-.01L9 7.5l.24.44-.03.01c-.19.09-.37.27-.51.55a2.43 2.43 0 0 0-.2.52V9h-1v-.02a.73.73 0 0 1 0-.09l.05-.2c.04-.15.11-.36.25-.64.22-.44.55-.8.97-1a3.34 3.34 0 0 0 .56-.41 1 1 0 0 0 .17-.61V6a.9.9 0 0 0-.34-.68A1.4 1.4 0 0 0 8.25 5h-.5ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" />
+        </svg>
+      ),
+    },
+    layouts: [
+      {
+        key: "classic",
+        label: "Classic",
+        description: "Standard FAQ-kort.",
+        previewImage: "https://assets.production.linktr.ee/mfe-link-editor/latest/images/visual-link-preview-frequently-asked-questions-featured.55329b02.webp",
+        guestRenderer: "faq-classic",
+      },
+      {
+        key: "compact",
+        label: "Compact",
+        description: "Kompakt FAQ-kort.",
+        previewImage: "https://assets.production.linktr.ee/mfe-link-editor/latest/images/visual-link-preview-frequently-asked-questions-stack.f9bba02a.webp",
+        guestRenderer: "faq-compact",
+      },
+    ],
+    iconBg: "#8B5CF6",
+    iconColor: "rgba(255,255,255,0.9)",
+    icon: (
+      <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path fill="currentColor" d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm7.75-3c-.35 0-.68.12-.91.32A.9.9 0 0 0 6.5 6h-1c0-.56.26-1.07.69-1.44A2.4 2.4 0 0 1 7.75 4h.5c.57 0 1.14.2 1.56.56.43.36.69.87.69 1.43a2 2 0 0 1-.33 1.2 2.2 2.2 0 0 1-.58.53 4.93 4.93 0 0 1-.32.2l-.02.01h-.01L9 7.5l.24.44-.03.01c-.19.09-.37.27-.51.55a2.43 2.43 0 0 0-.2.52V9h-1v-.02a.73.73 0 0 1 0-.09l.05-.2c.04-.15.11-.36.25-.64.22-.44.55-.8.97-1a3.34 3.34 0 0 0 .56-.41 1 1 0 0 0 .17-.61V6a.9.9 0 0 0-.34-.68A1.4 1.4 0 0 0 8.25 5h-.5ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" />
+      </svg>
+    ),
+    createEmpty: (sortOrder) => ({
+      id: `card_${Date.now()}`,
+      sortOrder,
+      isActive: true,
+      title: "",
+      description: "",
+      cardType: "faq",
+      type: "faq",
+    }),
+    showAdminSubRow: false,
+    autoOpenPanel: "layout",
+    resolveHref: () => undefined,
+  },
+
+  contact: {
+    key: "contact",
+    label: "Kontaktuppgifter",
+    description: "Visa kontaktinformation",
+    adminPanels: ["layout", "image", "schedule"],
+    categoryFriendly: true,
+    layoutPanelKey: "contact",
+    panelIcons: {
+      layout: (
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path fill="currentColor" d="M0 .5.5 0h15l.5.5v15l-.5.5H.5l-.5-.5V.5ZM1 1v14h14V1H1Zm7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM5 5a3 3 0 1 1 6 0 3 3 0 0 1-6 0ZM3.5 9l-.5.5V14h1v-4h8v4h1V9.5l-.5-.5h-9Z" />
+        </svg>
+      ),
+    },
+    layouts: [
+      {
+        key: "compact",
+        label: "Compact",
+        description: "Efficient, direct and compact.",
+        previewImage: "https://assets.production.linktr.ee/mfe-link-editor/latest/images/visual-link-preview-text-and-media-featured-text.eb566b94.webp",
+        guestRenderer: "contact-compact",
+      },
+      {
+        key: "classic",
+        label: "Classic",
+        description: "Full-width inline contact details.",
+        previewImage: "https://assets.production.linktr.ee/mfe-link-editor/latest/images/visual-link-preview-text-and-media-featured-text.eb566b94.webp",
+        guestRenderer: "contact-classic",
+      },
+    ],
+    iconBg: "#3498DB",
+    iconColor: "rgba(255,255,255,0.9)",
+    icon: (
+      <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path fill="currentColor" d="M0 .5.5 0h15l.5.5v15l-.5.5H.5l-.5-.5V.5ZM1 1v14h14V1H1Zm7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM5 5a3 3 0 1 1 6 0 3 3 0 0 1-6 0ZM3.5 9l-.5.5V14h1v-4h8v4h1V9.5l-.5-.5h-9Z" />
+      </svg>
+    ),
+    createEmpty: (sortOrder) => ({
+      id: `card_${Date.now()}`,
+      sortOrder,
+      isActive: true,
+      title: "",
+      description: "",
+      cardType: "contact",
+      type: "contact",
     }),
     showAdminSubRow: false,
     autoOpenPanel: "layout",

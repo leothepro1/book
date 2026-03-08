@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { themeToStyleAttr, backgroundStyle, googleFontsUrl } from "@/app/(guest)/_lib/theme";
 import type { ThemeConfig } from "@/app/(guest)/_lib/theme/types";
 import { isValidPreviewMessage } from "../_lib/previewMessages";
@@ -11,11 +12,12 @@ import { isValidPreviewMessage } from "../_lib/previewMessages";
  * Responsibilities:
  *  1. On mount, sends "preview-ready" to parent window
  *  2. Listens for "theme-update" → applies CSS vars + background + fonts instantly (DOM mutation)
- *  3. Listens for "content-refresh" → full page reload to re-fetch server data
+ *  3. Listens for "content-refresh" → seamless router.refresh() to re-fetch server data (preserves scroll + DOM)
  *
  * This component renders nothing visible — it's a communication bridge.
  */
 export function PreviewBridge() {
+  const router = useRouter();
   const fontLinkRef = useRef<HTMLLinkElement | null>(null);
   const refreshInFlightRef = useRef(false);
 
@@ -74,11 +76,11 @@ export function PreviewBridge() {
   const handleContentRefresh = useCallback(() => {
     if (refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
-    console.log("[PreviewBridge] Reloading page for content refresh");
-    // Full reload — guaranteed to fetch fresh server data
-    // This is more reliable than router.refresh() in an iframe context
-    window.location.reload();
-  }, []);
+    console.log("[PreviewBridge] Refreshing server data (seamless)");
+    router.refresh();
+    // Allow next refresh after a short cooldown
+    setTimeout(() => { refreshInFlightRef.current = false; }, 500);
+  }, [router]);
 
   useEffect(() => {
     // Only activate if we're inside an iframe

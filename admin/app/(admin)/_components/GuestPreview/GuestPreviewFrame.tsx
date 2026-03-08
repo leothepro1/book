@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { usePreview } from "./PreviewContext";
+import { usePublishBar } from "../PublishBar";
 import type { GuestPreviewProps } from "./types";
 import type { ParentToPreviewMessage } from "@/app/(preview)/_lib/previewMessages";
 import "./preview-spinner.css";
@@ -18,18 +19,33 @@ const ROUTE_TO_SLUG: Readonly<Record<string, string>> = {
 
 const SHARE_URL = "https://hospitality-8hca.onrender.com/p/test";
 const COPY_FEEDBACK_MS = 2000;
-const IFRAME_WIDTH = 375;
-const IFRAME_HEIGHT = 667;
 
 function GuestPreviewFrame({
   route,
   className = "",
 }: Omit<GuestPreviewProps, "device">) {
   const { config, draftVersion } = usePreview();
+  const { hasUnsavedChanges } = usePublishBar();
   const [copied, setCopied] = useState(false);
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Sync preview-header height with admin-header
+  useEffect(() => {
+    const adminHeader = document.querySelector<HTMLElement>(".admin-header");
+    if (!adminHeader) return;
+    const sync = () => {
+      document.documentElement.style.setProperty(
+        "--admin-header-h",
+        `${adminHeader.offsetHeight}px`,
+      );
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(adminHeader);
+    return () => ro.disconnect();
+  }, []);
 
   const previewSlug = ROUTE_TO_SLUG[route] || "home";
   const iframeSrc = `/preview/${previewSlug}?draft=1`;
@@ -115,27 +131,30 @@ function GuestPreviewFrame({
 
   return (
     <div className={`preview-widget ${className}`}>
-      <div className="preview-widget-inner">
-        {/* Share URL */}
-        <div style={shareContainerStyle}>
-          <div style={shareInnerStyle}>
+      {/* Preview header */}
+      <div className="preview-header">
+        {hasUnsavedChanges ? (
+          <div className="preview-header__unsaved">Osparade ändringar</div>
+        ) : (
+          <div className="preview-header__share">
             <input
               type="text"
               readOnly
               value={SHARE_URL}
-              className="preview-share-input"
-              style={inputStyle}
+              className="preview-header__input"
               onClick={handleInputClick}
               aria-label="Share URL"
             />
-            <button onClick={handleCopy} style={copyBtnStyle} aria-label={copied ? "Copied" : "Copy link"} type="button">
+            <button onClick={handleCopy} className="preview-header__copy" aria-label={copied ? "Copied" : "Copy link"} type="button">
               {copied ? <CheckIcon /> : <ShareIcon />}
             </button>
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Mobile iframe */}
-        <div style={iframeContainerStyle}>
+      {/* Scaled phone frame */}
+      <div className="preview-widget-inner">
+        <div className="preview-phone">
           {!iframeLoaded && (
             <div className="preview-spinner-overlay">
               <div className="preview-spinner" />
@@ -144,7 +163,7 @@ function GuestPreviewFrame({
           <iframe
             ref={iframeRef}
             src={iframeSrc}
-            style={iframeStyle}
+            className="preview-phone__iframe"
             title="Guest Portal Preview"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             onLoad={() => setIframeLoaded(true)}
@@ -156,71 +175,6 @@ function GuestPreviewFrame({
 }
 
 export default memo(GuestPreviewFrame);
-
-const shareContainerStyle: React.CSSProperties = {
-  background: "white",
-  padding: 0,
-  borderRadius: 50,
-  boxShadow: "none",
-  marginBottom: 32,
-};
-
-const shareInnerStyle: React.CSSProperties = {
-  position: "relative",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  border: "1px solid #e5e5e5",
-  borderRadius: 8000,
-  fontSize: 14,
-  fontFamily: "monospace",
-  color: "#666",
-  cursor: "text",
-  boxSizing: "border-box",
-  textOverflow: "ellipsis",
-  paddingTop: "0.75rem",
-  paddingBottom: "0.75rem",
-  paddingRight: "2.5rem",
-  paddingLeft: "1.5rem",
-  background: "#fff",
-};
-
-const copyBtnStyle: React.CSSProperties = {
-  position: "absolute",
-  right: 8,
-  top: "50%",
-  transform: "translateY(-50%)",
-  background: "transparent",
-  border: "none",
-  cursor: "pointer",
-  padding: 8,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "#2b2b2b",
-  transition: "color 0.2s",
-};
-
-const iframeContainerStyle: React.CSSProperties = {
-  width: IFRAME_WIDTH,
-  height: IFRAME_HEIGHT,
-  position: "relative",
-  background: "white",
-  borderRadius: 20,
-  overflow: "hidden",
-  boxShadow: "rgba(0, 0, 0, 0.2) 0px 18px 50px -10px",
-};
-
-const iframeStyle: React.CSSProperties = {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  width: "100%",
-  height: "100%",
-  border: "none",
-  background: "white",
-};
 
 const CheckIcon = memo(function CheckIcon() {
   return (

@@ -5,8 +5,8 @@ import "./publish-bar.css";
 
 function SpinnerIcon() {
   return (
-    <svg className="publish-spinner" width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="28" strokeDashoffset="8" strokeLinecap="round" />
+    <svg className="publish-spinner" width="21" height="21" viewBox="0 0 21 21" fill="none">
+      <circle cx="10.5" cy="10.5" r="7.5" stroke="currentColor" strokeWidth="2" strokeDasharray="33 14.1" strokeLinecap="round" />
     </svg>
   );
 }
@@ -17,20 +17,24 @@ export function PublishBar() {
     redoStack,
     isUndoing,
     isPublishing,
+    isLingeringAfterPublish,
     hasUnsavedChanges,
     handleUndo,
     handleRedo,
     handlePublish,
   } = usePublishBarInternal();
 
+  const visible = hasUnsavedChanges || isLingeringAfterPublish;
+  const publishDisabled = isPublishing || isLingeringAfterPublish;
+
   return (
-    <div className={`publish-actions ${hasUnsavedChanges ? "publish-actions--visible" : ""}`}>
+    <div className={`publish-actions ${visible ? "publish-actions--visible" : ""}`}>
       <div className="publish-actions-left">
         <button
           type="button"
           className="publish-action-icon"
           onClick={handleUndo}
-          disabled={undoStack.length === 0 || isUndoing}
+          disabled={undoStack.length === 0 || isUndoing || isLingeringAfterPublish}
           aria-label="Undo"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256">
@@ -41,7 +45,7 @@ export function PublishBar() {
           type="button"
           className="publish-action-icon"
           onClick={handleRedo}
-          disabled={redoStack.length === 0 || isUndoing}
+          disabled={redoStack.length === 0 || isUndoing || isLingeringAfterPublish}
           aria-label="Redo"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256">
@@ -51,12 +55,12 @@ export function PublishBar() {
       </div>
       <button
         type="button"
-        className="publish-btn"
+        className={`publish-btn${publishDisabled ? " publish-btn--done" : ""}`}
         onClick={handlePublish}
-        disabled={isPublishing}
+        disabled={publishDisabled}
       >
         {isPublishing && <SpinnerIcon />}
-        <span>Spara</span>
+        <span>Publicera</span>
       </button>
     </div>
   );

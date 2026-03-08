@@ -14,6 +14,12 @@ function isScheduleVisible(card: { scheduledShow?: string; scheduledHide?: strin
   return true;
 }
 
+/** Cards only appear in the guest portal once they have a title (headers are exempt) */
+function hasRequiredTitle(card: Card): boolean {
+  if (card.type === "header") return true;
+  return !!card.title.trim();
+}
+
 /**
  * Takes the raw cards array from HomeConfig and returns a sorted list
  * of HomeItems — either a loose card or a fully-resolved category.
@@ -49,7 +55,7 @@ export function resolveHomeItems(cards: Card[]): HomeItem[] {
       const category = card as CategoryCard;
       const resolvedCards = category.cardIds
         .map(id => cardMap.get(id))
-        .filter((c): c is LooseCard => !!c && c.isActive && isScheduleVisible(c));
+        .filter((c): c is LooseCard => !!c && c.isActive && hasRequiredTitle(c) && isScheduleVisible(c));
 
       // Only include categories that have visible child cards
       if (resolvedCards.length > 0) {
@@ -60,7 +66,7 @@ export function resolveHomeItems(cards: Card[]): HomeItem[] {
           cards: resolvedCards,
         });
       }
-    } else if (!ownedIds.has(card.id) && card.isActive && isScheduleVisible(card)) {
+    } else if (!ownedIds.has(card.id) && card.isActive && hasRequiredTitle(card) && isScheduleVisible(card)) {
       items.push({
         kind: "card",
         sortOrder: card.sortOrder,

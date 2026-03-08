@@ -15,41 +15,44 @@
   justify-content: center;
   gap: 0px;
   padding: 40px;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: background 0.15s ease;
   box-sizing: border-box;
 }
 .img-upload-empty:hover {
-  border-color: #7F22FE;
-  background: #faf8ff;
+  background: #F6F7F5;
 }
 .img-upload--wide .img-upload-empty { min-height: 130px; }
 
 .img-upload-icon {
-  width: 28px;
-  height: 28px;
-  display: none;
-  color: #999;
+  width: 2rem;
+  height: 2rem;
+  margin-bottom: 1rem;
+  display: block;
+  color: #1a1a1a;
 }
-.img-upload-empty-sub {
-  color: #666;
+.img-upload-empty-text {
+  color: #1a1a1a;
   font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
-  font-size: 12px;
-  margin-top: 9px;
+  font-size: 16px;
   font-weight: 400;
+  text-align: center;
+  line-height: 1.3;
 }
 .img-upload-cta-btn {
-  color: #fff;
-  cursor: pointer;
-  background: #1a1a1a;
-  border: none;
-  border-radius: 8px;
-  padding: 9px 18px;
-  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
-  font-size: 15px;
-  font-weight: 500;
-  transition: background 0.15s ease;
+    color: #fff;
+    cursor: pointer;
+    background: #0075DE;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 18px;
+    font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    transition: background .15s;
+    width: 100%;
+    margin-top: 17px;
 }
-.img-upload-cta-btn:hover:not(:disabled) { background: #3d3c3b; }
+.img-upload-cta-btn:hover:not(:disabled) { background: #0066C4; }
 .img-upload-cta-btn:disabled { cursor: not-allowed; opacity: 0.5; }
 
 .img-upload-result {
@@ -109,18 +112,17 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 6px;
   min-width: 0;
 }
 .img-upload-result-filename {
     white-space: nowrap;
     text-overflow: ellipsis;
+    color: #1a1a1a;
+    font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    font-size: 16px;
     font-weight: 500;
     overflow: hidden;
-    color: #1a1a1a;
-    font-family: Link sans, ui-sans-serif, system-ui, sans-serif;
-    font-size: 15px;
-    font-weight: 500;
 }
 .img-upload-replace-btn {
     color: #146ef5;
@@ -130,33 +132,21 @@
     border: none;
     width: fit-content;
     padding: 0;
-    transition: color .15s;
-    font-family: Link sans, ui-sans-serif, system-ui, sans-serif;
-    font-size: 15px;
+    font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    font-size: 16px;
     font-weight: 500;
+    transition: color .15s;
 }
 .img-upload-replace-btn:hover { color: #0d5acc; }
 
-/* Progress bar — diagonal stripe */
 .img-upload-progressbar {
-  width: 100%;
-  height: 8px;
-  border-radius: 4px;
-  overflow: hidden;
-  background:
-    linear-gradient(
-      45deg,
-      #5b9ef7 25%,
-      #146EF5 25%,
-      #146EF5 50%,
-      #5b9ef7 50%,
-      #5b9ef7 75%,
-      #146EF5 75%,
-      #146EF5
-    );
-  background-size: 30px 30px;
-  background-position: 0 0;
-  animation: img-progress-stripes 0.5s linear infinite;
+    background: linear-gradient(45deg, #5b9ef7 25%, #146ef5 25% 50%, #5b9ef7 50% 75%, #146ef5 75%, #146ef5) 0 0 / 30px 30px;
+    border-radius: 4px;
+    width: 100%;
+    height: 8px;
+    animation: .5s linear infinite img-progress-stripes;
+    overflow: hidden;
+    max-width: 300px;
 }
 .img-upload-progressbar-fill { display: none; }
 @keyframes img-progress-stripes {

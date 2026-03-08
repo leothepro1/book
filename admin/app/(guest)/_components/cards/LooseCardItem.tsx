@@ -8,6 +8,8 @@ import { ShowcaseCard }  from "./ShowcaseCard";
 import { TextClassicCard, TextCompactCard } from "./TextCard";
 import { HeaderCard } from "./HeaderCard";
 import { DocClassicCard, DocCompactCard } from "./DocumentCard";
+import { FaqCompactCard, FaqClassicCard } from "./FaqCard";
+import { ContactCompactCard, ContactClassicCard } from "./ContactCard";
 
 export type CardRendererProps = { card: LooseCard; token?: string; radius?: ButtonRadius };
 
@@ -27,6 +29,10 @@ export const GUEST_LAYOUT_RENDERERS: Record<string, (props: CardRendererProps) =
   "header-default": ({ card }) => <HeaderCard card={card} />,
   "doc-classic": ({ card, radius }) => <DocClassicCard card={card} radius={radius} />,
   "doc-compact": ({ card, radius }) => <DocCompactCard card={card} radius={radius} />,
+  "faq-classic": ({ card }) => <FaqClassicCard card={card} />,
+  "faq-compact": ({ card, radius }) => <FaqCompactCard card={card} radius={radius} />,
+  "contact-classic": ({ card, radius }) => <ContactClassicCard card={card} radius={radius} />,
+  "contact-compact": ({ card, radius }) => <ContactCompactCard card={card} radius={radius} />,
 };
 
 /** Built-in layout keys that map to the existing card components */

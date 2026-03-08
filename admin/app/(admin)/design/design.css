@@ -104,7 +104,7 @@
 /* ── View Container ── */
 
 .design-view-container {
-  max-width: 660px;
+  max-width: 750px;
   width: 100%;
   margin: 0 auto;
   padding: 1.5rem 2.5rem;
@@ -284,12 +284,35 @@
 
 .design-icon-box--theme {
     align-self: flex-end;
-    width: 82px;
-    height: 94px;
-    margin-bottom: -32px;
-    transition: transform .25s cubic-bezier(.16, 1, .3, 1);
+    margin-bottom: -14px;
     margin-left: 12px;
-    box-shadow: rgba(0, 0, 0, 0.04) 0px 0px 0px 0.5px, rgba(0, 0, 0, 0.05) 0px 2px 8px, rgba(0, 0, 0, 0.03) 0px 4px 14px !important;
+    transition: transform .25s cubic-bezier(.16, 1, .3, 1);
+}
+
+.wallet-card--theme-icon {
+    border-radius: 10px;
+    width: 140px;
+    box-shadow: 0 0 0 .5px #0000000a, 0 2px 8px #0000000d, 0 4px 14px #00000008;
+    margin-bottom: -32px;
+}
+
+.wallet-card--theme-icon .wallet-card__header {
+    padding: 8px 10px;
+}
+
+.wallet-card--theme-icon .wallet-card__logo-img {
+    max-width: 24px;
+    max-height: 16px;
+}
+
+.wallet-card--theme-icon .wallet-card__logo-placeholder {
+    width: 24px;
+    height: 16px;
+    border-radius: 3px;
+}
+
+.wallet-card--theme-icon .wallet-card__dates {
+    font-size: 7px;
 }
 
 .design-row--theme:hover .design-icon-box--theme {
@@ -454,9 +477,7 @@
   align-items: center;
   justify-content: center;
   padding: 8px 16px;
-  font-size: 0.8rem;
-  color: #999;
-  animation: staggerEntrance 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  color: #a1a09e;
 }
 
 /* ── Responsive ── */
@@ -886,31 +907,26 @@
 }
 
 .design-show-more-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 28px;
-  border-radius: 14px;
-  background: #1a1a1a;
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 0.25s ease,
-    border-color 0.25s ease,
-    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    color: #fff;
+    cursor: pointer;
+    background: #0075DE;
+    border-radius: 8px;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 22px;
+    font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    font-size: 16px;
+    font-weight: 600;
+    transition: background .25s, border-color .25s, transform .3s cubic-bezier(.16, 1, .3, 1);
+    display: flex;
 }
 
 .design-show-more-btn:hover:not(:disabled) {
-  background: #333;
+  background: #0066C4;
 }
 
-.design-show-more-btn:active:not(:disabled) {
-  transform: scale(0.96);
-}
+
 
 .design-show-more-btn:disabled {
   opacity: 0.7;
@@ -968,12 +984,13 @@
     cursor: pointer;
     background: #1a1a1a;
     border: none;
-    border-radius: 14px;
+    border-radius: 10px;
     align-items: center;
     gap: 6px;
-    padding: 9px 18px;
+    padding: 8px 14px;
     font-size: 16px;
     font-weight: 600;
+    width: max-content;
     transition: background .25s, transform .3s cubic-bezier(.16, 1, .3, 1);
     display: flex;
 }
@@ -995,7 +1012,7 @@
 .design-logo-btn-edit {
   background: transparent;
   color: #1a1a1a;
-  border: 1px solid #dadada;
+  border: 1px solid #DBDBDB;
 }
 
 .design-logo-btn-edit:hover {
@@ -1022,11 +1039,22 @@
   flex: 1;
   -webkit-appearance: none;
   appearance: none;
-  height: 4px;
+  height: 5px;
   border-radius: 2px;
-  background: #e0e0e0;
+  background: #ECEBEA;
+  border: none;
   outline: none;
   transition: background 0.2s ease;
+}
+
+.design-slider::-webkit-slider-runnable-track {
+  background: transparent;
+  border: none;
+}
+
+.design-slider::-moz-range-track {
+  background: transparent;
+  border: none;
 }
 
 .design-slider::-webkit-slider-thumb {
@@ -1062,26 +1090,26 @@
 }
 
 .design-slider-input-wrap {
-  display: flex;
-  align-items: center;
-  border: 1px solid #f0f0f0;
-  border-radius: 10px;
-  padding: 0 10px 0 0;
-  background: #fff;
-  flex-shrink: 0;
+    background: #fff;
+    border: 1px solid #ECEBEA;
+    border-radius: 10px;
+    flex-shrink: 8;
+    align-items: center;
+    padding: 0 10px 0 0;
+    display: flex;
 }
 
 .design-slider-input {
-  width: 52px;
-  padding: 10px 4px 10px 12px;
-  border: none;
-  background: transparent;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #1a1a1a;
-  text-align: center;
-  outline: none;
-  -moz-appearance: textfield;
+    color: #1a1a1a;
+    -moz-appearance: textfield;
+    background: none;
+    border: none;
+    outline: none;
+    width: 52px;
+    padding: 10px 4px 10px 10px;
+    font-size: 16px;
+    font-weight: 400;
+    text-align: left;
 }
 
 .design-slider-input::-webkit-outer-spin-button,
@@ -1091,20 +1119,22 @@
 }
 
 .design-slider-unit {
-  font-size: 0.8rem;
-  color: #999;
-  font-weight: 500;
+    color: #676767;
+    font-weight: 400;
+    font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    font-size: 14px;
 }
 
 /* ── Logo Edit/Remove Modal ── */
 
 .design-modal-sm {
-  width: 90%;
-  max-width: 320px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+    flex-direction: column;
+    gap: 8px;
+    width: 90%;
+    max-width: 320px;
+    padding: 16px;
+    display: flex;
+    height: max-content;
 }
 
 .design-logo-modal-btn {
@@ -1148,3 +1178,51 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* ── Wallet Card Panel (preview column) ── */
+
+.wallet-card--panel {
+    border-radius: 18px;
+    max-width: 100%;
+    margin: 0;
+    animation: 1.2s cubic-bezier(.4, 0, .15, 1) both wallet-card-entrance;
+    box-shadow: 0 4px 24px #0000002e, 0 1px 4px #00000014;
+    height: 100%;
+    max-height: 230px;
+}
+
+.wallet-card--panel .wallet-card__dates {
+  font-size: 15px;
+}
+
+@keyframes wallet-card-entrance {
+  from {
+    opacity: 0;
+    transform: perspective(900px) translateY(120px) scale(0.75) rotateY(-120deg);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(900px) translateY(0) scale(1) rotateY(0deg);
+  }
+}
+
+/* ── Upload Button ── */
+
+.design-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  font-size: 0.85rem;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.design-upload-btn:hover {
+  background: #f5f5f5;
+}
+

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useTransition, useRef } from "react";
+import { createContext, useCallback, useContext, useState, useTransition, useRef } from "react";
 import { createPortal } from "react-dom";
 import { PreviewProvider, GuestPreviewFrame, usePreview } from "../_components/GuestPreview";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
@@ -9,14 +9,39 @@ import { backgroundStyle } from "@/app/(guest)/_lib/theme/background";
 import { useDraftUpdate } from "../_hooks/useDraftUpdate";
 import { useUpload } from "../_hooks/useUpload";
 import { ColorPickerPopup } from "../_components/ColorPicker";
+import { ImageUpload } from "../_components/ImageUpload";
 import { PublishBarProvider, PublishBar, usePublishBar } from "../_components/PublishBar";
+import { WalletCard } from "@/app/_lib/access-pass/WalletCard";
+import type { CardDesignConfig, CardBackground } from "@/app/_lib/access-pass/card-design";
 import "../_components/GuestPreview/preview.css";
 import "./design.css";
 import "../_components/admin-page.css";
 
+/* ── Wallet Card Design Context ── */
+
+interface WalletCardState {
+  bgMode: BackgroundMode;
+  bgColor: string;
+  gradDirection: GradientDirection;
+  bgImageUrl: string;
+  overlayOpacity: number;
+  logoUrl: string;
+  dateColor: string;
+}
+
+const DEFAULT_WALLET_STATE: WalletCardState = {
+  bgMode: "fill", bgColor: "#1a1a2e", gradDirection: "down",
+  bgImageUrl: "", overlayOpacity: 0.3, logoUrl: "", dateColor: "#ffffff",
+};
+
+const WalletCardCtx = createContext<{
+  state: WalletCardState;
+  update: (patch: Partial<WalletCardState>) => void;
+}>({ state: DEFAULT_WALLET_STATE, update: () => {} });
+
 /* ── Types ── */
 
-type DesignView = "main" | "colors" | "header" | "wallpaper" | "buttons" | "text" | "tiles";
+type DesignView = "main" | "colors" | "header" | "wallpaper" | "buttons" | "text" | "tiles" | "walletCard";
 
 interface Props {
   initialConfig: TenantConfig;
@@ -105,20 +130,34 @@ function DesignInner() {
 
 function DesignInnerContent() {
   const { pushUndo } = usePublishBar();
+  const [activeView, setActiveView] = useState<DesignView>("main");
+  const [walletState, setWalletState] = useState<WalletCardState>(DEFAULT_WALLET_STATE);
+
+  const updateWallet = useCallback((patch: Partial<WalletCardState>) => {
+    setWalletState((prev) => ({ ...prev, ...patch }));
+  }, []);
 
   return (
-    <div className="admin-page">
-      <div className="admin-editor">
-        <div className="admin-header">
-          <h1 className="admin-title">Design</h1>
-          <PublishBar />
+    <WalletCardCtx.Provider value={{ state: walletState, update: updateWallet }}>
+      <div className="admin-page">
+        <div className="admin-editor">
+          <div className="admin-header">
+            <h1 className="admin-title">Design</h1>
+            <PublishBar />
+          </div>
+          <div className="admin-content">
+            <DesignViewManager pushUndo={pushUndo} onViewChange={setActiveView} />
+          </div>
         </div>
-        <DesignViewManager pushUndo={pushUndo} />
+        <div className="admin-preview">
+          {activeView === "walletCard" ? (
+            <WalletCardPreviewPanel />
+          ) : (
+            <GuestPreviewFrame route="/p/[token]" className="preview-widget-sticky" />
+          )}
+        </div>
       </div>
-      <div className="admin-preview">
-        <GuestPreviewFrame route="/p/[token]" className="preview-widget-sticky" />
-      </div>
-    </div>
+    </WalletCardCtx.Provider>
   );
 }
 
@@ -126,7 +165,7 @@ function DesignInnerContent() {
    View Manager
    ════════════════════════════════════════════ */
 
-function DesignViewManager({ pushUndo }: { pushUndo: (s: Partial<TenantConfig>) => void }) {
+function DesignViewManager({ pushUndo, onViewChange }: { pushUndo: (s: Partial<TenantConfig>) => void; onViewChange?: (v: DesignView) => void }) {
   const [currentView, setCurrentView] = useState<DesignView>("main");
   const [previousView, setPreviousView] = useState<DesignView | null>(null);
   const [direction, setDirection] = useState<"forward" | "back">("forward");
@@ -139,20 +178,22 @@ function DesignViewManager({ pushUndo }: { pushUndo: (s: Partial<TenantConfig>) 
     setIsTransitioning(true);
     setDirection("forward");
     setPreviousView(currentView);
+    onViewChange?.(view);
     requestAnimationFrame(() => {
       setTimeout(() => { setCurrentView(view); setPreviousView(null); setTimeout(() => setIsTransitioning(false), 500); }, 300);
     });
-  }, [currentView, isTransitioning]);
+  }, [currentView, isTransitioning, onViewChange]);
 
   const navigateBack = useCallback(() => {
     if (isTransitioning) return;
     setIsTransitioning(true);
     setDirection("back");
     setPreviousView(currentView);
+    onViewChange?.("main");
     requestAnimationFrame(() => {
       setTimeout(() => { setCurrentView("main"); setPreviousView(null); setTimeout(() => setIsTransitioning(false), 500); }, 300);
     });
-  }, [currentView, isTransitioning]);
+  }, [currentView, isTransitioning, onViewChange]);
 
   const exitClass = direction === "forward" ? "design-view-exit-left" : "design-view-exit-right";
   const enterClass = (direction === "forward" ? "design-view-enter-right" : "design-view-enter-left") + (hasNavigated.current ? " design-view-fast" : "");
@@ -176,6 +217,8 @@ function DesignViewManager({ pushUndo }: { pushUndo: (s: Partial<TenantConfig>) 
           <WallpaperView onBack={navigateBack} pushUndo={pushUndo} />
         ) : activeView === "tiles" ? (
           <TilesView onBack={navigateBack} pushUndo={pushUndo} />
+        ) : activeView === "walletCard" ? (
+          <WalletCardView onBack={navigateBack} />
         ) : (
           <PlaceholderView label={activeView} onBack={navigateBack} />
         )}
@@ -200,7 +243,7 @@ function MainView({ onNavigate }: { onNavigate: (v: DesignView) => void }) {
     <>
       <div className="design-section">
         <div className="design-section-header"><span className="design-section-label design-stagger-item">Tema</span></div>
-        <DesignRow icon={<ThemeIcon theme={theme} />} label="" value="Anpassat" className="design-stagger-item design-row--theme" />
+        <DesignRow icon={<ThemeIcon />} label="" value="Anpassat" onClick={() => onNavigate("walletCard")} className="design-stagger-item design-row--theme" />
       </div>
       <div className="design-section">
         <div className="design-section-header"><span className="design-section-label design-stagger-item">Anpassa tema</span></div>
@@ -308,8 +351,7 @@ function ColorsView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Pa
           <ColorField key={key} label={label} value={getColor(key)} onChange={(v) => handleChange(key, v)} onPickerChange={(v) => handlePicker(key, v)} className="design-stagger-item" />
         ))}
       </div>
-      {isPending && <div className="design-saving">Sparar...</div>}
-    </>
+          </>
   );
 }
 
@@ -412,7 +454,7 @@ function HeaderView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Pa
       <div className="design-field-group design-stagger-item">
         <span className="design-field-label">Bredd på logotyp</span>
         <div className="design-slider-row">
-          <input type="range" min={40} max={300} step={1} value={localWidth} onChange={(e) => handleWidthChange(Number(e.target.value))} className="design-slider" />
+          <DesignSlider min={40} max={300} step={1} value={localWidth} onChange={(e) => handleWidthChange(Number(e.target.value))} />
           <div className="design-slider-input-wrap">
             <input type="number" min={40} max={300} value={localWidth} onChange={(e) => handleWidthChange(Math.min(300, Math.max(40, Number(e.target.value) || 40)))} className="design-slider-input" />
             <span className="design-slider-unit">px</span>
@@ -420,8 +462,7 @@ function HeaderView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Pa
         </div>
       </div>
 
-      {isPending && <div className="design-saving">Sparar...</div>}
-
+      
       {showLogoModal && createPortal(
         <>
           <div className="design-modal-backdrop" onClick={() => setShowLogoModal(false)} />
@@ -496,8 +537,7 @@ function ButtonsView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: P
       <ColorField label="Knappfärg" value={getColor("buttonBg")} onChange={(v) => handleChange("buttonBg", v)} onPickerChange={(v) => handlePicker("buttonBg", v)} className="design-stagger-item" />
       <ColorField label="Knapptextfärg" value={getColor("buttonText")} onChange={(v) => handleChange("buttonText", v)} onPickerChange={(v) => handlePicker("buttonText", v)} className="design-stagger-item" />
 
-      {(isPending || colorPending) && <div className="design-saving">Sparar...</div>}
-    </>
+          </>
   );
 }
 
@@ -598,8 +638,7 @@ function TextView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Part
       <ColorField label="Sidtextfärg" value={getColor("text")} onChange={(v) => handleChange("text", v)} onPickerChange={(v) => handlePicker("text", v)} className="design-stagger-item" />
       <ColorField label="Titelfärg" value={getColor("buttonBg")} onChange={(v) => handleChange("buttonBg", v)} onPickerChange={(v) => handlePicker("buttonBg", v)} className="design-stagger-item" />
 
-      {(isPending || colorPending) && <div className="design-saving">Sparar...</div>}
-
+      
       {showModal && createPortal(
         <FontPickerModal
           currentFont={showModal === "heading" ? headingFont : showModal === "body" ? bodyFont : (buttonFont || headingFont)}
@@ -763,8 +802,6 @@ function WallpaperView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s:
   const theme = config?.theme;
   const bg: ThemeConfig["background"] = theme?.background || { mode: "fill" };
   const [isPending, startTransition] = useTransition();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
 
   const snapshot = useCallback(() => ({ theme: { background: { ...bg }, colors: { ...theme?.colors } } } as Partial<TenantConfig>), [bg, theme?.colors]);
 
@@ -796,23 +833,12 @@ function WallpaperView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s:
   }, [bg, theme?.colors, pushUndo, snapshot, saveDraft]);
 
 
-  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("folder", "wallpaper");
-      const res = await fetch("/api/tenant/upload", { method: "POST", body: formData });
-      if (res.ok) {
-        const { url } = await res.json();
-        saveBg({ imageUrl: url });
-      }
-    } finally {
-      setIsUploading(false);
-    }
-    e.target.value = "";
+  const handleImageChange = useCallback((url: string) => {
+    saveBg({ imageUrl: url });
+  }, [saveBg]);
+
+  const handleImageRemove = useCallback(() => {
+    saveBg({ imageUrl: undefined });
   }, [saveBg]);
 
   const overlayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -854,13 +880,13 @@ function WallpaperView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s:
 
       {/* Background color — shared by fill and gradient */}
       {(bg.mode === "fill" || bg.mode === "gradient") && (
-        <ColorField label="Färg" value={bgColor} onChange={(v) => handleBgColorChange(v)} onPickerChange={(v) => handleBgColorPicker(v)} className="design-stagger-item" />
+        <ColorField label="Färg" value={bgColor} onChange={(v) => handleBgColorChange(v)} onPickerChange={(v) => handleBgColorPicker(v)} />
       )}
 
       {/* Gradient options */}
       {bg.mode === "gradient" && (
         <>
-          <div className="design-field-group design-stagger-item">
+          <div className="design-field-group">
             <span className="design-field-label">Riktning</span>
             <div className="design-toggle-row design-toggle-2col">
               {GRADIENT_DIRS.map(({ key, label }) => (
@@ -881,49 +907,21 @@ function WallpaperView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s:
       {/* Image options */}
       {bg.mode === "image" && (
         <>
-          <div className="design-field-group design-stagger-item">
+          <div className="design-field-group">
             <span className="design-field-label">Bakgrundsbild</span>
-            {bg.imageUrl ? (
-              <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", border: "1px solid #e5e5e5" }}>
-                <div style={{
-                  height: 120, backgroundImage: `url(${bg.imageUrl})`,
-                  backgroundSize: "cover", backgroundPosition: "center",
-                }} />
-                <div style={{ position: "absolute", bottom: 8, right: 8, display: "flex", gap: 6 }}>
-                  <button type="button" onClick={() => fileInputRef.current?.click()} style={{
-                    padding: "5px 12px", borderRadius: 6, border: "none",
-                    background: "rgba(255,255,255,0.9)", fontSize: 12, fontWeight: 600,
-                    cursor: "pointer", color: "#1a1a1a",
-                  }}>Byt</button>
-                  <button type="button" onClick={() => saveBg({ imageUrl: undefined })} style={{
-                    padding: "5px 12px", borderRadius: 6, border: "none",
-                    background: "rgba(0,0,0,0.6)", fontSize: 12, fontWeight: 600,
-                    cursor: "pointer", color: "#fff",
-                  }}>Ta bort</button>
-                </div>
-              </div>
-            ) : (
-              <button type="button" onClick={() => fileInputRef.current?.click()} className={isUploading ? "design-logo-shimmer" : ""} style={{
-                width: "100%", height: 100, border: "1.5px dashed #d0d0d0",
-                borderRadius: 10, background: "none", cursor: "pointer",
-                display: "flex", flexDirection: "column", alignItems: "center",
-                justifyContent: "center", gap: 6, color: "#888", fontSize: 13,
-              }}>
-                {isUploading ? "Laddar upp..." : (
-                  <>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
-                    Ladda upp bild
-                  </>
-                )}
-              </button>
-            )}
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} style={{ display: "none" }} />
+            <ImageUpload
+              value={bg.imageUrl}
+              onChange={handleImageChange}
+              onRemove={handleImageRemove}
+              folder="hospitality/wallpaper"
+              placeholder="Välj bakgrundsbild..."
+            />
           </div>
 
-          <div className="design-field-group design-stagger-item">
+          <div className="design-field-group">
             <span className="design-field-label">Mörkläggning</span>
             <div className="design-slider-row">
-              <input type="range" min={0} max={80} step={1} value={Math.round(localOverlay * 100)} onChange={(e) => handleOverlayChange(Number(e.target.value) / 100)} className="design-slider" />
+              <DesignSlider min={0} max={80} step={1} value={Math.round(localOverlay * 100)} onChange={(e) => handleOverlayChange(Number(e.target.value) / 100)} />
               <div className="design-slider-input-wrap">
                 <input type="number" min={0} max={80} value={Math.round(localOverlay * 100)} onChange={(e) => handleOverlayChange(Math.min(0.8, Math.max(0, Number(e.target.value) / 100)))} className="design-slider-input" />
                 <span className="design-slider-unit">%</span>
@@ -933,8 +931,7 @@ function WallpaperView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s:
         </>
       )}
 
-      {isPending && <div className="design-saving">Sparar...</div>}
-    </>
+          </>
   );
 }
 
@@ -1052,9 +1049,321 @@ function TilesView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Par
         </div>
       </div>
 
-      {isPending && <div className="design-saving">Sparar...</div>}
+          </>
+  );
+}
+
+/* ════════════════════════════════════════════
+   Wallet Card View (Check-in kort) — editor panel
+   ════════════════════════════════════════════ */
+
+function WalletCardView({ onBack }: { onBack: () => void }) {
+  const { state, update } = useContext(WalletCardCtx);
+  const { bgMode, bgColor, gradDirection, bgImageUrl, overlayOpacity, logoUrl, dateColor } = state;
+  const [isSaving, startSave] = useTransition();
+
+  // Load existing design on mount
+  const [loaded, setLoaded] = useState(false);
+  const loadDesign = useCallback(async () => {
+    try {
+      const res = await fetch("/api/wallet-card-design");
+      if (res.ok) {
+        const data = await res.json();
+        const patch: Partial<WalletCardState> = {};
+        if (data.backgroundMode === "SOLID") patch.bgMode = "fill";
+        else if (data.backgroundMode === "GRADIENT") patch.bgMode = "gradient";
+        else if (data.backgroundMode === "IMAGE") patch.bgMode = "image";
+        if (data.backgroundColor) patch.bgColor = data.backgroundColor;
+        if (data.backgroundGradientFrom) patch.bgColor = data.backgroundGradientFrom;
+        if (data.gradientDirection) patch.gradDirection = data.gradientDirection;
+        if (data.backgroundImageUrl) patch.bgImageUrl = data.backgroundImageUrl;
+        if (data.overlayOpacity != null) patch.overlayOpacity = data.overlayOpacity;
+        if (data.logoUrl) patch.logoUrl = data.logoUrl;
+        if (data.dateTextColor) patch.dateColor = data.dateTextColor;
+        update(patch);
+      }
+    } catch { /* use defaults */ }
+    setLoaded(true);
+  }, [update]);
+
+  useState(() => { loadDesign(); });
+
+  // Save to API
+  const saveRef = useRef(state);
+  saveRef.current = state;
+
+  const save = useCallback(() => {
+    const s = saveRef.current;
+    const modeMap = { fill: "SOLID", gradient: "GRADIENT", image: "IMAGE" } as const;
+    startSave(async () => {
+      await fetch("/api/wallet-card-design", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          backgroundMode: modeMap[s.bgMode],
+          backgroundColor: s.bgMode === "fill" ? s.bgColor : null,
+          backgroundGradientFrom: s.bgMode === "gradient" ? s.bgColor : null,
+          backgroundGradientTo: null,
+          backgroundGradientAngle: null,
+          gradientDirection: s.bgMode === "gradient" ? s.gradDirection : null,
+          backgroundImageUrl: s.bgMode === "image" ? s.bgImageUrl : null,
+          overlayOpacity: s.bgMode === "image" ? s.overlayOpacity : null,
+          logoUrl: s.logoUrl || null,
+          dateTextColor: s.dateColor,
+        }),
+      });
+    });
+  }, []);
+
+  // Auto-save on change (debounced)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerSave = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(save, 600);
+  }, [save]);
+
+  // Helpers to update + trigger save
+  const set = useCallback((patch: Partial<WalletCardState>) => {
+    update(patch);
+    triggerSave();
+  }, [update, triggerSave]);
+
+  // Build bg object for wallpaperPreviewStyle
+  const bg: ThemeConfig["background"] = {
+    mode: bgMode,
+    gradientDirection: gradDirection,
+    imageUrl: bgImageUrl || undefined,
+    overlayOpacity,
+  };
+
+  // Color field (shared between fill and gradient, same as wallpaper)
+  const [localBgColor, setLocalBgColor] = useState(bgColor);
+  const prevBgColor = useRef(bgColor);
+  if (bgColor !== prevBgColor.current) { prevBgColor.current = bgColor; setLocalBgColor(bgColor); }
+
+  const colorDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleColorChange = useCallback((v: string) => {
+    let n = v.trim();
+    if (n && !n.startsWith("#")) n = "#" + n;
+    setLocalBgColor(n);
+    if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(n)) {
+      if (colorDebounce.current) clearTimeout(colorDebounce.current);
+      colorDebounce.current = setTimeout(() => set({ bgColor: n }), 500);
+    }
+  }, [set]);
+  const handleColorPicker = useCallback((v: string) => {
+    setLocalBgColor(v);
+    set({ bgColor: v });
+  }, [set]);
+
+  const handleImageChange = useCallback((url: string) => set({ bgImageUrl: url }), [set]);
+  const handleImageRemove = useCallback(() => set({ bgImageUrl: "" }), [set]);
+
+  // Logo upload (mirrors HeaderView pattern)
+  const [showLogoModal, setShowLogoModal] = useState(false);
+  const [isRemovingLogo, setIsRemovingLogo] = useState(false);
+  const logoFileRef = useRef<HTMLInputElement>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  const { upload: uploadLogo, isUploading: isLogoUploading } = useUpload("hospitality/wallet-card");
+
+  const currentLogo = logoPreviewUrl || logoUrl || "";
+
+  const handleLogoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    await uploadLogo(
+      file,
+      (localUrl) => setLogoPreviewUrl(localUrl),
+      (result) => {
+        setLogoPreviewUrl(null);
+        set({ logoUrl: result.url });
+      },
+    );
+  }, [set, uploadLogo]);
+
+  const handleLogoRemove = useCallback(async () => {
+    if (isRemovingLogo) return;
+    setIsRemovingLogo(true);
+    set({ logoUrl: "" });
+    setIsRemovingLogo(false);
+    setShowLogoModal(false);
+  }, [isRemovingLogo, set]);
+
+  const handleLogoEditClick = useCallback(() => {
+    if (currentLogo) {
+      setShowLogoModal(true);
+    } else {
+      logoFileRef.current?.click();
+    }
+  }, [currentLogo]);
+
+  // Overlay slider
+  const [localOverlay, setLocalOverlay] = useState(overlayOpacity);
+  const prevOverlay = useRef(overlayOpacity);
+  if (overlayOpacity !== prevOverlay.current) { prevOverlay.current = overlayOpacity; setLocalOverlay(overlayOpacity); }
+
+  const overlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleOverlayChange = useCallback((value: number) => {
+    setLocalOverlay(value);
+    if (overlayTimer.current) clearTimeout(overlayTimer.current);
+    overlayTimer.current = setTimeout(() => set({ overlayOpacity: value }), 200);
+  }, [set]);
+
+  if (!loaded) return <><BackButton label="Check-in kort" onClick={onBack} /><div className="design-stagger-item" style={{ padding: "24px 0", color: "#999", fontSize: "0.9rem" }}>Laddar...</div></>;
+
+  return (
+    <>
+      <BackButton label="Check-in kort" onClick={onBack} />
+
+      {/* ── Background mode selector (identical to wallpaper) ── */}
+      <div className="design-field-group design-stagger-item">
+        <span className="design-field-label">Bakgrundstyp</span>
+        <div className="design-toggle-row design-toggle-3col">
+          {BG_MODES.map(({ key, label }) => {
+            const previewStyle = wallpaperPreviewStyle(key, localBgColor, bg);
+            return (
+              <button key={key} type="button" className={"design-toggle-card " + (bgMode === key ? "design-toggle-active" : "")} onClick={() => set({ bgMode: key })}>
+                <div className="design-toggle-icon design-toggle-icon--preview" style={previewStyle}>
+                  {key === "image" && !bgImageUrl && (
+                    <svg width="20" height="20" viewBox="0 0 256 256" fill="#bbb" style={{ opacity: 0.6 }}>
+                      <path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200ZM176,88a16,16,0,1,1-16-16A16,16,0,0,1,176,88Z" />
+                    </svg>
+                  )}
+                </div>
+                <span className="design-toggle-label">{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Color (shared by fill and gradient, identical to wallpaper) ── */}
+      {(bgMode === "fill" || bgMode === "gradient") && (
+        <ColorField label="Färg" value={localBgColor} onChange={handleColorChange} onPickerChange={handleColorPicker} />
+      )}
+
+      {/* ── Gradient direction (identical to wallpaper) ── */}
+      {bgMode === "gradient" && (
+        <div className="design-field-group">
+          <span className="design-field-label">Riktning</span>
+          <div className="design-toggle-row design-toggle-2col">
+            {GRADIENT_DIRS.map(({ key, label }) => (
+              <button key={key} type="button" className={"design-toggle-card " + (gradDirection === key ? "design-toggle-active" : "")} onClick={() => set({ gradDirection: key })}>
+                <div className="design-toggle-icon">
+                  <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    {key === "down" ? <path d="M12 5v14M19 12l-7 7-7-7" /> : <path d="M12 19V5M5 12l7-7 7 7" />}
+                  </svg>
+                </div>
+                <span className="design-toggle-label">{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Image upload (identical to wallpaper) ── */}
+      {bgMode === "image" && (
+        <>
+          <div className="design-field-group">
+            <span className="design-field-label">Bakgrundsbild</span>
+            <ImageUpload
+              value={bgImageUrl || undefined}
+              onChange={handleImageChange}
+              onRemove={handleImageRemove}
+              folder="hospitality/wallet-card"
+              placeholder="Välj bakgrundsbild..."
+            />
+          </div>
+
+          <div className="design-field-group">
+            <span className="design-field-label">Mörkläggning</span>
+            <div className="design-slider-row">
+              <DesignSlider min={0} max={80} step={1} value={Math.round(localOverlay * 100)} onChange={(e) => handleOverlayChange(Number(e.target.value) / 100)} />
+              <div className="design-slider-input-wrap">
+                <input type="number" min={0} max={80} value={Math.round(localOverlay * 100)} onChange={(e) => handleOverlayChange(Math.min(0.8, Math.max(0, Number(e.target.value) / 100)))} className="design-slider-input" />
+                <span className="design-slider-unit">%</span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Logo ── */}
+      <div className="design-field-group design-stagger-item">
+        <span className="design-field-label">Logotyp</span>
+        <div className="design-logo-upload">
+          <div className={"design-logo-avatar " + (isLogoUploading ? "design-logo-shimmer" : "")}>
+            {currentLogo && !isLogoUploading ? (
+              <img src={currentLogo} alt="Logotyp" className="design-logo-img" />
+            ) : !isLogoUploading ? (
+              <svg className="design-logo-placeholder" viewBox="0 0 145 144" fill="none" xmlns="http://www.w3.org/2000/svg"><g clipPath="url(#clip0_wlogo)"><rect width="145" height="146" fill="#A8AAA2" /><circle cx="72.396" cy="53.896" r="31.396" fill="#F6F7F5" /><ellipse cx="72.5" cy="150.5" rx="63.5" ry="59" fill="#F6F7F5" /></g><defs><clipPath id="clip0_wlogo"><rect width="145" height="146" fill="white" /></clipPath></defs></svg>
+            ) : null}
+          </div>
+          <button type="button" className={"design-logo-btn " + (currentLogo ? "design-logo-btn-edit" : "")} onClick={handleLogoEditClick}>
+            {currentLogo ? (
+              <><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z" /></svg><span>Ändra</span></>
+            ) : (
+              <><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z" /></svg><span>Ladda upp</span></>
+            )}
+          </button>
+          <input ref={logoFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" onChange={handleLogoUpload} className="design-file-hidden" aria-hidden="true" />
+        </div>
+      </div>
+
+      {/* ── Date text color ── */}
+      <ColorField label="Datumfärg" value={dateColor.toUpperCase()} onChange={(v) => set({ dateColor: v })} onPickerChange={(v) => set({ dateColor: v })} className="design-stagger-item" />
+
+      
+      {showLogoModal && createPortal(
+        <>
+          <div className="design-modal-backdrop" onClick={() => setShowLogoModal(false)} />
+          <div className="design-modal design-modal-sm">
+            <button type="button" className="design-logo-modal-btn design-logo-modal-primary" onClick={() => { setShowLogoModal(false); logoFileRef.current?.click(); }}>Ändra logotyp</button>
+            <button type="button" className="design-logo-modal-btn design-logo-modal-danger" onClick={handleLogoRemove} disabled={isRemovingLogo}>
+              {isRemovingLogo && <SpinnerIcon />}
+              <span>Ta bort logotyp</span>
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
     </>
   );
+}
+
+/* ════════════════════════════════════════════
+   Wallet Card Preview Panel — replaces phone preview
+   ════════════════════════════════════════════ */
+
+function WalletCardPreviewPanel() {
+  const { state } = useContext(WalletCardCtx);
+
+  const design = stateToDesignConfig(state);
+
+  return (
+    <div className="preview-widget preview-widget-sticky">
+      <div className="preview-header">
+        <div className="preview-header__unsaved">Check-in kort</div>
+      </div>
+      <div className="preview-widget-inner">
+        <WalletCard design={design} dateLabel="Jun 22 - 25, 2026" className="wallet-card--panel" />
+      </div>
+    </div>
+  );
+}
+
+/** Convert editor state to the canonical CardDesignConfig used by WalletCard. */
+function stateToDesignConfig(state: WalletCardState): CardDesignConfig {
+  let background: CardBackground;
+  if (state.bgMode === "gradient") {
+    background = { mode: "GRADIENT", from: state.bgColor, to: "transparent", angle: state.gradDirection === "up" ? 0 : 180 };
+  } else if (state.bgMode === "image" && state.bgImageUrl) {
+    background = { mode: "IMAGE", imageUrl: state.bgImageUrl, overlayOpacity: state.overlayOpacity };
+  } else {
+    background = { mode: "SOLID", color: state.bgColor };
+  }
+  return { background, logoUrl: state.logoUrl || null, dateTextColor: state.dateColor };
 }
 
 /* ════════════════════════════════════════════
@@ -1067,6 +1376,28 @@ function PlaceholderView({ label, onBack }: { label: string; onBack: () => void 
       <BackButton label={label.charAt(0).toUpperCase() + label.slice(1)} onClick={onBack} />
       <div className="design-stagger-item" style={{ padding: "24px 0", color: "#999", fontSize: "0.9rem" }}>Kommer snart...</div>
     </>
+  );
+}
+
+/* ════════════════════════════════════════════
+   Design Slider (filled track)
+   ════════════════════════════════════════════ */
+
+function DesignSlider({ min, max, step, value, onChange, className = "" }: {
+  min: number; max: number; step: number; value: number; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; className?: string;
+}) {
+  const pct = ((value - min) / (max - min)) * 100;
+  return (
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={onChange}
+      className={"design-slider " + className}
+      style={{ background: `linear-gradient(to right, #1a1a1a ${pct}%, #ECEBEA ${pct}%)` }}
+    />
   );
 }
 
@@ -1095,36 +1426,27 @@ function SpinnerIcon() {
   );
 }
 
+function SavingSpinner() {
+  return (
+    <div className="design-saving">
+      <svg className="publish-spinner" width="21" height="21" viewBox="0 0 21 21" fill="none">
+        <circle cx="10.5" cy="10.5" r="7.5" stroke="currentColor" strokeWidth="2" strokeDasharray="33 14.1" strokeLinecap="round" />
+      </svg>
+    </div>
+  );
+}
+
 /* ════════════════════════════════════════════
    Icons (config-driven)
    ════════════════════════════════════════════ */
 
-function ThemeIcon({ theme }: { theme?: ThemeConfig }) {
-  const bgColor = theme?.colors?.background || "#ffffff";
-  const textColor = theme?.colors?.text || "#1a1a1a";
-  const buttonBg = theme?.colors?.buttonBg || "#8B3DFF";
-  const buttonText = theme?.colors?.buttonText || "#fff";
-  const isOutline = theme?.buttons?.variant === "outline";
-  const radius = theme?.buttons?.radius;
-  const btnR = radius === "square" ? "0px" : radius === "rounded" ? "3px" : radius === "round" ? "4px" : radius === "full" ? "999px" : "5px";
-  const family = FONT_OPTIONS.find(f => f.key === theme?.typography?.headingFont)?.family || "Inter, sans-serif";
-  const bgMode = theme?.background?.mode || "fill";
-  const previewBg = wallpaperPreviewStyle(bgMode, bgColor, theme?.background || { mode: "fill" });
+function ThemeIcon() {
+  const { state } = useContext(WalletCardCtx);
+  const design = stateToDesignConfig(state);
 
   return (
-    <div className="design-icon-box design-icon-box--fill design-icon-box--theme">
-      <div style={{ ...previewBg, position: "absolute", inset: 0, borderRadius: "inherit" }} />
-      <span style={{
-        position: "absolute", top: 12, left: 9,
-        fontSize: 22, fontWeight: 700, fontFamily: family, lineHeight: 1,
-        color: textColor,
-      }}>Aa</span>
-      <div style={{
-        position: "absolute", bottom: 25, left: 12, right: -15,
-        height: 20, borderRadius: btnR,
-        background: isOutline ? "transparent" : buttonBg,
-        border: isOutline ? `1.5px solid ${buttonBg}` : "none",
-      }} />
+    <div className="design-icon-box--theme">
+      <WalletCard design={design} dateLabel="Jun 22 - 25" className="wallet-card--theme-icon" />
     </div>
   );
 }
