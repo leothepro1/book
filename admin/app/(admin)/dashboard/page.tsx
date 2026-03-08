@@ -1,5 +1,7 @@
 import { getCurrentTenant } from "../_lib/tenant";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const tenantData = await getCurrentTenant();
 

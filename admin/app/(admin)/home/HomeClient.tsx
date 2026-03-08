@@ -1970,7 +1970,7 @@ function CardItem({ card, onToggle, onDelete, onArchive, onUpdate, openPanel, on
             >{sub}</span>
             {!editingUrl && (
               <button type="button" className="home-card-icon-btn" aria-label="Redigera URL"
-                onClick={() => { setEditingUrl(true); setUrlVal((card as any).url ?? (card as any).fileUrl ?? (card as any).email ?? (card as any).phone ?? ""); setTimeout(() => { const el = urlInputRef.current; if (el) { el.focus(); const range = document.createRange(); range.selectNodeContents(el); const sel = window.getSelection(); sel?.removeAllRanges(); sel?.addRange(range); } }, 0); }}>
+                onClick={() => { setEditingUrl(true); setTimeout(() => { const el = urlInputRef.current; if (el) { el.focus(); const range = document.createRange(); range.selectNodeContents(el); const sel = window.getSelection(); sel?.removeAllRanges(); sel?.addRange(range); } }, 0); }}>
                 <PenIcon />
               </button>
             )}
