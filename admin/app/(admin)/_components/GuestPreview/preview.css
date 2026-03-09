@@ -76,41 +76,45 @@
 
 .preview-phone {
   position: relative;
-  aspect-ratio: 393 / 852;
-  height: 100%;
-  max-height: 512px;
+  width: 234px;
+  height: 507px;
   background: white;
-  border-radius: 21px;
+  border-radius: 17px;
   overflow: hidden;
   box-shadow: 0px 0px 0px 1px rgba(0, 0, 0, 0.04), 0px 1px 2px rgba(0, 0, 0, 0.04), 0px 8px 32px rgba(0, 0, 0, 0.1);
-  transform: scale(0.85);
+  flex-shrink: 0;
 }
 
 .preview-phone__iframe {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 0;
+  left: 0;
+  width: 393px;
+  height: 852px;
   border: none;
   background: white;
+  transform-origin: top left;
+  transform: scale(0.596);
 }
 
 /* ── Responsive sizing ── */
 
-@media (min-height: 750px) {
+@media (min-height: 800px) {
   .preview-phone {
-    max-height: 580px;
+    width: 258px;
+    height: 560px;
+  }
+  .preview-phone__iframe {
+    transform: scale(0.657);
   }
 }
 
-@media (min-height: 900px) {
+@media (min-height: 950px) {
   .preview-phone {
-    max-height: 660px;
+    width: 282px;
+    height: 612px;
   }
-}
-
-@media (min-height: 1050px) {
-  .preview-phone {
-    max-height: 760px;
+  .preview-phone__iframe {
+    transform: scale(0.718);
   }
 }

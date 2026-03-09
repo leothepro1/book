@@ -70,7 +70,14 @@ model Tenant {
   draftSettings  Json?
   draftUpdatedAt DateTime?
   draftUpdatedBy String?  // Clerk userId som senast editerade draft
-  
+
+  /// Optimistic locking — increments on every publish.
+  /// Prevents concurrent publish from silently overwriting each other.
+  settingsVersion Int @default(0)
+
+  /// Snapshot of settings before last publish — enables one-click rollback.
+  previousSettings Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

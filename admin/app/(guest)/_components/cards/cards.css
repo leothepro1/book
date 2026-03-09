@@ -553,7 +553,7 @@
 .morph-modal__footer-left { flex: 1; min-width: 0; }
 
 .morph-modal__cta {
-    color: #fff;
+    color: #fff !important;
     width: max-content;
     font-family: var(--font-button, inherit);
     background: #1a1a1a;

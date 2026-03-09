@@ -35,6 +35,7 @@ import { updateDraft } from "../_lib/tenant/updateDraft";
 import { ImageUpload } from "../_components/ImageUpload";
 import { useUpload } from "../_hooks/useUpload";
 import { PublishBarProvider, PublishBar, usePublishBar } from "../_components/PublishBar";
+import { ThemePickerContent } from "../themes/ThemePickerContent";
 
 /**
  * Holds a local copy of the card for responsive inputs.
@@ -163,27 +164,91 @@ export default function HomeClient({ initialConfig }: { initialConfig: TenantCon
   );
 }
 
+type HomeTab = "tema" | "lankar";
+
 function HomeClientInner() {
+  const [tab, setTab] = useState<HomeTab>("lankar");
   const [view, setView] = useState<"home" | "archive">("home");
   const { config } = usePreview();
   const getConfig = useCallback(() => config, [config]);
 
+  // Theme view state — lifted here so header + preview can react
+  type ThemeView = "grid" | "detail" | "configure";
+  const configHasTheme = !!(config && config.themeId != null && config.themeId !== "");
+  const [themeView, setThemeView] = useState<ThemeView>(() =>
+    configHasTheme ? "configure" : "grid"
+  );
+  const [detailManifest, setDetailManifest] = useState<import("@/app/(guest)/_lib/themes/types").ThemeManifest | null>(null);
+
+  // Sync: if theme gets removed (undo, external change) while on configure → grid
+  useEffect(() => {
+    if (themeView === "configure" && !configHasTheme) {
+      setThemeView("grid");
+    }
+  }, [configHasTheme, themeView]);
+
+  const handleThemeNavigate = useCallback((nextView: ThemeView, manifest?: import("@/app/(guest)/_lib/themes/types").ThemeManifest) => {
+    setThemeView(nextView);
+    setDetailManifest(manifest ?? null);
+  }, []);
+
+  const themeDetailOpen = tab === "tema" && themeView === "detail";
+  const showThemeBack = tab === "tema" && themeView === "configure";
+
+  const headerTitle = tab === "tema"
+    ? "Home"
+    : view === "archive"
+      ? "Arkiv"
+      : "Home";
+
   return (
     <PublishBarProvider getConfig={getConfig}>
-      <div className="admin-page">
+      <div className={`admin-page${themeDetailOpen ? " admin-page--no-preview" : ""}`}>
         <div className="admin-editor">
           <div className="admin-header">
-            {view === "archive" && <BackButton onClick={() => setView("home")} />}
-            <h1 className="admin-title">{view === "archive" ? "Arkiv" : "Länkar"}</h1>
+            {showThemeBack && <BackButton onClick={() => setThemeView("grid")} />}
+            {tab === "lankar" && view === "archive" && <BackButton onClick={() => setView("home")} />}
+            <h1 className="admin-title">{headerTitle}</h1>
+
+            {/* Tab buttons */}
+            <div className="home-tabs">
+              <button
+                type="button"
+                className={`home-tab ${tab === "tema" ? "home-tab--active" : ""}`}
+                onClick={() => { setTab("tema"); setView("home"); }}
+              >
+                Tema
+              </button>
+              <button
+                type="button"
+                className={`home-tab ${tab === "lankar" ? "home-tab--active" : ""}`}
+                onClick={() => setTab("lankar")}
+              >
+                Länkar
+              </button>
+            </div>
+
             <PublishBar />
           </div>
           <div className="admin-content">
-            {view === "home" ? <HomePageInner onNavigateToArchive={() => setView("archive")} /> : <ArchivePageInner />}
+            {tab === "tema" ? (
+              <ThemePickerContent
+                view={themeView}
+                detailManifest={detailManifest}
+                onNavigate={handleThemeNavigate}
+              />
+            ) : (
+              view === "home"
+                ? <HomePageInner onNavigateToArchive={() => setView("archive")} />
+                : <ArchivePageInner />
+            )}
           </div>
         </div>
-        <div className="admin-preview">
-          <GuestPreviewFrame route="/p/[token]" className="preview-widget-sticky" />
-        </div>
+        {!themeDetailOpen && (
+          <div className="admin-preview">
+            <GuestPreviewFrame route="/p/[token]" className="preview-widget-sticky" />
+          </div>
+        )}
       </div>
     </PublishBarProvider>
   );
@@ -2275,7 +2340,7 @@ function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, onDel
 
         {/* Right: add, more, toggle */}
         <div className="home-category-card-right">
-          <button type="button" className="home-card-icon-btn" aria-label="Lägg till kort" onClick={onAddCard}>
+          <button type="button" className="home-card-icon-btn" aria-label="Lägg till kort" onClick={() => onAddCard()}>
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#1a1a1a" viewBox="0 0 256 256">
               <line x1="40" y1="128" x2="216" y2="128" stroke="#1a1a1a" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16"/>
               <line x1="128" y1="40" x2="128" y2="216" stroke="#1a1a1a" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16"/>
@@ -2349,7 +2414,7 @@ function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, onDel
             return (
               <div className="home-category-card-empty">
                 <p className="home-category-empty-text">Lägg till en ny länk eller dra och släpp en befintlig länk i den här samlingen.</p>
-                <button type="button" className="home-category-empty-btn" onClick={onAddCard}>
+                <button type="button" className="home-category-empty-btn" onClick={() => onAddCard()}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
                   Lägg till länk
                 </button>

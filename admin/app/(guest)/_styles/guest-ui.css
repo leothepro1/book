@@ -73,6 +73,7 @@
 
 .g-body {
   font-family: var(--font-body);
+  overflow-x: hidden;
 }
 
 .g-btn-font {

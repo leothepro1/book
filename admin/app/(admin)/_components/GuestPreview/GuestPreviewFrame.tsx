@@ -5,7 +5,10 @@ import { usePreview } from "./PreviewContext";
 import { usePublishBar } from "../PublishBar";
 import type { GuestPreviewProps } from "./types";
 import type { ParentToPreviewMessage } from "@/app/(preview)/_lib/previewMessages";
+import { isValidPreviewMessage } from "@/app/(preview)/_lib/previewMessages";
 import "./preview-spinner.css";
+
+const __DEV__ = process.env.NODE_ENV === "development";
 
 const ROUTE_TO_SLUG: Readonly<Record<string, string>> = {
   "/p/[token]": "home",
@@ -62,22 +65,20 @@ function GuestPreviewFrame({
     try {
       const w = iframeRef.current?.contentWindow;
       if (w) {
-        console.log("[GuestPreview] Sending:", message.type);
+        if (__DEV__) console.log("[GuestPreview] Sending:", message.type);
         w.postMessage(message, window.location.origin);
-      } else {
-        console.log("[GuestPreview] No contentWindow for:", message.type);
       }
     } catch (e) {
-      console.log("[GuestPreview] postMessage failed:", e);
+      if (__DEV__) console.warn("[GuestPreview] postMessage failed:", e);
     }
   }, []);
 
   // ── When bridge signals ready, push full current theme ───────
   useEffect(() => {
     function onMessage(event: MessageEvent) {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === "preview-ready") {
-        console.log("[GuestPreview] Received preview-ready from iframe");
+      if (!isValidPreviewMessage(event)) return;
+      if (event.data.type === "preview-ready") {
+        if (__DEV__) console.log("[GuestPreview] Received preview-ready");
         if (config?.theme) {
           const w = iframeRef.current?.contentWindow;
           if (w) w.postMessage({ type: "theme-update", theme: config.theme } satisfies ParentToPreviewMessage, window.location.origin);
@@ -95,7 +96,7 @@ function GuestPreviewFrame({
     const json = JSON.stringify(config.theme);
     if (json === prevThemeJson.current) return;
     prevThemeJson.current = json;
-    console.log("[GuestPreview] Theme changed, posting to iframe");
+    if (__DEV__) console.log("[GuestPreview] Theme changed, posting to iframe");
     postToPreview({ type: "theme-update", theme: config.theme });
   }, [config?.theme, postToPreview]);
 
@@ -104,7 +105,7 @@ function GuestPreviewFrame({
   useEffect(() => {
     if (draftVersion === 0 || draftVersion === prevDraftVersion.current) return;
     prevDraftVersion.current = draftVersion;
-    console.log("[GuestPreview] Draft saved, sending content-refresh");
+    if (__DEV__) console.log("[GuestPreview] Draft saved, sending content-refresh");
     postToPreview({ type: "content-refresh" });
   }, [draftVersion, postToPreview]);
 

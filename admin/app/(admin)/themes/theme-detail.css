@@ -1,0 +1,437 @@
+/* ── Theme Detail View ───────────────────────── */
+
+.td {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+/* ── Dark preview section ────────────────────── */
+
+.td__preview {
+  position: relative;
+  background: #131111;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 24px 0;
+  overflow: hidden;
+}
+
+/* ── Back button ─────────────────────────────── */
+
+.td__back {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+  z-index: 2;
+}
+
+.td__back:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+/* ── Phone frame ─────────────────────────────── */
+
+.td__phone-wrap {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: -40px;
+  position: relative;
+}
+
+.td__phone {
+  position: relative;
+  width: 360px;
+  height: 640px;
+  background: white;
+  border-radius: 21px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 8px 40px rgba(0, 0, 0, 0.35);
+}
+
+.td__phone--loading {
+  box-shadow: none;
+  background: transparent;
+}
+
+.td__phone-iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: white;
+}
+
+/* Blocks all pointer events until interactive mode is enabled */
+.td__phone-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  cursor: pointer;
+}
+
+/* Cursor-following tooltip pill */
+.td__cursor-tooltip {
+  position: absolute;
+  pointer-events: none;
+  transform: translate(-50%, 28px);
+  padding: 4px 6px;
+  border-radius: 500px;
+  background: #131111;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  letter-spacing: 0.2px;
+}
+
+.td__phone-overlay:hover .td__cursor-tooltip {
+  opacity: 1;
+}
+
+/* When interactive, allow scrolling/clicking inside iframe */
+.td__phone--interactive {
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.2),
+    0 8px 40px rgba(0, 0, 0, 0.35);
+}
+
+/* ── Spinner ─────────────────────────────────── */
+
+.td__phone-spinner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  z-index: 1;
+}
+
+.td__spinner {
+  width: 28px;
+  height: 28px;
+  border: 2.5px solid rgba(255, 255, 255, 0.15);
+  border-top-color: rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  animation: td-spin 0.65s linear infinite;
+}
+
+@keyframes td-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Side controls (visible in demo mode) ────── */
+
+.td__side-control {
+  position: absolute;
+  top: 0;
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.32, 0.72, 0, 1.12);
+}
+
+.td__side-control--left {
+  right: calc(50% + 232px);
+}
+
+.td__side-control--right {
+  left: calc(50% + 232px);
+}
+
+.td__side-control--visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.td__close-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid #A8A29F;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.td__close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #fff;
+}
+
+.td__btn--ghost {
+  background: transparent;
+  color: #fff;
+  border: 1px solid #A8A29F;
+}
+
+.td__btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #fff;
+}
+
+.td__btn--ghost:disabled {
+  opacity: 0.6;
+}
+
+/* ── Footer bar ──────────────────────────────── */
+
+.td__footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: none;
+  backdrop-filter: blur(10px);
+  border-top: none;
+  padding-bottom: 48px;
+  transform: translateY(0);
+  transition: transform 0.7s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.td__footer--hidden {
+  transform: translateY(calc(100% + 30px));
+  transition: transform 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.td__footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  max-width: 950px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px #0003;
+}
+
+.td__footer-name {
+  font-size: clamp(1.125rem, 0.781vw + 0.813rem, 1.438rem);
+  font-weight: 600;
+  color: #1a1a1a;
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  margin-left: 16px;
+}
+
+.td__footer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Buttons ─────────────────────────────────── */
+
+.td__btn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease, transform 0.35s cubic-bezier(0.22, 0.68, 0, 1.06);
+  line-height: 1.25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.td__btn:disabled {
+  pointer-events: none;
+}
+
+.td__btn--primary:disabled {
+  background: #e6e5e3;
+  color: #a1a09e;
+}
+
+.td__btn:active:not(:disabled) {
+  transform: scale(0.94);
+  transition: transform 0.1s cubic-bezier(0.22, 0.68, 0, 1);
+}
+
+.td__btn--primary {
+  background: #0075DE;
+  color: #fff;
+}
+
+.td__btn--primary:hover {
+  background: #0068c7;
+}
+
+.td__btn--secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: #1a1a1a;
+  border: 1px solid #D6D3D1;
+}
+
+.td__btn--secondary:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.td__btn--secondary-active {
+  background: rgba(0, 0, 0, 0.04);
+  color: #1a1a1a;
+  border: 1px solid #D6D3D1;
+}
+
+.td__btn--secondary-active:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* ── White info section ──────────────────────── */
+
+.td__info {
+  background: #FBFAF9;
+  padding: 64px 24px 56px;
+}
+
+.td__info-inner {
+  max-width: 950px;
+  margin: 0 auto;
+}
+
+.td__heading {
+  font-size: clamp(2.1rem, 1.594vw + 0.862rem, 1.538rem);
+  font-weight: 650;
+  color: #1a1a1a;
+  margin: 0 0 8px;
+  line-height: 1.3;
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+}
+
+.td__description {
+  font-size: 17px;
+  font-weight: 500;
+  color: #6D6C6B;
+  line-height: 1.55;
+  margin: 0 0 32px;
+  max-width: 100%;
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ── Feature grid ────────────────────────────── */
+
+.td__features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.td__feature {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.td__feature-img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #F6F5F4;
+}
+
+.td__feature-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.td__feature-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1.3;
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+}
+
+.td__feature-desc {
+  font-size: 13.5px;
+  color: #6D6C6B;
+  line-height: 1.45;
+  margin: 0;
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ── Button spinner (same as PublishBar) ─────── */
+
+.td__btn-spinner {
+  animation: td-btn-spin 0.6s linear infinite, td-btn-spinner-in 0.25s ease-out both;
+  flex-shrink: 0;
+  will-change: width, opacity, margin-left;
+}
+
+.td__btn-spinner--out {
+  animation: td-btn-spin 0.6s linear infinite, td-btn-spinner-out 0.2s ease-in both;
+}
+
+@keyframes td-btn-spinner-in {
+  0%   { width: 0; opacity: 0; margin-left: -8px; }
+  100% { width: 21px; opacity: 1; margin-left: 0; }
+}
+
+@keyframes td-btn-spinner-out {
+  0%   { width: 21px; opacity: 1; margin-left: 0; }
+  100% { width: 0; opacity: 0; margin-left: -8px; }
+}
+
+@keyframes td-btn-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Entrance animation ──────────────────────── */
+
+@keyframes td-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.td {
+  animation: td-fade-in 0.2s ease;
+}
+
+/* ── Responsive ──────────────────────────────── */
+
+@media (max-width: 600px) {
+  .td__features {
+    grid-template-columns: 1fr;
+  }
+
+  .td__preview {
+    padding: 40px 16px 0;
+  }
+
+  .td__footer-inner {
+    padding: 8px;
+  }
+}

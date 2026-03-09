@@ -80,11 +80,12 @@ export function PreviewProvider({
     debounceRef.current = setTimeout(fetchDraft, REFRESH_DEBOUNCE_MS);
   }, [fetchDraft]);
 
-  // Optimistic update — mergar changes direkt i lokal state
+  // Optimistic update — merges changes into local state instantly (no DB roundtrip)
+  // Arrays are fully replaced (not concatenated) to match updateDraft server behavior
   const updateConfig = useCallback((changes: Partial<TenantConfig>) => {
     setConfig(prev => {
       if (!prev) return prev;
-      return merge(prev as any, changes as any, { arrayMerge: overwriteArrays }) as TenantConfig;
+      return merge<TenantConfig>(prev, changes as TenantConfig, { arrayMerge: overwriteArrays });
     });
   }, []);
 
@@ -124,7 +125,11 @@ export function PreviewProvider({
         try {
           const data = JSON.parse(event.data) as DraftUpdateEvent | { type: string };
           if (data.type === "draft_updated") refresh();
-        } catch { /* malformed — ignore */ }
+        } catch (err) {
+          if (process.env.NODE_ENV === "development") {
+            console.warn("[Preview] Malformed SSE message:", err);
+          }
+        }
       };
     };
 

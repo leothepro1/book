@@ -3,6 +3,7 @@
 import { prisma } from "@/app/_lib/db/prisma";
 import { getCurrentTenant } from "./getCurrentTenant";
 import { getAuth } from "../auth/devAuth";
+import type { InputJsonValue } from "@prisma/client/runtime/library";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import merge from "deepmerge";
 
@@ -27,22 +28,14 @@ export async function updateDraft(
       arrayMerge: overwriteArrays,
     });
 
-    // DEBUG: log card count before/after merge
-    const beforeCards = (baseConfig as any)?.home?.cards?.length ?? 0;
-    const afterCards = (updatedDraft as any)?.home?.cards?.length ?? 0;
-    const changesCards = (changes as any)?.home?.cards?.length ?? 0;
-    console.log(`[updateDraft] cards: base=${beforeCards}, changes=${changesCards}, merged=${afterCards}`);
-
     await prisma.tenant.update({
       where: { id: tenant.id },
       data: {
-        draftSettings: updatedDraft as any,
+        draftSettings: updatedDraft as unknown as InputJsonValue,
         draftUpdatedAt: new Date(),
         draftUpdatedBy: effectiveUserId,
       },
     });
-
-    console.log(`[updateDraft] SUCCESS — saved ${afterCards} cards to DB`);
     return { success: true };
   } catch (error) {
     console.error("updateDraft error:", error);

@@ -14,6 +14,22 @@ import { updateDraft } from "../../_lib/tenant/updateDraft";
 import { publishDraft, discardDraft } from "../../_lib/tenant/publishDraft";
 import { useNavigationGuard } from "../NavigationGuard";
 
+/**
+ * Pick keys from `source` that exist in `template`.
+ * Used to create symmetrical undo/redo snapshots without `as any`.
+ */
+function pickKeys(
+  source: TenantConfig,
+  template: Partial<TenantConfig>,
+): Partial<TenantConfig> {
+  const result: Partial<TenantConfig> = {};
+  for (const key of Object.keys(template) as (keyof TenantConfig)[]) {
+    // Safe: we're reading from a fully typed TenantConfig
+    (result as Record<string, unknown>)[key] = source[key];
+  }
+  return result;
+}
+
 /* ── Context value ── */
 
 interface PublishBarContextValue {
@@ -89,11 +105,8 @@ export function PublishBarProvider({ children, getConfig }: PublishBarProviderPr
     const previousSnapshot = undoStack[undoStack.length - 1];
     const config = getConfig();
     if (config) {
-      // Snapshot current state for redo — use the keys from the undo snapshot
-      const redoSnapshot: Partial<TenantConfig> = {};
-      for (const key of Object.keys(previousSnapshot) as (keyof TenantConfig)[]) {
-        (redoSnapshot as any)[key] = (config as any)[key];
-      }
+      // Snapshot current state for redo — pick only the keys that the undo snapshot contains
+      const redoSnapshot = pickKeys(config, previousSnapshot);
       setRedoStack(prev => [...prev, redoSnapshot]);
     }
 
@@ -114,10 +127,7 @@ export function PublishBarProvider({ children, getConfig }: PublishBarProviderPr
     const redoSnapshot = redoStack[redoStack.length - 1];
     const config = getConfig();
     if (config) {
-      const undoSnapshot: Partial<TenantConfig> = {};
-      for (const key of Object.keys(redoSnapshot) as (keyof TenantConfig)[]) {
-        (undoSnapshot as any)[key] = (config as any)[key];
-      }
+      const undoSnapshot = pickKeys(config, redoSnapshot);
       setUndoStack(prev => [...prev, undoSnapshot]);
     }
 

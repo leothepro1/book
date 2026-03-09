@@ -6,6 +6,8 @@ import { themeToStyleAttr, backgroundStyle, googleFontsUrl } from "@/app/(guest)
 import type { ThemeConfig } from "@/app/(guest)/_lib/theme/types";
 import { isValidPreviewMessage } from "../_lib/previewMessages";
 
+const __DEV__ = process.env.NODE_ENV === "development";
+
 /**
  * PreviewBridge — lives inside the preview iframe.
  *
@@ -76,7 +78,7 @@ export function PreviewBridge() {
   const handleContentRefresh = useCallback(() => {
     if (refreshInFlightRef.current) return;
     refreshInFlightRef.current = true;
-    console.log("[PreviewBridge] Refreshing server data (seamless)");
+    if (__DEV__) console.log("[PreviewBridge] Refreshing server data");
     router.refresh();
     // Allow next refresh after a short cooldown
     setTimeout(() => { refreshInFlightRef.current = false; }, 500);
@@ -86,12 +88,12 @@ export function PreviewBridge() {
     // Only activate if we're inside an iframe
     if (window === window.parent) return;
 
-    console.log("[PreviewBridge] Mounted inside iframe, registering listener");
+    if (__DEV__) console.log("[PreviewBridge] Mounted inside iframe");
 
     function onMessage(event: MessageEvent) {
       if (!isValidPreviewMessage(event)) return;
       const { data } = event;
-      console.log("[PreviewBridge] Received:", data.type);
+      if (__DEV__) console.log("[PreviewBridge] Received:", data.type);
 
       switch (data.type) {
         case "theme-update":
@@ -106,7 +108,7 @@ export function PreviewBridge() {
     window.addEventListener("message", onMessage);
 
     // Signal parent that we're ready to receive messages
-    console.log("[PreviewBridge] Sending preview-ready to parent");
+    if (__DEV__) console.log("[PreviewBridge] Sending preview-ready");
     window.parent.postMessage({ type: "preview-ready" }, window.location.origin);
 
     return () => {

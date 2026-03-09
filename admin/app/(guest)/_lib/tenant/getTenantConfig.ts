@@ -2,25 +2,25 @@ import { prisma } from "@/app/_lib/db/prisma";
 import type { TenantConfig } from "./types";
 
 /**
- * Hämtar tenant config för guest portal.
- * 
- * preferDraft: true → använd draftSettings (anropas från preview-route)
- * preferDraft: false/undefined → använd live settings (default)
- * 
- * Auth hanteras INTE här – det sker i preview-routen.
+ * Resolves the full TenantConfig for a tenant.
+ *
+ * preferDraft: true  → merges draftSettings over live (admin preview)
+ * preferDraft: false → uses live settings only (guest portal)
+ *
+ * Merge strategy: shallow spread with explicit home.cards handling
+ * to prevent deepmerge from concatenating card arrays.
+ *
+ * Auth is NOT handled here — caller is responsible.
  */
 export async function getTenantConfig(
   tenantIdOrSlug: string,
-  options?: { preferDraft?: boolean }
+  options?: { preferDraft?: boolean },
 ): Promise<TenantConfig> {
   const useDraft = options?.preferDraft || false;
 
   const tenant = await prisma.tenant.findFirst({
     where: {
-      OR: [
-        { id: tenantIdOrSlug },
-        { slug: tenantIdOrSlug },
-      ],
+      OR: [{ id: tenantIdOrSlug }, { slug: tenantIdOrSlug }],
     },
   });
 
@@ -28,31 +28,54 @@ export async function getTenantConfig(
     throw new Error(`Tenant not found: ${tenantIdOrSlug}`);
   }
 
-  // Prioritize draft if explicitly requested
   const defaults = getDefaultConfig(tenant.id);
 
-  if (useDraft && tenant.draftSettings && typeof tenant.draftSettings === 'object') {
-    const draft = tenant.draftSettings as any;
-    return {
-      ...defaults,
-      ...draft,
-      tenantId: tenant.id,
-      home: { ...defaults.home, ...(draft.home || {}), cards: draft.home?.cards || defaults.home.cards },
-    };
+  // Pick the right settings source
+  const raw = useDraft
+    ? (tenant.draftSettings ?? tenant.settings)
+    : tenant.settings;
+
+  if (!raw || typeof raw !== "object") {
+    return defaults;
   }
 
-  // Use live settings
-  if (tenant.settings && typeof tenant.settings === 'object') {
-    const live = tenant.settings as any;
-    return {
-      ...defaults,
-      ...live,
-      tenantId: tenant.id,
-      home: { ...defaults.home, ...(live.home || {}), cards: live.home?.cards || defaults.home.cards },
-    };
-  }
+  const stored = raw as Record<string, unknown>;
 
-  return getDefaultConfig(tenant.id);
+  return mergeConfig(defaults, stored, tenant.id);
+}
+
+/**
+ * Merge stored JSON into typed defaults.
+ *
+ * Explicit per-field merge ensures we never lose nested defaults
+ * and never concatenate arrays that should be replaced.
+ */
+function mergeConfig(
+  defaults: TenantConfig,
+  stored: Record<string, unknown>,
+  tenantId: string,
+): TenantConfig {
+  const storedHome = (stored.home ?? {}) as Record<string, unknown>;
+
+  return {
+    ...defaults,
+    ...stored,
+    tenantId,
+    // home.cards is replaced entirely (not merged) — same as updateDraft's overwriteArrays
+    home: {
+      ...defaults.home,
+      ...storedHome,
+      cards: Array.isArray(storedHome.cards) ? storedHome.cards : defaults.home.cards,
+      archivedCards: Array.isArray(storedHome.archivedCards)
+        ? storedHome.archivedCards
+        : defaults.home.archivedCards,
+    },
+    // Ensure these always exist (may be missing in old stored data)
+    sectionSettings: (stored.sectionSettings as Record<string, Record<string, unknown>>) ?? {},
+    themeSettings: (stored.themeSettings as Record<string, unknown>) ?? {},
+    themeId: (stored.themeId as string | null) ?? null,
+    themeVersion: (stored.themeVersion as string | null) ?? null,
+  } as TenantConfig;
 }
 
 function getDefaultConfig(tenantId: string): TenantConfig {
@@ -116,5 +139,9 @@ function getDefaultConfig(tenantId: string): TenantConfig {
     },
     supportLinks: {},
     rules: [],
+    themeId: null,
+    themeVersion: null,
+    sectionSettings: {},
+    themeSettings: {},
   };
 }
