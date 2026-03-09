@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { t, type AdminLocale } from '../_lib/i18n';
 import { useSidebar } from './SidebarContext';
 import { useNavigationGuard } from './NavigationGuard';
+import { SidebarUserRow } from './SidebarUserRow';
 
 export function Sidebar() {
   const { isCollapsed, setIsCollapsed } = useSidebar();
@@ -26,10 +27,13 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`fixed left-0 top-[3.5rem] h-[calc(100vh-3.5rem)] bg-[#F1F0EE] rounded-tl-[12px] transition-all duration-300 ease-in-out z-30 flex flex-col ${
+      className={`fixed left-0 top-0 h-screen bg-[#F1F0EE] transition-all duration-300 ease-in-out z-30 flex flex-col ${
         isCollapsed ? 'w-16' : 'w-64'
       }`}
     >
+      {/* Profile row */}
+      <SidebarUserRow isCollapsed={isCollapsed} />
+
       {/* Navigation - flex-1 för att ta upp allt utrymme */}
       <nav className="p-3 flex-1 overflow-y-auto">
         {/* Min portal - Accordion (aldrig active själv) */}

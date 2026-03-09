@@ -264,28 +264,17 @@ function PanelSkeleton() {
  * extend loading via usePanelLoading().setLoading(true).
  */
 function PanelContentWrapper({ children, panelKey }: { children: React.ReactNode; panelKey: string | null }) {
-  const [ready, setReady] = useState(false);
   const [externalLoading, setExternalLoading] = useState(false);
-
-  useEffect(() => {
-    setReady(false);
-    const frame = requestAnimationFrame(() => {
-      setReady(true);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [panelKey]);
-
-  const isLoading = !ready || externalLoading;
 
   return (
     <PanelLoadingContext.Provider value={{ setLoading: setExternalLoading }}>
       <div className="panel-content-wrap">
-        <div className={"panel-skeleton" + (isLoading ? "" : " panel-skeleton--hidden")}>
+        <div className={"panel-skeleton" + (!externalLoading ? " panel-skeleton--hidden" : "")}>
           <div className="panel-skeleton-bar" />
           <div className="panel-skeleton-bar" />
           <div className="panel-skeleton-bar" />
         </div>
-        <div className={"panel-content" + (isLoading ? " panel-content--hidden" : "")}>
+        <div className={"panel-content" + (externalLoading ? " panel-content--hidden" : "")}>
           {children}
         </div>
       </div>
@@ -1492,6 +1481,31 @@ function isoToSchedule(iso: string | undefined): ScheduleDate {
   };
 }
 
+function SchedSpinner({ visible, variant }: { visible: boolean; variant?: "dark" }) {
+  const [mounted, setMounted] = useState(false);
+  const [animState, setAnimState] = useState<"enter" | "exit" | "idle">("idle");
+  const prevVisible = useRef(visible);
+  useEffect(() => {
+    if (visible && !prevVisible.current) { setMounted(true); setAnimState("enter"); }
+    else if (!visible && prevVisible.current) { setAnimState("exit"); }
+    prevVisible.current = visible;
+  }, [visible]);
+  const handleAnimationEnd = () => {
+    if (animState === "exit") { setMounted(false); setAnimState("idle"); }
+    else if (animState === "enter") { setAnimState("idle"); }
+  };
+  if (!mounted) return null;
+  return (
+    <svg
+      className={`sched-animated-spinner${variant === "dark" ? " sched-animated-spinner--dark" : ""}${animState === "exit" ? " sched-animated-spinner--out" : ""}`}
+      width="21" height="21" viewBox="0 0 21 21" fill="none"
+      onAnimationEnd={handleAnimationEnd}
+    >
+      <circle cx="10.5" cy="10.5" r="7.5" stroke="currentColor" strokeWidth="2" strokeDasharray="33 14.1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function SchedulePanelContent({ card, onUpdate }: { card: Card; onUpdate: (updated: Card) => void }) {
   const isScheduled = !!(card.scheduledShow || card.scheduledHide);
   const initialShowRef = useRef<ScheduleDate>(isoToSchedule(card.scheduledShow));
@@ -1500,7 +1514,8 @@ function SchedulePanelContent({ card, onUpdate }: { card: Card; onUpdate: (updat
   const [hideFrom, setHideFrom] = useState<ScheduleDate>(() => initialHideRef.current);
   const [openPicker, setOpenPicker] = useState<"show"|"hide"|null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [savingAction, setSavingAction] = useState<"save" | "cancel" | null>(null);
+  const saving = savingAction !== null;
   const showRef = useRef<HTMLButtonElement>(null);
   const hideRef = useRef<HTMLButtonElement>(null);
 
@@ -1519,31 +1534,29 @@ function SchedulePanelContent({ card, onUpdate }: { card: Card; onUpdate: (updat
   const hasChanges = !scheduleDatesEqual(showFrom, initialShowRef.current)
     || !scheduleDatesEqual(hideFrom, initialHideRef.current);
 
-  const doSave = (updated: Card) => {
-    setSaving(true);
-    setTimeout(() => { onUpdate(updated); setSaving(false); }, 600);
-  };
-
   const handleSave = () => {
+    setSavingAction("save");
     const updated = { ...card } as any;
     const showISO = scheduleToISO(showFrom);
     const hideISO = scheduleToISO(hideFrom);
     if (showISO) updated.scheduledShow = showISO; else delete updated.scheduledShow;
     if (hideISO) updated.scheduledHide = hideISO; else delete updated.scheduledHide;
     if (showISO) updated.isActive = true;
-    doSave(updated as Card);
+    initialShowRef.current = showFrom;
+    initialHideRef.current = hideFrom;
+    setTimeout(() => { onUpdate(updated as Card); setSavingAction(null); }, 600);
   };
 
   const handleCancel = () => {
+    setSavingAction("cancel");
     const updated = { ...card } as any;
     delete updated.scheduledShow;
     delete updated.scheduledHide;
-    setSaving(true);
     setTimeout(() => {
       onUpdate(updated as Card);
       setShowFrom(null);
       setHideFrom(null);
-      setSaving(false);
+      setSavingAction(null);
     }, 600);
   };
 
@@ -1596,20 +1609,20 @@ function SchedulePanelContent({ card, onUpdate }: { card: Card; onUpdate: (updat
       {isScheduled ? (
         <div className="sched-actions">
           <button type="button"
-            className={"sched-save-btn" + (hasChanges ? " sched-save-btn--active" : "")}
-            disabled={!hasChanges || saving}
-            style={saving ? { pointerEvents: "none" } : undefined}
-            onClick={handleSave}>
-            {saving && <span className="sched-spinner" />}
-            Spara ändringar
-          </button>
-          <button type="button"
             className="sched-cancel-btn"
             disabled={saving}
             style={saving ? { pointerEvents: "none" } : undefined}
             onClick={handleCancel}>
-            {saving && <span className="sched-spinner sched-spinner--dark" />}
-            Avbryt schemaläggning
+            <SchedSpinner visible={savingAction === "cancel"} variant="dark" />
+            <span className="sched-btn-label">Avbryt schemaläggning</span>
+          </button>
+          <button type="button"
+            className={"sched-save-btn" + (hasChanges ? " sched-save-btn--active" : "")}
+            disabled={!hasChanges || saving}
+            style={saving ? { pointerEvents: "none" } : undefined}
+            onClick={handleSave}>
+            <SchedSpinner visible={savingAction === "save"} />
+            <span className="sched-btn-label">Spara ändringar</span>
           </button>
         </div>
       ) : (
@@ -1619,8 +1632,8 @@ function SchedulePanelContent({ card, onUpdate }: { card: Card; onUpdate: (updat
             disabled={!hasDate || !hasChanges || saving}
             style={saving ? { pointerEvents: "none" } : undefined}
             onClick={handleSave}>
-            {saving && <span className="sched-spinner" />}
-            Schemalägg
+            <SchedSpinner visible={savingAction === "save"} />
+            <span className="sched-btn-label">Schemalägg</span>
           </button>
         </div>
       )}
@@ -1639,22 +1652,64 @@ const BackButton = ({ onClick }: { onClick: () => void }) => (
   </button>
 );
 
+// ── Confirm Spinner (matches Publicera) ──────────────────────────
+function ConfirmSpinner({ visible, variant }: { visible: boolean; variant?: "dark" }) {
+  const [mounted, setMounted] = useState(false);
+  const [animState, setAnimState] = useState<"enter" | "exit" | "idle">("idle");
+  const prevVisible = useRef(visible);
+  useEffect(() => {
+    if (visible && !prevVisible.current) { setMounted(true); setAnimState("enter"); }
+    else if (!visible && prevVisible.current) { setAnimState("exit"); }
+    prevVisible.current = visible;
+  }, [visible]);
+  const handleAnimationEnd = () => {
+    if (animState === "exit") { setMounted(false); setAnimState("idle"); }
+    else if (animState === "enter") { setAnimState("idle"); }
+  };
+  if (!mounted) return null;
+  return (
+    <svg
+      className={`confirm-spinner${variant === "dark" ? " confirm-spinner--dark" : ""}${animState === "exit" ? " confirm-spinner--out" : ""}`}
+      width="21" height="21" viewBox="0 0 21 21" fill="none"
+      onAnimationEnd={handleAnimationEnd}
+    >
+      <circle cx="10.5" cy="10.5" r="7.5" stroke="currentColor" strokeWidth="2" strokeDasharray="33 14.1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 // ── Confirm Dialog ────────────────────────────────────────────────
 function ConfirmDialog({ title, description, confirmLabel = "Bekräfta", danger = false, onConfirm, onCancel }: {
   title: string; description: string; confirmLabel?: string; danger?: boolean;
   onConfirm: () => void; onCancel: () => void;
 }) {
+  const [loadingAction, setLoadingAction] = useState<"confirm" | "cancel" | null>(null);
+  const loading = loadingAction !== null;
+
+  const handleConfirm = () => {
+    setLoadingAction("confirm");
+    setTimeout(() => { onConfirm(); }, 500);
+  };
+  const handleCancel = () => {
+    setLoadingAction("cancel");
+    setTimeout(() => { onCancel(); }, 400);
+  };
+
   return createPortal(
     <>
-      <div className="confirm-backdrop" onClick={onCancel} />
+      <div className="confirm-backdrop" onClick={loading ? undefined : onCancel} />
       <div className="confirm-dialog">
         <div className="confirm-icon">{danger ? "🗑️" : "⚠️"}</div>
         <div className="confirm-title">{title}</div>
         <div className="confirm-desc">{description}</div>
         <div className="confirm-actions">
-          <button type="button" className="confirm-btn confirm-btn--cancel" onClick={onCancel}>Avbryt</button>
-          <button type="button" className={"confirm-btn" + (danger ? " confirm-btn--danger" : " confirm-btn--primary")} onClick={onConfirm}>
-            {confirmLabel}
+          <button type="button" className="confirm-btn confirm-btn--cancel" disabled={loading} onClick={handleCancel}>
+            <ConfirmSpinner visible={loadingAction === "cancel"} variant="dark" />
+            <span className="confirm-btn-label">Avbryt</span>
+          </button>
+          <button type="button" className={"confirm-btn" + (danger ? " confirm-btn--danger" : " confirm-btn--primary")} disabled={loading} onClick={handleConfirm}>
+            <ConfirmSpinner visible={loadingAction === "confirm"} />
+            <span className="confirm-btn-label">{confirmLabel}</span>
           </button>
         </div>
       </div>
@@ -1841,13 +1896,14 @@ function CardItem({ card, onToggle, onDelete, onArchive, onUpdate, openPanel, on
       panelReadyRef.current = false;
       return;
     }
+
     if (panelReadyRef.current) {
-      // Panel already open, switching content — measure immediately
-      setPanelHeight(el.scrollHeight);
+      const frame = requestAnimationFrame(() => setPanelHeight(el.scrollHeight));
       const ro = new ResizeObserver(() => setPanelHeight(el.scrollHeight));
       ro.observe(el);
-      return () => ro.disconnect();
+      return () => { cancelAnimationFrame(frame); ro.disconnect(); };
     }
+
     // Initial open — wait for grid animation before measuring
     let ro: ResizeObserver | null = null;
     const timeout = setTimeout(() => {
@@ -1855,7 +1911,7 @@ function CardItem({ card, onToggle, onDelete, onArchive, onUpdate, openPanel, on
       setPanelHeight(el.scrollHeight);
       ro = new ResizeObserver(() => setPanelHeight(el.scrollHeight));
       ro.observe(el);
-    }, 500);
+    }, 1050);
     return () => { clearTimeout(timeout); ro?.disconnect(); };
   }, [openPanel]);
 
@@ -1891,12 +1947,19 @@ function CardItem({ card, onToggle, onDelete, onArchive, onUpdate, openPanel, on
     ? (CUSTOM_LAYOUT_PANELS[cardTypeConfig.layoutPanelKey]?.({ card, onUpdate }) ?? <LayoutPanelContent card={card} onChange={l => onUpdate({ ...card, layoutStyle: l } as any)} />)
     : <LayoutPanelContent card={card} onChange={l => onUpdate({ ...card, layoutStyle: l } as any)} />;
 
-  const panelContent =
+  const livePanelContent =
     openPanel === "layout"   ? layoutPanel :
     openPanel === "image"    ? <ImagePanelContent card={card} onUpdate={onUpdate} /> :
     openPanel === "badge"    ? <BadgePanelContent card={card} onChange={b => onUpdate({ ...card, badge: b || undefined })} /> :
     openPanel === "schedule" ? <SchedulePanelContent card={card} onUpdate={onUpdate} /> :
     openPanel === "delete"   ? <DeletePanelContent onDelete={onDelete} onArchive={onArchive} /> : null;
+
+  // Keep last content rendered during close animation
+  const lastPanelContentRef = useRef<React.ReactNode>(null);
+  if (livePanelContent !== null) {
+    lastPanelContentRef.current = livePanelContent;
+  }
+  const panelContent = livePanelContent ?? lastPanelContentRef.current;
 
   const PANEL_ICON_MAP: Record<string, React.ReactNode> = {
     layout: <LayoutIcon />, image: <ImageIcon />, badge: <StarIcon />, schedule: <CalendarIcon />,
@@ -1910,8 +1973,10 @@ function CardItem({ card, onToggle, onDelete, onArchive, onUpdate, openPanel, on
   const titlePlaceholder = isHeader ? "Skriv rubrik här" : "Rubrik";
   const titleMaxLen = isHeader ? 35 : undefined;
 
+  const cardWarning = cardTypeConfig.warning?.(card) ?? null;
+
   return (
-    <div className={"home-card" + (openPanel ? " home-card--expanded" : "") + (isHeader ? " home-card--header" : "")}>
+    <div className={"home-card" + (openPanel ? " home-card--expanded" : "") + (isHeader ? " home-card--header" : "") + (cardWarning && !openPanel ? " home-card--warning" : "")}>
       <div className="home-card-top">
         <div className="home-card-drag" {...(dragHandleProps ?? {})} title="Dra för att sortera">
           <DragIcon />
@@ -2011,13 +2076,13 @@ function CardItem({ card, onToggle, onDelete, onArchive, onUpdate, openPanel, on
                 </button>
               ))}
             </div>
-            <button type="button" className={"home-card-icon-btn home-card-trash" + (openPanel === "delete" ? " home-card-icon-btn--active home-card-icon-btn--active-danger" : "")} onClick={() => onPanelToggle(card.id, "delete")} aria-label="Ta bort">
-              <TrashIcon />
-            </button>
           </div>
         </div>
         <div className="home-card-toggle">
           <Toggle checked={card.isActive} onChange={onToggle} />
+          <button type="button" className={"home-card-icon-btn home-card-trash" + (openPanel === "delete" ? " home-card-icon-btn--active home-card-icon-btn--active-danger" : "")} onClick={() => onPanelToggle(card.id, "delete")} aria-label="Ta bort">
+            <TrashIcon />
+          </button>
         </div>
       </div>
       <div className={"home-card-panel" + (openPanel ? " home-card-panel--open" : "")}>
@@ -2037,6 +2102,14 @@ function CardItem({ card, onToggle, onDelete, onArchive, onUpdate, openPanel, on
           </div>
         </div>
       </div>
+      {cardWarning && !openPanel && (
+        <div className="home-card-warning">
+          <div className="home-card-warning-text">
+            <span className="home-card-warning-title">{cardWarning.title}</span>
+            <span className="home-card-warning-desc">{cardWarning.description}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2045,7 +2118,7 @@ const SortableCategoryCardItem = React.memo(function SortableCategoryCardItem({ 
   card: Card;
   onToggle: (id: string) => void;
   onUpdate: (updated: Card) => void;
-  onAddCard: () => void;
+  onAddCard: (atIndex?: number) => void;
   allCards: Card[];
   onDelete: (id: string) => void;
   onArchive: (id: string) => void;
@@ -2104,7 +2177,7 @@ function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, onDel
   card: Card;
   onToggle: (id: string) => void;
   onUpdate: (updated: Card) => void;
-  onAddCard: () => void;
+  onAddCard: (atIndex?: number) => void;
   allCards?: Card[];
   onDelete?: (id: string) => void;
   onArchive?: (id: string) => void;
@@ -2155,7 +2228,7 @@ function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, onDel
     if (newVal && newVal !== card.title) {
       onUpdate({ ...card, title: newVal } as Card);
     } else if (el) {
-      el.textContent = card.title || "Kategorinamn";
+      el.textContent = card.title || "Samlingens namn";
     }
   };
 
@@ -2189,9 +2262,9 @@ function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, onDel
             onBlur={handleTitleBlur}
             onKeyDown={e => {
               if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLElement).blur(); }
-              if (e.key === "Escape") { (e.target as HTMLElement).textContent = card.title || "Kategorinamn"; setEditingTitle(false); }
+              if (e.key === "Escape") { (e.target as HTMLElement).textContent = card.title || "Samlingens namn"; setEditingTitle(false); }
             }}
-          >{card.title || "Kategorinamn"}</span>
+          >{card.title || "Samlingens namn"}</span>
           {!editingTitle && (
             <button type="button" className="home-card-icon-btn" aria-label="Redigera kategorinamn"
               onClick={() => { setEditingTitle(true); setTimeout(() => { const el = titleInputRef.current; if (el) { if (!card.title) el.textContent = ""; el.focus(); const range = document.createRange(); range.selectNodeContents(el); const sel = window.getSelection(); sel?.removeAllRanges(); sel?.addRange(range); } }, 0); }}>
@@ -2203,24 +2276,32 @@ function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, onDel
         {/* Right: add, more, toggle */}
         <div className="home-category-card-right">
           <button type="button" className="home-card-icon-btn" aria-label="Lägg till kort" onClick={onAddCard}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256">
-              <line x1="40" y1="128" x2="216" y2="128" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16"/>
-              <line x1="128" y1="40" x2="128" y2="216" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16"/>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#1a1a1a" viewBox="0 0 256 256">
+              <line x1="40" y1="128" x2="216" y2="128" stroke="#1a1a1a" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16"/>
+              <line x1="128" y1="40" x2="128" y2="216" stroke="#1a1a1a" strokeLinecap="round" strokeLinejoin="round" strokeWidth="16"/>
             </svg>
           </button>
           <div className="home-category-more-wrap" ref={moreRef}>
             <button type="button" className="home-card-icon-btn" aria-label="Fler alternativ" onClick={() => moreOpen ? closeMore() : setMoreOpen(true)}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#1a1a1a" viewBox="0 0 256 256">
                 <path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm12-88a12,12,0,1,1-12-12A12,12,0,0,1,140,128Zm44,0a12,12,0,1,1-12-12A12,12,0,0,1,184,128Zm-88,0a12,12,0,1,1-12-12A12,12,0,0,1,96,128Z"/>
               </svg>
             </button>
             {moreOpen && (
               <div className={"home-category-more-popup" + (moreClosing ? " home-category-more-popup--closing" : "")}>
-                <button type="button" className="home-category-more-item" onClick={() => { closeMore(); setConfirmAction("ungroup"); }}>
+                <button type="button" className="home-category-more-item" onClick={() => {
+                  closeMore();
+                  const hasChildren = ((card as any).cardIds ?? []).length > 0;
+                  if (hasChildren) { setConfirmAction("ungroup"); } else { onUngroup?.(); }
+                }}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 256 256"><path d="M224,160V96a8,8,0,0,0-8-8H168V40a8,8,0,0,0-8-8H40a8,8,0,0,0-8,8V160a8,8,0,0,0,8,8H88v48a8,8,0,0,0,8,8H216a8,8,0,0,0,8-8V160Zm-60.69,48-40-40h33.38l40,40ZM168,156.69V123.31l40,40v33.38Zm40-16L171.31,104H208ZM48,48H152v56h0v48H48Zm56,123.31L140.69,208H104Z"/></svg>
                   Avgruppera
                 </button>
-                <button type="button" className="home-category-more-item" onClick={() => { closeMore(); setConfirmAction("delete"); }}>
+                <button type="button" className="home-category-more-item" onClick={() => {
+                  closeMore();
+                  const hasChildren = ((card as any).cardIds ?? []).length > 0;
+                  if (hasChildren) { setConfirmAction("delete"); } else { onDeleteCategory?.(); }
+                }}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 256 256"><path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"/></svg>
                   Ta bort
                 </button>
@@ -2279,17 +2360,22 @@ function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, onDel
           return (
             <SortableContext items={childCards.map(c => c.id)} strategy={verticalListSortingStrategy}>
               <div className="home-category-card-items">
-                {childCards.map(child => (
-                  <SortableCardItem
-                    key={child.id}
-                    card={child}
-                    openPanel={activeChildCard === child.id ? activeChildPanel : null}
-                    onPanelToggle={handleChildPanelToggle}
-                    onToggle={() => onToggle(child.id)}
-                    onDelete={() => onDelete?.(child.id)}
-                    onArchive={() => onArchive?.(child.id)}
-                    onUpdate={onUpdate}
-                  />
+                {childCards.map((child, idx) => (
+                  <React.Fragment key={child.id}>
+                    {idx === 0 && (
+                      <CardDivider variant="category" onClick={() => onAddCard(0)} />
+                    )}
+                    <SortableCardItem
+                      card={child}
+                      openPanel={activeChildCard === child.id ? activeChildPanel : null}
+                      onPanelToggle={handleChildPanelToggle}
+                      onToggle={() => onToggle(child.id)}
+                      onDelete={() => onDelete?.(child.id)}
+                      onArchive={() => onArchive?.(child.id)}
+                      onUpdate={onUpdate}
+                    />
+                    <CardDivider variant="category" onClick={() => onAddCard(idx + 1)} />
+                  </React.Fragment>
                 ))}
               </div>
             </SortableContext>
@@ -2330,13 +2416,13 @@ function CategoryCardItem({ card, onToggle, onUpdate, onAddCard, allCards, onDel
 }
 
 // ── Card Divider (add-between) ────────────────────────────────────
-function CardDivider({ onClick }: { onClick: () => void }) {
+function CardDivider({ onClick, variant }: { onClick: () => void; variant?: "category" }) {
   return (
-    <div className="home-card-divider">
+    <div className={"home-card-divider" + (variant === "category" ? " home-card-divider--category" : "")}>
       <div className="home-card-divider-line" />
       <button type="button" className="home-card-divider-btn" onClick={onClick} aria-label="Lägg till kort här">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none">
-          <path fill="currentColor" d="M0 10C0 4.477 4.477 0 10 0s10 4.477 10 10-4.477 10-10 10S0 15.523 0 10Z"/>
+          <path fill="#0075DE" d="M0 10C0 4.477 4.477 0 10 0s10 4.477 10 10-4.477 10-10 10S0 15.523 0 10Z"/>
           <path stroke="#fff" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.33" d="M10 5.333v9.334M5.333 10h9.334"/>
         </svg>
       </button>
@@ -2351,6 +2437,7 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
   const [showModal, setShowModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [addToCategoryId, setAddToCategoryId] = useState<string | null>(null);
+  const [addToCategoryIndex, setAddToCategoryIndex] = useState<number | undefined>(undefined);
   const [insertAtIndex, setInsertAtIndex] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
   const [activeCard, setActiveCard] = useState<string | null>(null);
@@ -2705,13 +2792,18 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
     }
   }, [cards, rootSorted, insertAtIndex, saveHome]);
 
-  const handleAddToCategory = useCallback((categoryId: string, newCard: Card) => {
+  const handleAddToCategory = useCallback((categoryId: string, newCard: Card, atIndex?: number) => {
     const updatedCards = [...cards, newCard];
-    const updatedWithCategory = updatedCards.map(c =>
-      c.id === categoryId
-        ? { ...c, cardIds: [...((c as any).cardIds ?? []), newCard.id] } as Card
-        : c
-    );
+    const updatedWithCategory = updatedCards.map(c => {
+      if (c.id !== categoryId) return c;
+      const ids = [...((c as any).cardIds ?? [])];
+      if (atIndex !== undefined && atIndex >= 0 && atIndex <= ids.length) {
+        ids.splice(atIndex, 0, newCard.id);
+      } else {
+        ids.push(newCard.id);
+      }
+      return { ...c, cardIds: ids } as Card;
+    });
     saveHome(updatedWithCategory);
   }, [cards, saveHome]);
 
@@ -2810,12 +2902,13 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
       type: "category",
       title: "",
       description: "",
-      sortOrder: cards.length,
+      sortOrder: 0,
       isActive: true,
       layout: "stack",
       cardIds: [],
     } as any;
-    const updatedCards = [...cards, newCategory];
+    const shifted = cards.map(c => ({ ...c, sortOrder: c.sortOrder + 1 }));
+    const updatedCards = [newCategory, ...shifted];
     saveHome(updatedCards);
   }, [cards, saveHome]);
 
@@ -2879,7 +2972,7 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
                       card={card}
                       onToggle={handleToggle}
                       onUpdate={handleUpdate}
-                      onAddCard={() => setAddToCategoryId(card.id)}
+                      onAddCard={(atIndex) => { setAddToCategoryId(card.id); setAddToCategoryIndex(atIndex); }}
                       allCards={cards}
                       onDelete={handleDelete}
                       onArchive={handleArchive}
@@ -2940,8 +3033,8 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
       {addToCategoryId && createPortal(
         <AddCardModal
           existingCount={cards.length}
-          onAdd={(newCard) => { handleAddToCategory(addToCategoryId, newCard); setAddToCategoryId(null); }}
-          onClose={() => setAddToCategoryId(null)}
+          onAdd={(newCard) => { handleAddToCategory(addToCategoryId, newCard, addToCategoryIndex); setAddToCategoryId(null); setAddToCategoryIndex(undefined); }}
+          onClose={() => { setAddToCategoryId(null); setAddToCategoryIndex(undefined); }}
         />,
         document.body
       )}

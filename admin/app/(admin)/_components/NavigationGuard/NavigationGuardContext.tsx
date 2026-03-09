@@ -118,19 +118,19 @@ export function NavigationGuardProvider({ children }: { children: ReactNode }) {
     }
   }, [router, closeModal]);
 
-  const handleDiscard = useCallback(() => {
+  const handleDiscard = useCallback(async () => {
     const href = pendingHrefRef.current;
-    console.log("[NavGuard] handleDiscard called, href:", href, "guardRef:", !!guardRef.current);
-    if (href) {
-      guardRef.current = null;
-      setIsGuarded(false);
-      pendingHrefRef.current = null;
-      setModal({ isOpen: false, pendingHref: null, isSaving: false, isDiscarding: false });
-      console.log("[NavGuard] navigating to:", href);
-      router.push(href);
-    } else {
-      closeModal();
-    }
+    if (!href) { closeModal(); return; }
+    setModal(prev => { if (prev.isDiscarding) return prev; return { ...prev, isDiscarding: true }; });
+    // Fire onDiscard to clear unsaved state (sets hasUnsavedChanges=false, removes beforeunload)
+    try { await guardRef.current?.onDiscard(); } catch { /* ignore */ }
+    // Clear guard so navigation isn't re-blocked
+    guardRef.current = null;
+    setIsGuarded(false);
+    pendingHrefRef.current = null;
+    closeModal();
+    // Delay navigation to let React flush state updates (removes beforeunload listener)
+    setTimeout(() => router.push(href), 50);
   }, [router, closeModal]);
 
   const handleCancel = useCallback(() => {

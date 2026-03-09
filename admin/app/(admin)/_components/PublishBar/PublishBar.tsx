@@ -1,11 +1,49 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import { usePublishBarInternal } from "./PublishBarContext";
 import "./publish-bar.css";
 
-function SpinnerIcon() {
+/**
+ * Animated spinner with enter/exit transitions.
+ * Stays mounted during exit animation to allow smooth collapse.
+ */
+function AnimatedSpinner({ visible }: { visible: boolean }) {
+  const [mounted, setMounted] = useState(false);
+  const [animState, setAnimState] = useState<"enter" | "exit" | "idle">("idle");
+  const prevVisible = useRef(visible);
+
+  useEffect(() => {
+    if (visible && !prevVisible.current) {
+      setMounted(true);
+      setAnimState("enter");
+    } else if (!visible && prevVisible.current) {
+      setAnimState("exit");
+    }
+    prevVisible.current = visible;
+  }, [visible]);
+
+  // Unmount after exit animation completes
+  const handleAnimationEnd = () => {
+    if (animState === "exit") {
+      setMounted(false);
+      setAnimState("idle");
+    } else if (animState === "enter") {
+      setAnimState("idle");
+    }
+  };
+
+  if (!mounted) return null;
+
   return (
-    <svg className="publish-spinner" width="21" height="21" viewBox="0 0 21 21" fill="none">
+    <svg
+      className={`publish-spinner ${animState === "exit" ? "publish-spinner--out" : ""}`}
+      width="21"
+      height="21"
+      viewBox="0 0 21 21"
+      fill="none"
+      onAnimationEnd={handleAnimationEnd}
+    >
       <circle cx="10.5" cy="10.5" r="7.5" stroke="currentColor" strokeWidth="2" strokeDasharray="33 14.1" strokeLinecap="round" />
     </svg>
   );
@@ -59,7 +97,7 @@ export function PublishBar() {
         onClick={handlePublish}
         disabled={publishDisabled}
       >
-        {isPublishing && <SpinnerIcon />}
+        <AnimatedSpinner visible={isPublishing} />
         <span>Publicera</span>
       </button>
     </div>

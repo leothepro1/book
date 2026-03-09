@@ -113,13 +113,14 @@
   font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
   cursor: pointer;
   transition:
-    background 0.2s ease,
-    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.2s ease;
+    background .25s,
+    transform .35s cubic-bezier(0.22, 0.68, 0, 1.06),
+    opacity .25s;
 }
 
 .nav-guard-btn:active:not(:disabled) {
-  transform: scale(0.97);
+  transform: scale(0.94);
+  transition: transform 0.1s cubic-bezier(0.22, 0.68, 0, 1);
 }
 
 .nav-guard-btn:disabled {
@@ -159,8 +160,38 @@
   color: #1a1a1a;
 }
 
-.nav-guard-spinner {
-  animation: navGuardSpin 0.8s linear infinite;
+.nav-guard-btn-label {
+  transition: transform 0.3s cubic-bezier(0.22, 0.68, 0, 1.06);
+}
+
+.nav-guard-spinner-animated {
+  color: inherit;
+  animation: navGuardSpin 0.6s linear infinite, navGuardSpinnerIn 0.25s cubic-bezier(0.22, 0.68, 0, 1.04) both;
+  flex-shrink: 0;
+  will-change: width, opacity, margin-left;
+}
+
+.nav-guard-spinner-animated--danger {
+  color: #c2030a;
+}
+
+.nav-guard-spinner-animated--dark {
+  color: #555;
+}
+
+.nav-guard-spinner-animated--out {
+  animation: navGuardSpin 0.6s linear infinite, navGuardSpinnerOut 0.2s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes navGuardSpinnerIn {
+  0%   { width: 0; opacity: 0; margin-left: -8px; }
+  70%  { width: 23px; opacity: 1; margin-left: 1px; }
+  100% { width: 21px; opacity: 1; margin-left: 0; }
+}
+
+@keyframes navGuardSpinnerOut {
+  0%   { width: 21px; opacity: 1; margin-left: 0; }
+  100% { width: 0; opacity: 0; margin-left: -8px; }
 }
 
 @keyframes navGuardSpin {

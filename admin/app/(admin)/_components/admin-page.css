@@ -10,7 +10,7 @@
   display: grid;
   grid-template-columns: 1fr 460px;
   gap: 0;
-  height: calc(100vh - 3.5rem);
+  height: 100vh;
   overflow: hidden;
 }
 

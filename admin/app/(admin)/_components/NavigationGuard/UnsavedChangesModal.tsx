@@ -1,15 +1,37 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useUnsavedModal } from "./NavigationGuardContext";
 import "./navigation-guard.css";
 
-function Spinner() {
+function AnimatedSpinner({ visible, variant }: { visible: boolean; variant?: "dark" | "danger" }) {
+  const [mounted, setMounted] = useState(false);
+  const [animState, setAnimState] = useState<"enter" | "exit" | "idle">("idle");
+  const prevVisible = useRef(visible);
+
+  useEffect(() => {
+    if (visible && !prevVisible.current) { setMounted(true); setAnimState("enter"); }
+    else if (!visible && prevVisible.current) { setAnimState("exit"); }
+    prevVisible.current = visible;
+  }, [visible]);
+
+  const handleAnimationEnd = () => {
+    if (animState === "exit") { setMounted(false); setAnimState("idle"); }
+    else if (animState === "enter") { setAnimState("idle"); }
+  };
+
+  if (!mounted) return null;
+
+  const cls = `nav-guard-spinner-animated${variant ? ` nav-guard-spinner-animated--${variant}` : ""}${animState === "exit" ? " nav-guard-spinner-animated--out" : ""}`;
+
   return (
-    <svg className="nav-guard-spinner" width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
-      <path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <svg
+      className={cls}
+      width="21" height="21" viewBox="0 0 21 21" fill="none"
+      onAnimationEnd={handleAnimationEnd}
+    >
+      <circle cx="10.5" cy="10.5" r="7.5" stroke="currentColor" strokeWidth="2" strokeDasharray="33 14.1" strokeLinecap="round" />
     </svg>
   );
 }
@@ -54,8 +76,8 @@ export function UnsavedChangesModal() {
               onClick={handleSave}
               disabled={busy}
             >
-              {modal.isSaving ? <Spinner /> : null}
-              Spara ändringar
+              <AnimatedSpinner visible={modal.isSaving} />
+              <span className="nav-guard-btn-label">Spara ändringar</span>
             </button>
 
             <button
@@ -63,8 +85,8 @@ export function UnsavedChangesModal() {
               onClick={handleDiscard}
               disabled={busy}
             >
-              {modal.isDiscarding ? <Spinner /> : null}
-              Ignorera ändringar
+              <AnimatedSpinner visible={modal.isDiscarding} variant="danger" />
+              <span className="nav-guard-btn-label">Ignorera ändringar</span>
             </button>
           </div>
         </div>

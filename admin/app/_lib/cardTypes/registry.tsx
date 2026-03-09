@@ -40,6 +40,14 @@ export type LayoutOption = {
   guestRenderer?: string;
 };
 
+/** Warning returned by a card type's `warning` validator */
+export type CardWarning = {
+  /** Bold title shown in the warning body (e.g. "PDF saknas") */
+  title: string;
+  /** Description shown below the title (e.g. "Vänligen ladda upp en PDF-fil") */
+  description: string;
+};
+
 export type CardTypeConfig = {
   key: CardTypeKey;
   label: string;
@@ -75,6 +83,12 @@ export type CardTypeConfig = {
    * in HomeClient). When set, replaces the default LayoutPanelContent.
    */
   layoutPanelKey?: string;
+  /**
+   * Validate whether this card meets all requirements to render in the guest portal.
+   * Return a CardWarning if a requirement is missing, or null if the card is valid.
+   * Cards with warnings are shown with a warning body and border in the admin UI.
+   */
+  warning?: (card: Card) => CardWarning | null;
 };
 
 const TextIcon = (
@@ -377,6 +391,11 @@ export const CARD_TYPE_REGISTRY: Record<CardTypeKey, CardTypeConfig> = {
     showAdminSubRow: false,
     autoOpenPanel: "layout",
     resolveHref: () => undefined,
+    warning: (card) => {
+      const fileUrl = (card as any).fileUrl;
+      if (!fileUrl) return { title: "PDF saknas", description: "Vänligen ladda upp en PDF-fil" };
+      return null;
+    },
   },
 
   faq: {
