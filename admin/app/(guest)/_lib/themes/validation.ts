@@ -42,7 +42,8 @@ export function validateSettingValue(field: SettingField, value: unknown): Valid
       return { valid: true };
     }
 
-    case "select": {
+    case "select":
+    case "segmented": {
       if (typeof value !== "string") {
         return { valid: false, reason: `"${field.key}" must be a string` };
       }
@@ -74,6 +75,20 @@ export function validateSettingValue(field: SettingField, value: unknown): Valid
       if (typeof value !== "string") {
         return { valid: false, reason: `"${field.key}" must be a string` };
       }
+      return { valid: true };
+    }
+
+    case "link": {
+      // Link is either null (no link) or an object with type/target/payload
+      if (value === null || value === undefined) return { valid: true };
+      if (typeof value !== "object") {
+        return { valid: false, reason: `"${field.key}" must be a link object or null` };
+      }
+      return { valid: true };
+    }
+
+    case "cornerRadius": {
+      // Virtual composite field — actual values stored in separate keys
       return { valid: true };
     }
 

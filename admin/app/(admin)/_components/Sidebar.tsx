@@ -85,6 +85,17 @@ export function Sidebar() {
               >
                 Home
               </Link>
+              <Link
+                href="/editor"
+                onClick={(e) => guardedClick(e, '/editor')}
+                className={`block px-[8px] py-[4px] mb-[4px] rounded-lg text-base tracking-[-0.15px] font-[500]  ${
+                  isActive('/editor')
+                    ? 'bg-[#E6E5E3] text-[#0075DE]'
+                    : 'text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232]'
+                }`}
+              >
+                Editor
+              </Link>
               <span
                 className="block px-[8px] py-[4px] mb-[4px] rounded-lg text-base tracking-[-0.15px] font-[500] text-[#6D6C6B]"
               >

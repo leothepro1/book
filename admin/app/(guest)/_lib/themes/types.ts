@@ -227,10 +227,13 @@ export type SettingFieldType =
   | "image"
   | "color"
   | "select"
+  | "segmented"
   | "toggle"
   | "number"
   | "range"
-  | "url";
+  | "url"
+  | "link"
+  | "cornerRadius";
 
 export type SettingField = {
   key: string;
@@ -244,6 +247,12 @@ export type SettingField = {
   max?: number;
   step?: number;
   group?: string;
+  /** Hidden fields are not rendered in the settings form but pass through resolveSettings. */
+  hidden?: boolean;
+  /** When true, the label and description are not shown in the editor form. */
+  hideLabel?: boolean;
+  /** Unit label displayed next to range input (e.g. "%", "px"). */
+  unit?: string;
 };
 
 // ─── Section Component Contract ──────────────────────────

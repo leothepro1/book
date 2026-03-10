@@ -26,11 +26,13 @@ import { getActiveThemeIdOrDefault } from "./selection";
 import { SectionErrorBoundary } from "./SectionErrorBoundary";
 import { sanitizeSectionSettings } from "./sanitizeSettings";
 import { migrateSettings } from "./migrations";
-import { resolveHomeItems } from "../../_components/cards/resolveHomeItems";
+import { resolvePageItems } from "@/app/_lib/sections/resolve";
+import { ensureSectionsRegistered } from "@/app/_lib/sections/registry";
 
 const DEFAULT_PAGE_PADDING = 17;
 import { CategorySection } from "../../_components/cards/CategorySection";
 import { LooseCardItem } from "../../_components/cards/LooseCardItem";
+import { SectionItem } from "../../_components/sections";
 
 export type ThemeRendererProps = {
   /** Which page template to render (e.g. "home", "shop", "account"). */
@@ -75,7 +77,7 @@ export async function ThemeRenderer({
   bookingStatus,
   token,
 }: ThemeRendererProps) {
-  await ensureRegistered();
+  await Promise.all([ensureRegistered(), ensureSectionsRegistered()]);
 
   const themeId = getActiveThemeIdOrDefault(config);
 
@@ -175,8 +177,10 @@ export async function ThemeRenderer({
     );
   };
 
-  // ── Card feed (global — not theme-controlled) ──
-  const cardFeedItems = templateKey === "home" ? resolveHomeItems(config.home.cards ?? []) : [];
+  // ── Content feed: sections + cards interleaved by sortOrder ──
+  const pageItems = templateKey === "home"
+    ? resolvePageItems(config.home.cards ?? [], config.home.sections ?? [], config)
+    : [];
 
   return (
     <div
@@ -191,26 +195,40 @@ export async function ThemeRenderer({
       {/* Template sections (theme-controlled) */}
       {templateSlots.map(renderSlot)}
 
-      {/* Card feed (global — identical regardless of theme) */}
-      {cardFeedItems.length > 0 && (
+      {/* Content feed: sections + cards sorted by sortOrder */}
+      {pageItems.length > 0 && (
         <div style={{ marginTop: 12 }}>
-          {cardFeedItems.map((item) =>
-            item.kind === "category" ? (
-              <CategorySection
-                key={item.category.id}
-                category={item.category}
-                cards={item.cards}
-                radius={config.theme.buttons.radius}
-              />
-            ) : (
+          {pageItems.map((item) => {
+            if (item.kind === "section") {
+              return (
+                <SectionErrorBoundary
+                  key={item.renderProps.section.id}
+                  sectionId={item.renderProps.section.id}
+                  sectionType={item.renderProps.definition.id}
+                >
+                  <SectionItem renderProps={item.renderProps} />
+                </SectionErrorBoundary>
+              );
+            }
+            if (item.kind === "category") {
+              return (
+                <CategorySection
+                  key={item.category.id}
+                  category={item.category}
+                  cards={item.cards}
+                  radius={config.theme.buttons.radius}
+                />
+              );
+            }
+            return (
               <LooseCardItem
                 key={item.card.id}
                 card={item.card}
                 token={token}
                 radius={config.theme.buttons.radius}
               />
-            ),
-          )}
+            );
+          })}
         </div>
       )}
 

@@ -1,5 +1,16 @@
 /* Platform UI system for guest. Tenant ska INTE kunna ändra layout/spacing här. */
 
+/* Reset UA margins inside section-rendered content */
+[data-section-id] h1,
+[data-section-id] h2,
+[data-section-id] h3,
+[data-section-id] h4,
+[data-section-id] h5,
+[data-section-id] h6,
+[data-section-id] p {
+  margin: 0;
+}
+
 .g-container {
   max-width: 72rem;
   margin: 0 auto;
@@ -132,3 +143,4 @@
   opacity: var(--muted-opacity);
   font-family: var(--font-body);
 }
+

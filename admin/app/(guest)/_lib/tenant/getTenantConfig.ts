@@ -61,11 +61,12 @@ function mergeConfig(
     ...defaults,
     ...stored,
     tenantId,
-    // home.cards is replaced entirely (not merged) — same as updateDraft's overwriteArrays
+    // home arrays are replaced entirely (not merged) — same as updateDraft's overwriteArrays
     home: {
       ...defaults.home,
       ...storedHome,
       cards: Array.isArray(storedHome.cards) ? storedHome.cards : defaults.home.cards,
+      sections: Array.isArray(storedHome.sections) ? storedHome.sections : defaults.home.sections,
       archivedCards: Array.isArray(storedHome.archivedCards)
         ? storedHome.archivedCards
         : defaults.home.archivedCards,
@@ -125,6 +126,7 @@ function getDefaultConfig(tenantId: string): TenantConfig {
       version: 1,
       links: [],
       cards: [],
+      sections: [],
       archivedCards: [],
     },
     footer: {

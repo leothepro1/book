@@ -78,8 +78,23 @@ export type CategoryCard = BaseCard & {
 export type Card = ArticleCard | LinkCard | DownloadCard | GalleryCard | TextCard | HeaderCard | DocumentCard | FaqCard | EmailCard | PhoneCard | ContactCard | CategoryCard;
 
 export type HomeConfig = {
-  version: 1;
+  /**
+   * Schema version.
+   * 1 = original (cards + categories only)
+   * 2 = sections added (cards + categories + sections)
+   *
+   * Version is forward-compatible: v1 configs work as v2 (sections defaults to []).
+   */
+  version: 1 | 2;
   links: HomeLink[];
   cards: Card[];
+  /**
+   * Section instances placed on the page.
+   * Each section is a layout container that references cards via cardIds.
+   * Sections interleave with loose cards by sortOrder.
+   *
+   * Added in version 2. Defaults to [] for v1 configs.
+   */
+  sections: import("@/app/_lib/sections/types").SectionInstance[];
   archivedCards: ArchivedCard[];
 };

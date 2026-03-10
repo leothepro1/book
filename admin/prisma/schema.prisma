@@ -83,6 +83,7 @@ model Tenant {
 
   bookings         Booking[]
   walletCardDesign WalletCardDesign?
+  mediaAssets      MediaAsset[]
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -234,6 +235,69 @@ model AccessPassEvent {
 // ============================================================================
 // WALLET CARD DESIGN (Per-tenant card styling for Apple/Google Wallet)
 // ============================================================================
+
+// ============================================================================
+// MEDIA ASSETS (Organization-scoped media library)
+// ============================================================================
+
+/// Persistent media index. Cloudinary is source of truth for files,
+/// this table is source of truth for indexing, ownership, and permissions.
+/// Supports soft-delete with delayed Cloudinary cleanup.
+model MediaAsset {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  // ── Cloudinary identity ─────────────────────────────────────────
+  /// Full Cloudinary public_id (e.g. "hospitality/acme-hotel/cards/abc123")
+  publicId  String @unique
+  /// Optimized delivery URL (secure_url from upload response)
+  url       String
+  /// Cloudinary resource type ("image", "video", "raw")
+  resourceType String @default("image")
+
+  // ── File metadata ───────────────────────────────────────────────
+  /// Original filename from upload (user-facing)
+  filename   String
+  /// MIME type (image/jpeg, image/png, etc.)
+  mimeType   String
+  /// File size in bytes
+  bytes      Int
+  /// Image dimensions (null for non-image resources)
+  width      Int?
+  height     Int?
+  /// Cloudinary format (jpg, png, webp, etc.)
+  format     String
+
+  // ── Organization ────────────────────────────────────────────────
+  /// Logical folder within the tenant (cards, wallpaper, sections, etc.)
+  folder     String @default("general")
+  /// User-editable alt text for accessibility
+  alt        String @default("")
+  /// User-editable title/caption
+  title      String @default("")
+
+  // ── Provenance ──────────────────────────────────────────────────
+  /// Clerk userId who uploaded this asset
+  uploadedBy String
+
+  // ── Soft delete ─────────────────────────────────────────────────
+  /// Null = active. Set = soft-deleted (pending Cloudinary cleanup).
+  deletedAt  DateTime?
+  /// Who deleted it
+  deletedBy  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Indexes ─────────────────────────────────────────────────────
+  @@index([tenantId])
+  @@index([tenantId, folder])
+  @@index([tenantId, deletedAt])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, mimeType])
+  @@index([deletedAt])  // For cleanup job: find soft-deleted assets
+}
 
 /// Visual design template for wallet passes. One per tenant.
 /// Controls background, logo placement, and date text styling.
