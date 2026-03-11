@@ -233,13 +233,18 @@ export type SettingFieldType =
   | "range"
   | "url"
   | "link"
-  | "cornerRadius";
+  | "cornerRadius"
+  | "weightRange"
+  | "markers"
+  | "mapPicker";
 
 export type SettingField = {
   key: string;
   type: SettingFieldType;
   label: string;
   description?: string;
+  /** External link rendered below description (e.g. { href: "https://...", label: "See icons" }). */
+  descriptionLink?: { href: string; label: string };
   default?: unknown;
   required?: boolean;
   options?: { value: string; label: string }[];

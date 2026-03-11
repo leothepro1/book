@@ -9,18 +9,9 @@ export const dividerElement: ElementDefinition = {
   icon: "divider",
   supportsAction: false,
 
+  skipPresetPicker: true,
+
   settingsSchema: [
-    {
-      key: "style",
-      type: "select",
-      label: "Linjestil",
-      default: "solid",
-      options: [
-        { value: "solid", label: "Heldragen" },
-        { value: "dashed", label: "Streckad" },
-        { value: "dotted", label: "Prickad" },
-      ],
-    },
     {
       key: "color",
       type: "color",
@@ -38,28 +29,22 @@ export const dividerElement: ElementDefinition = {
       unit: "px",
     },
     {
-      key: "spacing",
-      type: "range",
-      label: "Avstånd",
-      default: 16,
-      min: 4,
-      max: 64,
-      step: 4,
-      unit: "px",
-    },
-    {
-      key: "link",
-      type: "link",
-      label: "Länk",
+      key: "style",
+      type: "select",
+      label: "Linjestil",
+      default: "solid",
+      options: [
+        { value: "solid", label: "Heldragen" },
+        { value: "dashed", label: "Streckad" },
+        { value: "dotted", label: "Prickad" },
+      ],
     },
   ],
 
   settingDefaults: {
-    style: "solid",
     color: "#E6E5E3",
     thickness: 1,
-    spacing: 16,
-    link: null,
+    style: "solid",
   },
 
   presets: [

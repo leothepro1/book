@@ -26,6 +26,12 @@ interface NavigationGuardContextValue {
    * instead of navigating immediately. The modal handles save/discard/cancel.
    */
   navigate: (href: string) => void;
+  /**
+   * Guard an arbitrary action (e.g. in-component state change).
+   * If a guard is active, shows the modal. On save/discard the action runs.
+   * If no guard is active, the action runs immediately.
+   */
+  guardAction: (action: () => void) => void;
   /** Register a guard (called by PublishBarProvider when hasUnsavedChanges). */
   registerGuard: (callbacks: GuardCallbacks) => void;
   /** Unregister the guard. */
@@ -79,6 +85,7 @@ export function NavigationGuardProvider({ children }: { children: ReactNode }) {
     isDiscarding: false,
   });
   const pendingHrefRef = useRef<string | null>(null);
+  const pendingActionRef = useRef<(() => void) | null>(null);
 
   const registerGuard = useCallback((callbacks: GuardCallbacks) => {
     guardRef.current = callbacks;
@@ -92,46 +99,65 @@ export function NavigationGuardProvider({ children }: { children: ReactNode }) {
 
   const navigate = useCallback((href: string) => {
     if (guardRef.current) {
-      // Guard active — show modal instead of navigating
       pendingHrefRef.current = href;
+      pendingActionRef.current = null;
       setModal({ isOpen: true, pendingHref: href, isSaving: false, isDiscarding: false });
     } else {
       router.push(href);
     }
   }, [router]);
 
+  const guardAction = useCallback((action: () => void) => {
+    if (guardRef.current) {
+      pendingHrefRef.current = null;
+      pendingActionRef.current = action;
+      setModal({ isOpen: true, pendingHref: null, isSaving: false, isDiscarding: false });
+    } else {
+      action();
+    }
+  }, []);
+
   const closeModal = useCallback(() => {
     pendingHrefRef.current = null;
+    pendingActionRef.current = null;
     setModal({ isOpen: false, pendingHref: null, isSaving: false, isDiscarding: false });
   }, []);
+
+  /** Run the pending navigation or action after save/discard completes */
+  const executePending = useCallback(() => {
+    const href = pendingHrefRef.current;
+    const action = pendingActionRef.current;
+    pendingHrefRef.current = null;
+    pendingActionRef.current = null;
+    if (href) {
+      setTimeout(() => router.push(href), 50);
+    } else if (action) {
+      setTimeout(action, 50);
+    }
+  }, [router]);
 
   const handleSave = useCallback(async () => {
     if (!guardRef.current) return;
     setModal(prev => { if (prev.isSaving) return prev; return { ...prev, isSaving: true }; });
     const success = await guardRef.current.onSave();
-    const href = pendingHrefRef.current;
-    if (success && href) {
+    if (success) {
       closeModal();
-      requestAnimationFrame(() => router.push(href));
+      requestAnimationFrame(() => executePending());
     } else {
       setModal(prev => ({ ...prev, isSaving: false }));
     }
-  }, [router, closeModal]);
+  }, [closeModal, executePending]);
 
   const handleDiscard = useCallback(async () => {
-    const href = pendingHrefRef.current;
-    if (!href) { closeModal(); return; }
+    const hasPending = pendingHrefRef.current || pendingActionRef.current;
+    if (!hasPending) { closeModal(); return; }
     setModal(prev => { if (prev.isDiscarding) return prev; return { ...prev, isDiscarding: true }; });
-    // Fire onDiscard to clear unsaved state (sets hasUnsavedChanges=false, removes beforeunload)
     try { await guardRef.current?.onDiscard(); } catch { /* ignore */ }
-    // Clear guard so navigation isn't re-blocked
     guardRef.current = null;
     setIsGuarded(false);
-    pendingHrefRef.current = null;
     closeModal();
-    // Delay navigation to let React flush state updates (removes beforeunload listener)
-    setTimeout(() => router.push(href), 50);
-  }, [router, closeModal]);
+    executePending();
+  }, [closeModal, executePending]);
 
   const handleCancel = useCallback(() => {
     if (modal.isSaving || modal.isDiscarding) return;
@@ -165,7 +191,7 @@ export function NavigationGuardProvider({ children }: { children: ReactNode }) {
   }, [isGuarded]);
 
   return (
-    <NavigationGuardContext.Provider value={{ navigate, registerGuard, unregisterGuard, isGuarded }}>
+    <NavigationGuardContext.Provider value={{ navigate, guardAction, registerGuard, unregisterGuard, isGuarded }}>
       <ModalContext.Provider value={{ modal, handleSave, handleDiscard, handleCancel }}>
         {children}
       </ModalContext.Provider>

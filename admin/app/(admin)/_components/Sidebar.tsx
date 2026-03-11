@@ -112,6 +112,17 @@ export function Sidebar() {
               >
                 Design
               </Link>
+              <Link
+                href="/maps"
+                onClick={(e) => guardedClick(e, '/maps')}
+                className={`block px-[8px] py-[4px] mb-[4px] rounded-lg text-base tracking-[-0.15px] font-[500]  ${
+                  isActive('/maps')
+                    ? 'bg-[#E6E5E3] text-[#0075DE]'
+                    : 'text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232]'
+                }`}
+              >
+                Kartor
+              </Link>
             </div>
           </div>
         </div>

@@ -49,6 +49,7 @@ import {
   validatePayload,
 } from "./richTextLinkTypes";
 import { useUpload } from "@/app/(admin)/_hooks/useUpload";
+import { EditorIcon } from "@/app/_components/EditorIcon";
 
 // ═══════════════════════════════════════════════════════════════
 // PROPS
@@ -823,16 +824,11 @@ function CloseIcon() {
 
 function ChevronIcon({ open }: { open: boolean }) {
   return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 12 12"
-      fill="none"
-      aria-hidden="true"
+    <EditorIcon
+      name="expand_more"
+      size={16}
       style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
-    >
-      <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    />
   );
 }
 

@@ -3,29 +3,52 @@ import { registerElementDefinition } from "../registry";
 
 export const iconElement: ElementDefinition = {
   type: "icon",
-  version: "1.0.0",
+  version: "2.0.0",
   name: "Ikon",
-  description: "Ikonvisning med valfri storlek och färg.",
+  description: "Google Material Symbol med valfri storlek och färg.",
   icon: "icon",
   supportsAction: true,
+  skipPresetPicker: true,
 
   settingsSchema: [
     {
       key: "name",
       type: "text",
-      label: "Ikonnamn",
-      description: "Phosphor-ikonnamn (t.ex. 'MapPin', 'Phone').",
-      default: "Star",
-      required: true,
+      label: "Ikon",
+      descriptionLink: {
+        href: "https://fonts.google.com/icons",
+        label: "Se tillgängliga ikoner",
+      },
+      default: "star",
+    },
+    {
+      key: "fill",
+      type: "segmented",
+      label: "Stil",
+      default: "outlined",
+      options: [
+        { value: "outlined", label: "Kontur" },
+        { value: "filled", label: "Fylld" },
+      ],
     },
     {
       key: "size",
       type: "range",
       label: "Storlek",
       default: 24,
-      min: 12,
-      max: 64,
+      min: 16,
+      max: 96,
       step: 4,
+      unit: "px",
+    },
+    {
+      key: "weight",
+      type: "weightRange",
+      label: "Vikt",
+      default: 400,
+      min: 100,
+      max: 700,
+      step: 100,
     },
     {
       key: "color",
@@ -34,28 +57,19 @@ export const iconElement: ElementDefinition = {
       default: "#1a1a1a",
     },
     {
-      key: "alignment",
-      type: "segmented",
-      label: "Justering",
-      default: "left",
-      options: [
-        { value: "left", label: "Vänster" },
-        { value: "center", label: "Center" },
-        { value: "right", label: "Höger" },
-      ],
-    },
-    {
       key: "link",
       type: "link",
       label: "Länk",
+      hidden: true,
     },
   ],
 
   settingDefaults: {
-    name: "Star",
+    name: "star",
+    fill: "outlined",
     size: 24,
+    weight: 400,
     color: "#1a1a1a",
-    alignment: "left",
     link: null,
   },
 

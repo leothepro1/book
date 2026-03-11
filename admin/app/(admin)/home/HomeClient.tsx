@@ -351,6 +351,8 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
   return (
     <button type="button" role="switch" aria-checked={checked} onClick={onChange}
       className={"admin-toggle" + (checked ? " admin-toggle-on" : "")}>
+      <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-outlined">check</span>
+      <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-outlined">remove</span>
       <span className="admin-toggle-thumb" />
     </button>
   );
@@ -972,6 +974,8 @@ function SortableFaqItem({ faq, onEdit, onToggle, dragHandleProps }: {
       </button>
       <button type="button" role="switch" aria-checked={faq.isActive} onClick={onToggle}
         className={"admin-toggle" + (faq.isActive ? " admin-toggle-on" : "")}>
+        <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-outlined">check</span>
+        <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-outlined">remove</span>
         <span className="admin-toggle-thumb" />
       </button>
     </div>

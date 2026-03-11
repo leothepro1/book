@@ -15,6 +15,47 @@ export type PropertySettings = {
   timezone: string;
 };
 
+// ─── Map Configuration ──────────────────────────────────────
+
+export type MapMarkerConfig = {
+  id: string;
+  type?: "marker" | "category";
+  lat: number;
+  lng: number;
+  title: string;
+  description: string;
+  content?: string;
+  icon: string;
+  color: string;
+  address?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+  markerIds?: string[];
+  layout?: string;
+};
+
+export type MapConfig = {
+  id: string;
+  name: string;
+  address?: string;
+  style: string;
+  customStyle: string;
+  zoom: number;
+  pitch: number;
+  bearing: number;
+  centerLat: number;
+  centerLng: number;
+  buildings3d: boolean;
+  scrollZoom: boolean;
+  navControls: boolean;
+  showPropertyMarker: boolean;
+  showPlaceLabels: boolean;
+  showRoadLabels: boolean;
+  markers: MapMarkerConfig[];
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type TenantConfig = {
   supportLinks: SupportLinks;
   tenantId: string;
@@ -48,6 +89,13 @@ export type TenantConfig = {
    * Merged over the active theme's settingDefaults.
    */
   themeSettings: Record<string, unknown>;
+
+  /**
+   * Saved map configurations.
+   * Created/managed in the /maps admin page.
+   * Referenced by map elements via map_id.
+   */
+  maps?: MapConfig[];
 };
 
 export type SupportLinks = {

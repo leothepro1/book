@@ -37,6 +37,9 @@ import { FieldLink } from "./FieldLink";
 import { FieldSegmented } from "./FieldSegmented";
 import { FieldImage } from "./FieldImage";
 import { FieldCornerRadiusInline } from "./FieldCornerRadiusInline";
+import { FieldWeightRange } from "./FieldWeightRange";
+import { FieldMarkers } from "./FieldMarkers";
+import { FieldMapPicker } from "./FieldMapPicker";
 
 // ─── Field Dispatcher ───────────────────────────────────────
 
@@ -65,6 +68,9 @@ const FIELD_MAP: Record<string, React.ComponentType<FieldRendererProps>> = {
   image: FieldImage,
   link: FieldLink,
   cornerRadius: FieldCornerRadiusInline,
+  weightRange: FieldWeightRange,
+  markers: FieldMarkers,
+  mapPicker: FieldMapPicker,
 };
 
 export function FieldRenderer({ field, value, onChange, allValues }: FieldRendererProps) {
@@ -95,6 +101,22 @@ export function FieldWrapper({
         </>
       )}
       {children}
+      {field.descriptionLink && (
+        <a
+          className="sf-desc-link"
+          href={field.descriptionLink.href}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {field.descriptionLink.label}
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: 16, verticalAlign: "middle", marginLeft: 2, fontVariationSettings: "'wght' var(--icon-weight, 400), 'FILL' 0" }}
+          >
+            arrow_right_alt
+          </span>
+        </a>
+      )}
     </div>
   );
 }

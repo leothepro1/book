@@ -14,6 +14,7 @@ import { DividerElement } from "./DividerElement";
 import { IconElement } from "./IconElement";
 import { RichTextElement } from "./RichTextElement";
 import { CollapsibleElement } from "./CollapsibleElement";
+import { MapElement } from "./MapElement";
 import { ElementLinkWrapper } from "./ElementLinkWrapper";
 
 const ELEMENT_RENDERERS: Record<string, React.ComponentType<{ resolved: ResolvedElement }>> = {
@@ -25,6 +26,7 @@ const ELEMENT_RENDERERS: Record<string, React.ComponentType<{ resolved: Resolved
   icon: IconElement,
   richtext: RichTextElement,
   collapsible: CollapsibleElement,
+  map: MapElement,
 };
 
 export function ElementRenderer({ resolved }: { resolved: ResolvedElement }) {

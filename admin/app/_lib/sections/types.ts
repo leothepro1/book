@@ -115,7 +115,8 @@ export type ElementType =
   | "divider"
   | "icon"
   | "richtext"
-  | "collapsible";
+  | "collapsible"
+  | "map";
 
 /**
  * A named settings bundle for an element type.

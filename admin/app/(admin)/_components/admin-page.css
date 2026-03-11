@@ -93,7 +93,14 @@
 
 /* ── Shared Toggle (iOS-style) ── */
 
-.admin-toggle { width: 32px; height: 20px; border-radius: 999px; border: none; background: #A8AAA2; cursor: pointer; padding: 0; position: relative; transition: background 0.25s ease; flex-shrink: 0; }
-.admin-toggle-on { background: #016E1A; }
-.admin-toggle-thumb { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1); display: block; }
-.admin-toggle-on .admin-toggle-thumb { transform: translateX(12px); }
+.admin-toggle { width: 43px; height: 24px; border-radius: 999px; border: none; background: #A8AAA2; cursor: pointer; padding: 0; position: relative; transition: background 0.25s ease; flex-shrink: 0; }
+.admin-toggle-on { background: #0075DE; }
+.admin-toggle-thumb { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1); display: block; }
+.admin-toggle-on .admin-toggle-thumb { transform: translateX(19px); }
+.admin-toggle-icon { position: absolute; top: 50%; transform: translateY(-50%); font-size: 18px !important; line-height: 1; pointer-events: none; transition: opacity 0.2s; }
+.admin-toggle-icon--check { left: 4px; color: #fff; opacity: 0; }
+.admin-toggle-icon--remove { right: 4px; color: #fff; opacity: 0.7; }
+.admin-toggle-on .admin-toggle-icon--check { opacity: 1; }
+.admin-toggle-on .admin-toggle-icon--remove { opacity: 0; }
+.admin-toggle:not(.admin-toggle-on) .admin-toggle-icon--remove { opacity: 0.7; }
+.admin-toggle:not(.admin-toggle-on) .admin-toggle-icon--check { opacity: 0; }

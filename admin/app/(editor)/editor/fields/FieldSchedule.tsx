@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { EditorIcon } from "@/app/_components/EditorIcon";
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES & CONSTANTS
@@ -353,9 +354,5 @@ function CalendarIcon() {
 }
 
 function SchedChevronIcon({ className }: { className?: string } = {}) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={"sched-chevron" + (className ? " " + className : "")} aria-hidden="true">
-      <path fill="currentColor" d="m1.7 4 .36.35L7.71 10l5.64-5.65.36-.35.7.7-.35.36-6 6h-.7l-6-6L1 4.71 1.7 4Z"/>
-    </svg>
-  );
+  return <EditorIcon name="expand_more" size={16} className={"sched-chevron" + (className ? " " + className : "")} />;
 }

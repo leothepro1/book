@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
+import { Tooltip } from "@/app/_components/Tooltip";
+import { EditorIcon } from "@/app/_components/EditorIcon";
 import { EditorPublishBar } from "./EditorPublishBar";
 
 /**
@@ -22,22 +24,16 @@ export function EditorHeader() {
 
   return (
     <header className="editor-header">
-      <button
-        type="button"
-        onClick={handleBack}
-        className="editor-header__back"
-        aria-label="Tillbaka till Home"
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path
-            d="M10 3L5 8l5 5"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
+      <Tooltip label="Stäng">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="editor-header__back"
+          aria-label="Tillbaka till Home"
+        >
+          <EditorIcon name="logout" size={22} style={{ transform: "rotate(180deg)" }} />
+        </button>
+      </Tooltip>
 
       <span className="editor-header__title">Editor</span>
 

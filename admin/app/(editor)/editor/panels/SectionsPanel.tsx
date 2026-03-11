@@ -49,6 +49,8 @@ import { useDraftUpdate } from "@/app/(admin)/_hooks/useDraftUpdate";
 import type { SectionInstance, ElementInstance } from "@/app/_lib/sections/types";
 import { createSectionId, createBlockId } from "@/app/_lib/sections/types";
 import { ensureSectionsRegistered, getElementDefinition, getSectionDefinition } from "@/app/_lib/sections/registry";
+import { Tooltip } from "@/app/_components/Tooltip";
+import { EditorIcon } from "@/app/_components/EditorIcon";
 import { useEditor } from "../EditorContext";
 import { DetailPanel } from "./DetailPanel";
 import {
@@ -238,7 +240,7 @@ function SectionListPane() {
     key: "test",
     name: "Test",
     description: "Alla element",
-    allowedElements: ["heading", "text", "richtext", "collapsible", "button", "image", "divider", "icon"] as ElementType[],
+    allowedElements: ["heading", "text", "richtext", "collapsible", "button", "image", "divider", "icon", "map"] as ElementType[],
     minElements: 0,
     maxElements: -1,
     defaultElements: [],
@@ -419,9 +421,7 @@ function SectionListPane() {
           className="sp-add-row"
           onClick={() => handleOpenPicker()}
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
+          <EditorIcon name="add_circle" size={16} />
           <span>Lägg till avsnitt</span>
         </button>
 
@@ -431,10 +431,7 @@ function SectionListPane() {
           className="sp-add-row"
           onClick={() => setElementPickerOpen(true)}
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="2" y="2" width="12" height="12" rx="3" stroke="currentColor" strokeWidth="1.2" />
-            <path d="M8 5v6M5 8h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-          </svg>
+          <EditorIcon name="add_circle" size={16} />
           <span>Lägg till element</span>
         </button>
       </div>
@@ -608,32 +605,36 @@ function SectionRow({
       <div className="sp-row__actions">
         {/* Delete — only when active + hovered */}
         {section.isActive && isHovered && !isOverlay && (
-          <button
-            type="button"
-            className="sp-row__action-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(section.id);
-            }}
-            aria-label="Ta bort sektion"
-          >
-            <TrashIcon />
-          </button>
+          <Tooltip label="Radera">
+            <button
+              type="button"
+              className="sp-row__action-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(section.id);
+              }}
+              aria-label="Radera sektion"
+            >
+              <TrashIcon />
+            </button>
+          </Tooltip>
         )}
 
         {/* Visibility toggle — always visible when inactive, hover-only when active */}
         {(!section.isActive || (isHovered && !isOverlay)) && (
-          <button
-            type="button"
-            className={`sp-row__action-btn${!section.isActive ? " sp-row__action-btn--muted" : ""}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleVisibility(section.id);
-            }}
-            aria-label={section.isActive ? "Dölj sektion" : "Visa sektion"}
-          >
-            {section.isActive ? <EyeOpenIcon /> : <EyeClosedIcon />}
-          </button>
+          <Tooltip label={section.isActive ? "Dölj" : "Visa"}>
+            <button
+              type="button"
+              className={`sp-row__action-btn${!section.isActive ? " sp-row__action-btn--muted" : ""}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleVisibility(section.id);
+              }}
+              aria-label={section.isActive ? "Dölj sektion" : "Visa sektion"}
+            >
+              {section.isActive ? <EyeOpenIcon /> : <EyeClosedIcon />}
+            </button>
+          </Tooltip>
         )}
       </div>
     </div>
@@ -656,6 +657,7 @@ const ELEMENT_ICONS: Record<string, React.ReactNode> = {
   icon: <svg width="14" height="14" viewBox="0 0 18 18" fill="none"><path d="M9 2l2.5 5 5.5.8-4 3.9.9 5.3L9 14.5 4.1 17l.9-5.3-4-3.9L6.5 7z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/></svg>,
   richtext: <svg width="14" height="14" viewBox="0 0 18 18" fill="none"><path d="M4 4v4M10 4v4M4 6h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M3 11h12M3 14h9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>,
   collapsible: <svg width="14" height="14" viewBox="0 0 18 18" fill="none"><path d="M3 5h12M3 8h10M3 11h8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/><path d="M9 14l2-1.5M9 14l-2-1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>,
+  map: <EditorIcon name="map" size={14} />,
 };
 
 function ChildRow({ label, indent, icon, onClick }: {
@@ -692,10 +694,7 @@ function SectionDivider({ onClick }: { onClick: () => void }) {
         onClick={onClick}
         aria-label="Lägg till sektion här"
       >
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <path fill="#0075DE" d="M0 10C0 4.477 4.477 0 10 0s10 4.477 10 10-4.477 10-10 10S0 15.523 0 10Z" />
-          <path stroke="#fff" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.33" d="M10 5.333v9.334M5.333 10h9.334" />
-        </svg>
+        <EditorIcon name="add_circle" size={16} style={{ color: "#0075DE" }} />
       </button>
       <div className="sp-divider__line" />
     </div>
@@ -705,50 +704,21 @@ function SectionDivider({ onClick }: { onClick: () => void }) {
 // ─── Icons ──────────────────────────────────────────────────
 
 function SectionIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-      <path d="M1.5 1.5H6.5V6.5H1.5z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="bevel" fill="transparent" />
-      <path d="M1.5 9.5H6.5V14.5H1.5z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="bevel" fill="transparent" />
-      <path d="M9.5 1.5H14.5V14.5H9.5z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="bevel" fill="transparent" />
-    </svg>
-  );
+  return <EditorIcon name="grid_view" size={16} />;
 }
 
 function DragIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-      <circle cx="5.5" cy="3.5" r="1.5" />
-      <circle cx="10.5" cy="3.5" r="1.5" />
-      <circle cx="5.5" cy="8" r="1.5" />
-      <circle cx="10.5" cy="8" r="1.5" />
-      <circle cx="5.5" cy="12.5" r="1.5" />
-      <circle cx="10.5" cy="12.5" r="1.5" />
-    </svg>
-  );
+  return <EditorIcon name="drag_indicator" size={16} />;
 }
 
 function TrashIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path fillRule="evenodd" d="m6.83 0-.35.15-1.33 1.33-.15.35V3H0v1h2v11.5l.5.5h11l.5-.5V4h2V3h-5V1.83l-.15-.35L9.52.15 9.17 0H6.83ZM10 3v-.96L8.96 1H7.04L6 2.04V3h4ZM5 4H3v11h10V4H5Zm2 3v5H6V7h1Zm3 .5V7H9v5h1V7.5Z" fill="currentColor" />
-    </svg>
-  );
+  return <EditorIcon name="delete" size={16} />;
 }
 
 function EyeOpenIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
-      <path fillRule="evenodd" d="M11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0m-1.5 0a1.5 1.5 0 1 1-3.001-.001 1.5 1.5 0 0 1 3.001.001" />
-      <path fillRule="evenodd" d="M8 2c-2.476 0-4.348 1.23-5.577 2.532a9.3 9.3 0 0 0-1.4 1.922 6 6 0 0 0-.37.818c-.082.227-.153.488-.153.728s.071.501.152.728c.088.246.213.524.371.818.317.587.784 1.27 1.4 1.922 1.229 1.302 3.1 2.532 5.577 2.532s4.348-1.23 5.577-2.532a9.3 9.3 0 0 0 1.4-1.922c.158-.294.283-.572.37-.818.082-.227.153-.488.153-.728s-.071-.501-.152-.728a6 6 0 0 0-.371-.818 9.3 9.3 0 0 0-1.4-1.922C12.348 3.23 10.476 2 8 2m-5.999 6.002v-.004c.004-.02.017-.09.064-.223.058-.161.15-.369.278-.608a7.8 7.8 0 0 1 1.17-1.605c1.042-1.104 2.545-2.062 4.487-2.062s3.445.958 4.486 2.062c.52.55.912 1.126 1.17 1.605.13.24.221.447.279.608.047.132.06.203.064.223v.004c-.004.02-.017.09-.064.223-.058.161-.15.369-.278.608a7.8 7.8 0 0 1-1.17 1.605c-1.042 1.104-2.545 2.062-4.487 2.062s-3.445-.958-4.486-2.062a7.7 7.7 0 0 1-1.17-1.605 4.5 4.5 0 0 1-.279-.608c-.047-.132-.06-.203-.064-.223" />
-    </svg>
-  );
+  return <EditorIcon name="visibility" size={16} />;
 }
 
 function EyeClosedIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
-      <path d="M9.977 2.751a7.6 7.6 0 0 0-1.977-.251c-2.444 0-4.196 1.045-5.325 2.233a7.2 7.2 0 0 0-1.243 1.773c-.26.532-.432 1.076-.432 1.494s.171.962.432 1.494c.172.353.4.733.687 1.115l1.074-1.074a5 5 0 0 1-.414-.7c-.221-.453-.279-.753-.279-.835s.058-.382.279-.835a5.7 5.7 0 0 1 .983-1.398c.89-.937 2.264-1.767 4.238-1.767q.36 0 .693.036z" />
-      <path fillRule="evenodd" d="M2.25 12.6a.75.75 0 0 0 1.067 1.053l1.062-1.061c.975.543 2.177.908 3.621.908 2.45 0 4.142-1.05 5.24-2.242 1.078-1.17 1.588-2.476 1.738-3.076a.75.75 0 0 0 0-.364c-.15-.6-.66-1.906-1.738-3.076a7 7 0 0 0-.51-.502l.923-.923a.749.749 0 0 0-1.053-1.068l-.008.008-10.335 10.336zm5.75-.6c-.978 0-1.809-.204-2.506-.523l1.108-1.109a2.75 2.75 0 0 0 3.767-3.766l1.298-1.299q.254.221.47.455a6.4 6.4 0 0 1 1.332 2.242 6.4 6.4 0 0 1-1.332 2.242c-.86.933-2.17 1.758-4.137 1.758m0-2.75q-.13-.001-.254-.026l1.478-1.478a1.25 1.25 0 0 1-1.224 1.504" />
-    </svg>
-  );
+  return <EditorIcon name="visibility_off" size={16} />;
 }

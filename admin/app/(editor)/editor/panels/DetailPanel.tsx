@@ -61,6 +61,7 @@ import {
   getSectionDefinition,
   ensureSectionsRegistered,
 } from "@/app/_lib/sections/registry";
+import { EditorIcon } from "@/app/_components/EditorIcon";
 import type {
   SectionInstance,
   BlockInstance,
@@ -308,22 +309,11 @@ function SpacingAccordion({
         onClick={() => setOpen(!open)}
       >
         <span className="dp-accordion__label">Avstånd</span>
-        <svg
+        <EditorIcon
+          name="expand_more"
+          size={16}
           className={`dp-accordion__chevron ${open ? "dp-accordion__chevron--open" : ""}`}
-          width="14"
-          height="14"
-          viewBox="0 0 16 16"
-          fill="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M4 6l4 4 4-4"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        />
       </button>
       {open && (
         <div className="dp-accordion__content">
@@ -364,22 +354,11 @@ function ScheduleAccordion({
         onClick={() => setOpen(!open)}
       >
         <span className="dp-accordion__label">Schemalägg</span>
-        <svg
+        <EditorIcon
+          name="expand_more"
+          size={16}
           className={`dp-accordion__chevron ${open ? "dp-accordion__chevron--open" : ""}`}
-          width="14"
-          height="14"
-          viewBox="0 0 16 16"
-          fill="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M4 6l4 4 4-4"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        />
       </button>
       {open && (
         <div className="dp-accordion__content">
@@ -824,20 +803,7 @@ function extractPreview(settings: Record<string, unknown>): string | null {
 // ═══════════════════════════════════════════════════════════════
 
 function BackIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        fillRule="evenodd"
-        d="M9.78 3.47a.75.75 0 0 1 0 1.06l-3.47 3.47 3.47 3.47a.749.749 0 1 1-1.06 1.06l-4-4a.75.75 0 0 1 0-1.06l4-4a.75.75 0 0 1 1.06 0"
-      />
-    </svg>
-  );
+  return <EditorIcon name="chevron_left" size={16} />;
 }
 
 function MoreIcon() {
@@ -857,24 +823,7 @@ function MoreIcon() {
 }
 
 function ChevronIcon() {
-  return (
-    <svg
-      className="ct-chevron"
-      width="14"
-      height="14"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M6 3.5L10.5 8 6 12.5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <EditorIcon name="chevron_right" size={16} className="ct-chevron" />;
 }
 
 function BlockIcon() {
@@ -1058,6 +1007,8 @@ function ElementTypeIcon({ elementType }: { elementType: string }) {
           <path d="M3 11h12M3 14h9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
         </svg>
       );
+    case "map":
+      return <EditorIcon name="map" size={14} />;
     default:
       return (
         <svg

@@ -104,17 +104,27 @@ export function ColorPickerPopup({ value, onChange, onClose, anchorRef }: ColorP
   const hueCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDraggingSV = useRef(false);
   const isDraggingHue = useRef(false);
-  const [position, setPosition] = useState<"below" | "above">("below");
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
 
   const SV_W = 256, SV_H = 180, HUE_W = 256, HUE_H = 14;
+  const POPUP_W = 276;
 
-  // Position popup
+  // Position popup with fixed coords — always above the anchor swatch
   useEffect(() => {
     if (!anchorRef.current || !popupRef.current) return;
-    const anchorRect = anchorRef.current.getBoundingClientRect();
-    const popupHeight = popupRef.current.offsetHeight;
-    const spaceBelow = window.innerHeight - anchorRect.bottom;
-    setPosition(spaceBelow < popupHeight + 16 ? "above" : "below");
+    const anchor = anchorRef.current.getBoundingClientRect();
+    const popupH = popupRef.current.offsetHeight;
+
+    let top = anchor.top - popupH - 10;
+    let left = anchor.right - POPUP_W;
+
+    // If not enough room above, flip below
+    if (top < 8) top = anchor.bottom + 10;
+    // Clamp left
+    if (left < 8) left = 8;
+    if (left + POPUP_W > window.innerWidth - 8) left = window.innerWidth - POPUP_W - 8;
+
+    setCoords({ top, left });
   }, [anchorRef]);
 
   // Close on outside click
@@ -235,7 +245,8 @@ export function ColorPickerPopup({ value, onChange, onClose, anchorRef }: ColorP
   return (
     <div
       ref={popupRef}
-      className={`cp-popup cp-popup--${position}`}
+      className="cp-popup"
+      style={coords ? { top: coords.top, left: coords.left } : { visibility: "hidden" as const }}
     >
       {/* SV area */}
       <div className="cp-sv-wrap" onMouseDown={onSVDown}>

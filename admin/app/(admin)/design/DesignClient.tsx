@@ -624,6 +624,8 @@ function TextView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Part
           </div>
           <button type="button" role="switch" aria-checked={hasCustomButtonFont} onClick={handleButtonFontToggle}
             className={"admin-toggle" + (hasCustomButtonFont ? " admin-toggle-on" : "")}>
+            <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-outlined">check</span>
+            <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-outlined">remove</span>
             <span className="admin-toggle-thumb" />
           </button>
         </div>

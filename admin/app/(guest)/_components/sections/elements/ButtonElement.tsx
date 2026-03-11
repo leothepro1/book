@@ -1,6 +1,7 @@
 import type { ResolvedElement } from "@/app/_lib/sections/types";
+import { MaterialIcon } from "./MaterialIcon";
 
-// ─── Arrow Icon ──────────────────────────────────────────────
+// ─── Arrow Icon (legacy fallback) ────────────────────────────
 
 const ArrowIcon = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -10,28 +11,23 @@ const ArrowIcon = () => (
 
 // ─── Circle Badge (radius follows tenantConfig) ──────────────
 
-const CIRCLE_STYLE: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 28,
-  height: 28,
-  flexShrink: 0,
-  borderRadius: "var(--button-radius, 999px)" as string,
-  background: "currentColor",
-};
-
-const CIRCLE_ICON_STYLE: React.CSSProperties = {
-  /* Inverted color — icon sits on currentColor background */
-  color: "var(--button-bg, #1a1a1a)" as string,
-  display: "flex",
-};
-
-function CircleIcon() {
+function CircleIcon({ name, size, weight, fill }: { name?: string; size?: number; weight?: number; fill?: boolean }) {
+  const badgeSize = Math.max(28, (size ?? 20) + 12);
   return (
-    <span style={CIRCLE_STYLE}>
-      <span style={CIRCLE_ICON_STYLE}>
-        <ArrowIcon />
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: badgeSize,
+        height: badgeSize,
+        flexShrink: 0,
+        borderRadius: "var(--button-radius, 999px)" as string,
+        background: "currentColor",
+      }}
+    >
+      <span style={{ color: "var(--button-bg, #1a1a1a)" as string, display: "flex" }}>
+        {name ? <MaterialIcon name={name} size={size ?? 16} weight={weight} fill={fill} /> : <ArrowIcon />}
       </span>
     </span>
   );
@@ -62,13 +58,40 @@ const BASE: React.CSSProperties = {
 export function ButtonElement({ resolved }: { resolved: ResolvedElement }) {
   const { settings, action } = resolved;
   const label = (settings.label as string) || "Klicka här";
-  const iconPosition = (settings.iconPosition as string) || "none";
-  const iconCircle = settings.iconCircle as boolean;
   const width = (settings.width as string) || "auto";
 
-  const icon = iconPosition !== "none"
-    ? (iconCircle ? <CircleIcon /> : <ArrowIcon />)
-    : null;
+  // Icon settings
+  const iconName = (settings.icon as string) || "";
+  const iconPlacement = (settings.icon_placement as string) || "right";
+  const iconSize = (settings.icon_size as number) ?? 20;
+  const iconWeight = (settings.icon_weight as number) ?? 400;
+  const iconFill = (settings.icon_fill as string) === "filled";
+  const iconCircle = settings.iconCircle as boolean;
+
+  // Legacy preset position (hidden field)
+  const legacyPosition = (settings.iconPosition as string) || "none";
+
+  // Resolve: new icon system takes priority, then legacy
+  let position = "none";
+  let icon: React.ReactNode = null;
+
+  if (iconName) {
+    // User has set an icon name → show it at chosen placement
+    position = iconPlacement;
+    if (iconCircle) {
+      icon = <CircleIcon name={iconName} size={iconSize} weight={iconWeight} fill={iconFill} />;
+    } else {
+      icon = <MaterialIcon name={iconName} size={iconSize} weight={iconWeight} fill={iconFill} />;
+    }
+  } else if (legacyPosition !== "none") {
+    // Legacy preset with arrow fallback
+    position = legacyPosition;
+    if (iconCircle) {
+      icon = <CircleIcon />;
+    } else {
+      icon = <ArrowIcon />;
+    }
+  }
 
   const style: React.CSSProperties = {
     ...BASE,
@@ -77,9 +100,9 @@ export function ButtonElement({ resolved }: { resolved: ResolvedElement }) {
 
   const content = (
     <>
-      {iconPosition === "left" && icon}
+      {position === "left" && icon}
       <span>{label}</span>
-      {iconPosition === "right" && icon}
+      {position === "right" && icon}
     </>
   );
 

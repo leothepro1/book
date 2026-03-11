@@ -54,4 +54,5 @@ export type ThemeConfig = {
     radius: ButtonRadius;     // reuses button radius type → --tile-radius
     shadow: ButtonShadow;     // reuses button shadow type → --tile-shadow
   };
+
 };

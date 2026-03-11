@@ -92,6 +92,34 @@ export function validateSettingValue(field: SettingField, value: unknown): Valid
       return { valid: true };
     }
 
+    case "weightRange": {
+      // Numeric range with snap points
+      if (value == null) return { valid: true };
+      const wVal = value as number;
+      if (typeof wVal !== "number" || isNaN(wVal)) {
+        return { valid: false, reason: `"${field.key}" must be a number` };
+      }
+      if (field.min != null && wVal < field.min) {
+        return { valid: false, reason: `"${field.key}" below min ${field.min}` };
+      }
+      if (field.max != null && wVal > field.max) {
+        return { valid: false, reason: `"${field.key}" above max ${field.max}` };
+      }
+      return { valid: true };
+    }
+
+    case "markers":
+      // JSON string — validated by the FieldMarkers component
+      return { valid: true };
+
+    case "mapPicker": {
+      // Map ID string — references a saved MapConfig
+      if (value != null && typeof value !== "string") {
+        return { valid: false, reason: `"${field.key}" must be a map ID string` };
+      }
+      return { valid: true };
+    }
+
     default: {
       // Exhaustive check — if a new SettingFieldType is added but not handled here,
       // TypeScript will flag this at compile time (value of `field.type` won't be `never`)

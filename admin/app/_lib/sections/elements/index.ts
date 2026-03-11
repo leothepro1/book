@@ -12,3 +12,4 @@ import "./divider";
 import "./icon";
 import "./richtext";
 import "./collapsible";
+import "./map";

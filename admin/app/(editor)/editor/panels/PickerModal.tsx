@@ -65,6 +65,7 @@ import {
   getAllElementDefinitions,
   getElementDefinition,
 } from "@/app/_lib/sections/registry";
+import { EditorIcon } from "@/app/_components/EditorIcon";
 
 // ═══════════════════════════════════════════════════════════════
 // PUBLIC TYPES
@@ -824,11 +825,7 @@ function SearchIcon() {
 }
 
 function ChevronRightIcon() {
-  return (
-    <svg className="pk-result__chevron" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M6 3.5L10.5 8 6 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  return <EditorIcon name="chevron_right" size={16} className="pk-result__chevron" />;
 }
 
 function EmptyIcon() {

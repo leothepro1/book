@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import type { SettingField } from "@/app/(guest)/_lib/themes/types";
 import { FieldWrapper } from "./FieldRenderer";
+import { EditorIcon } from "@/app/_components/EditorIcon";
 
 type Props = {
   field: SettingField;
@@ -37,9 +38,7 @@ export function FieldSelect({ field, value, onChange }: Props) {
           <span className="sf-dropdown__text">
             {selectedOption?.label || current}
           </span>
-          <svg className="sf-dropdown__chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-            <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <EditorIcon name="expand_more" size={16} className="sf-dropdown__chevron" />
         </button>
         {open && (
           <ul className="sf-dropdown__menu">

@@ -1,6 +1,6 @@
 .cp-popup {
-  position: absolute;
-  z-index: 1000;
+  position: fixed;
+  z-index: 9000;
   background: #fff;
   border-radius: 14px;
   box-shadow:
@@ -11,16 +11,6 @@
   width: 276px;
   user-select: none;
   animation: cpFadeIn 0.15s ease-out;
-}
-
-.cp-popup--below {
-  top: calc(100% + 8px);
-  left: 0;
-}
-
-.cp-popup--above {
-  bottom: calc(100% + 8px);
-  left: 0;
 }
 
 @keyframes cpFadeIn {
