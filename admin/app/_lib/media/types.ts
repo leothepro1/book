@@ -99,9 +99,12 @@ export const ALLOWED_MIME_TYPES = [
   "image/gif",
   "image/svg+xml",
   "application/pdf",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
 ] as const;
 
-export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+export const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB (video files need more)
 
 export const DEFAULT_PAGE_SIZE = 50;
 export const MAX_PAGE_SIZE = 100;

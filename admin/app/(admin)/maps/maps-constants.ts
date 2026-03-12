@@ -37,6 +37,10 @@ export const DEFAULT_MARKER: Omit<MapMarkerConfig, "id"> = {
   color: "#E74C3C",
   isActive: true,
   sortOrder: 0,
+  showButton: false,
+  buttonLabel: "",
+  buttonUrl: "",
+  buttonOpenNewTab: false,
 };
 
 export const STYLE_OPTIONS = [

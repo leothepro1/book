@@ -6,7 +6,7 @@ export const dividerElement: ElementDefinition = {
   version: "1.0.0",
   name: "Avgränsare",
   description: "Visuell separationslinje.",
-  icon: "divider",
+  icon: "horizontal_rule",
   supportsAction: false,
 
   skipPresetPicker: true,

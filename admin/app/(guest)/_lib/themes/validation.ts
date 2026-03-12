@@ -120,6 +120,21 @@ export function validateSettingValue(field: SettingField, value: unknown): Valid
       return { valid: true };
     }
 
+    case "video": {
+      // Video URL string
+      if (value != null && typeof value !== "string") {
+        return { valid: false, reason: `"${field.key}" must be a video URL string` };
+      }
+      return { valid: true };
+    }
+
+    case "imageList": {
+      if (value != null && !Array.isArray(value)) {
+        return { valid: false, reason: `"${field.key}" must be an array of gallery image objects` };
+      }
+      return { valid: true };
+    }
+
     default: {
       // Exhaustive check — if a new SettingFieldType is added but not handled here,
       // TypeScript will flag this at compile time (value of `field.type` won't be `never`)

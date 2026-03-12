@@ -55,7 +55,7 @@ export function MaterialIcon({ name, size = 24, weight = 400, fill = false, colo
   return (
     <span
       ref={ref}
-      className="material-symbols-outlined"
+      className="material-symbols-rounded"
       style={{
         fontSize: size,
         width: size,

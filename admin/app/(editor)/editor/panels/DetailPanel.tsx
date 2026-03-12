@@ -54,6 +54,7 @@ import { usePreview } from "@/app/(admin)/_components/GuestPreview";
 import { usePublishBar } from "@/app/(admin)/_components/PublishBar";
 import { useDraftUpdate } from "@/app/(admin)/_hooks/useDraftUpdate";
 import { SettingsForm } from "../fields";
+import type { FieldOnChange } from "../fields/FieldRenderer";
 import { FieldSpacing } from "../fields/FieldSpacing";
 import { FieldSchedule } from "../fields/FieldSchedule";
 import {
@@ -92,45 +93,71 @@ export function DetailPanel() {
     return resolveTarget(detailTarget, sections);
   }, [detailTarget, sections, registryReady]);
 
+  // ── Shared patch splitter ─────────────────────────────────
+  // Separates schedule fields (instance-level) from settings fields.
+
+  const INSTANCE_KEYS = useMemo(() => new Set(["scheduledShow", "scheduledHide"]), []);
+
+  function splitPatch(keyOrPatch: string | Record<string, unknown>, value?: unknown) {
+    const fullPatch: Record<string, unknown> =
+      typeof keyOrPatch === "string" ? { [keyOrPatch]: value } : keyOrPatch;
+    const instancePatch: Record<string, unknown> = {};
+    const settingsPatch: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(fullPatch)) {
+      if (INSTANCE_KEYS.has(k)) instancePatch[k] = v;
+      else settingsPatch[k] = v;
+    }
+    return { instancePatch, settingsPatch };
+  }
+
+  function cleanSettings(
+    settings: Record<string, unknown>,
+    settingsPatch: Record<string, unknown>,
+    hasInstanceKeys: boolean
+  ) {
+    const cleaned = { ...settings, ...settingsPatch };
+    if (hasInstanceKeys) {
+      for (const key of INSTANCE_KEYS) delete cleaned[key];
+    }
+    return cleaned;
+  }
+
   // Save handler — updates the specific item's settings within the section tree
   // Supports single key/value OR a batch patch object
   const handleChange = useCallback(
     (keyOrPatch: string | Record<string, unknown>, value?: unknown) => {
       if (!config || !detailTarget || !resolved) return;
 
-      const fullPatch: Record<string, unknown> =
-        typeof keyOrPatch === "string" ? { [keyOrPatch]: value } : keyOrPatch;
-
-      // Separate schedule fields (live on instance) from settings fields
-      const INSTANCE_KEYS = new Set(["scheduledShow", "scheduledHide"]);
-      const instancePatch: Record<string, unknown> = {};
-      const settingsPatch: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(fullPatch)) {
-        if (INSTANCE_KEYS.has(k)) {
-          instancePatch[k] = v;
-        } else {
-          settingsPatch[k] = v;
-        }
-      }
-
-      // Remove schedule keys from settings if they exist there (legacy cleanup)
+      const { instancePatch, settingsPatch } = splitPatch(keyOrPatch, value);
       const hasInstanceKeys = Object.keys(instancePatch).length > 0;
-      const cleanSettings = (settings: Record<string, unknown>) => {
-        if (!hasInstanceKeys) return { ...settings, ...settingsPatch };
-        const cleaned = { ...settings, ...settingsPatch };
-        for (const key of INSTANCE_KEYS) delete cleaned[key];
-        return cleaned;
-      };
 
       const updatedSections = sections.map((section) => {
         if (section.id !== detailTarget.sectionId) return section;
 
-        // Editing section
+        // Editing section — split patch between settings and presetSettings
         if (!detailTarget.blockId) {
+          const presetKeys = resolved._presetSettingKeys;
+          if (presetKeys && presetKeys.size > 0) {
+            const sectionSettingsPatch: Record<string, unknown> = {};
+            const presetSettingsPatch: Record<string, unknown> = {};
+            for (const [k, v] of Object.entries(settingsPatch)) {
+              if (presetKeys.has(k)) {
+                presetSettingsPatch[k] = v;
+              } else {
+                sectionSettingsPatch[k] = v;
+              }
+            }
+            return {
+              ...section,
+              ...instancePatch,
+              settings: { ...section.settings, ...sectionSettingsPatch },
+              presetSettings: { ...section.presetSettings, ...presetSettingsPatch },
+            };
+          }
           return {
             ...section,
             ...instancePatch,
-            settings: cleanSettings(section.settings),
+            settings: cleanSettings(section.settings, settingsPatch, hasInstanceKeys),
           };
         }
 
@@ -145,7 +172,7 @@ export function DetailPanel() {
               return {
                 ...block,
                 ...instancePatch,
-                settings: cleanSettings(block.settings),
+                settings: cleanSettings(block.settings, settingsPatch, hasInstanceKeys),
               };
             }
 
@@ -168,6 +195,55 @@ export function DetailPanel() {
     },
     [config, detailTarget, resolved, sections, pushUndo, saveDraft]
   );
+
+  // ── Element-level change handler for block panel ───────────
+  // Reuses the exact same mutation path as element-level editing:
+  // sections → block → updateElementInSlots → pushUndo → saveDraft
+
+  const handleElementChange = useCallback(
+    (elementId: string, keyOrPatch: string | Record<string, unknown>, value?: unknown) => {
+      if (!config || !detailTarget?.blockId) return;
+
+      const { instancePatch, settingsPatch } = splitPatch(keyOrPatch, value);
+
+      const updatedSections = sections.map((section) => {
+        if (section.id !== detailTarget.sectionId) return section;
+        return {
+          ...section,
+          blocks: (section.blocks ?? []).map((block) => {
+            if (block.id !== detailTarget.blockId) return block;
+            return {
+              ...block,
+              slots: updateElementInSlots(block.slots, elementId, settingsPatch, instancePatch),
+            };
+          }),
+        };
+      });
+
+      pushUndo({ home: config.home });
+      saveDraft({ home: { ...config.home, sections: updatedSections } });
+    },
+    [config, detailTarget, sections, pushUndo, saveDraft]
+  );
+
+  // ── Block data for element forms ───────────────────────────
+  // Only computed at block level — provides the block instance
+  // and its slot definitions for rendering element forms.
+
+  const blockData = useMemo(() => {
+    if (!detailTarget?.blockId || !resolved || resolved.level !== "block") return null;
+    const section = sections.find((s) => s.id === detailTarget.sectionId);
+    if (!section) return null;
+    const block = section.blocks.find((b) => b.id === detailTarget.blockId);
+    if (!block) return null;
+
+    const sectionDef = getSectionDefinition(section.definitionId);
+    const preset = sectionDef?.presets.find((p) => p.key === section.presetKey);
+    const blockTypeDef = preset?.blockTypes.find((bt) => bt.type === block.type);
+    const slotDefs = blockTypeDef?.slots ?? [];
+
+    return { block, slotDefs };
+  }, [detailTarget, resolved, sections]);
 
   if (!resolved) return null;
 
@@ -210,6 +286,15 @@ export function DetailPanel() {
             schema={resolved.schema}
             values={resolved.values}
             onChange={handleChange}
+          />
+        )}
+
+        {/* Block panel: element forms — renders each element's real settings */}
+        {resolved.level === "block" && blockData && (
+          <BlockElementsPanel
+            block={blockData.block}
+            slotDefs={blockData.slotDefs}
+            onElementChange={handleElementChange}
           />
         )}
 
@@ -311,7 +396,7 @@ function SpacingAccordion({
         <span className="dp-accordion__label">Avstånd</span>
         <EditorIcon
           name="expand_more"
-          size={16}
+          size={18}
           className={`dp-accordion__chevron ${open ? "dp-accordion__chevron--open" : ""}`}
         />
       </button>
@@ -356,7 +441,7 @@ function ScheduleAccordion({
         <span className="dp-accordion__label">Schemalägg</span>
         <EditorIcon
           name="expand_more"
-          size={16}
+          size={18}
           className={`dp-accordion__chevron ${open ? "dp-accordion__chevron--open" : ""}`}
         />
       </button>
@@ -366,6 +451,139 @@ function ScheduleAccordion({
             scheduledShow={scheduledShow}
             scheduledHide={scheduledHide}
             onChange={onChange}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BLOCK ELEMENTS PANEL
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Renders each element's REAL settings form inside the block panel.
+ *
+ * This is NOT a separate config model — it renders the same SettingsForm
+ * with the same schema (from ElementDefinition.settingsSchema) and the
+ * same values (from ElementInstance.settings) that the element panel uses.
+ *
+ * Changes go through the same mutation path (updateElementInSlots),
+ * so block panel and element panel always show the same data.
+ *
+ * New element types and new fields automatically appear because this
+ * component reads from the registry at render time — no hardcoded
+ * field lists or element-specific logic.
+ */
+function BlockElementsPanel({
+  block,
+  slotDefs,
+  onElementChange,
+}: {
+  block: BlockInstance;
+  slotDefs: SlotDefinition[];
+  onElementChange: (
+    elementId: string,
+    keyOrPatch: string | Record<string, unknown>,
+    value?: unknown
+  ) => void;
+}) {
+  // Collect elements in slot order (same order as in the block)
+  const orderedElements = useMemo(() => {
+    const result: ElementInstance[] = [];
+    const coveredKeys = new Set<string>();
+
+    for (const slotDef of slotDefs) {
+      coveredKeys.add(slotDef.key);
+      const elements = block.slots[slotDef.key] ?? [];
+      for (const el of [...elements].sort((a, b) => a.sortOrder - b.sortOrder)) {
+        result.push(el);
+      }
+    }
+
+    // Defensive: include elements from slots not in slotDefs
+    for (const [key, elements] of Object.entries(block.slots)) {
+      if (coveredKeys.has(key)) continue;
+      for (const el of [...elements].sort((a, b) => a.sortOrder - b.sortOrder)) {
+        result.push(el);
+      }
+    }
+
+    return result;
+  }, [block.slots, slotDefs]);
+
+  if (orderedElements.length === 0) return null;
+
+  return (
+    <div className="dp-elements">
+      {orderedElements.map((element) => (
+        <ElementFormGroup
+          key={element.id}
+          element={element}
+          onElementChange={onElementChange}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A single element's settings rendered as a collapsible group.
+ * Uses the element's real definition schema and real instance settings.
+ */
+function ElementFormGroup({
+  element,
+  onElementChange,
+}: {
+  element: ElementInstance;
+  onElementChange: (
+    elementId: string,
+    keyOrPatch: string | Record<string, unknown>,
+    value?: unknown
+  ) => void;
+}) {
+  const [open, setOpen] = useState(true);
+
+  const def = getElementDefinition(element.type);
+  if (!def) return null;
+
+  const visibleFields = def.settingsSchema.filter((f) => !f.hidden);
+  if (visibleFields.length === 0) return null;
+
+  const name = def.name;
+
+  // Bind onChange to this specific element — same mutation path as element panel
+  const handleChange: FieldOnChange = useCallback(
+    (keyOrPatch: string | Record<string, unknown>, value?: unknown) => {
+      onElementChange(element.id, keyOrPatch, value);
+    },
+    [element.id, onElementChange]
+  );
+
+  return (
+    <div className="dp-el-group">
+      <button
+        type="button"
+        className="dp-el-group__header"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="dp-el-group__icon">
+          <EditorIcon name={def.icon} size={18} />
+        </span>
+        <span className="dp-el-group__name">{name}</span>
+        <EditorIcon
+          name="expand_more"
+          size={18}
+          className={`dp-accordion__chevron${open ? " dp-accordion__chevron--open" : ""}`}
+        />
+      </button>
+      {open && (
+        <div className="dp-el-group__body">
+          <SettingsForm
+            schema={def.settingsSchema}
+            values={element.settings}
+            onChange={handleChange}
           />
         </div>
       )}
@@ -680,6 +898,8 @@ type ResolvedTarget = {
   name: string;
   schema: SettingField[];
   values: Record<string, unknown>;
+  /** Keys that belong to presetSettings (section level only). */
+  _presetSettingKeys?: Set<string>;
 };
 
 function resolveTarget(
@@ -689,19 +909,24 @@ function resolveTarget(
   const section = sections.find((s) => s.id === target.sectionId);
   if (!section) return null;
 
-  // Section level
+  // Section level — merge section settings + preset settings into one form
   if (!target.blockId) {
     const def = getSectionDefinition(section.definitionId);
+    const preset = def?.presets.find((p) => p.key === section.presetKey);
+    const sectionSchema = def?.settingsSchema ?? [];
+    const presetSchema = preset?.settingsSchema ?? [];
     return {
       level: "section",
       name: section.title || def?.name || section.definitionId,
-      schema: def?.settingsSchema ?? [],
+      schema: [...sectionSchema, ...presetSchema],
       values: {
+        ...section.presetSettings,
         ...section.settings,
         scheduledShow: section.scheduledShow ?? (section.settings?.scheduledShow as string | undefined),
         scheduledHide: section.scheduledHide ?? (section.settings?.scheduledHide as string | undefined),
       },
-    };
+      _presetSettingKeys: new Set(presetSchema.map((f) => f.key)),
+    } as ResolvedTarget;
   }
 
   // Block level

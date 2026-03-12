@@ -1,6 +1,7 @@
 import type { ResolvedElement } from "@/app/_lib/sections/types";
 
 const SIZE_MAP: Record<string, string> = {
+  xs: "1rem",
   sm: "clamp(1.5rem, 1.25rem + 1vw, 2rem)",
   md: "clamp(1.875rem, 1.5rem + 1.5vw, 2.5rem)",
   lg: "clamp(2.25rem, 1.75rem + 2vw, 3.25rem)",

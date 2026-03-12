@@ -18,7 +18,7 @@ export const richtextElement: ElementDefinition = {
   version: "1.0.0",
   name: "Rich text",
   description: "Rubrik och brödtext i ett element.",
-  icon: "text",
+  icon: "wysiwyg",
   supportsAction: false,
   skipPresetPicker: true,
 

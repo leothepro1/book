@@ -3,14 +3,13 @@
 /**
  * FieldMapPicker — Searchable dropdown to select a saved map.
  *
- * Fetches available maps from the server on mount.
- * Shows map name + style as option labels.
+ * Fetches lightweight map summaries (id, name, style, markerCount)
+ * instead of full MapConfig to minimise payload in the editor.
  */
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { SettingField } from "@/app/(guest)/_lib/themes/types";
-import type { MapConfig } from "@/app/(guest)/_lib/tenant/types";
-import { getMaps } from "@/app/(admin)/_lib/tenant/getMaps";
+import { getMapSummaries, type MapSummary } from "@/app/(admin)/_lib/tenant/getMaps";
 import { getMapThumbnail } from "@/app/(admin)/maps/maps-constants";
 import { FieldWrapper } from "./FieldRenderer";
 import { EditorIcon } from "@/app/_components/EditorIcon";
@@ -31,7 +30,7 @@ const STYLE_LABELS: Record<string, string> = {
 };
 
 export function FieldMapPicker({ field, value, onChange }: Props) {
-  const [maps, setMaps] = useState<MapConfig[]>([]);
+  const [maps, setMaps] = useState<MapSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -40,9 +39,9 @@ export function FieldMapPicker({ field, value, onChange }: Props) {
 
   const selectedId = (value as string) || "";
 
-  // Fetch maps on mount
+  // Fetch lightweight summaries on mount
   useEffect(() => {
-    getMaps()
+    getMapSummaries()
       .then((m) => setMaps(m))
       .catch(() => setMaps([]))
       .finally(() => setLoading(false));
@@ -173,7 +172,7 @@ export function FieldMapPicker({ field, value, onChange }: Props) {
                     <span className="fmp-option__name">{m.name}</span>
                     <span className="fmp-option__meta">
                       {STYLE_LABELS[m.style] || m.style}
-                      {m.markers.length > 0 && ` · ${m.markers.length} markörer`}
+                      {m.markerCount > 0 && ` · ${m.markerCount} markörer`}
                     </span>
                     {m.id === selectedId && (
                       <EditorIcon name="check" size={16} className="fmp-option__check" />

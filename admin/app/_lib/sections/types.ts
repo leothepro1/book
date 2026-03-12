@@ -116,7 +116,9 @@ export type ElementType =
   | "icon"
   | "richtext"
   | "collapsible"
-  | "map";
+  | "map"
+  | "video"
+  | "gallery";
 
 /**
  * A named settings bundle for an element type.

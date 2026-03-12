@@ -1,0 +1,107 @@
+/* ═══════════════════════════════════════════════════
+   Accordion Section — Shared + Default + Card Presets
+   ═══════════════════════════════════════════════════ */
+
+/* ── Shared layout ── */
+
+.s-accordion {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* ── Header (clickable row: heading + icon) ── */
+
+.s-accordion__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.s-accordion__title {
+  flex: 1;
+  min-width: 0;
+}
+
+.s-accordion__title h1,
+.s-accordion__title h2,
+.s-accordion__title h3,
+.s-accordion__title h4,
+.s-accordion__title h5,
+.s-accordion__title h6,
+.s-accordion__title p {
+  margin: 0;
+}
+
+/* ── Indicator (icon, rotates 180° on open) ── */
+
+.s-accordion__indicator {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.s-accordion__item--open .s-accordion__indicator {
+  transform: rotate(180deg);
+}
+
+/* ── Body (expandable content) ── */
+
+.s-accordion__body {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+}
+
+.s-accordion__item--open .s-accordion__body {
+  grid-template-rows: 1fr;
+}
+
+.s-accordion__content {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.s-accordion__content p {
+  margin: 0;
+}
+
+/* ── Animated (opt-in via useTransition setting) ── */
+
+.s-accordion--animated .s-accordion__indicator {
+  transition: transform 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.s-accordion--animated .s-accordion__body {
+  transition: grid-template-rows 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ═══════════════════════════════════════════════════
+   DEFAULT PRESET — bordered rows
+   ═══════════════════════════════════════════════════ */
+
+.s-accordion--default .s-accordion__item {
+  border-top: 1px solid var(--accordion-border, #E6E5E3);
+}
+
+.s-accordion--default .s-accordion__item--last {
+  border-bottom: 1px solid var(--accordion-border, #E6E5E3);
+}
+
+/* ═══════════════════════════════════════════════════
+   CARD PRESET — each item in its own container
+   ═══════════════════════════════════════════════════ */
+
+.s-accordion--card .s-accordion__item {
+  background: var(--accordion-card-bg, #F5F5F4);
+  border-radius: var(--accordion-card-radius, 12px);
+}

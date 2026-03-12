@@ -4,26 +4,27 @@ import { useState, useCallback, useEffect, useRef, memo } from "react";
 import { createPortal } from "react-dom";
 import type { MediaAssetDTO } from "@/app/_lib/media/types";
 import { useMediaLibrary, SORT_OPTIONS } from "@/app/(admin)/_hooks/useMediaLibrary";
+import { useVideoThumb } from "@/app/_lib/cloudinary/useVideoThumb";
 import "./media-library.css";
 
 // ─── Inline upload (same as useUpload's uploadDirect) ───────
 
 const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME!;
 const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!;
-const ALLOWED_UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif", "image/svg+xml", "application/pdf"];
+const ALLOWED_UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif", "image/svg+xml", "application/pdf", "video/mp4", "video/webm", "video/quicktime"];
 
-function uploadDirect(file: File | Blob, folder: string): Promise<{ url: string; publicId: string; width: number; height: number; bytes: number; format: string }> {
+function uploadDirect(file: File | Blob, folder: string, resourceType: "image" | "video" = "image"): Promise<{ url: string; publicId: string; width: number; height: number; bytes: number; format: string; resourceType: string }> {
   return new Promise((resolve, reject) => {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("upload_preset", UPLOAD_PRESET);
     fd.append("folder", folder);
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, true);
+    xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`, true);
     xhr.onload = () => {
       if (xhr.status === 200) {
         const d = JSON.parse(xhr.responseText);
-        resolve({ url: d.secure_url, publicId: d.public_id, width: d.width, height: d.height, bytes: d.bytes, format: d.format });
+        resolve({ url: d.secure_url, publicId: d.public_id, width: d.width, height: d.height, bytes: d.bytes, format: d.format, resourceType: d.resource_type || resourceType });
       } else reject(new Error("Upload failed: " + xhr.status));
     };
     xhr.onerror = () => reject(new Error("Network error"));
@@ -107,6 +108,8 @@ export type MediaLibraryModalProps = {
   /** Subfolder within tenant (e.g. "sections", "cards"). Default: "media" */
   uploadFolder?: string;
   title?: string;
+  /** Filter selectable items by media type. "image" = images only, "video" = videos only, undefined = all. */
+  accept?: "image" | "video";
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -121,6 +124,7 @@ export function MediaLibraryModal({
   folder,
   uploadFolder = "sections",
   title = "Mediabibliotek",
+  accept,
 }: MediaLibraryModalProps) {
   const { state, actions } = useMediaLibrary(open ? folder : "__disabled__");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -222,6 +226,23 @@ export function MediaLibraryModal({
     return () => el.removeEventListener("scroll", handle);
   }, [state.hasMore, state.isLoadingMore, actions]);
 
+  // ── Clean up pending items once they appear in the real list ──
+  useEffect(() => {
+    if (pendingUploads.length === 0 || state.isLoading) return;
+    const donePendings = pendingUploads.filter((p) => p.status === "done" && p.result);
+    if (donePendings.length === 0) return;
+
+    const realPublicIds = new Set(state.items.map((i) => i.publicId));
+    const toRemove = donePendings.filter((p) => p.result && realPublicIds.has(p.result.publicId));
+    if (toRemove.length === 0) return;
+
+    const idsToRemove = new Set(toRemove.map((p) => p.id));
+    setPendingUploads((prev) => prev.filter((p) => !idsToRemove.has(p.id)));
+    for (const p of toRemove) {
+      if (p.previewUrl) URL.revokeObjectURL(p.previewUrl);
+    }
+  }, [pendingUploads, state.items, state.isLoading]);
+
   // ── Handle files (multi-file, from button or drag-drop) ──
   const handleFiles = useCallback(
     (files: FileList | File[]) => {
@@ -231,10 +252,11 @@ export function MediaLibraryModal({
 
       for (const file of fileArray) {
         const id = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const isVideo = file.type.startsWith("video/");
 
-        // Create local preview for images
+        // Create local preview for images and videos
         let previewUrl: string | null = null;
-        if (file.type.startsWith("image/")) {
+        if (file.type.startsWith("image/") || isVideo) {
           previewUrl = URL.createObjectURL(file);
         }
 
@@ -250,31 +272,21 @@ export function MediaLibraryModal({
 
         setPendingUploads((prev) => [pending, ...prev]);
 
-        // Upload
-        uploadDirect(file, folder)
+        // Upload (use video endpoint for video files)
+        uploadDirect(file, folder, isVideo ? "video" : "image")
           .then((result) => {
             setPendingUploads((prev) =>
               prev.map((p) => (p.id === id ? { ...p, status: "done" as const, result } : p))
             );
 
-            // Index in DB
+            // Index in DB, then refresh — pending item stays until real item appears in list
             fetch("/api/media/index", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ url: result.url, publicId: result.publicId, folder: uploadFolder }),
+              body: JSON.stringify({ url: result.url, publicId: result.publicId, folder: uploadFolder, ...(isVideo && { resourceType: "video" }) }),
             })
               .catch((err) => console.warn("[MediaLibrary] Index failed:", err))
-              .finally(() => {
-                // Refresh list — the real item replaces the pending one
-                setTimeout(() => {
-                  actions.refresh();
-                  // Remove the pending item after list refreshes
-                  setTimeout(() => {
-                    setPendingUploads((prev) => prev.filter((p) => p.id !== id));
-                    if (previewUrl) URL.revokeObjectURL(previewUrl);
-                  }, 300);
-                }, 300);
-              });
+              .finally(() => actions.refresh());
           })
           .catch(() => {
             setPendingUploads((prev) =>
@@ -331,7 +343,16 @@ export function MediaLibraryModal({
 
   if (!open) return null;
 
-  const selectedAsset = state.items.find((i) => i.id === selectedId);
+  // Filter items by accepted media type (for selection — upload still allows all)
+  const filteredItems = accept
+    ? state.items.filter((i) => {
+        if (accept === "video") return i.mimeType.startsWith("video/") || i.resourceType === "video";
+        if (accept === "image") return i.mimeType.startsWith("image/");
+        return true;
+      })
+    : state.items;
+
+  const selectedAsset = filteredItems.find((i) => i.id === selectedId);
 
   return createPortal(
     <>
@@ -510,7 +531,7 @@ export function MediaLibraryModal({
                   Försök igen
                 </button>
               </div>
-            ) : state.items.length === 0 && pendingUploads.length === 0 ? (
+            ) : filteredItems.length === 0 && pendingUploads.length === 0 ? (
               <div className="ml-empty">
                 <EmptyIcon />
                 <p className="ml-empty-text">
@@ -531,7 +552,7 @@ export function MediaLibraryModal({
                     {pendingUploads.map((p) => (
                       <PendingGridItem key={p.id} pending={p} />
                     ))}
-                    {state.items.map((item) => (
+                    {filteredItems.map((item) => (
                       <MediaGridItem
                         key={item.id}
                         item={item}
@@ -545,7 +566,7 @@ export function MediaLibraryModal({
                     {pendingUploads.map((p) => (
                       <PendingListItem key={p.id} pending={p} />
                     ))}
-                    {state.items.map((item) => (
+                    {filteredItems.map((item) => (
                       <MediaListItem
                         key={item.id}
                         item={item}
@@ -572,7 +593,7 @@ export function MediaLibraryModal({
             <div className="ml-footer-meta">
               {!state.isLoading && (
                 <span className="ml-footer-count">
-                  {state.totalCount} {state.totalCount === 1 ? "fil" : "filer"}
+                  {accept ? filteredItems.length : state.totalCount} {(accept ? filteredItems.length : state.totalCount) === 1 ? "fil" : "filer"}
                   {selectedAsset && (
                     <> &middot; <strong>{selectedAsset.filename}</strong></>
                   )}
@@ -607,11 +628,20 @@ export function MediaLibraryModal({
 function PendingGridItem({ pending }: { pending: PendingUpload }) {
   const ext = pending.mimeType.split("/")[1]?.toUpperCase() || "";
   const sizeStr = formatBytes(pending.size);
+  const isVideo = pending.mimeType.startsWith("video/");
 
   return (
     <div className="ml-item ml-item--pending">
       <div className="ml-item-thumb">
-        {pending.previewUrl ? (
+        {pending.previewUrl && isVideo ? (
+          <>
+            <video src={pending.previewUrl} className="ml-item-img" muted preload="metadata" style={{ objectFit: "cover" }} />
+            <span className="ml-item-play-badge">
+              <span className="material-symbols-rounded" style={{ fontSize: 28, color: "#fff", fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>play_circle</span>
+            </span>
+            {pending.status === "uploading" && <div className="ml-item-shimmer" />}
+          </>
+        ) : pending.previewUrl ? (
           <>
             <img src={pending.previewUrl} alt="" className="ml-item-img" />
             {pending.status === "uploading" && <div className="ml-item-shimmer" />}
@@ -661,6 +691,19 @@ function PendingListItem({ pending }: { pending: PendingUpload }) {
 // GRID ITEM (memoized)
 // ═══════════════════════════════════════════════════════════════
 
+/** Video thumbnail — fetches a signed Cloudinary poster image. */
+const VideoThumb = memo(function VideoThumb({ src, className }: { src: string; className: string }) {
+  const thumb = useVideoThumb(src);
+  if (!thumb) {
+    return (
+      <div className={className} style={{ objectFit: "cover", background: "#e5e5e5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span className="material-symbols-rounded" style={{ fontSize: 32, color: "#999", fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24" }}>videocam</span>
+      </div>
+    );
+  }
+  return <img src={thumb} alt="" className={className} style={{ objectFit: "cover" }} />;
+});
+
 const MediaGridItem = memo(function MediaGridItem({
   item,
   selected,
@@ -672,6 +715,7 @@ const MediaGridItem = memo(function MediaGridItem({
 }) {
   const ext = item.format?.toUpperCase() || item.mimeType.split("/")[1]?.toUpperCase() || "";
   const sizeStr = formatBytes(item.bytes);
+  const isVideo = item.mimeType.startsWith("video/") || item.resourceType === "video";
 
   return (
     <button
@@ -686,6 +730,13 @@ const MediaGridItem = memo(function MediaGridItem({
             alt={item.alt || item.filename}
             className="ml-item-img"
           />
+        ) : isVideo ? (
+          <>
+            <VideoThumb src={item.url} className="ml-item-img" />
+            <span className="ml-item-play-badge">
+              <span className="material-symbols-rounded" style={{ fontSize: 28, color: "#fff", fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>play_circle</span>
+            </span>
+          </>
         ) : (
           <div className="ml-item-file">
             <span className="ml-item-file-ext">{ext}</span>
@@ -719,6 +770,7 @@ const MediaListItem = memo(function MediaListItem({
   const ext = item.format?.toUpperCase() || "";
   const sizeStr = formatBytes(item.bytes);
   const dateStr = new Date(item.createdAt).toLocaleDateString("sv-SE");
+  const isVideo = item.mimeType.startsWith("video/") || item.resourceType === "video";
 
   return (
     <button
@@ -732,6 +784,13 @@ const MediaListItem = memo(function MediaListItem({
       <div className="ml-list-thumb">
         {item.mimeType.startsWith("image/") ? (
           <LazyImage src={item.url} alt={item.alt || item.filename} className="ml-list-img" />
+        ) : isVideo ? (
+          <div style={{ position: "relative", width: "100%", height: "100%" }}>
+            <VideoThumb src={item.url} className="ml-list-img" />
+            <span className="ml-item-play-badge ml-item-play-badge--small">
+              <span className="material-symbols-rounded" style={{ fontSize: 18, color: "#fff", fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}>play_circle</span>
+            </span>
+          </div>
         ) : (
           <div className="ml-list-file-icon">
             <span>{ext}</span>

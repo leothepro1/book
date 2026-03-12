@@ -32,6 +32,10 @@ export type MapMarkerConfig = {
   sortOrder?: number;
   markerIds?: string[];
   layout?: string;
+  showButton?: boolean;
+  buttonLabel?: string;
+  buttonUrl?: string;
+  buttonOpenNewTab?: boolean;
 };
 
 export type MapConfig = {

@@ -351,8 +351,8 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
   return (
     <button type="button" role="switch" aria-checked={checked} onClick={onChange}
       className={"admin-toggle" + (checked ? " admin-toggle-on" : "")}>
-      <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-outlined">check</span>
-      <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-outlined">remove</span>
+      <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-rounded">check</span>
+      <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-rounded">remove</span>
       <span className="admin-toggle-thumb" />
     </button>
   );
@@ -974,8 +974,8 @@ function SortableFaqItem({ faq, onEdit, onToggle, dragHandleProps }: {
       </button>
       <button type="button" role="switch" aria-checked={faq.isActive} onClick={onToggle}
         className={"admin-toggle" + (faq.isActive ? " admin-toggle-on" : "")}>
-        <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-outlined">check</span>
-        <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-outlined">remove</span>
+        <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-rounded">check</span>
+        <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-rounded">remove</span>
         <span className="admin-toggle-thumb" />
       </button>
     </div>
@@ -988,11 +988,9 @@ function SortableFaqItemWrapper({ faq, onEdit, onToggle }: {
   onToggle: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: faq.id });
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 50 : undefined,
-  };
+  const style: React.CSSProperties = isDragging
+    ? { opacity: 0, transition }
+    : { transform: CSS.Transform.toString(transform), transition };
   return (
     <div ref={setNodeRef} style={style}>
       <SortableFaqItem faq={faq} onEdit={onEdit} onToggle={onToggle} dragHandleProps={{ ...attributes, ...listeners }} />
@@ -1921,13 +1919,9 @@ function SortableCardItem({ card, openPanel, onPanelToggle, onToggle, onDelete, 
     isDragging,
   } = useSortable({ id: card.id });
 
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 50 : undefined,
-    opacity: isDragging ? 0.04 : 1,
-    boxShadow: isDragging ? "none" : undefined,
-  };
+  const style: React.CSSProperties = isDragging
+    ? { opacity: 0, transition }
+    : { transform: CSS.Transform.toString(transform), transition };
 
   return (
     <div ref={setNodeRef} style={style}>
@@ -2215,13 +2209,9 @@ const SortableCategoryCardItem = React.memo(function SortableCategoryCardItem({ 
     wasDraggingRef.current = isDragging;
   }, [isDragging]);
 
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 50 : undefined,
-    opacity: isDragging ? 0.04 : 1,
-    boxShadow: isDragging ? "none" : undefined,
-  };
+  const style: React.CSSProperties = isDragging
+    ? { opacity: 0, transition }
+    : { transform: CSS.Transform.toString(transform), transition };
   return (
     <div ref={setNodeRef} style={style}>
       <CategoryCardItem

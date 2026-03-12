@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { themeToStyleAttr, backgroundStyle, googleFontsUrl } from "@/app/(guest)/_lib/theme";
 import type { ThemeConfig } from "@/app/(guest)/_lib/theme/types";
+import type { PreviewScrollTarget } from "../_lib/previewMessages";
 import { isValidPreviewMessage } from "../_lib/previewMessages";
 
 const __DEV__ = process.env.NODE_ENV === "development";
@@ -15,6 +16,7 @@ const __DEV__ = process.env.NODE_ENV === "development";
  *  1. On mount, sends "preview-ready" to parent window
  *  2. Listens for "theme-update" → applies CSS vars + background + fonts instantly (DOM mutation)
  *  3. Listens for "content-refresh" → seamless router.refresh() to re-fetch server data (preserves scroll + DOM)
+ *  4. Listens for "scroll-to-target" → smooth-scrolls to the selected section/block/element + highlight
  *
  * This component renders nothing visible — it's a communication bridge.
  */
@@ -84,6 +86,77 @@ export function PreviewBridge() {
     setTimeout(() => { refreshInFlightRef.current = false; }, 500);
   }, [router]);
 
+  // ── Scroll-to-target controller ──────────────────────────────
+  // Smooth-scrolls to the selected section/block/element.
+  //
+  // Design:
+  //   - Target lookup via data-* attributes (O(1) querySelector)
+  //   - No dedup: every click scrolls, even to the same target
+  //   - Retry: MutationObserver waits for DOM if target not yet rendered (max 3s)
+  //   - Coalescing: new target cancels pending retry
+  //   - No highlight/styling — just smooth scroll
+
+  const retryCleanupRef = useRef<(() => void) | null>(null);
+
+  const handleScrollToTarget = useCallback((target: PreviewScrollTarget) => {
+    // Cancel any pending retry from a previous target
+    if (retryCleanupRef.current) {
+      retryCleanupRef.current();
+      retryCleanupRef.current = null;
+    }
+
+    // Build selector — use the most specific ID available
+    const selector = target.elementId
+      ? `[data-element-id="${target.elementId}"]`
+      : target.blockId
+        ? `[data-block-id="${target.blockId}"]`
+        : `[data-section-id="${target.sectionId}"]`;
+
+    const scrollTo = (el: Element) => {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+
+    // Try to find the target immediately
+    const el = document.querySelector(selector);
+    if (el) {
+      scrollTo(el);
+      return;
+    }
+
+    // Target not in DOM yet (e.g., content-refresh in flight).
+    // Watch for it with MutationObserver, timeout after 3s.
+    if (__DEV__) console.log("[PreviewBridge] Target not found, watching for:", selector);
+
+    let cancelled = false;
+    const timeoutId = setTimeout(() => {
+      cancelled = true;
+      observer.disconnect();
+      retryCleanupRef.current = null;
+      if (__DEV__) console.log("[PreviewBridge] Scroll target timeout:", selector);
+    }, 3000);
+
+    const observer = new MutationObserver(() => {
+      if (cancelled) return;
+      const found = document.querySelector(selector);
+      if (found) {
+        observer.disconnect();
+        clearTimeout(timeoutId);
+        retryCleanupRef.current = null;
+        requestAnimationFrame(() => {
+          if (!cancelled) scrollTo(found);
+        });
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    retryCleanupRef.current = () => {
+      cancelled = true;
+      observer.disconnect();
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
   useEffect(() => {
     // Only activate if we're inside an iframe
     if (window === window.parent) return;
@@ -102,6 +175,9 @@ export function PreviewBridge() {
         case "content-refresh":
           handleContentRefresh();
           break;
+        case "scroll-to-target":
+          handleScrollToTarget(data.target);
+          break;
       }
     }
 
@@ -113,8 +189,13 @@ export function PreviewBridge() {
 
     return () => {
       window.removeEventListener("message", onMessage);
+      if (retryCleanupRef.current) {
+        retryCleanupRef.current();
+        retryCleanupRef.current = null;
+      }
     };
-  }, [applyTheme, handleContentRefresh]);
+  }, [applyTheme, handleContentRefresh, handleScrollToTarget]);
+
 
   return null;
 }

@@ -72,8 +72,8 @@ describe("migrateSettings", () => {
   it("runs migration chain in order", () => {
     const log: string[] = [];
     const manifest = makeManifest("3.0.0", {
-      "2.0.0": (s) => { log.push("2.0.0"); return { ...s, v2: true }; },
-      "3.0.0": (s) => { log.push("3.0.0"); return { ...s, v3: true }; },
+      "2.0.0": (s) => { log.push("2.0.0"); return { ...s, v2: { applied: true } }; },
+      "3.0.0": (s) => { log.push("3.0.0"); return { ...s, v3: { applied: true } }; },
     });
 
     const result = migrateSettings({}, manifest, "1.0.0");
@@ -110,7 +110,7 @@ describe("migrateSettings", () => {
 
   it("stops migration chain on error", () => {
     const manifest = makeManifest("3.0.0", {
-      "2.0.0": (s) => ({ ...s, ok: true }),
+      "2.0.0": (s) => ({ ...s, ok: { applied: true } }),
       "3.0.0": () => { throw new Error("boom"); },
     });
 
@@ -120,6 +120,6 @@ describe("migrateSettings", () => {
     expect(result.migrated).toBe(true);
     expect(result.appliedVersions).toEqual(["2.0.0"]);
     expect(result.resolvedVersion).toBe("2.0.0");
-    expect((result.settings as any).ok).toBe(true);
+    expect((result.settings as any).ok).toEqual({ applied: true });
   });
 });

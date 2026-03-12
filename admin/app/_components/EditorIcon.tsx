@@ -19,7 +19,7 @@ type EditorIconProps = {
 export function EditorIcon({ name, size = 16, className, style }: EditorIconProps) {
   return (
     <span
-      className={`material-symbols-outlined${className ? ` ${className}` : ""}`}
+      className={`material-symbols-rounded${className ? ` ${className}` : ""}`}
       style={{
         fontSize: size,
         width: size,
@@ -30,7 +30,8 @@ export function EditorIcon({ name, size = 16, className, style }: EditorIconProp
         justifyContent: "center",
         flexShrink: 0,
         userSelect: "none",
-        fontVariationSettings: "'wght' var(--icon-weight, 400), 'FILL' 0",
+        fontVariationSettings: "'wght' var(--icon-weight, 400), 'FILL' 0, 'GRAD' 0, 'opsz' 24",
+        fontFamily: "'Material Symbols Rounded'",
         ...style,
       }}
       aria-hidden="true"

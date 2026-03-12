@@ -373,6 +373,8 @@ export function FieldRenderer({
     case "text":
     case "url":
     case "image":
+    case "video":
+    case "imageList":
       return (
         <div className="tc-f">
           <div className="tc-f__label">{field.label}</div>

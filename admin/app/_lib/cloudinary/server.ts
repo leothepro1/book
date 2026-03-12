@@ -19,6 +19,26 @@ export type CloudinaryUploadResult = {
   resource_type: string;
 };
 
+/**
+ * Generate a signed video thumbnail URL (first frame as JPG).
+ * Needed because strict transformations are enabled — unsigned transform URLs return 401.
+ */
+export function getSignedVideoThumbUrl(
+  publicId: string,
+  options: { width?: number; height?: number } = {}
+): string {
+  const { width = 400, height = 300 } = options;
+  return cloudinary.url(publicId, {
+    secure: true,
+    sign_url: true,
+    resource_type: "video",
+    format: "jpg",
+    transformation: [
+      { start_offset: "0", width, height, crop: "fill" },
+    ],
+  });
+}
+
 export function getOptimizedUrl(
   publicId: string,
   options: {

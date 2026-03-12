@@ -7,3 +7,4 @@
  */
 
 export { TabsUnderlineRenderer, TabsPillRenderer } from "./TabsRenderer";
+export { AccordionDefaultRenderer, AccordionCardRenderer } from "./AccordionRenderer";

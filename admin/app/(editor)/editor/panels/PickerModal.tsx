@@ -76,6 +76,8 @@ export type PickerItem = {
   name: string;
   description: string;
   category: string;
+  /** Additional categories this item should appear in (e.g. map in both media + interaktion). */
+  categories?: string[];
   tags: string[];
   icon?: React.ReactNode;
 };
@@ -120,7 +122,7 @@ export function PickerModal({
   onClose,
 }: PickerModalProps) {
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState("all");
+  const [activeCategory, setActiveCategory] = useState(categories[0]?.key ?? "all");
   const [focusIndex, setFocusIndex] = useState(0);
 
   // ── Preset panel state ──
@@ -131,12 +133,6 @@ export function PickerModal({
   const searchRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // ── Auto-focus search on mount ──
-
-  useEffect(() => {
-    const timer = setTimeout(() => searchRef.current?.focus(), 60);
-    return () => clearTimeout(timer);
-  }, []);
 
   // ── Filter items ──
 
@@ -144,7 +140,10 @@ export function PickerModal({
     let result = items;
 
     if (activeCategory !== "all") {
-      result = result.filter((item) => item.category === activeCategory);
+      result = result.filter((item) =>
+        item.category === activeCategory ||
+        (item.categories && item.categories.includes(activeCategory))
+      );
     }
 
     if (search.trim()) {
@@ -164,21 +163,6 @@ export function PickerModal({
     return result;
   }, [items, activeCategory, search]);
 
-  // ── Category counts ──
-
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: items.length };
-    const source = search.trim() ? filtered : items;
-    if (search.trim()) counts.all = source.length;
-
-    for (const cat of categories) {
-      counts[cat.key] = (search.trim() ? source : items).filter(
-        (i) => i.category === cat.key
-      ).length;
-    }
-    return counts;
-  }, [items, categories, filtered, search]);
-
   // ── Reset focus on filter change ──
 
   useEffect(() => {
@@ -188,7 +172,7 @@ export function PickerModal({
   // ── All categories ──
 
   const allCategories: PickerCategory[] = useMemo(
-    () => [{ key: "all", label: "Alla" }, ...categories],
+    () => [...categories, { key: "all", label: "Alla element", icon: <EditorIcon name="more_horiz" size={16} /> }],
     [categories]
   );
 
@@ -438,7 +422,6 @@ export function PickerModal({
           <div className="pk-body">
             <nav className="pk-categories" aria-label="Kategorier">
               {allCategories.map((cat) => {
-                const count = categoryCounts[cat.key] ?? 0;
                 const isActive = activeCategory === cat.key;
 
                 return (
@@ -451,7 +434,6 @@ export function PickerModal({
                   >
                     {cat.icon && <span className="pk-cat__icon">{cat.icon}</span>}
                     <span className="pk-cat__label">{cat.label}</span>
-                    <span className="pk-cat__count">{count}</span>
                   </button>
                 );
               })}
@@ -464,6 +446,9 @@ export function PickerModal({
               role="listbox"
               aria-label="Resultat"
             >
+              <span className="pk-results__heading">
+                {allCategories.find((c) => c.key === activeCategory)?.label ?? ""}
+              </span>
               {filtered.length === 0 ? (
                 <div className="pk-empty">
                   <EmptyIcon />
@@ -673,6 +658,20 @@ export function buildBlockPickerData(preset: SectionPreset): {
   return { items, categories: [] };
 }
 
+const ELEMENT_CATEGORY_MAP: Record<string, { primary: string; extra?: string[] }> = {
+  heading:     { primary: "text" },
+  text:        { primary: "text" },
+  richtext:    { primary: "text" },
+  collapsible: { primary: "text" },
+  image:       { primary: "media" },
+  video:       { primary: "media" },
+  gallery:     { primary: "media" },
+  map:         { primary: "media", extra: ["interaktion"] },
+  button:      { primary: "interaktion" },
+  icon:        { primary: "interaktion" },
+  divider:     { primary: "layout" },
+};
+
 export function buildElementPickerData(slotDef: SlotDefinition): {
   items: PickerItem[];
   categories: PickerCategory[];
@@ -681,18 +680,24 @@ export function buildElementPickerData(slotDef: SlotDefinition): {
   const allowed = new Set<string>(slotDef.allowedElements);
   const validElements = allElements.filter((el) => allowed.has(el.type));
 
-  const items: PickerItem[] = validElements.map((el) => ({
-    id: el.type,
-    name: el.name,
-    description: el.description,
-    category: el.supportsAction ? "interactive" : "presentational",
-    tags: [el.type, el.icon],
-    icon: <ElementTypeIcon elementType={el.type} />,
-  }));
+  const items: PickerItem[] = validElements.map((el) => {
+    const catInfo = ELEMENT_CATEGORY_MAP[el.type] ?? { primary: "text" };
+    return {
+      id: el.type,
+      name: el.name,
+      description: el.description,
+      category: catInfo.primary,
+      categories: catInfo.extra,
+      tags: [el.type, el.icon],
+      icon: <ElementTypeIcon elementType={el.type} />,
+    };
+  });
 
   const categories: PickerCategory[] = [
-    { key: "presentational", label: "Visning" },
-    { key: "interactive", label: "Interaktiv" },
+    { key: "text", label: "Text", icon: <EditorIcon name="title" size={16} /> },
+    { key: "media", label: "Media", icon: <EditorIcon name="broken_image" size={16} /> },
+    { key: "interaktion", label: "Interaktion", icon: <EditorIcon name="web_traffic" size={16} /> },
+    { key: "layout", label: "Layout", icon: <EditorIcon name="responsive_layout" size={16} /> },
   ];
 
   return { items, categories };
@@ -904,47 +909,20 @@ function BlockTypeIcon() {
 }
 
 function ElementTypeIcon({ elementType }: { elementType: string }) {
-  switch (elementType) {
-    case "heading":
-      return (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          <path d="M4 4v10M14 4v10M4 9h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
-      );
-    case "text":
-      return (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          <path d="M3 5h12M3 9h10M3 13h8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-      );
-    case "button":
-      return (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          <rect x="2" y="5" width="14" height="8" rx="4" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M6 9h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-      );
-    case "image":
-      return (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          <rect x="2" y="3" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
-          <circle cx="6.5" cy="7" r="1.5" stroke="currentColor" strokeWidth="1" />
-          <path d="M2 13l4-3 3 2 3-2 4 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      );
-    case "divider":
-      return (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          <path d="M3 9h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 2" />
-        </svg>
-      );
-    case "icon":
-      return (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          <path d="M9 2l2.5 5 5.5.8-4 3.9.9 5.3L9 14.5 4.1 17l.9-5.3-4-3.9L6.5 7z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-        </svg>
-      );
-    default:
-      return <DefaultItemIcon />;
-  }
+  const iconMap: Record<string, string> = {
+    heading: "title",
+    text: "view_headline",
+    button: "call_to_action",
+    image: "image",
+    divider: "horizontal_rule",
+    icon: "star",
+    richtext: "wysiwyg",
+    collapsible: "close_fullscreen",
+    map: "map",
+    video: "youtube_activity",
+    gallery: "gallery_thumbnail",
+  };
+  const name = iconMap[elementType];
+  if (name) return <EditorIcon name={name} size={18} />;
+  return <DefaultItemIcon />;
 }

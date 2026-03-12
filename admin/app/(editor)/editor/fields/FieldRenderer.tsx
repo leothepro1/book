@@ -40,6 +40,8 @@ import { FieldCornerRadiusInline } from "./FieldCornerRadiusInline";
 import { FieldWeightRange } from "./FieldWeightRange";
 import { FieldMarkers } from "./FieldMarkers";
 import { FieldMapPicker } from "./FieldMapPicker";
+import { FieldVideo } from "./FieldVideo";
+import { FieldImageList } from "./FieldImageList";
 
 // ─── Field Dispatcher ───────────────────────────────────────
 
@@ -71,6 +73,8 @@ const FIELD_MAP: Record<string, React.ComponentType<FieldRendererProps>> = {
   weightRange: FieldWeightRange,
   markers: FieldMarkers,
   mapPicker: FieldMapPicker,
+  video: FieldVideo,
+  imageList: FieldImageList,
 };
 
 export function FieldRenderer({ field, value, onChange, allValues }: FieldRendererProps) {
@@ -110,7 +114,7 @@ export function FieldWrapper({
         >
           {field.descriptionLink.label}
           <span
-            className="material-symbols-outlined"
+            className="material-symbols-rounded"
             style={{ fontSize: 16, verticalAlign: "middle", marginLeft: 2, fontVariationSettings: "'wght' var(--icon-weight, 400), 'FILL' 0" }}
           >
             arrow_right_alt

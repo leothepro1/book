@@ -11,11 +11,12 @@
  *   - MarkersSection.tsx    — marker cards, DnD, rich text editor, panels
  */
 
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useMemo } from "react";
 import { PreviewProvider, usePreview } from "../_components/GuestPreview";
 import { PublishBarProvider, PublishBar, usePublishBar } from "../_components/PublishBar";
 import { useDraftUpdate } from "../_hooks/useDraftUpdate";
 import { useNavigationGuard } from "../_components/NavigationGuard";
+import { themeToStyleAttr } from "@/app/(guest)/_lib/theme/applyTheme";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import type { MapConfig } from "./maps-constants";
 import { createId, createMarkerId, DEFAULT_MAP } from "./maps-constants";
@@ -100,7 +101,12 @@ function MapsContent() {
         m.id === id ? { ...m, ...patch, updatedAt: new Date().toISOString() } : m
       );
       await saveMaps(updated);
-      setLocalOverrides({});
+      // Only clear the keys we just saved — don't nuke concurrent edits
+      setLocalOverrides((prev) => {
+        const cleaned = { ...prev };
+        for (const key of Object.keys(patch)) delete cleaned[key as keyof typeof cleaned];
+        return Object.keys(cleaned).length > 0 ? cleaned : {};
+      });
     },
     [maps, saveMaps]
   );
@@ -138,6 +144,12 @@ function MapsContent() {
 
   const isEditing = !!editingMap;
 
+  // Tenant theme CSS vars so MarkerSheet CTA uses correct button styling
+  const themeStyle = useMemo(
+    () => config?.theme ? themeToStyleAttr(config.theme) : undefined,
+    [config?.theme]
+  );
+
   return (
     <div className={`admin-page${isEditing ? "" : " admin-page--no-preview"}`}>
       <div className="admin-editor">
@@ -148,7 +160,7 @@ function MapsContent() {
                 className="maps-back-btn"
                 onClick={() => guardAction(() => setEditingId(null))}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
+                <span className="material-symbols-rounded" style={{ fontSize: 20 }}>
                   arrow_back
                 </span>
               </button>
@@ -161,7 +173,7 @@ function MapsContent() {
             {editingMap && <PublishBar />}
             {!editingMap && (
               <button className="maps-create-btn" onClick={handleCreate}>
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                <span className="material-symbols-rounded" style={{ fontSize: 18 }}>
                   add
                 </span>
                 Skapa karta
@@ -195,7 +207,7 @@ function MapsContent() {
           <div className="maps-preview-header">
             <MapStatusPill />
           </div>
-          <div className="maps-preview-container">
+          <div className="maps-preview-container" style={themeStyle}>
             <MapPreview map={previewMap} />
           </div>
         </div>

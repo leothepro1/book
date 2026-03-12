@@ -6,7 +6,7 @@ export const headingElement: ElementDefinition = {
   version: "1.0.0",
   name: "Rubrik",
   description: "Rubriktext i olika storlekar (H1–H6).",
-  icon: "heading",
+  icon: "title",
   supportsAction: false,
   skipPresetPicker: true,
 
@@ -26,6 +26,7 @@ export const headingElement: ElementDefinition = {
       label: "Textstorlek",
       default: "md",
       options: [
+        { value: "xs", label: "Extra liten" },
         { value: "sm", label: "Liten" },
         { value: "md", label: "Medium" },
         { value: "lg", label: "Stor" },

@@ -228,7 +228,7 @@ function MarkerCard({
               />
               {marker.icon && (
                 <span
-                  className="material-symbols-outlined"
+                  className="material-symbols-rounded"
                   style={{ fontSize: 20, color: marker.color, flexShrink: 0 }}
                   aria-hidden="true"
                 >

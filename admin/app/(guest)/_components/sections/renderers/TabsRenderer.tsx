@@ -164,7 +164,7 @@ function TabContent({ block }: { block: ResolvedBlock }) {
   const iconSlot = block.slots.icon;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div data-block-id={block.block.id} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {iconSlot && <SlotRenderer slot={iconSlot} />}
       {contentSlot && <SlotRenderer slot={contentSlot} />}
     </div>

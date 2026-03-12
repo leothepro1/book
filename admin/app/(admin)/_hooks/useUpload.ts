@@ -45,7 +45,6 @@ function uploadDirect(
     formData.append("upload_preset", UPLOAD_PRESET);
     formData.append("folder", folder);
 
-    // Always use image/upload — Cloudinary handles PDFs as images (renders first page)
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, true);
 

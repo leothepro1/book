@@ -24,10 +24,11 @@ export async function POST(req: NextRequest) {
     const { tenant } = tenantData;
 
     const body = await req.json();
-    const { url, publicId, folder = "general" } = body as {
+    const { url, publicId, folder = "general", resourceType: hintResourceType } = body as {
       url?: string;
       publicId?: string;
       folder?: string;
+      resourceType?: string;
     };
 
     if (!publicId || !url) {
@@ -58,7 +59,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch metadata from Cloudinary to get accurate dimensions/size
-    const resource = await getCloudinaryResource(publicId);
+    // Use hint to determine resource type (video uploads use different endpoint)
+    const fetchResourceType = hintResourceType || (url.match(/\.(mp4|webm|mov|avi|mkv)(\?|$)/i) ? "video" : "image");
+    const resource = await getCloudinaryResource(publicId, fetchResourceType);
 
     // Extract filename from publicId (last segment without folder path)
     const segments = publicId.split("/");
@@ -102,6 +105,11 @@ function inferMimeType(format: string): string {
     gif: "image/gif",
     svg: "image/svg+xml",
     pdf: "application/pdf",
+    mp4: "video/mp4",
+    webm: "video/webm",
+    mov: "video/quicktime",
+    avi: "video/x-msvideo",
+    mkv: "video/x-matroska",
   };
   return map[format.toLowerCase()] || `image/${format}`;
 }

@@ -5,3 +5,4 @@
  * Used by the bootstrap system in registry.ts.
  */
 import "./tabs";
+import "./accordion";

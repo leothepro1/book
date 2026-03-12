@@ -35,6 +35,14 @@ export function FieldSelect({ field, value, onChange }: Props) {
           className="sf-dropdown__trigger"
           onClick={() => setOpen(!open)}
         >
+          {selectedOption?.icon && (
+            <span
+              className="material-symbols-rounded"
+              style={{ fontSize: 18, fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24" }}
+            >
+              {selectedOption.icon}
+            </span>
+          )}
           <span className="sf-dropdown__text">
             {selectedOption?.label || current}
           </span>
@@ -51,6 +59,14 @@ export function FieldSelect({ field, value, onChange }: Props) {
                   setOpen(false);
                 }}
               >
+                {opt.icon && (
+                  <span
+                    className="material-symbols-rounded"
+                    style={{ fontSize: 18, fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24" }}
+                  >
+                    {opt.icon}
+                  </span>
+                )}
                 {opt.label}
               </li>
             ))}

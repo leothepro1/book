@@ -13,7 +13,7 @@ export const textElement: ElementDefinition = {
   version: "2.0.0",
   name: "Text",
   description: "Brödtext eller kort beskrivning.",
-  icon: "text",
+  icon: "view_headline",
   supportsAction: false,
   skipPresetPicker: true,
 

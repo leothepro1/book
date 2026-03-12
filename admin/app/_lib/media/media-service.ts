@@ -82,7 +82,8 @@ export async function uploadMedia(params: UploadParams): Promise<UploadResult> {
 
   const isWallpaper = folder === "wallpaper";
   const isPdf = file.type === "application/pdf";
-  const transformation = isPdf
+  const isVideo = file.type.startsWith("video/");
+  const transformation = isPdf || isVideo
     ? undefined
     : isWallpaper
       ? [
@@ -95,11 +96,17 @@ export async function uploadMedia(params: UploadParams): Promise<UploadResult> {
   const cloudinaryResult = await uploadToCloudinary(buffer, {
     folder: cloudinaryFolder,
     tags: [tenant.slug, folder, userId],
+    ...(isVideo && { resourceType: "video" as const }),
     ...(transformation && { transformation }),
     ...(isWallpaper && {
       eager: [
         { width: 1200, crop: "limit", quality: "auto:low", fetch_format: "auto" },
         { width: 640, crop: "limit", quality: "auto:low", fetch_format: "auto" },
+      ],
+    }),
+    ...(isVideo && {
+      eager: [
+        { width: 400, height: 300, crop: "fill", format: "jpg", resource_type: "video" },
       ],
     }),
   });

@@ -6,7 +6,7 @@ export const iconElement: ElementDefinition = {
   version: "2.0.0",
   name: "Ikon",
   description: "Google Material Symbol med valfri storlek och färg.",
-  icon: "icon",
+  icon: "star",
   supportsAction: true,
   skipPresetPicker: true,
 

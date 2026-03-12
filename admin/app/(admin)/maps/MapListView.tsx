@@ -21,7 +21,7 @@ export function MapListView({
   if (maps.length === 0) {
     return (
       <div className="maps-empty">
-        <span className="material-symbols-outlined" style={{ fontSize: 48, color: "#C8C7C5" }}>
+        <span className="material-symbols-rounded" style={{ fontSize: 48, color: "#C8C7C5" }}>
           map
         </span>
         <h2 className="maps-empty__title">Inga kartor ännu</h2>
@@ -29,7 +29,7 @@ export function MapListView({
           Skapa din första karta och använd den i gästportalen.
         </p>
         <button className="maps-create-btn" onClick={onCreate}>
-          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
+          <span className="material-symbols-rounded" style={{ fontSize: 18 }}>add</span>
           Skapa karta
         </button>
       </div>
@@ -98,7 +98,7 @@ function MapCard({
             onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}
             aria-label="Alternativ"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 20 }}>more_vert</span>
+            <span className="material-symbols-rounded" style={{ fontSize: 20 }}>more_vert</span>
           </button>
           {menuOpen && (() => {
             const rect = menuBtnRef.current?.getBoundingClientRect();
@@ -113,21 +113,21 @@ function MapCard({
                   className="maps-card__menu-item"
                   onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onEdit(); }}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                  <span className="material-symbols-rounded" style={{ fontSize: 18 }}>edit</span>
                   Byt namn
                 </button>
                 <button
                   className="maps-card__menu-item"
                   onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDuplicate(); }}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>content_copy</span>
+                  <span className="material-symbols-rounded" style={{ fontSize: 18 }}>content_copy</span>
                   Duplicera
                 </button>
                 <button
                   className="maps-card__menu-item maps-card__menu-item--danger"
                   onClick={(e) => { e.stopPropagation(); setMenuOpen(false); setConfirmOpen(true); }}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>delete</span>
+                  <span className="material-symbols-rounded" style={{ fontSize: 18 }}>delete</span>
                   Ta bort
                 </button>
               </div>,

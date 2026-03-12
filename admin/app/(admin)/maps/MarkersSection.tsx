@@ -32,16 +32,16 @@ import { MarkerAddressSearch } from "./MapDetailView";
 // ── Icons (shared with Home pattern) ─────────────────────────
 
 const MkDragIcon = () => (
-  <span className="material-symbols-outlined" style={{ fontSize: 19 }}>drag_indicator</span>
+  <span className="material-symbols-rounded" style={{ fontSize: 19 }}>drag_indicator</span>
 );
 const MkPenIcon = () => (
-  <span className="material-symbols-outlined" style={{ fontSize: 19 }}>edit</span>
+  <span className="material-symbols-rounded" style={{ fontSize: 19 }}>edit</span>
 );
 const MkTrashIcon = () => (
-  <span className="material-symbols-outlined" style={{ fontSize: 19 }}>delete</span>
+  <span className="material-symbols-rounded" style={{ fontSize: 19 }}>delete</span>
 );
 const MkCloseIcon = () => (
-  <span className="material-symbols-outlined" style={{ fontSize: 19 }}>close</span>
+  <span className="material-symbols-rounded" style={{ fontSize: 19 }}>close</span>
 );
 
 // ── Toggle ───────────────────────────────────────────────────
@@ -50,8 +50,8 @@ function MkToggle({ checked, onChange }: { checked: boolean; onChange: () => voi
   return (
     <button type="button" role="switch" aria-checked={checked} onClick={onChange}
       className={"admin-toggle" + (checked ? " admin-toggle-on" : "")}>
-      <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-outlined">check</span>
-      <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-outlined">remove</span>
+      <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-rounded">check</span>
+      <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-rounded">remove</span>
       <span className="admin-toggle-thumb" />
     </button>
   );
@@ -214,7 +214,8 @@ function rtWalk(node: Node): string {
   const el = node as HTMLElement;
   const tag = el.tagName.toLowerCase();
 
-  // Self-closing: img with safe attributes
+  // Self-closing: br, img
+  if (tag === "br") return "<br>";
   if (tag === "img") {
     const src = el.getAttribute("src") || "";
     const alt = el.getAttribute("alt") || "";
@@ -227,10 +228,17 @@ function rtWalk(node: Node): string {
     return `<img${attrs} />`;
   }
 
-  const inner = Array.from(el.childNodes).map(rtWalk).join("");
+  let inner = Array.from(el.childNodes).map(rtWalk).join("");
   // Strip empty non-br tags (but keep blocks that contain images)
   if (tag !== "br" && !inner.trim() && !inner.includes("<br") && !inner.includes("<img")) return "";
   if (RT_SAFE_TAGS.has(tag)) {
+    // Block elements: strip trailing <br> cursor anchor
+    // Browser adds a trailing <br> so the cursor has a place to sit on the
+    // new empty line. Keep it only if the entire block is just <br> (empty line).
+    if (RT_BLOCK_TAGS.has(tag)) {
+      const stripped = inner.replace(/<br\s*\/?>$/, "");
+      if (stripped.length > 0) inner = stripped;
+    }
     // Preserve text-align on block elements
     let attrs = "";
     if (RT_BLOCK_TAGS.has(tag)) {
@@ -554,12 +562,18 @@ function MkContentPanel({ marker, onUpdate }: { marker: MapMarkerConfig; onUpdat
   // ── Emit ──
   const preventFocusLoss = useCallback((e: React.MouseEvent) => { e.preventDefault(); }, []);
 
-  const emitChange = useCallback(() => {
+  // Use ref to always have the latest marker without recreating emitChange
+  const markerRef = useRef(marker);
+  markerRef.current = marker;
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+
+  const emitChange = useCallback((normalize = false) => {
     if (!editorRef.current) return;
-    rtNormalize(editorRef.current);
+    if (normalize) rtNormalize(editorRef.current);
     const html = rtSanitize(editorRef.current.innerHTML);
-    onUpdate({ ...marker, content: html });
-  }, [marker, onUpdate]);
+    onUpdateRef.current({ ...markerRef.current, content: html });
+  }, []);
 
   // Stable ref for callbacks that can't depend on emitChange
   const emitChangeRef = useRef(emitChange);
@@ -570,13 +584,13 @@ function MkContentPanel({ marker, onUpdate }: { marker: MapMarkerConfig; onUpdat
     document.execCommand("bold", false);
     setFormat(f => ({ ...f, bold: !f.bold }));
     emitChange();
-  }, [emitChange]);
+  }, []);
 
   const toggleItalic = useCallback(() => {
     document.execCommand("italic", false);
     setFormat(f => ({ ...f, italic: !f.italic }));
     emitChange();
-  }, [emitChange]);
+  }, []);
 
   // ── Image insertion ──
   const openMediaPicker = useCallback(() => {
@@ -621,7 +635,7 @@ function MkContentPanel({ marker, onUpdate }: { marker: MapMarkerConfig; onUpdat
     }
 
     savedRangeRef.current = null;
-    emitChange();
+    emitChange(true);
   }, [emitChange]);
 
   // ── Block formatting ──
@@ -630,7 +644,7 @@ function MkContentPanel({ marker, onUpdate }: { marker: MapMarkerConfig; onUpdat
     rtApplyBlock(tag, editorRef.current);
     setBlockType(tag);
     setBlockDropdownOpen(false);
-    emitChange();
+    emitChange(true);
   }, [emitChange]);
 
   // ── Text alignment ──
@@ -732,7 +746,7 @@ function MkContentPanel({ marker, onUpdate }: { marker: MapMarkerConfig; onUpdat
     const lines = text.split(/\r?\n/);
     const html = lines.join("<br>");
     document.execCommand("insertHTML", false, html);
-    emitChange();
+    emitChange(true);
   }, [emitChange]);
 
   const activeBlockLabel = BLOCK_OPTIONS.find(o => o.tag === blockType)?.label || "Stycke";
@@ -749,7 +763,7 @@ function MkContentPanel({ marker, onUpdate }: { marker: MapMarkerConfig; onUpdat
           <button type="button" className="mk-block-dropdown__trigger"
             onMouseDown={preventFocusLoss} onClick={() => setBlockDropdownOpen(!blockDropdownOpen)}>
             <span>{activeBlockLabel}</span>
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+            <span className="material-symbols-rounded" style={{ fontSize: 16 }}>
               {blockDropdownOpen ? "expand_less" : "expand_more"}
             </span>
           </button>
@@ -769,7 +783,7 @@ function MkContentPanel({ marker, onUpdate }: { marker: MapMarkerConfig; onUpdat
                         {opt.label}
                       </span>
                       {opt.tag === blockType && (
-                        <span className="material-symbols-outlined" style={{ fontSize: 24, color: "#0075DE" }}>check</span>
+                        <span className="material-symbols-rounded" style={{ fontSize: 24, color: "#0075DE" }}>check</span>
                       )}
                     </button>
                   </li>
@@ -797,7 +811,7 @@ function MkContentPanel({ marker, onUpdate }: { marker: MapMarkerConfig; onUpdat
               <span style={{ display: "flex", alignItems: "center" }}>
                 {ALIGN_OPTIONS.find(o => o.value === format.textAlign)?.icon ?? ALIGN_OPTIONS[0].icon}
               </span>
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+              <span className="material-symbols-rounded" style={{ fontSize: 16 }}>
                 {alignDropdownOpen ? "expand_less" : "expand_more"}
               </span>
             </button>
@@ -818,7 +832,7 @@ function MkContentPanel({ marker, onUpdate }: { marker: MapMarkerConfig; onUpdat
                           {opt.label}
                         </span>
                         {opt.value === format.textAlign && (
-                          <span className="material-symbols-outlined" style={{ fontSize: 24, color: "#0075DE" }}>check</span>
+                          <span className="material-symbols-rounded" style={{ fontSize: 24, color: "#0075DE" }}>check</span>
                         )}
                       </button>
                     </li>
@@ -830,7 +844,7 @@ function MkContentPanel({ marker, onUpdate }: { marker: MapMarkerConfig; onUpdat
           </div>
           <button type="button" className="mk-rt-toolbar__btn"
             onMouseDown={preventFocusLoss} onClick={openMediaPicker} aria-label="Infoga bild">
-            <span className="material-symbols-outlined" style={{ fontSize: 19 }}>image</span>
+            <span className="material-symbols-rounded" style={{ fontSize: 19 }}>image</span>
           </button>
         </div>
       </div>
@@ -840,7 +854,7 @@ function MkContentPanel({ marker, onUpdate }: { marker: MapMarkerConfig; onUpdat
           className="mk-rt-editor"
           contentEditable
           suppressContentEditableWarning
-          onInput={emitChange}
+          onInput={() => emitChange()}
           onPaste={handlePaste}
           onKeyDown={handleKeyDown}
           onClick={handleEditorClick}
@@ -879,6 +893,69 @@ function MkContentPanel({ marker, onUpdate }: { marker: MapMarkerConfig; onUpdat
         title="Välj bild"
       />
     </div>
+    {/* ── CTA Button Section ── */}
+    <MkCtaSection marker={marker} onUpdate={onUpdate} />
+    </div>
+  );
+}
+
+// ── CTA Button Section ────────────────────────────────────────
+
+function isValidUrl(str: string): boolean {
+  if (!str.trim()) return true; // empty is ok
+  try {
+    const url = new URL(str.startsWith("http") ? str : `https://${str}`);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function MkCtaSection({ marker, onUpdate }: { marker: MapMarkerConfig; onUpdate: (m: MapMarkerConfig) => void }) {
+  const showButton = marker.showButton ?? false;
+  const buttonUrl = marker.buttonUrl ?? "";
+  const urlValid = isValidUrl(buttonUrl);
+
+  return (
+    <div className="mk-cta-section">
+      <div className="mk-cta-toggle">
+        <span className="mk-cta-toggle__label">Visa en knapp</span>
+        <MkToggle checked={showButton} onChange={() => onUpdate({ ...marker, showButton: !showButton })} />
+      </div>
+      {showButton && (
+        <div className="mk-cta-fields">
+          <div className="mk-cta-field">
+            <span className="tp-field-label">Knappetikett</span>
+            <input
+              type="text"
+              className="tp-float-input"
+              value={marker.buttonLabel ?? ""}
+              onChange={e => onUpdate({ ...marker, buttonLabel: e.target.value })}
+              placeholder="T.ex. Läs mer"
+            />
+          </div>
+          <div className="mk-cta-field">
+            <span className="tp-field-label">URL</span>
+            <input
+              type="url"
+              className={"tp-float-input" + (!urlValid ? " mk-cta-input--invalid" : "")}
+              value={buttonUrl}
+              onChange={e => onUpdate({ ...marker, buttonUrl: e.target.value })}
+              placeholder="https://example.com"
+            />
+            {!urlValid && (
+              <span className="mk-cta-error">Ange en giltig URL (https://...)</span>
+            )}
+          </div>
+          <div className="mk-cta-toggle">
+            <span className="mk-cta-toggle__label">Öppna länk i en ny flik</span>
+            <MkToggle
+              checked={marker.buttonOpenNewTab ?? false}
+              onChange={() => onUpdate({ ...marker, buttonOpenNewTab: !(marker.buttonOpenNewTab ?? false) })}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -902,7 +979,7 @@ function MkAppearancePanel({ marker, onUpdate }: { marker: MapMarkerConfig; onUp
           placeholder="location_on" />
         <a className="sf-desc-link" href="https://fonts.google.com/icons" target="_blank" rel="noopener noreferrer">
           Se tillgängliga ikoner
-          <span className="material-symbols-outlined" style={{ fontSize: 16, verticalAlign: "middle", marginLeft: 2 }}>arrow_right_alt</span>
+          <span className="material-symbols-rounded" style={{ fontSize: 16, verticalAlign: "middle", marginLeft: 2 }}>arrow_right_alt</span>
         </a>
       </div>
       <div>
@@ -1053,17 +1130,17 @@ function MarkerCardItem({
               <button type="button"
                 className={"home-card-icon-btn" + (openPanel === "content" ? " home-card-icon-btn--active" : "")}
                 title="Innehåll" onClick={() => onPanelToggle(marker.id, "content")}>
-                <span className="material-symbols-outlined" style={{ fontSize: 19 }}>article</span>
+                <span className="material-symbols-rounded" style={{ fontSize: 19 }}>article</span>
               </button>
               <button type="button"
                 className={"home-card-icon-btn" + (openPanel === "location" ? " home-card-icon-btn--active" : "")}
                 title="Plats" onClick={() => onPanelToggle(marker.id, "location")}>
-                <span className="material-symbols-outlined" style={{ fontSize: 19 }}>keep</span>
+                <span className="material-symbols-rounded" style={{ fontSize: 19 }}>keep</span>
               </button>
               <button type="button"
                 className={"home-card-icon-btn" + (openPanel === "appearance" ? " home-card-icon-btn--active" : "")}
                 title="Färger" onClick={() => onPanelToggle(marker.id, "appearance")}>
-                <span className="material-symbols-outlined" style={{ fontSize: 19 }}>colors</span>
+                <span className="material-symbols-rounded" style={{ fontSize: 19 }}>colors</span>
               </button>
             </div>
           </div>
@@ -1111,12 +1188,9 @@ function SortableMarkerCard({
   onUpdate: (updated: MapMarkerConfig) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: marker.id });
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 50 : undefined,
-    opacity: isDragging ? 0.04 : 1,
-  };
+  const style: React.CSSProperties = isDragging
+    ? { opacity: 0, transition }
+    : { transform: CSS.Transform.toString(transform), transition };
   return (
     <div ref={setNodeRef} style={style}>
       <MarkerCardItem
@@ -1228,12 +1302,12 @@ export function MarkersSection({
     return (
       <div className="mk-empty">
         <div className="mk-empty__icon">
-          <span className="material-symbols-outlined" style={{ fontSize: 35 }}>pinboard</span>
+          <span className="material-symbols-rounded" style={{ fontSize: 35 }}>pinboard</span>
         </div>
         <h3 className="mk-empty__title">Inga markörer ännu</h3>
         <p className="mk-empty__desc">Lägg till en för att komma igång.</p>
         <button type="button" className="maps-create-btn" onClick={() => handleAdd()}>
-          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add_2</span>
+          <span className="material-symbols-rounded" style={{ fontSize: 18 }}>add_2</span>
           Lägg till markör
         </button>
       </div>
@@ -1286,7 +1360,7 @@ export function MarkersSection({
       </DndContext>
 
       <button type="button" className="home-add-btn-full" onClick={() => handleAdd()}>
-        <span className="material-symbols-outlined" style={{ fontSize: 20 }}>add_2</span>
+        <span className="material-symbols-rounded" style={{ fontSize: 20 }}>add_2</span>
         Lägg till
       </button>
     </>

@@ -67,7 +67,7 @@ function AddressSearch({
   return (
     <div className="maps-address" ref={containerRef}>
       <div className="maps-address__input-wrap">
-        <span className="maps-address__icon material-symbols-outlined">search</span>
+        <span className="maps-address__icon material-symbols-rounded">search</span>
         <input
           type="text"
           className="maps-input maps-address__input"
@@ -86,7 +86,7 @@ function AddressSearch({
             {results.map((r, i) => (
               <li key={i}>
                 <button type="button" className="maps-address__item" onClick={() => handleSelect(r)}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#8C8B89" }}>location_on</span>
+                  <span className="material-symbols-rounded" style={{ fontSize: 18, color: "#8C8B89" }}>location_on</span>
                   <span className="maps-address__text">{r.place_name}</span>
                 </button>
               </li>
@@ -154,7 +154,7 @@ export function MarkerAddressSearch({
   return (
     <div className="maps-address" ref={containerRef}>
       <div className="maps-address__input-wrap">
-        <span className="maps-address__icon material-symbols-outlined">search</span>
+        <span className="maps-address__icon material-symbols-rounded">search</span>
         <input
           type="text"
           className="maps-input maps-address__input"
@@ -173,7 +173,7 @@ export function MarkerAddressSearch({
             {results.map((r, i) => (
               <li key={i}>
                 <button type="button" className="maps-address__item" onClick={() => handleSelect(r)}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#8C8B89" }}>location_on</span>
+                  <span className="material-symbols-rounded" style={{ fontSize: 18, color: "#8C8B89" }}>location_on</span>
                   <span className="maps-address__text">{r.place_name}</span>
                 </button>
               </li>
@@ -211,7 +211,7 @@ function StyleDropdown({
     <div className="maps-style-dropdown" ref={containerRef}>
       <button type="button" className="maps-style-dropdown__trigger" onClick={() => setOpen(!open)}>
         <span className="maps-style-dropdown__value">{activeLabel}</span>
-        <span className="material-symbols-outlined maps-style-dropdown__chevron" style={{ fontSize: 20 }}>
+        <span className="material-symbols-rounded maps-style-dropdown__chevron" style={{ fontSize: 20 }}>
           {open ? "expand_less" : "expand_more"}
         </span>
       </button>
@@ -226,7 +226,7 @@ function StyleDropdown({
               >
                 <span>{opt.label}</span>
                 {opt.value === value && (
-                  <span className="material-symbols-outlined" style={{ fontSize: 24, color: "#0075DE" }}>check</span>
+                  <span className="material-symbols-rounded" style={{ fontSize: 24, color: "#0075DE" }}>check</span>
                 )}
               </button>
             </li>
@@ -311,7 +311,7 @@ export function MapDetailView({
           <div className="maps-label-row">
             <label className="maps-label" style={{ marginBottom: 0 }}>Adress</label>
             <button type="button" className="maps-help-btn" onClick={() => setShowAddressHelp(true)}>
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>help</span>
+              <span className="material-symbols-rounded" style={{ fontSize: 18 }}>help</span>
             </button>
           </div>
           <AddressSearch
@@ -469,8 +469,8 @@ function ToggleField({
       <span className="maps-toggle__label">{label}</span>
       <button type="button" className={`admin-toggle${checked ? " admin-toggle-on" : ""}`}
         onClick={() => onChange(!checked)}>
-        <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-outlined">check</span>
-        <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-outlined">remove</span>
+        <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-rounded">check</span>
+        <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-rounded">remove</span>
         <span className="admin-toggle-thumb" />
       </button>
     </div>

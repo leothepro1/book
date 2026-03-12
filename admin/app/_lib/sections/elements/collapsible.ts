@@ -13,7 +13,7 @@ export const collapsibleElement: ElementDefinition = {
   version: "1.0.0",
   name: "Hopfällbar text",
   description: "Brödtext med visa mer / visa mindre.",
-  icon: "text",
+  icon: "close_fullscreen",
   supportsAction: false,
 
   settingsSchema: [

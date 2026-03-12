@@ -15,6 +15,8 @@ import { IconElement } from "./IconElement";
 import { RichTextElement } from "./RichTextElement";
 import { CollapsibleElement } from "./CollapsibleElement";
 import { MapElement } from "./MapElement";
+import { VideoElement } from "./VideoElement";
+import { GalleryElement } from "./GalleryElement";
 import { ElementLinkWrapper } from "./ElementLinkWrapper";
 
 const ELEMENT_RENDERERS: Record<string, React.ComponentType<{ resolved: ResolvedElement }>> = {
@@ -27,6 +29,8 @@ const ELEMENT_RENDERERS: Record<string, React.ComponentType<{ resolved: Resolved
   richtext: RichTextElement,
   collapsible: CollapsibleElement,
   map: MapElement,
+  video: VideoElement,
+  gallery: GalleryElement,
 };
 
 export function ElementRenderer({ resolved }: { resolved: ResolvedElement }) {
@@ -50,10 +54,16 @@ export function ElementRenderer({ resolved }: { resolved: ResolvedElement }) {
     </ElementLinkWrapper>
   );
 
-  if (!hasSpacing) return content;
+  if (!hasSpacing) {
+    return (
+      <div data-element-id={resolved.element.id}>
+        {content}
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: `${pt}px ${pr}px ${pb}px ${pl}px` }}>
+    <div data-element-id={resolved.element.id} style={{ padding: `${pt}px ${pr}px ${pb}px ${pl}px` }}>
       {content}
     </div>
   );

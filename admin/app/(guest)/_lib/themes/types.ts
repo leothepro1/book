@@ -236,7 +236,9 @@ export type SettingFieldType =
   | "cornerRadius"
   | "weightRange"
   | "markers"
-  | "mapPicker";
+  | "mapPicker"
+  | "video"
+  | "imageList";
 
 export type SettingField = {
   key: string;
@@ -247,7 +249,7 @@ export type SettingField = {
   descriptionLink?: { href: string; label: string };
   default?: unknown;
   required?: boolean;
-  options?: { value: string; label: string }[];
+  options?: { value: string; label: string; icon?: string }[];
   min?: number;
   max?: number;
   step?: number;

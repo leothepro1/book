@@ -83,8 +83,6 @@ export function validateSettingValue(
 
     case "color":
       if (typeof value !== "string") return { valid: false, reason: `Expected string` };
-      if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value))
-        return { valid: false, reason: `Invalid color: "${value}"` };
       return { valid: true };
 
     case "text":
@@ -115,13 +113,19 @@ export function validateSettings(
 
   for (const field of schema) {
     const value = settings[field.key];
-    if (field.required && (value === null || value === undefined || value === "")) {
+    // For required check, use merged value (instance override ?? definition default)
+    // so that fields with defaults don't fail when the instance has no override.
+    const mergedValue = value ?? defaults[field.key];
+    if (field.required && (mergedValue === null || mergedValue === undefined || mergedValue === "")) {
       errors.push({ path: `${pathPrefix}.${field.key}`, message: `"${field.label}" is required`, severity: "error" });
       continue;
     }
-    const result = validateSettingValue(field, value);
-    if (!result.valid) {
-      errors.push({ path: `${pathPrefix}.${field.key}`, message: `"${field.label}": ${result.reason}`, severity: "error" });
+    // Validate the actual override value (if present) against field type constraints
+    if (value !== null && value !== undefined) {
+      const result = validateSettingValue(field, value);
+      if (!result.valid) {
+        errors.push({ path: `${pathPrefix}.${field.key}`, message: `"${field.label}": ${result.reason}`, severity: "error" });
+      }
     }
   }
 

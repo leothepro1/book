@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { usePreview } from "./PreviewContext";
 import { usePublishBar } from "../PublishBar";
 import type { GuestPreviewProps } from "./types";
-import type { ParentToPreviewMessage } from "@/app/(preview)/_lib/previewMessages";
+import type { ParentToPreviewMessage, PreviewScrollTarget } from "@/app/(preview)/_lib/previewMessages";
 import { isValidPreviewMessage } from "@/app/(preview)/_lib/previewMessages";
 import "./preview-spinner.css";
 
@@ -26,7 +26,8 @@ const COPY_FEEDBACK_MS = 2000;
 function GuestPreviewFrame({
   route,
   className = "",
-}: Omit<GuestPreviewProps, "device">) {
+  scrollTarget,
+}: Omit<GuestPreviewProps, "device"> & { scrollTarget?: PreviewScrollTarget | null }) {
   const { config, draftVersion } = usePreview();
   const { hasUnsavedChanges } = usePublishBar();
   const [copied, setCopied] = useState(false);
@@ -73,15 +74,25 @@ function GuestPreviewFrame({
     }
   }, []);
 
-  // ── When bridge signals ready, push full current theme ───────
+  // ── When bridge signals ready, push full current theme + active scroll target ──
+  const scrollTargetRef = useRef(scrollTarget);
+  scrollTargetRef.current = scrollTarget;
+
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (!isValidPreviewMessage(event)) return;
       if (event.data.type === "preview-ready") {
         if (__DEV__) console.log("[GuestPreview] Received preview-ready");
+        const w = iframeRef.current?.contentWindow;
+        if (!w) return;
         if (config?.theme) {
-          const w = iframeRef.current?.contentWindow;
-          if (w) w.postMessage({ type: "theme-update", theme: config.theme } satisfies ParentToPreviewMessage, window.location.origin);
+          w.postMessage({ type: "theme-update", theme: config.theme } satisfies ParentToPreviewMessage, window.location.origin);
+        }
+        // Re-send current scroll target after iframe reload (DOM may not exist yet,
+        // but PreviewBridge will retry with MutationObserver)
+        const target = scrollTargetRef.current;
+        if (target) {
+          w.postMessage({ type: "scroll-to-target", target } satisfies ParentToPreviewMessage, window.location.origin);
         }
       }
     }
@@ -108,6 +119,12 @@ function GuestPreviewFrame({
     if (__DEV__) console.log("[GuestPreview] Draft saved, sending content-refresh");
     postToPreview({ type: "content-refresh" });
   }, [draftVersion, postToPreview]);
+
+  // ── Scroll-to-target → postMessage to iframe on every selection click ──
+  useEffect(() => {
+    if (!scrollTarget) return;
+    postToPreview({ type: "scroll-to-target", target: scrollTarget });
+  }, [scrollTarget, postToPreview]);
 
   // ── Copy handler ─────────────────────────────────────────────
   useEffect(() => {

@@ -14,9 +14,9 @@ import { registerElementDefinition } from "../registry";
 export const buttonElement: ElementDefinition = {
   type: "button",
   version: "2.0.0",
-  name: "Knappar",
+  name: "Knapp",
   description: "Knapp som följer portalens designinställningar.",
-  icon: "button",
+  icon: "call_to_action",
   supportsAction: true,
 
   settingsSchema: [

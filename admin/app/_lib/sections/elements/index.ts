@@ -13,3 +13,5 @@ import "./icon";
 import "./richtext";
 import "./collapsible";
 import "./map";
+import "./video";
+import "./gallery";
