@@ -105,3 +105,15 @@
   background: var(--accordion-card-bg, #F5F5F4);
   border-radius: var(--accordion-card-radius, 12px);
 }
+
+.s-accordion--card .s-accordion__title {
+  padding-left: var(--accordion-card-padding, 16px);
+}
+
+.s-accordion--card .s-accordion__indicator {
+  margin-right: var(--accordion-card-padding, 16px);
+}
+
+.s-accordion--card .s-accordion__content {
+  padding-left: var(--accordion-card-padding, 16px);
+}

@@ -139,6 +139,7 @@ export function AccordionCardRenderer(props: SectionRendererProps) {
   const shared = useSharedSettings(settings);
   const cardBackground = (presetSettings.cardBackground as string) || "#F5F5F4";
   const cardRadius = (presetSettings.cardRadius as number) ?? 12;
+  const cardPadding = (presetSettings.cardPadding as number) ?? 16;
 
   const padding = useSectionPadding(settings);
   const { openIds, toggle } = useAccordionToggle(blocks, shared.defaultMode, shared.allowMultiple);
@@ -160,6 +161,7 @@ export function AccordionCardRenderer(props: SectionRendererProps) {
         gap: shared.gap || undefined,
         "--accordion-card-bg": cardBackground,
         "--accordion-card-radius": `${cardRadius}px`,
+        "--accordion-card-padding": `${cardPadding}px`,
       } as React.CSSProperties}
     >
       {blocks.map((block) => (

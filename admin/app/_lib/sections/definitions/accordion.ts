@@ -248,10 +248,21 @@ const cardPreset: SectionPreset = {
       step: 2,
       unit: "px",
     },
+    {
+      key: "cardPadding",
+      type: "range",
+      label: "Innehållsavstånd",
+      default: 16,
+      min: 0,
+      max: 32,
+      step: 2,
+      unit: "px",
+    },
   ],
   settingDefaults: {
     cardBackground: "#F5F5F4",
     cardRadius: 12,
+    cardPadding: 16,
   },
 
   changeStrategy: "preserve_compatible",
