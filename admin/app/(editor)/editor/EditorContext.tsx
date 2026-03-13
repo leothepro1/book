@@ -42,6 +42,8 @@ export type RailTab = "sections" | "settings";
  *   { sectionId: "sec_1", blockId: "blk_1", elementId: "elm_1"} → editing element settings
  */
 export type DetailTarget = {
+  /** Scope discriminator. undefined = body section (backward-compatible). */
+  scope?: "header" | "footer";
   sectionId: string;
   blockId?: string;
   elementId?: string;
@@ -68,6 +70,16 @@ export type EditorContextValue = {
 
   /** Close detail panel entirely (back to list view). */
   closeDetail: () => void;
+
+  /**
+   * Deep-link hint for SettingsPanel.
+   * When set, SettingsPanel opens the named accordion on mount.
+   * Consumed once (reset after read).
+   */
+  settingsAccordion: string | null;
+
+  /** Navigate to settings panel, optionally opening a specific accordion. */
+  navigateToSettings: (accordion?: string) => void;
 };
 
 // ─── Context ────────────────────────────────────────────────
@@ -80,6 +92,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const [activeRail, setActiveRail] = useState<RailTab>("sections");
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const [detailTarget, setDetailTarget] = useState<DetailTarget | null>(null);
+  const [settingsAccordion, setSettingsAccordion] = useState<string | null>(null);
 
   const selectSection = useCallback((id: string | null) => {
     setSelectedSectionId(id);
@@ -90,6 +103,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     setActiveRail(tab);
     setSelectedSectionId(null);
     setDetailTarget(null);
+    setSettingsAccordion(null);
   }, []);
 
   const openDetail = useCallback((target: DetailTarget) => {
@@ -107,6 +121,13 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     setSelectedSectionId(null);
   }, []);
 
+  const navigateToSettings = useCallback((accordion?: string) => {
+    setActiveRail("settings");
+    setSelectedSectionId(null);
+    setDetailTarget(null);
+    setSettingsAccordion(accordion ?? null);
+  }, []);
+
   return (
     <EditorContext.Provider
       value={{
@@ -118,6 +139,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
         openDetail,
         goBack,
         closeDetail,
+        settingsAccordion,
+        navigateToSettings,
       }}
     >
       {children}

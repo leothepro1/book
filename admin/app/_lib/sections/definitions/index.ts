@@ -6,3 +6,4 @@
  */
 import "./tabs";
 import "./accordion";
+import "./slider";

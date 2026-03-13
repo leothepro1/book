@@ -257,6 +257,51 @@ export function MapCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [styleUrl, mapConfig.id]);
 
+  // ── Update camera when props change ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    map.setZoom(zoom);
+  }, [loaded, zoom]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    map.setPitch(pitch);
+  }, [loaded, pitch]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    map.setBearing(bearing);
+  }, [loaded, bearing]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    if (buildings3d) {
+      add3dBuildings(map);
+    } else if (map.getLayer("3d-buildings")) {
+      map.removeLayer("3d-buildings");
+    }
+  }, [loaded, buildings3d]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    for (const id of poiLayersRef.current) {
+      map.setLayoutProperty(id, "visibility", showPlaceLabels ? "visible" : "none");
+    }
+  }, [loaded, showPlaceLabels]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    for (const id of roadLayersRef.current) {
+      map.setLayoutProperty(id, "visibility", showRoadLabels ? "visible" : "none");
+    }
+  }, [loaded, showRoadLabels]);
+
   // ── Render markers ──
   useEffect(() => {
     const map = mapRef.current;
@@ -398,6 +443,70 @@ export function MapModalBody({ mapConfig }: { mapConfig: MapConfig }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [styleUrl, mapConfig.id]);
+
+  // ── Update camera when props change ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    map.setZoom(zoom);
+  }, [loaded, zoom]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    map.setPitch(pitch);
+  }, [loaded, pitch]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    map.setBearing(bearing);
+  }, [loaded, bearing]);
+
+  // ── Update scroll-zoom toggle ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    if (mapConfig.scrollZoom) {
+      map.scrollZoom.enable();
+    } else {
+      map.scrollZoom.disable();
+    }
+  }, [loaded, mapConfig.scrollZoom]);
+
+  // ── Update label visibility ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    const layers = map.getStyle().layers ?? [];
+    for (const l of layers) {
+      if (l.id.includes("poi") && l.type === "symbol") {
+        map.setLayoutProperty(l.id, "visibility", showPlaceLabels ? "visible" : "none");
+      }
+    }
+  }, [loaded, showPlaceLabels]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    const layers = map.getStyle().layers ?? [];
+    for (const l of layers) {
+      if (l.id.includes("road") && l.type === "symbol") {
+        map.setLayoutProperty(l.id, "visibility", showRoadLabels ? "visible" : "none");
+      }
+    }
+  }, [loaded, showRoadLabels]);
+
+  // ── Update 3D buildings ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    if (buildings3d) {
+      add3dBuildings(map);
+    } else if (map.getLayer("3d-buildings")) {
+      map.removeLayer("3d-buildings");
+    }
+  }, [loaded, buildings3d]);
 
   // ── Render markers with click handlers ──
   useEffect(() => {

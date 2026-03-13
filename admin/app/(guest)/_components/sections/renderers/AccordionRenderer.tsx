@@ -8,6 +8,11 @@
  *
  * Both share the same AccordionItem component — only the
  * section wrapper and CSS class differ.
+ *
+ * COLOR SCHEME INTEGRATION:
+ * All colors derive from section-scoped CSS variables set by
+ * SectionItem. Borders use `var(--text)` at low opacity.
+ * Card backgrounds use `var(--text)` at 4% tint over `var(--background)`.
  */
 
 import { useState, useCallback, useEffect } from "react";
@@ -89,11 +94,9 @@ function useSectionPadding(settings: Record<string, unknown>) {
 // ═══════════════════════════════════════════════════════════
 
 export function AccordionDefaultRenderer(props: SectionRendererProps) {
-  const { section, settings, presetSettings, blocks } = props;
+  const { section, settings, blocks } = props;
 
   const shared = useSharedSettings(settings);
-  const borderColor = (presetSettings.borderColor as string) || "#E6E5E3";
-
   const padding = useSectionPadding(settings);
   const { openIds, toggle } = useAccordionToggle(blocks, shared.defaultMode, shared.allowMultiple);
 
@@ -112,8 +115,7 @@ export function AccordionDefaultRenderer(props: SectionRendererProps) {
       style={{
         padding,
         gap: shared.gap || undefined,
-        "--accordion-border": borderColor,
-      } as React.CSSProperties}
+      }}
     >
       {blocks.map((block, i) => (
         <AccordionItem
@@ -137,7 +139,6 @@ export function AccordionCardRenderer(props: SectionRendererProps) {
   const { section, settings, presetSettings, blocks } = props;
 
   const shared = useSharedSettings(settings);
-  const cardBackground = (presetSettings.cardBackground as string) || "#F5F5F4";
   const cardRadius = (presetSettings.cardRadius as number) ?? 12;
   const cardPadding = (presetSettings.cardPadding as number) ?? 16;
 
@@ -159,7 +160,6 @@ export function AccordionCardRenderer(props: SectionRendererProps) {
       style={{
         padding,
         gap: shared.gap || undefined,
-        "--accordion-card-bg": cardBackground,
         "--accordion-card-radius": `${cardRadius}px`,
         "--accordion-card-padding": `${cardPadding}px`,
       } as React.CSSProperties}

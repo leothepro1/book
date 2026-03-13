@@ -97,4 +97,8 @@ export type HomeConfig = {
    */
   sections: import("@/app/_lib/sections/types").SectionInstance[];
   archivedCards: ArchivedCard[];
+  /** Page-scoped header configuration. Falls back to HEADER_DEFAULTS if absent. */
+  header?: import("@/app/(guest)/_lib/tenant/types").HeaderConfig;
+  /** Page-scoped footer configuration. Falls back to PAGE_FOOTER_DEFAULTS if absent. */
+  footer?: import("@/app/(guest)/_lib/tenant/types").PageFooterConfig;
 };

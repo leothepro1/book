@@ -47,7 +47,12 @@ export function themeToStyleAttr(theme: ThemeConfig) {
     "--font-heading": fontStack(theme.typography.headingFont),
     "--font-body": fontStack(theme.typography.bodyFont),
     "--font-button": fontStack(theme.typography.buttonFont ?? theme.typography.headingFont),
-    "--button-radius": RADIUS_MAP[theme.buttons?.radius ?? "rounder"],
+    "--button-radius": theme.buttons?.radiusPx != null
+      ? `${theme.buttons.radiusPx}px`
+      : RADIUS_MAP[theme.buttons?.radius ?? "rounder"],
+    ...(theme.buttons?.padding ? {
+      "--button-padding": `${theme.buttons.padding.top}px ${theme.buttons.padding.right}px ${theme.buttons.padding.bottom}px ${theme.buttons.padding.left}px`,
+    } : {}),
     "--tile-bg": theme.tiles?.background ?? "#F1F0EE",
     "--tile-radius": RADIUS_MAP[theme.tiles?.radius ?? "round"],
     "--tile-shadow": SHADOW_MAP[theme.tiles?.shadow ?? "none"],

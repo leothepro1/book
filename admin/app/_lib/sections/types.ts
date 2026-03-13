@@ -578,6 +578,15 @@ export type SectionInstance = {
 
   /** ISO 8601 — section becomes hidden at this time. */
   scheduledHide?: string;
+
+  /**
+   * References a tenant-level ColorScheme by ID.
+   * When set, the section and all its children inherit the scheme's
+   * color tokens via CSS custom properties applied at section scope.
+   * When undefined, falls back to TenantConfig.defaultColorSchemeId.
+   * When no default exists either, the section inherits page-level tokens.
+   */
+  colorSchemeId?: import("@/app/_lib/color-schemes/types").ColorSchemeId;
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -650,6 +659,13 @@ export type SectionRendererProps = {
 
   /** Full tenant config (design tokens, property info, etc.). */
   config: import("@/app/(guest)/_lib/tenant/types").TenantConfig;
+
+  /**
+   * Resolved color scheme for this section, if one is referenced.
+   * Null when no scheme is set (section inherits page-level tokens).
+   * Contains pre-computed CSS variables ready to apply on the section wrapper.
+   */
+  colorScheme: import("@/app/_lib/color-schemes/types").ResolvedColorScheme | null;
 };
 
 /**

@@ -30,7 +30,7 @@
 
 .nav-guard-content {
   position: relative;
-  background: #fff;
+  background: var(--admin-surface);
   border-radius: 16px;
   padding: 24px;
   width: 500px;
@@ -59,14 +59,14 @@
   border-radius: 8px;
   border: none;
   background: transparent;
-  color: #6D6C6B;
+  color: var(--admin-text-secondary);
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease;
 }
 
 .nav-guard-close:hover:not(:disabled) {
-  background: #f5f5f5;
-  color: #1a1a1a;
+  background: var(--admin-surface-hover);
+  color: var(--admin-text);
 }
 
 .nav-guard-close:disabled {
@@ -75,22 +75,22 @@
 }
 
 .nav-guard-title {
-    color: #1a1a1a;
+    color: var(--admin-text);
     margin: 0 0 16px;
-    font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-    font-size: 1.2rem;
+    font-family: var(--admin-font);
+    font-size: 14px;
     font-weight: 600;
     text-align: center;
 }
 
 .nav-guard-description {
-  font-size: 1.1rem;
-  color: #1a1a1a;
+  font-size: 14px;
+  color: var(--admin-text);
   margin: 0 0 27px;
   text-align:center;
   font-weight:400;
   line-height: 1.5;
-  font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  font-family: var(--admin-font);
 }
 
 .nav-guard-actions {
@@ -108,9 +108,9 @@
   padding: 10px 16px;
   border-radius: 10px;
   border: none;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  font-family: var(--admin-font);
   cursor: pointer;
   transition:
     background .25s,
@@ -129,35 +129,35 @@
 }
 
 .nav-guard-btn--save {
-    color: #fff;
-    border: 1px solid #0075DE;
-    background: #0075DE;
+    color: var(--admin-primary-text);
+    border: 1px solid var(--admin-accent);
+    background: var(--admin-accent);
 }
 
 .nav-guard-btn--save:hover:not(:disabled) {
-  background: #2774DE;
+  background: var(--admin-accent-hover);
 }
 
 .nav-guard-btn--discard {
-    color: #c2030a;
+    color: var(--admin-danger);
     background: none;
-    border: 1px solid #c2030a;
+    border: 1px solid var(--admin-danger);
 }
 
 .nav-guard-btn--discard:hover:not(:disabled) {
-  background: #fdf2f2;
-  border-color: #C2030A;
+  background: var(--admin-danger-tint);
+  border-color: var(--admin-danger);
 }
 
 /* Continue editing - subtle ghost */
 .nav-guard-btn--cancel {
   background: transparent;
-  color: #6D6C6B;
+  color: var(--admin-text-secondary);
 }
 
 .nav-guard-btn--cancel:hover:not(:disabled) {
-  background: #f5f5f5;
-  color: #1a1a1a;
+  background: var(--admin-surface-hover);
+  color: var(--admin-text);
 }
 
 .nav-guard-btn-label {
@@ -172,11 +172,11 @@
 }
 
 .nav-guard-spinner-animated--danger {
-  color: #c2030a;
+  color: var(--admin-danger);
 }
 
 .nav-guard-spinner-animated--dark {
-  color: #555;
+  color: var(--admin-text-secondary);
 }
 
 .nav-guard-spinner-animated--out {

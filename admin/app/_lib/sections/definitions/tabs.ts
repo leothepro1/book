@@ -98,12 +98,6 @@ const underlinePreset: SectionPreset = {
 
   settingsSchema: [
     {
-      key: "indicatorColor",
-      type: "color",
-      label: "Indikatorfärg",
-      default: "#1a1a1a",
-    },
-    {
       key: "alignment",
       type: "select",
       label: "Justering",
@@ -116,7 +110,6 @@ const underlinePreset: SectionPreset = {
     },
   ],
   settingDefaults: {
-    indicatorColor: "#1a1a1a",
     alignment: "left",
   },
 
@@ -199,18 +192,6 @@ const pillPreset: SectionPreset = {
 
   settingsSchema: [
     {
-      key: "pillColor",
-      type: "color",
-      label: "Pill-färg (aktiv)",
-      default: "#1a1a1a",
-    },
-    {
-      key: "pillTextColor",
-      type: "color",
-      label: "Textfärg (aktiv)",
-      default: "#ffffff",
-    },
-    {
       key: "gap",
       type: "range",
       label: "Mellanrum",
@@ -221,8 +202,6 @@ const pillPreset: SectionPreset = {
     },
   ],
   settingDefaults: {
-    pillColor: "#1a1a1a",
-    pillTextColor: "#ffffff",
     gap: 8,
   },
 
@@ -310,16 +289,9 @@ export const tabsSection: SectionDefinition = {
       max: 64,
       step: 4,
     },
-    {
-      key: "backgroundColor",
-      type: "color",
-      label: "Bakgrundsfärg",
-      default: "#ffffff",
-    },
   ],
   settingDefaults: {
     padding: 16,
-    backgroundColor: "#ffffff",
   },
 
   presets: [underlinePreset, pillPreset],

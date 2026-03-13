@@ -335,10 +335,14 @@ export function validateBlockInstance(
 
 /**
  * Full tree validation: section → blocks → slots → elements.
+ *
+ * @param colorSchemes  Tenant-level color schemes for validating colorSchemeId references.
+ *                      Optional for backward compatibility — omit to skip scheme validation.
  */
 export function validateSectionInstance(
   instance: SectionInstance,
-  definition: SectionDefinition
+  definition: SectionDefinition,
+  colorSchemes?: import("@/app/_lib/color-schemes/types").ColorScheme[],
 ): ValidationResult {
   const errors: ValidationError[] = [];
   const warnings: ValidationError[] = [];
@@ -386,6 +390,18 @@ export function validateSectionInstance(
       message: `Instance preset version "${instance.presetVersion}" differs from preset "${preset.version}" — migration may be needed`,
       severity: "warning",
     });
+  }
+
+  // 3b. Color scheme reference
+  if (instance.colorSchemeId && colorSchemes) {
+    const found = colorSchemes.some((s) => s.id === instance.colorSchemeId);
+    if (!found) {
+      warnings.push({
+        path: "colorSchemeId",
+        message: `Color scheme "${instance.colorSchemeId}" not found — section inherits page-level tokens`,
+        severity: "warning",
+      });
+    }
   }
 
   // 4. Section-level settings

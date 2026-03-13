@@ -53,8 +53,9 @@ export const iconElement: ElementDefinition = {
     {
       key: "color",
       type: "color",
-      label: "Färg",
-      default: "#1a1a1a",
+      label: "Färg (valfri)",
+      description: "Lämna tomt för att ärva färgschemat",
+      default: "",
     },
     {
       key: "link",
@@ -69,7 +70,7 @@ export const iconElement: ElementDefinition = {
     fill: "outlined",
     size: 24,
     weight: 400,
-    color: "#1a1a1a",
+    color: "",
     link: null,
   },
 

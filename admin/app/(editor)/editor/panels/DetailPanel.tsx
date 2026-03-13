@@ -48,7 +48,7 @@
  * CSS prefixes: dp-* (detail panel), ct-* (content tree)
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEditor, type DetailTarget } from "../EditorContext";
 import { usePreview } from "@/app/(admin)/_components/GuestPreview";
 import { usePublishBar } from "@/app/(admin)/_components/PublishBar";
@@ -57,6 +57,7 @@ import { SettingsForm } from "../fields";
 import type { FieldOnChange } from "../fields/FieldRenderer";
 import { FieldSpacing } from "../fields/FieldSpacing";
 import { FieldSchedule } from "../fields/FieldSchedule";
+import { ColorSchemeSelect } from "./ColorSchemeSelect";
 import {
   getElementDefinition,
   getSectionDefinition,
@@ -71,6 +72,9 @@ import type {
   BlockTypeDefinition,
   SlotDefinition,
 } from "@/app/_lib/sections/types";
+import type { HeaderConfig } from "@/app/(guest)/_lib/tenant/types";
+import { HEADER_DEFAULTS, PAGE_FOOTER_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
+import type { PageFooterConfig, FooterActiveMode } from "@/app/(guest)/_lib/tenant/types";
 
 // ─── Main Component ─────────────────────────────────────────
 
@@ -87,9 +91,9 @@ export function DetailPanel() {
 
   const sections: SectionInstance[] = config?.home?.sections ?? [];
 
-  // Resolve what we're editing
+  // Resolve what we're editing (body sections only)
   const resolved = useMemo(() => {
-    if (!detailTarget || !registryReady) return null;
+    if (!detailTarget || detailTarget.scope === "header" || !registryReady) return null;
     return resolveTarget(detailTarget, sections);
   }, [detailTarget, sections, registryReady]);
 
@@ -226,6 +230,31 @@ export function DetailPanel() {
     [config, detailTarget, sections, pushUndo, saveDraft]
   );
 
+  // ── Color scheme change handler (section-level, instance field) ──
+  // Writes directly to section.colorSchemeId, not through settings.
+
+  const handleColorSchemeChange = useCallback(
+    (schemeId: string) => {
+      if (!config || !detailTarget) return;
+
+      const updatedSections = sections.map((section) => {
+        if (section.id !== detailTarget.sectionId) return section;
+        return { ...section, colorSchemeId: schemeId };
+      });
+
+      pushUndo({ home: config.home });
+      saveDraft({ home: { ...config.home, sections: updatedSections } });
+    },
+    [config, detailTarget, sections, pushUndo, saveDraft],
+  );
+
+  // Current section's colorSchemeId (for the dropdown)
+  const currentColorSchemeId = useMemo(() => {
+    if (!detailTarget) return undefined;
+    const section = sections.find((s) => s.id === detailTarget.sectionId);
+    return section?.colorSchemeId;
+  }, [detailTarget, sections]);
+
   // ── Block data for element forms ───────────────────────────
   // Only computed at block level — provides the block instance
   // and its slot definitions for rendering element forms.
@@ -244,6 +273,29 @@ export function DetailPanel() {
 
     return { block, slotDefs };
   }, [detailTarget, resolved, sections]);
+
+  // Header scope → dedicated panel (after all hooks)
+  if (detailTarget?.scope === "header") {
+    return (
+      <HeaderDetailPanel
+        config={config}
+        pushUndo={pushUndo}
+        saveDraft={saveDraft}
+        goBack={goBack}
+      />
+    );
+  }
+
+  if (detailTarget?.scope === "footer") {
+    return (
+      <FooterDetailPanel
+        config={config}
+        pushUndo={pushUndo}
+        saveDraft={saveDraft}
+        goBack={goBack}
+      />
+    );
+  }
 
   if (!resolved) return null;
 
@@ -286,6 +338,15 @@ export function DetailPanel() {
             schema={resolved.schema}
             values={resolved.values}
             onChange={handleChange}
+          />
+        )}
+
+        {/* Universal section control: Color Scheme selector */}
+        {resolved.level === "section" && config?.colorSchemes && config.colorSchemes.length > 0 && (
+          <ColorSchemeSelect
+            schemes={config.colorSchemes}
+            value={currentColorSchemeId}
+            onChange={handleColorSchemeChange}
           />
         )}
 
@@ -886,6 +947,297 @@ function ElementRow({
       </span>
       <ChevronIcon />
     </button>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HEADER DETAIL PANEL
+// ═══════════════════════════════════════════════════════════════
+
+function HeaderDetailPanel({
+  config,
+  pushUndo,
+  saveDraft,
+  goBack,
+}: {
+  config: any;
+  pushUndo: (snapshot: Record<string, unknown>) => void;
+  saveDraft: (changes: any) => any;
+  goBack: () => void;
+}) {
+  const header: HeaderConfig = { ...HEADER_DEFAULTS, ...config?.home?.header };
+  const schemes = config?.colorSchemes ?? [];
+
+  const snapshot = useCallback(
+    () => ({ home: { header: config?.home?.header ?? {} } }),
+    [config?.home?.header],
+  );
+
+  const save = useCallback(
+    (patch: Partial<HeaderConfig>) => {
+      pushUndo(snapshot());
+      saveDraft({ home: { header: { ...header, ...patch } } } as any);
+    },
+    [pushUndo, snapshot, saveDraft, header],
+  );
+
+  const handleSpacingChange = useCallback(
+    (keyOrPatch: string | Record<string, unknown>, value?: unknown) => {
+      const PADDING_KEY_MAP: Record<string, keyof HeaderConfig> = {
+        paddingTop: "paddingTop",
+        paddingRight: "paddingRight",
+        paddingBottom: "paddingBottom",
+        paddingLeft: "paddingLeft",
+      };
+      if (typeof keyOrPatch === "string") {
+        const mapped = PADDING_KEY_MAP[keyOrPatch] || keyOrPatch;
+        save({ [mapped]: value } as Partial<HeaderConfig>);
+      } else {
+        const patch: Partial<HeaderConfig> = {};
+        for (const [k, v] of Object.entries(keyOrPatch)) {
+          const mapped = PADDING_KEY_MAP[k] || k;
+          (patch as any)[mapped] = v;
+        }
+        save(patch);
+      }
+    },
+    [save],
+  );
+
+  return (
+    <div className="dp">
+      <div className="dp-header">
+        <button type="button" className="dp-header__back" onClick={goBack} aria-label="Tillbaka">
+          <BackIcon />
+        </button>
+        <span className="dp-header__title">Sidhuvud</span>
+      </div>
+
+      <div className="dp-divider" />
+
+      <div className="dp-body">
+        {/* Logo position */}
+        <div className="dp-field">
+          <span className="dp-accordion__label" style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: "block" }}>Logotypens position</span>
+          <div className="dp-segmented">
+            <button
+              type="button"
+              className={`dp-segmented__btn${header.logoPosition === "left" ? " dp-segmented__btn--active" : ""}`}
+              onClick={() => save({ logoPosition: "left" })}
+            >
+              <EditorIcon name="format_align_left" size={16} />
+              <span>Vänster</span>
+            </button>
+            <button
+              type="button"
+              className={`dp-segmented__btn${header.logoPosition === "center" ? " dp-segmented__btn--active" : ""}`}
+              onClick={() => save({ logoPosition: "center" })}
+            >
+              <EditorIcon name="format_align_center" size={16} />
+              <span>Centrerad</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Show divider toggle */}
+        <div className="dp-field">
+          <div className="sf-toggle-row">
+            <span>Avskiljande linje</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={header.showDivider}
+              className={`sf-toggle${header.showDivider ? " sf-toggle--on" : ""}`}
+              onClick={() => save({ showDivider: !header.showDivider })}
+            >
+              <span className="sf-toggle__icon sf-toggle__icon--check material-symbols-rounded">check</span>
+              <span className="sf-toggle__icon sf-toggle__icon--remove material-symbols-rounded">remove</span>
+              <span className="sf-toggle__thumb" />
+            </button>
+          </div>
+        </div>
+
+        {/* Color scheme */}
+        {schemes.length > 0 && (
+          <ColorSchemeSelect
+            schemes={schemes}
+            value={header.colorSchemeId}
+            onChange={(schemeId) => save({ colorSchemeId: schemeId })}
+          />
+        )}
+
+        {/* Spacing */}
+        <SpacingAccordion
+          paddingTop={header.paddingTop}
+          paddingRight={header.paddingRight}
+          paddingBottom={header.paddingBottom}
+          paddingLeft={header.paddingLeft}
+          onChange={handleSpacingChange}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FOOTER DETAIL PANEL
+// ═══════════════════════════════════════════════════════════════
+
+const ACTIVE_MODE_OPTIONS: { key: FooterActiveMode; label: string }[] = [
+  { key: "background", label: "Bakgrund och ikon" },
+  { key: "icon-only", label: "Endast ikon" },
+];
+
+function FooterDetailPanel({
+  config,
+  pushUndo,
+  saveDraft,
+  goBack,
+}: {
+  config: any;
+  pushUndo: (snapshot: Record<string, unknown>) => void;
+  saveDraft: (changes: any) => any;
+  goBack: () => void;
+}) {
+  const footer: PageFooterConfig = { ...PAGE_FOOTER_DEFAULTS, ...config?.home?.footer };
+  const schemes = config?.colorSchemes ?? [];
+
+  const snapshot = useCallback(
+    () => ({ home: { footer: config?.home?.footer ?? {} } }),
+    [config?.home?.footer],
+  );
+
+  const save = useCallback(
+    (patch: Partial<PageFooterConfig>) => {
+      pushUndo(snapshot());
+      saveDraft({ home: { footer: { ...footer, ...patch } } } as any);
+    },
+    [pushUndo, snapshot, saveDraft, footer],
+  );
+
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handle = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [dropdownOpen]);
+
+  const handleFooterSpacing = useCallback(
+    (keyOrPatch: string | Record<string, unknown>, value?: unknown) => {
+      if (typeof keyOrPatch === "string") {
+        save({ [keyOrPatch]: value } as Partial<PageFooterConfig>);
+      } else {
+        save(keyOrPatch as Partial<PageFooterConfig>);
+      }
+    },
+    [save],
+  );
+
+  const activeLabel = ACTIVE_MODE_OPTIONS.find(o => o.key === footer.activeMode)?.label ?? "Bakgrund och ikon";
+
+  return (
+    <div className="dp">
+      <div className="dp-header">
+        <button type="button" className="dp-header__back" onClick={goBack} aria-label="Tillbaka">
+          <BackIcon />
+        </button>
+        <span className="dp-header__title">Sidfot</span>
+      </div>
+
+      <div className="dp-divider" />
+
+      <div className="dp-body">
+        {/* Active mode dropdown */}
+        <div className="cs-select">
+          <span className="cs-select__label">Aktivt läge</span>
+          <div className="sf-dropdown" ref={dropdownRef}>
+            <button
+              type="button"
+              className="sf-dropdown__trigger"
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+            >
+              <span className="sf-dropdown__text">{activeLabel}</span>
+              <EditorIcon name="expand_more" size={16} className="sf-dropdown__chevron" />
+            </button>
+            {dropdownOpen && (
+              <ul className="sf-dropdown__menu">
+                {ACTIVE_MODE_OPTIONS.map(({ key, label }) => (
+                  <li
+                    key={key}
+                    className={`sf-dropdown__item${footer.activeMode === key ? " sf-dropdown__item--active" : ""}`}
+                    onClick={() => { save({ activeMode: key }); setDropdownOpen(false); }}
+                  >
+                    <span style={{ flex: 1 }}>{label}</span>
+                    <span className={`material-symbols-rounded sf-dropdown__check${footer.activeMode === key ? " sf-dropdown__check--visible" : ""}`}>
+                      check
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        {/* Show labels toggle */}
+        <div>
+          <div className="sf-toggle-row">
+            <span>Visa text</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={footer.showLabels}
+              className={`sf-toggle${footer.showLabels ? " sf-toggle--on" : ""}`}
+              onClick={() => save({ showLabels: !footer.showLabels })}
+            >
+              <span className="sf-toggle__icon sf-toggle__icon--check material-symbols-rounded">check</span>
+              <span className="sf-toggle__icon sf-toggle__icon--remove material-symbols-rounded">remove</span>
+              <span className="sf-toggle__thumb" />
+            </button>
+          </div>
+        </div>
+
+        {/* Show divider toggle */}
+        <div>
+          <div className="sf-toggle-row">
+            <span>Avskiljande linje</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={footer.showDivider}
+              className={`sf-toggle${footer.showDivider ? " sf-toggle--on" : ""}`}
+              onClick={() => save({ showDivider: !footer.showDivider })}
+            >
+              <span className="sf-toggle__icon sf-toggle__icon--check material-symbols-rounded">check</span>
+              <span className="sf-toggle__icon sf-toggle__icon--remove material-symbols-rounded">remove</span>
+              <span className="sf-toggle__thumb" />
+            </button>
+          </div>
+        </div>
+
+        {/* Color scheme */}
+        {schemes.length > 0 && (
+          <ColorSchemeSelect
+            schemes={schemes}
+            value={footer.colorSchemeId}
+            onChange={(schemeId) => save({ colorSchemeId: schemeId })}
+          />
+        )}
+
+        {/* Spacing */}
+        <SpacingAccordion
+          paddingTop={footer.paddingTop}
+          paddingRight={footer.paddingRight}
+          paddingBottom={footer.paddingBottom}
+          paddingLeft={footer.paddingLeft}
+          onChange={handleFooterSpacing}
+        />
+      </div>
+    </div>
   );
 }
 

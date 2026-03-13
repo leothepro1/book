@@ -25,6 +25,8 @@ export function FieldToggle({ field, value, onChange }: Props) {
           className={`sf-toggle${checked ? " sf-toggle--on" : ""}`}
           onClick={() => onChange(field.key, !checked)}
         >
+          <span className="sf-toggle__icon sf-toggle__icon--check material-symbols-rounded">check</span>
+          <span className="sf-toggle__icon sf-toggle__icon--remove material-symbols-rounded">remove</span>
           <span className="sf-toggle__thumb" />
         </button>
       </div>

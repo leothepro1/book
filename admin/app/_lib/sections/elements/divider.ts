@@ -13,12 +13,6 @@ export const dividerElement: ElementDefinition = {
 
   settingsSchema: [
     {
-      key: "color",
-      type: "color",
-      label: "Färg",
-      default: "#E6E5E3",
-    },
-    {
       key: "thickness",
       type: "range",
       label: "Tjocklek",
@@ -42,7 +36,6 @@ export const dividerElement: ElementDefinition = {
   ],
 
   settingDefaults: {
-    color: "#E6E5E3",
     thickness: 1,
     style: "solid",
   },

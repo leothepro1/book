@@ -38,7 +38,7 @@ export function SidebarUserRow({ isCollapsed }: { isCollapsed: boolean }) {
             className="w-[22px] h-[22px] rounded-full flex-shrink-0"
           />
         ) : (
-          <div className="w-[22px] h-[22px] rounded-full flex-shrink-0 bg-[#0075DE] flex items-center justify-center text-white text-[11px] font-semibold">
+          <div className="w-[22px] h-[22px] rounded-full flex-shrink-0 bg-[var(--admin-accent)] flex items-center justify-center text-white text-[11px] font-semibold">
             {firstName[0]}
           </div>
         )}

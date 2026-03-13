@@ -9,7 +9,7 @@
   padding: 0 20px;
   flex-shrink: 0;
   box-sizing: border-box;
-  border-bottom: 1px solid #F1F0EF;
+  border-bottom: 1px solid var(--admin-border);
 }
 
 /* ── Status Pill ── */
@@ -64,7 +64,7 @@
   justify-content: center;
   gap: 8px;
   height: 100%;
-  color: #8C8B89;
+  color: var(--admin-text-tertiary);
   font-size: 14px;
 }
 
@@ -79,11 +79,11 @@
   background: none;
   cursor: pointer;
   border-radius: 2228px;
-  color: #6D6C6B;
+  color: var(--admin-text-secondary);
   padding: 0;
 }
 
-.maps-back-btn:hover { background: #e3e3e3; color: #1a1a1a; }
+.maps-back-btn:hover { background: var(--admin-border); color: var(--admin-text); }
 
 /* ── Create button ── */
 .maps-create-btn {
@@ -93,15 +93,15 @@
   padding: 8px 16px;
   border: none;
   border-radius: 8px;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--admin-primary);
+  color: var(--admin-primary-text);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s;
 }
 
-.maps-create-btn:hover { background: #333; }
+.maps-create-btn:hover { background: var(--admin-primary-hover); }
 
 /* ── Empty state ── */
 .maps-empty {
@@ -117,13 +117,13 @@
 .maps-empty__title {
   font-size: 18px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--admin-text);
   margin: 0;
 }
 
 .maps-empty__desc {
   font-size: 14px;
-  color: #8C8B89;
+  color: var(--admin-text-tertiary);
   margin: 0 0 8px;
 }
 
@@ -137,7 +137,7 @@
 
 .maps-card {
     cursor: pointer;
-    background: #fff;
+    background: var(--admin-surface);
     border: none;
     border-radius: 0.75rem;
     transition: box-shadow .15s, border-color .15s;
@@ -150,7 +150,7 @@
   height: 210px;
   overflow: hidden;
   position: relative;
-  background: #F5F4F2;
+  background: var(--admin-surface-hover);
 }
 
 .maps-card__thumbnail {
@@ -172,13 +172,13 @@
 .maps-card__name {
   font-size: 15px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--admin-text);
   margin-bottom: 2px;
 }
 
 .maps-card__meta {
   font-size: 14px;
-  color: #616161;
+  color: var(--admin-text-secondary);
   font-weight: 400;
 }
 
@@ -197,7 +197,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #1a1a1a;
+  color: var(--admin-text);
   opacity: 0;
   transition: opacity 0.15s, background 0.15s;
   padding: 0;
@@ -205,14 +205,14 @@
 }
 
 .maps-card:hover .maps-card__menu-btn { opacity: 1; }
-.maps-card__menu-btn:hover { background: #fff; }
+.maps-card__menu-btn:hover { background: var(--admin-surface); }
 
 /* ── Card dropdown menu ── */
 .maps-card__menu {
   position: fixed;
   z-index: 9000;
   width: 180px;
-  background: #fff;
+  background: var(--admin-surface);
   border-radius: 12px;
   padding: 5px;
   box-shadow: 0px 0px 0px 1px rgba(64, 87, 109, .04), 0px 6px 20px -4px rgba(64, 87, 109, .3);
@@ -231,12 +231,12 @@
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  color: #1a1a1a;
+  color: var(--admin-text);
   text-align: left;
   transition: background 0.1s;
 }
 
-.maps-card__menu-item:hover { background: #F5F4F2; }
+.maps-card__menu-item:hover { background: var(--admin-surface-hover); }
 .maps-card__menu-item--danger { color: #DC2626; }
 .maps-card__menu-item--danger:hover { background: #FEF2F2; }
 
@@ -259,7 +259,7 @@
 }
 
 .maps-confirm-modal {
-  background: #fff;
+  background: var(--admin-surface);
   border-radius: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -279,10 +279,10 @@
 .maps-confirm-title {
   font-size: 19px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--admin-text);
   margin: 0;
   padding-bottom: 16px;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid var(--admin-border);
 }
 
 .maps-confirm-body {
@@ -315,12 +315,12 @@
 .maps-confirm-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .maps-confirm-btn--cancel {
-  color: #1a1a1a;
-  background: #fff;
-  border: 1px solid #DBDBDB;
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
 }
 
-.maps-confirm-btn--cancel:hover { background: #e5e4e2; }
+.maps-confirm-btn--cancel:hover { background: var(--admin-surface-hover); }
 
 .maps-confirm-btn--delete {
   background: #DC2626;
@@ -350,7 +350,7 @@
 }
 
 .maps-container {
-    background: #fff;
+    background: var(--admin-surface);
     padding: 18px;
     box-shadow: rgba(0, 0, 0, 0.03) 0px 0.3125rem 0.3125rem -0.15625rem, rgba(0, 0, 0, 0.02) 0px 0.1875rem 0.1875rem -0.09375rem, rgba(0, 0, 0, 0.02) 0px 0.125rem 0.125rem -0.0625rem, rgba(0, 0, 0, 0.03) 0px 0.0625rem 0.0625rem -0.03125rem, rgba(0, 0, 0, 0.04) 0px 0.03125rem 0.03125rem 0px, rgba(0, 0, 0, 0.06) 0px 0px 0px 0.0625rem;
     border-radius: 0.75rem;
@@ -358,7 +358,7 @@
 
 .maps-container .maps-section {
   padding: 12px 0;
-  border-bottom: 1px solid #F0EFED;
+  border-bottom: 1px solid var(--admin-border);
 }
 
 .maps-container .maps-section:first-child { padding-top: 0; }
@@ -366,7 +366,7 @@
 
 .maps-section {
   padding: 16px 0;
-  border-bottom: 1px solid #F0EFED;
+  border-bottom: 1px solid var(--admin-border);
 }
 
 .maps-section:first-child { padding-top: 0; }
@@ -376,7 +376,7 @@
   display: block;
   font-size: 15px;
   font-weight: 500;
-  color: #1a1a1a;
+  color: var(--admin-text);
   margin-bottom: 7px;
 }
 
@@ -384,34 +384,34 @@
   display: block;
   font-size: 12px;
   font-weight: 500;
-  color: #6D6C6B;
+  color: var(--admin-text-secondary);
   margin-bottom: 4px;
 }
 
 .maps-input {
   width: 100%;
   padding: 8px 11px;
-  border: 1px solid #e3e3e3;
-  border-radius: 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-input-radius);
   font-size: 15px;
   font-weight: 400;
-  color: #1a1a1a;
-  background: #fff;
+  color: var(--admin-text);
+  background: var(--admin-surface);
   outline: none;
   transition: border-color 0.15s;
   box-sizing: border-box;
 }
 
-.maps-input:focus { border-color: #0075DE; outline: 1px solid #0075de;}
+.maps-input:focus { border-color: var(--admin-input-focus); box-shadow: var(--admin-input-focus-ring); }
 
 .maps-textarea {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #E6E5E3;
-  border-radius: 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-input-radius);
   font-size: 14px;
-  color: #1a1a1a;
-  background: #fff;
+  color: var(--admin-text);
+  background: var(--admin-surface);
   outline: none;
   resize: vertical;
   font-family: inherit;
@@ -419,7 +419,7 @@
   box-sizing: border-box;
 }
 
-.maps-textarea:focus { border-color: #0075DE; }
+.maps-textarea:focus { border-color: var(--admin-input-focus); box-shadow: var(--admin-input-focus-ring); }
 
 .maps-row {
   display: flex;
@@ -446,12 +446,12 @@
   background: none;
   cursor: pointer;
   border-radius: 50%;
-  color: #8C8B89;
+  color: var(--admin-text-tertiary);
   padding: 0;
   transition: color 0.15s, background 0.15s;
 }
 
-.maps-help-btn:hover { color: #1a1a1a; background: #F0EFED; }
+.maps-help-btn:hover { color: var(--admin-text); background: var(--admin-border); }
 
 /* ── Address search ── */
 .maps-address {
@@ -468,7 +468,7 @@
   top: 50%;
   transform: translateY(-50%);
   font-size: 20px !important;
-  color: #8C8B89;
+  color: var(--admin-text-tertiary);
   pointer-events: none;
 }
 
@@ -481,8 +481,8 @@
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: #fff;
-  border-radius: 12px;
+  background: var(--admin-surface);
+  border-radius: var(--admin-dropdown-list-radius);
   list-style: none;
   margin: 0;
   padding: 5px;
@@ -508,11 +508,11 @@
   cursor: pointer;
   border-radius: 8px;
   font-size: 15px;
-  color: #1a1a1a;
+  color: var(--admin-text);
   text-align: left;
 }
 
-.maps-address__item:hover { background: #F5F4F2; }
+.maps-address__item:hover { background: var(--admin-surface-hover); }
 
 .maps-address__text {
   flex: 1;
@@ -532,22 +532,22 @@
   justify-content: space-between;
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #E6E5E3;
-  border-radius: 10px;
-  background: #fff;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-dropdown-trigger-radius);
+  background: var(--admin-surface);
   font-size: 15px;
   font-weight: 500;
-  color: #1a1a1a;
+  color: var(--admin-text);
   cursor: pointer;
   transition: border-color 0.15s;
 }
 
 .maps-style-dropdown__trigger:hover {
-  border-color: #ccc;
+  border-color: var(--admin-border-focus);
 }
 
 .maps-style-dropdown__chevron {
-  color: #8C8B89;
+  color: var(--admin-text-tertiary);
 }
 
 .maps-style-dropdown__list {
@@ -555,8 +555,8 @@
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: #fff;
-  border-radius: 12px;
+  background: var(--admin-surface);
+  border-radius: var(--admin-dropdown-list-radius);
   list-style: none;
   margin: 0;
   padding: 5px;
@@ -577,17 +577,17 @@
   cursor: pointer;
   border-radius: 8px;
   font-size: 15px;
-  color: #1a1a1a;
+  color: var(--admin-text);
   text-align: left;
 }
 
 .maps-style-dropdown__item:hover {
-  background: #F5F4F2;
+  background: var(--admin-surface-hover);
 }
 
 .maps-style-dropdown__item--active {
   font-weight: 500;
-  background: #f1f1f1;
+  background: var(--admin-surface-muted);
 }
 
 /* ── Marker location panel ── */
@@ -600,29 +600,19 @@
 .mk-or-divider__line {
   flex: 1;
   height: 1px;
-  background: #E6E5E3;
+  background: var(--admin-border);
 }
 
 .mk-or-divider__text {
   font-size: 11px;
   font-weight: 600;
-  color: #8C8B89;
+  color: var(--admin-text-tertiary);
   letter-spacing: 0.05em;
-}
-
-.mk-coord-row {
-  display: flex;
-  gap: 8px;
-}
-
-.mk-coord-field {
-  flex: 1;
-  min-width: 0;
 }
 
 /* ── Content panel (rich text) ── */
 .mk-content-panel {
-  border: 1px solid #E6E5E3;
+  border: 1px solid var(--admin-border);
   border-radius: 10px;
   margin-top: 0px;
 }
@@ -632,7 +622,7 @@
   align-items: center;
   justify-content: start;
   padding: 4px 6px;
-  background: #f7f7f7;
+  background: var(--admin-surface-hover);
   gap: 4px;
   border-radius: 10px 10px 0 0;
 }
@@ -652,18 +642,18 @@
   background: none;
   border-radius: 6px;
   cursor: pointer;
-  color: #6D6C6B;
+  color: var(--admin-text-secondary);
   transition: all 0.12s;
 }
 
 .mk-rt-toolbar__btn:hover {
-  background: #EEEDEB;
-  color: #1a1a1a;
+  background: var(--admin-surface-hover);
+  color: var(--admin-text);
 }
 
 .mk-rt-toolbar__btn--active {
-  background: #ccc;
-  color: #121212;
+  background: var(--admin-border-focus);
+  color: var(--admin-text);
 }
 
 .mk-rt-editor {
@@ -673,14 +663,14 @@
   overflow-y: auto;
   font-size: 14px;
   line-height: 1.6;
-  color: #1a1a1a;
+  color: var(--admin-text);
   outline: none;
   font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
 }
 
 .mk-rt-editor:empty::before {
   content: attr(data-placeholder);
-  color: #A1A09E;
+  color: var(--admin-text-tertiary);
   pointer-events: none;
 }
 
@@ -716,7 +706,7 @@
 .mk-img-overlay__border {
   position: absolute;
   inset: 0;
-  border: 2px solid #0075DE;
+  border: 2px solid var(--admin-accent);
   border-radius: 8px;
   pointer-events: none;
 }
@@ -725,8 +715,8 @@
   position: absolute;
   width: 10px;
   height: 10px;
-  background: #fff;
-  border: 2px solid #0075DE;
+  background: var(--admin-surface);
+  border: 2px solid var(--admin-accent);
   border-radius: 2px;
   pointer-events: auto;
   z-index: 6;
@@ -769,15 +759,15 @@
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
-  color: #444;
+  color: var(--admin-text-secondary);
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.12s;
 }
 
 .mk-block-dropdown__trigger:hover {
-  background: #EEEDEB;
-  color: #1a1a1a;
+  background: var(--admin-surface-hover);
+  color: var(--admin-text);
 }
 
 .mk-block-dropdown__list {
@@ -785,7 +775,7 @@
   top: calc(100% + 4px);
   left: 0;
   min-width: 180px;
-  background: #fff;
+  background: var(--admin-surface);
   border-radius: 12px;
   list-style: none;
   margin: 0;
@@ -806,17 +796,17 @@
   background: none;
   cursor: pointer;
   border-radius: 8px;
-  color: #1a1a1a;
+  color: var(--admin-text);
   text-align: left;
 }
 
 .mk-block-dropdown__item:hover {
-  background: #F5F4F2;
+  background: var(--admin-surface-hover);
 }
 
 .mk-block-dropdown__item--active {
   font-weight: 500;
-  background: #f1f1f1;
+  background: var(--admin-surface-muted);
 }
 
 /* ── Range field ── */
@@ -829,7 +819,7 @@
 
 .maps-range__label {
   font-size: 15px;
-  color: #616161;
+  color: var(--admin-text-secondary);
   font-weight: 400;
   min-width: 72px;
 }
@@ -838,7 +828,7 @@
   flex: 1;
   position: relative;
   height: 4px;
-  background: #CAE6FF;
+  background: var(--admin-range-track);
   border-radius: 2px;
   cursor: pointer;
   touch-action: none;
@@ -850,7 +840,7 @@
   top: 0;
   left: 0;
   height: 100%;
-  background: #0075DE;
+  background: var(--admin-range-accent);
   border-radius: 2px;
   pointer-events: none;
 }
@@ -861,7 +851,7 @@
   width: 19px;
   height: 19px;
   border-radius: 50%;
-  background: #0075DE;
+  background: var(--admin-range-accent);
   transform: translate(-50%, -50%);
   cursor: pointer;
   transition: box-shadow 0.15s;
@@ -883,7 +873,7 @@
   bottom: calc(100% + 18px);
   left: 50%;
   transform: translateX(-50%) scale(0.8);
-  background: #0075DE;
+  background: var(--admin-range-accent);
   color: #fff;
   border-radius: 6px;
   padding: 4px 8px;
@@ -900,7 +890,7 @@
   left: 50%;
   transform: translateX(-50%);
   border: 4px solid transparent;
-  border-top-color: #0075DE;
+  border-top-color: var(--admin-range-accent);
 }
 
 .maps-range__thumb:hover .maps-range__pin,
@@ -925,7 +915,7 @@
 
 .maps-toggle__label {
   font-size: 15px;
-  color: #616161;
+  color: var(--admin-text-secondary);
   font-weight: 400;
 }
 
@@ -935,17 +925,17 @@
 .maps-markers__empty {
   padding: 12px 0;
   font-size: 13px;
-  color: #8C8B89;
+  color: var(--admin-text-tertiary);
 }
 
 .maps-marker-card {
-  border: 1px solid #E6E5E3;
+  border: 1px solid var(--admin-border);
   border-radius: 8px;
   overflow: hidden;
-  background: #fff;
+  background: var(--admin-surface);
 }
 
-.maps-marker-card--expanded { border-color: #ccc; }
+.maps-marker-card--expanded { border-color: var(--admin-border-focus); }
 
 .maps-marker-card__header {
   display: flex;
@@ -957,7 +947,7 @@
   background: none;
   cursor: pointer;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--admin-text);
   text-align: left;
 }
 
@@ -975,7 +965,7 @@
 
 .maps-marker-card__chevron {
   transition: transform 0.15s;
-  color: #8C8B89;
+  color: var(--admin-text-tertiary);
 }
 
 .maps-marker-card__chevron--open { transform: rotate(180deg); }
@@ -985,7 +975,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border-top: 1px solid #F0EFED;
+  border-top: 1px solid var(--admin-border);
   padding-top: 12px;
 }
 
@@ -1008,7 +998,7 @@
 .maps-color-input {
   width: 32px;
   height: 32px;
-  border: 1px solid #E6E5E3;
+  border: 1px solid var(--admin-border);
   border-radius: 6px;
   padding: 2px;
   cursor: pointer;
@@ -1022,7 +1012,7 @@
   align-items: center;
   gap: 4px;
   padding-top: 8px;
-  border-top: 1px solid #F0EFED;
+  border-top: 1px solid var(--admin-border);
 }
 
 .maps-marker-action {
@@ -1034,11 +1024,11 @@
   background: none;
   cursor: pointer;
   border-radius: 4px;
-  color: #8C8B89;
+  color: var(--admin-text-tertiary);
   font-size: 12px;
 }
 
-.maps-marker-action:hover { background: #F0EFED; color: #1a1a1a; }
+.maps-marker-action:hover { background: var(--admin-border); color: var(--admin-text); }
 .maps-marker-action:disabled { opacity: 0.3; cursor: not-allowed; }
 .maps-marker-action--danger { margin-left: auto; }
 .maps-marker-action--danger:hover { background: #FEF2F2; color: #DC2626; }
@@ -1048,19 +1038,19 @@
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  border: 1px dashed #E6E5E3;
+  border: 1px dashed var(--admin-border);
   border-radius: 8px;
   background: none;
   cursor: pointer;
   font-size: 13px;
-  color: #8C8B89;
+  color: var(--admin-text-tertiary);
   transition: all 0.15s;
 }
 
 .maps-marker-add:hover {
-  border-color: #ccc;
-  color: #1a1a1a;
-  background: #FAFAF9;
+  border-color: var(--admin-border-focus);
+  color: var(--admin-text);
+  background: var(--admin-surface-hover);
 }
 
 /* ── Markers empty state ── */
@@ -1077,24 +1067,24 @@
   width: 55px;
   height: 55px;
   border-radius: 500px;
-  background: #F5F4F2;
+  background: var(--admin-surface-hover);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #8C8B89;
+  color: var(--admin-text-tertiary);
   margin-bottom: 8px;
 }
 
 .mk-empty__title {
   font-size: 16px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--admin-text);
   margin: 0;
 }
 
 .mk-empty__desc {
   font-size: 14px;
-  color: #8C8B89;
+  color: var(--admin-text-tertiary);
   margin: 0 0 12px;
 }
 
@@ -1109,12 +1099,12 @@
 .mk-panel-intro__label {
   font-size: 13px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--admin-text);
 }
 
 .mk-panel-intro__desc {
   font-size: 12px;
-  color: #8C8B89;
+  color: var(--admin-text-tertiary);
   line-height: 1.4;
 }
 
@@ -1124,14 +1114,14 @@
   align-items: center;
   font-size: 12px;
   font-weight: 500;
-  color: #6D6C6B;
+  color: var(--admin-text-secondary);
   text-decoration: none;
   margin: 6px 0 0 0;
   transition: color 0.15s;
 }
 
 .sf-desc-link:hover {
-  color: #1a1a1a;
+  color: var(--admin-text);
 }
 
 /* ── Overflow fixes for dropdowns inside panels ── */
@@ -1151,7 +1141,7 @@
 .mk-cta-section {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #F1F0EF;
+  border-top: 1px solid var(--admin-border);
 }
 
 .mk-cta-toggle {
@@ -1163,7 +1153,7 @@
 
 .mk-cta-toggle__label {
   font-size: 15px;
-  color: #616161;
+  color: var(--admin-text-secondary);
   font-weight: 400;
   user-select: none;
 }

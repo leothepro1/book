@@ -183,7 +183,8 @@ export function RichTextLinkModal({
                       onClick={() => handleTypeChange(opt.value)}
                     >
                       <TypeIcon type={opt.value} />
-                      <span>{opt.label}</span>
+                      <span style={{ flex: 1 }}>{opt.label}</span>
+                      <span className={`material-symbols-rounded rt-type-dropdown__check${opt.value === linkType ? " rt-type-dropdown__check--visible" : ""}`}>check</span>
                     </li>
                   ))}
                 </ul>

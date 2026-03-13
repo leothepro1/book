@@ -33,6 +33,12 @@ export const buttonElement: ElementDefinition = {
       label: "Länk",
     },
     {
+      key: "outline",
+      type: "toggle",
+      label: "Använd knappkonturer",
+      default: false,
+    },
+    {
       key: "width",
       type: "segmented",
       label: "Bredd",
@@ -122,6 +128,7 @@ export const buttonElement: ElementDefinition = {
   settingDefaults: {
     label: "Klicka här",
     link: null,
+    outline: false,
     width: "auto",
     icon: "",
     icon_placement: "right",

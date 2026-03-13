@@ -4,6 +4,9 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
 import type { TenantConfig } from "../_lib/tenant/types";
+import { PAGE_FOOTER_DEFAULTS } from "../_lib/tenant/types";
+import type { ColorScheme } from "@/app/_lib/color-schemes/types";
+import { resolvePageIdFromPathname, getPageLayout } from "@/app/_lib/pages";
 import "./guest-footer.css";
 
 type FooterKey = "home" | "stays" | "account";
@@ -65,7 +68,11 @@ const AccountActive = () => (
 export default function GuestFooter({ config }: { config: TenantConfig }) {
   const pathname = usePathname();
   const params = useParams<{ token?: string; slug?: string }>();
-  
+
+  // Page layout contract — hide footer if page doesn't support it
+  const pageLayout = useMemo(() => getPageLayout(resolvePageIdFromPathname(pathname)), [pathname]);
+  if (!pageLayout.footer) return null;
+
   // KRITISK FIX: Använd preview mode base OM vi är i /preview/
   const isPreviewMode = pathname.startsWith("/preview");
   const token = isPreviewMode ? "preview" : (params?.token ?? "");
@@ -98,29 +105,67 @@ export default function GuestFooter({ config }: { config: TenantConfig }) {
     ];
   }, [token]);
 
-  void config;
+  const ftr = { ...PAGE_FOOTER_DEFAULTS, ...config.home?.footer };
+  const iconOnly = ftr.activeMode === "icon-only";
+
+  // Resolve color scheme CSS vars for footer
+  const schemeCssVars = useMemo(() => {
+    if (!ftr.colorSchemeId || !config.colorSchemes) return undefined;
+    const scheme = (config.colorSchemes as ColorScheme[]).find((s) => s.id === ftr.colorSchemeId);
+    if (!scheme) return undefined;
+    const t = scheme.tokens;
+    return {
+      "--footer-bg": t.background,
+      "--footer-text": t.text,
+      "--footer-active": t.solidButtonBackground,
+      "--footer-divider": t.outlineButton,
+    } as React.CSSProperties;
+  }, [ftr.colorSchemeId, config.colorSchemes]);
+
+  const navStyle: React.CSSProperties = {
+    ...schemeCssVars,
+    paddingTop: ftr.paddingTop,
+    paddingRight: ftr.paddingRight,
+    paddingBottom: ftr.paddingBottom,
+    paddingLeft: ftr.paddingLeft,
+    backgroundColor: "var(--footer-bg, var(--background))",
+    ...(ftr.showDivider
+      ? { borderTop: `1px solid var(--footer-divider, color-mix(in srgb, var(--footer-text, var(--text)) 12%, transparent))` }
+      : { borderTop: "none" }),
+  };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--border)] bg-[var(--background)] p-[5px]">
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-40"
+      style={navStyle}
+    >
       <div className="flex items-center justify-around">
         {items.map((item) => {
           const active = isActive(item.key, pathname);
           const Icon = active ? item.IconActive : item.IconInactive;
 
+          const cls = [
+            "footer-link flex flex-1 flex-col items-center justify-center gap-1 py-2",
+            active ? "active" : "",
+            active && iconOnly ? "active--icon-only" : "",
+          ].filter(Boolean).join(" ");
+
           return (
             <Link
               key={item.key}
               href={item.href}
-              className={`footer-link flex flex-1 flex-col items-center justify-center gap-1 py-2 ${active ? "active" : ""}`}
-              style={{ color: active ? undefined : "rgba(0,0,0,0.549)" }}
+              className={cls}
+              style={{ color: active ? undefined : "var(--footer-text, rgba(0,0,0,0.549))" }}
               aria-current={active ? "page" : undefined}
             >
               <div className="footer-icon">
                 <Icon />
               </div>
-              <span className="text-[11px] font-semibold leading-none">
-                {item.label}
-              </span>
+              {ftr.showLabels && (
+                <span className="text-[11px] font-semibold leading-none">
+                  {item.label}
+                </span>
+              )}
             </Link>
           );
         })}

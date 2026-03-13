@@ -9,17 +9,22 @@
 }
 
 .footer-link.active {
-  color: var(--button-bg);
+  color: var(--footer-active, var(--button-bg));
 }
 
 .footer-link.active::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: var(--button-bg);
+  background: var(--footer-active, var(--button-bg));
   opacity: 0.1;
   border-radius: 12px;
   z-index: -1;
+}
+
+/* icon-only mode: keep color, remove background tint */
+.footer-link.active--icon-only::before {
+  display: none;
 }
 
 .footer-icon {

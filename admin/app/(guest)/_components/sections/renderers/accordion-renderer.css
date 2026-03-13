@@ -1,5 +1,11 @@
 /* ═══════════════════════════════════════════════════
    Accordion Section — Shared + Default + Card Presets
+
+   COLOR SCHEME INTEGRATION:
+   All colors derive from section-scoped CSS variables.
+   - Borders: var(--text) at 12% opacity via color-mix
+   - Card backgrounds: var(--text) at 4% tint via color-mix
+   - Text/icons: inherited from var(--text) set at section scope
    ═══════════════════════════════════════════════════ */
 
 /* ── Shared layout ── */
@@ -87,22 +93,24 @@
 
 /* ═══════════════════════════════════════════════════
    DEFAULT PRESET — bordered rows
+   Border color derived from scheme text at 12% opacity
    ═══════════════════════════════════════════════════ */
 
 .s-accordion--default .s-accordion__item {
-  border-top: 1px solid var(--accordion-border, #E6E5E3);
+  border-top: 1px solid color-mix(in srgb, var(--text, #171717) 12%, transparent);
 }
 
 .s-accordion--default .s-accordion__item--last {
-  border-bottom: 1px solid var(--accordion-border, #E6E5E3);
+  border-bottom: 1px solid color-mix(in srgb, var(--text, #171717) 12%, transparent);
 }
 
 /* ═══════════════════════════════════════════════════
    CARD PRESET — each item in its own container
+   Card background derived from scheme text at 4% tint
    ═══════════════════════════════════════════════════ */
 
 .s-accordion--card .s-accordion__item {
-  background: var(--accordion-card-bg, #F5F5F4);
+  background: color-mix(in srgb, var(--text, #171717) 4%, var(--background, #ffffff));
   border-radius: var(--accordion-card-radius, 12px);
 }
 

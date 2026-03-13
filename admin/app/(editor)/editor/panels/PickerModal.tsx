@@ -710,10 +710,15 @@ export function buildElementPickerData(slotDef: SlotDefinition): {
 /**
  * Create a SectionInstance from a definition ID + chosen preset key.
  * If no presetKey provided, uses the definition's default.
+ *
+ * When defaultColorSchemeId is provided, the new section automatically
+ * receives that scheme. This ensures every new section has a valid
+ * color scheme from creation.
  */
 export function createSectionFromPicker(
   definitionId: string,
-  presetKey?: string
+  presetKey?: string,
+  defaultColorSchemeId?: string,
 ): SectionInstance | null {
   const def = getSectionDefinition(definitionId);
   if (!def) return null;
@@ -732,6 +737,7 @@ export function createSectionFromPicker(
     presetVersion: preset.version,
     sortOrder: 0,
     blocks,
+    ...(defaultColorSchemeId ? { colorSchemeId: defaultColorSchemeId } : {}),
   };
 }
 

@@ -37,6 +37,7 @@ import {
   resolveElementSettings,
   validateSectionInstance,
 } from "./validation";
+import { resolveColorScheme } from "@/app/_lib/color-schemes";
 
 // ─── Page Item Types ────────────────────────────────────────
 
@@ -206,7 +207,7 @@ function resolveSection(
   }
 
   // Validate (strict contract: invalid data doesn't reach renderer)
-  const result = validateSectionInstance(section, definition);
+  const result = validateSectionInstance(section, definition, config?.colorSchemes);
   if (!result.valid) {
     console.warn(
       `[resolve] Section "${section.id}" failed validation:`,
@@ -214,6 +215,13 @@ function resolveSection(
     );
     return null;
   }
+
+  // Resolve color scheme (null = inherit page-level tokens)
+  const colorScheme = resolveColorScheme(
+    section.colorSchemeId,
+    config?.colorSchemes ?? [],
+    config?.defaultColorSchemeId,
+  );
 
   return {
     section,
@@ -223,6 +231,7 @@ function resolveSection(
     presetSettings: resolvePresetSettings(preset, section.presetSettings),
     blocks: resolveBlocks(section, preset),
     config,
+    colorScheme,
   };
 }
 
@@ -303,6 +312,7 @@ function resolveLooseElementSection(
     presetSettings: section.presetSettings,
     blocks: resolvedBlocks,
     config,
+    colorScheme: resolveColorScheme(section.colorSchemeId, config?.colorSchemes ?? [], config?.defaultColorSchemeId),
   };
 }
 

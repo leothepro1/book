@@ -67,7 +67,8 @@ export function FieldSelect({ field, value, onChange }: Props) {
                     {opt.icon}
                   </span>
                 )}
-                {opt.label}
+                <span style={{ flex: 1 }}>{opt.label}</span>
+                <span className={`material-symbols-rounded sf-dropdown__check${opt.value === current ? " sf-dropdown__check--visible" : ""}`}>check</span>
               </li>
             ))}
           </ul>

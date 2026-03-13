@@ -79,7 +79,7 @@ export function Sidebar() {
                 onClick={(e) => guardedClick(e, '/home')}
                 className={`block px-[8px] py-[4px] mb-[4px] rounded-lg text-base tracking-[-0.15px] font-[500]  ${
                   isActive('/home')
-                    ? 'bg-[#E6E5E3] text-[#0075DE]'
+                    ? 'bg-[#E6E5E3] text-[var(--admin-accent)]'
                     : 'text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232]'
                 }`}
               >
@@ -90,7 +90,7 @@ export function Sidebar() {
                 onClick={(e) => guardedClick(e, '/editor')}
                 className={`block px-[8px] py-[4px] mb-[4px] rounded-lg text-base tracking-[-0.15px] font-[500]  ${
                   isActive('/editor')
-                    ? 'bg-[#E6E5E3] text-[#0075DE]'
+                    ? 'bg-[#E6E5E3] text-[var(--admin-accent)]'
                     : 'text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232]'
                 }`}
               >
@@ -106,7 +106,7 @@ export function Sidebar() {
                 onClick={(e) => guardedClick(e, '/design')}
                 className={`block px-[8px] py-[4px] mb-[4px] rounded-lg text-base tracking-[-0.15px] font-[500]  ${
                   isActive('/design')
-                    ? 'bg-[#E6E5E3] text-[#0075DE]'
+                    ? 'bg-[#E6E5E3] text-[var(--admin-accent)]'
                     : 'text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232]'
                 }`}
               >
@@ -117,7 +117,7 @@ export function Sidebar() {
                 onClick={(e) => guardedClick(e, '/maps')}
                 className={`block px-[8px] py-[4px] mb-[4px] rounded-lg text-base tracking-[-0.15px] font-[500]  ${
                   isActive('/maps')
-                    ? 'bg-[#E6E5E3] text-[#0075DE]'
+                    ? 'bg-[#E6E5E3] text-[var(--admin-accent)]'
                     : 'text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232]'
                 }`}
               >
@@ -133,7 +133,7 @@ export function Sidebar() {
           onClick={(e) => guardedClick(e, '/dashboard/guests')}
           className={`flex items-center gap-3 p-2 rounded-lg  ${
             isActive('/dashboard/guests')
-              ? 'bg-[#E6E5E3] text-[#0075DE]'
+              ? 'bg-[#E6E5E3] text-[var(--admin-accent)]'
               : 'text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232]'
           }`}
         >
@@ -153,7 +153,7 @@ export function Sidebar() {
           onClick={(e) => guardedClick(e, '/dashboard/organization')}
           className={`flex items-center gap-3 p-2 rounded-lg  ${
             isActive('/dashboard/organization')
-              ? 'bg-[#E6E5E3] text-[#0075DE]'
+              ? 'bg-[#E6E5E3] text-[var(--admin-accent)]'
               : 'text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232]'
           }`}
         >
@@ -173,7 +173,7 @@ export function Sidebar() {
           onClick={(e) => guardedClick(e, '/dashboard/analytics')}
           className={`flex items-center gap-3 p-2 rounded-lg  ${
             isActive('/dashboard/analytics')
-              ? 'bg-[#E6E5E3] text-[#0075DE]'
+              ? 'bg-[#E6E5E3] text-[var(--admin-accent)]'
               : 'text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232]'
           }`}
         >
@@ -193,7 +193,7 @@ export function Sidebar() {
           onClick={(e) => guardedClick(e, '/dashboard/integrations')}
           className={`flex items-center gap-3 p-2 rounded-lg  ${
             isActive('/dashboard/integrations')
-              ? 'bg-[#E6E5E3] text-[#0075DE]'
+              ? 'bg-[#E6E5E3] text-[var(--admin-accent)]'
               : 'text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232]'
           }`}
         >

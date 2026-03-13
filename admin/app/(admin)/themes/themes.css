@@ -22,8 +22,8 @@
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
-  background: #fff;
-  border: 2px solid #E6E5E3;
+  background: var(--admin-surface);
+  border: 2px solid var(--admin-border);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.1s ease;
   text-align: left;
   padding: 0;
@@ -32,7 +32,7 @@
 }
 
 .theme-card:hover {
-  border-color: #D1D0CE;
+  border-color: var(--admin-border-strong, #D1D0CE);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
@@ -41,12 +41,12 @@
 }
 
 .theme-card--active {
-  border-color: #0075DE;
-  box-shadow: 0 0 0 1px #0075DE;
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 1px var(--admin-accent);
 }
 
 .theme-card--active:hover {
-  border-color: #0075DE;
+  border-color: var(--admin-accent);
 }
 
 /* ── Card Image Container ───────────────────── */
@@ -54,7 +54,7 @@
 .theme-card__img {
   width: 100%;
   aspect-ratio: 3 / 4;
-  background: #F6F5F4;
+  background: var(--admin-surface-muted, #F6F5F4);
   overflow: hidden;
 }
 
@@ -71,9 +71,9 @@
   padding: 12px 14px;
   font-weight: 600;
   font-size: 14px;
-  color: #1a1a1a;
+  color: var(--admin-text);
   line-height: 1.25;
-  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+
 }
 
 /* ── Staggered entrance ─────────────────────── */

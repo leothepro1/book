@@ -1,0 +1,1253 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+/* ══════════════════════════════════════════════════════════
+   base.css — Admin global foundation
+   Light + Dark mode via CSS custom properties
+   Import in (admin)/layout.tsx
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Light Mode (default) ── */
+
+:root,
+[data-theme="light"] {
+  /* Surface / Background */
+  --admin-bg:            #F9F8F7;
+  --admin-surface:       #FFFFFF;
+  --admin-surface-hover: #F3F3F3;
+  --admin-surface-active:#EAE8E6;
+  --admin-surface-muted: #F1F0EE;
+  --admin-surface-sunken:#ECEBEA;
+
+  /* Sidebar */
+  --admin-sidebar:       #FFFFFF;
+
+  /* Borders */
+  --admin-border:        #E6E5E3;
+  --admin-border-strong: #E6E5E3;
+  --admin-border-focus:  #D0D0D0;
+
+  /* Text */
+  --admin-text:          #1A1A1A;
+  --admin-text-secondary:#5F5E59;
+  --admin-text-tertiary: #a19e99;
+  --admin-text-muted:    #a19e99;
+  --admin-text-inverse:  #FFFFFF;
+
+  /* Primary action (dark buttons) */
+  --admin-primary:       #1A1A1A;
+  --admin-primary-hover: #333333;
+  --admin-primary-text:  #FFFFFF;
+
+  /* Accent (blue) */
+  --admin-accent:        #2783DE;
+  --admin-accent-hover:  #1F6FC2;
+  --admin-accent-text:   #FFFFFF;
+
+  /* Danger */
+  --admin-danger:        #E56458;
+  --admin-danger-tint:   rgba(223, 22, 0, 0.094);
+
+  /* Toggle / switch */
+  --admin-toggle-off:    #dcdcd7;
+  --admin-toggle-on:     #2783DE;
+
+  /* Shadows */
+  --admin-shadow-sm:     0px 0px 0px 1px rgba(0,0,0,0.04), 0px 2px 4px rgba(0,0,0,0.06);
+  --admin-shadow-md:     0px 0px 0px 1px rgba(0,0,0,0.04), 0px 5px 4px rgba(0,0,0,0.06);
+  --admin-shadow-lg:     0 24px 80px rgba(0,0,0,0.18);
+  --admin-shadow-card:   0 4px 24px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.08);
+
+  /* Overlay */
+  --admin-overlay:       rgba(0, 0, 0, 0.57);
+
+  /* Tabs */
+  --admin-tab-bg:        #D7D4CE;
+  --admin-tab-text:      #6D6C6B;
+  --admin-tab-active-bg: #F9F8F7;
+  --admin-tab-active-text:#1A1A1A;
+
+  /* Form elements */
+  --admin-input-radius:          8px;
+  --admin-input-focus:           var(--admin-accent);
+  --admin-input-focus-ring:      0 0 0 3px rgba(39, 131, 222, 0.1);
+  --admin-dropdown-trigger-radius: 8px;
+  --admin-dropdown-list-radius:  12px;
+  --admin-range-accent:          #2783de;
+  --admin-range-track:           #CAE6FF;
+}
+
+/* ── Dark Mode ── */
+
+[data-theme="dark"] {
+  /* Surface / Background */
+  --admin-bg:            #191919;
+  --admin-surface:       #202020;
+  --admin-surface-hover: #2C2C2C;
+  --admin-surface-active:#2F2F2F;
+  --admin-surface-muted: #2A2A2A;
+  --admin-surface-sunken:#1F1F1F;
+
+  /* Sidebar */
+  --admin-sidebar:       #202020;
+
+  /* Borders */
+  --admin-border:        #383836;
+  --admin-border-strong: #383836;
+  --admin-border-focus:  #4A4A4A;
+
+  /* Text */
+  --admin-text:          #ECECEC;
+  --admin-text-secondary:#BCBAB6;
+  --admin-text-tertiary: #707070;
+  --admin-text-muted:    #555555;
+  --admin-text-inverse:  #191919;
+
+  /* Primary action */
+  --admin-primary:       #ECECEC;
+  --admin-primary-hover: #D0D0D0;
+  --admin-primary-text:  #191919;
+
+  /* Accent (blue) */
+  --admin-accent:        #2783DE;
+  --admin-accent-hover:  #1F6FC2;
+  --admin-accent-text:   #FFFFFF;
+
+  /* Danger */
+  --admin-danger:        #E56458;
+  --admin-danger-tint:   rgba(223, 22, 0, 0.094);
+
+  /* Toggle / switch */
+  --admin-toggle-off:    #555555;
+  --admin-toggle-on:     #2783DE;
+
+  /* Shadows (subtler in dark) */
+  --admin-shadow-sm:     0px 0px 0px 1px rgba(255,255,255,0.06), 0px 2px 4px rgba(0,0,0,0.3);
+  --admin-shadow-md:     0px 0px 0px 1px rgba(255,255,255,0.06), 0px 5px 8px rgba(0,0,0,0.4);
+  --admin-shadow-lg:     0 24px 80px rgba(0,0,0,0.6);
+  --admin-shadow-card:   0 4px 24px rgba(0,0,0,0.4), 0 1px 4px rgba(0,0,0,0.3);
+
+  /* Overlay */
+  --admin-overlay:       rgba(0, 0, 0, 0.75);
+
+  /* Tabs */
+  --admin-tab-bg:        #2A2A2A;
+  --admin-tab-text:      #BCBAB6;
+  --admin-tab-active-bg: #191919;
+  --admin-tab-active-text:#ECECEC;
+
+  /* Form elements */
+  --admin-input-radius:          8px;
+  --admin-input-focus:           var(--admin-accent);
+  --admin-input-focus-ring:      0 0 0 3px rgba(39, 131, 222, 0.15);
+  --admin-dropdown-trigger-radius: 10px;
+  --admin-dropdown-list-radius:  12px;
+  --admin-range-accent:          #3B9AEF;
+  --admin-range-track:           #1A3A5C;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Typography — Inter-only (Notion-like)
+   ══════════════════════════════════════════════════════════ */
+
+:root {
+  --admin-font:
+    "Inter",
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    "Apple Color Emoji",
+    Arial,
+    sans-serif,
+    "Segoe UI Emoji",
+    "Segoe UI Symbol";
+}
+
+/* ── Base body ── */
+
+html, body {
+  font-family: var(--admin-font);
+  color: var(--admin-text);
+  background: var(--admin-bg);
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.5;
+  font-optical-sizing: auto;
+  font-feature-settings: "cv02","cv03","cv04","cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Headings ── */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--admin-font);
+  color: var(--admin-text);
+  line-height: 1.25;
+  margin: 0;
+}
+
+h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; }
+h3 { font-size: 18px; font-weight: 600; }
+h4 { font-size: 16px; font-weight: 500; }
+h5 { font-size: 13px; font-weight: 500; }
+h6 { font-size: 13px; font-weight: 500; }
+
+/* ── Paragraphs & body text ── */
+
+p {
+  font-family: var(--admin-font);
+  font-weight: 400;
+}
+
+p {
+  color: var(--admin-text);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+small {
+  font-size: 13px;
+  color: var(--admin-text-secondary);
+}
+
+/* ── UI elements inherit Inter ── */
+
+button,
+input,
+textarea,
+select {
+  font-family: var(--admin-font);
+  font-weight: 500;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Labels & Form Text
+   ══════════════════════════════════════════════════════════ */
+
+label,
+.admin-label {
+  font-family: var(--admin-font);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--admin-text);
+  display: block;
+  margin-bottom: 7px;
+}
+
+.admin-hint {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--admin-text-secondary);
+  margin-top: 2px;
+}
+
+.admin-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--admin-text);
+}
+
+.admin-section-sub {
+  font-size: 12px;
+  color: var(--admin-text-tertiary);
+  margin-top: 2px;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Inputs
+   ══════════════════════════════════════════════════════════ */
+
+input[type="text"],
+input[type="email"],
+input[type="url"],
+input[type="number"],
+input[type="search"],
+input[type="tel"],
+input[type="password"],
+textarea,
+select,
+.admin-input {
+  font-family: var(--admin-font);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border-strong);
+  border-radius: 8px;
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+.admin-input:focus {
+  border-color: var(--admin-border-focus);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--admin-text-tertiary);
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Buttons
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Primary (dark fill) ── */
+
+.admin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-radius: 10px;
+  border: none;
+  font-family: var(--admin-font);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.25s ease,
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.25s ease;
+  background: var(--admin-primary);
+  color: var(--admin-primary-text);
+}
+
+.admin-btn:hover:not(:disabled) {
+  background: var(--admin-primary-hover);
+}
+
+.admin-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.admin-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Outline ── */
+
+.admin-btn--outline {
+  background: transparent;
+  color: var(--admin-text);
+  border: 1px solid var(--admin-border-strong);
+}
+
+.admin-btn--outline:hover:not(:disabled) {
+  background: var(--admin-surface-hover);
+}
+
+/* ── Accent (blue) ── */
+
+.admin-btn--accent {
+  background: var(--admin-accent);
+  color: var(--admin-accent-text);
+}
+
+.admin-btn--accent:hover:not(:disabled) {
+  background: var(--admin-accent-hover);
+}
+
+/* ── Danger Primary (red fill, white text — "Ta bort") ── */
+
+.admin-btn--danger {
+  background: var(--admin-danger);
+  color: #FFFFFF;
+  border: none;
+}
+
+.admin-btn--danger:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.admin-btn--danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Danger Secondary (tint bg, red text) ── */
+
+.admin-btn--danger-secondary {
+  background: var(--admin-danger-tint);
+  color: var(--admin-danger);
+  border: none;
+}
+
+.admin-btn--danger-secondary:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.admin-btn--danger-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Ghost (no bg, no border) ── */
+
+.admin-btn--ghost {
+  background: transparent;
+  color: var(--admin-text);
+  border: none;
+  padding: 8px;
+}
+
+.admin-btn--ghost:hover:not(:disabled) {
+  background: var(--admin-surface-muted);
+}
+
+/* ── Small variant ── */
+
+.admin-btn--sm {
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Links
+   ══════════════════════════════════════════════════════════ */
+
+a {
+  color: var(--admin-accent);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--admin-accent-hover);
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Toggle (iOS-style checkbox/switch)
+   ══════════════════════════════════════════════════════════ */
+
+.admin-toggle {
+  width: 43px;
+  height: 24px;
+  border-radius: 999px;
+  border: none;
+  background: var(--admin-toggle-off);
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  transition: background 0.25s ease;
+  flex-shrink: 0;
+}
+
+.admin-toggle-on {
+  background: var(--admin-toggle-on);
+}
+
+.admin-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: block;
+}
+
+.admin-toggle-on .admin-toggle-thumb {
+  transform: translateX(19px);
+}
+
+.admin-toggle-icon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px !important;
+  line-height: 1;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.admin-toggle-icon--check {
+  left: 4px;
+  color: #fff;
+  opacity: 0;
+}
+
+.admin-toggle-icon--remove {
+  right: 4px;
+  color: #fff;
+  opacity: 0;
+}
+
+.admin-toggle-on .admin-toggle-icon--check { opacity: 1; }
+.admin-toggle-on .admin-toggle-icon--remove { opacity: 0; }
+.admin-toggle:not(.admin-toggle-on) .admin-toggle-icon--remove { opacity: 0; }
+.admin-toggle:not(.admin-toggle-on) .admin-toggle-icon--check { opacity: 0; }
+
+
+/* ══════════════════════════════════════════════════════════
+   Drag Handle
+   ══════════════════════════════════════════════════════════ */
+
+.admin-drag-handle {
+  color: var(--admin-text-secondary);
+  cursor: grab;
+  background: transparent;
+  border: none;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  transition: color 0.2s;
+  display: flex;
+}
+
+.admin-drag-handle:hover {
+  color: var(--admin-text-tertiary);
+}
+
+.admin-drag-handle:active {
+  cursor: grabbing;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Field Label (small muted label above inputs)
+   ══════════════════════════════════════════════════════════ */
+
+.admin-field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--admin-text-secondary);
+  margin-bottom: 4px;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Dropdown / Popdown
+   ══════════════════════════════════════════════════════════ */
+
+/* Wrapper */
+.admin-dropdown {
+  position: relative;
+}
+
+/* Trigger button */
+.admin-dropdown__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--admin-text);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.admin-dropdown__trigger:hover {
+  border-color: var(--admin-border-focus);
+}
+
+.admin-dropdown__chevron {
+  color: var(--admin-text-muted);
+  transition: transform 0.15s;
+}
+
+/* Dropdown list (panel) */
+.admin-dropdown__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--admin-surface);
+  border-radius: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 5px;
+  z-index: 10;
+  box-shadow: 0px 0px 0px 1px rgba(64, 87, 109, .04), 0px 6px 20px -4px rgba(64, 87, 109, .3);
+  animation: .12s ease both admin-dropdown-in;
+}
+
+.admin-dropdown__list--fixed {
+  position: fixed;
+  z-index: 9000;
+}
+
+@keyframes admin-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Dropdown item */
+.admin-dropdown__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--admin-text);
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 8px;
+  text-align: left;
+  gap: 10px;
+  transition: background 0.1s;
+}
+
+.admin-dropdown__item:hover {
+  background: var(--admin-surface-hover);
+}
+
+.admin-dropdown__item--active {
+  font-weight: 500;
+  background: var(--admin-surface-muted);
+}
+
+/* Check icon inside active item */
+.admin-dropdown__check {
+  color: var(--admin-accent);
+  flex-shrink: 0;
+}
+
+/* Item text (truncate) */
+.admin-dropdown__text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Textarea
+   ══════════════════════════════════════════════════════════ */
+
+.admin-textarea-wrap {
+  position: relative;
+  margin-top: 12px;
+}
+
+.admin-textarea {
+  font-family: var(--admin-font);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  border: 1.5px solid var(--admin-border);
+  border-radius: 10px;
+  padding: 12px;
+  outline: none;
+  width: 100%;
+  min-height: 96px;
+  box-sizing: border-box;
+  resize: vertical;
+  line-height: 1.5;
+  transition: border-color 0.15s;
+}
+
+.admin-textarea:focus {
+  border-color: var(--admin-text);
+}
+
+.admin-textarea-count {
+  display: block;
+  text-align: right;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--admin-text-secondary);
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Input — Compact (smaller padding for inline/panel usage)
+   ══════════════════════════════════════════════════════════ */
+
+.admin-input--compact {
+  padding: 8px 11px;
+  border-width: 1.5px;
+  border-radius: 8px;
+}
+
+.admin-input--compact:focus {
+  border-color: var(--admin-input-focus);
+  box-shadow: var(--admin-input-focus-ring);
+}
+
+
+/* ── Editor-size input (36px height, 13px font) ── */
+
+.admin-input--sm {
+  height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+.admin-input--sm:focus {
+  border-color: var(--admin-input-focus);
+  box-shadow: var(--admin-input-focus-ring);
+}
+
+.admin-input--number {
+  width: 80px;
+}
+
+.admin-input--color-hex {
+  flex: 1;
+  font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+
+/* ── Editor-size textarea ── */
+
+.admin-textarea--sm {
+  min-height: 80px;
+  padding: 8px 10px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+.admin-textarea--sm:focus {
+  border-color: var(--admin-input-focus);
+  box-shadow: var(--admin-input-focus-ring);
+}
+
+
+/* ── Editor-size dropdown ── */
+
+.admin-dropdown__trigger--sm {
+  height: 36px;
+  padding: 0 10px;
+  font-size: 15px;
+  border-radius: 8px;
+  gap: 8px;
+}
+
+.admin-dropdown__item--sm {
+  font-size: 15px;
+  font-weight: 500;
+  padding: 8px;
+  gap: 10px;
+}
+
+.admin-dropdown__item--accent {
+  background: var(--admin-accent-tint, #EBF5FF);
+  color: var(--admin-accent);
+}
+
+.admin-dropdown__item--accent:hover {
+  background: var(--admin-accent-tint-hover, #DBEAFE);
+}
+
+
+/* ── Editor-size toggle (smaller) ── */
+
+.admin-toggle--sm {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+}
+
+.admin-toggle--sm .admin-toggle-thumb {
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+}
+
+.admin-toggle--sm.admin-toggle-on .admin-toggle-thumb {
+  transform: translateX(16px);
+}
+
+
+/* ── Editor-size label ── */
+
+.admin-label--sm {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.admin-label--inline {
+  flex: 1;
+}
+
+
+/* ── Range / Slider ── */
+
+.admin-range-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-range {
+  flex: 1;
+  height: 4px;
+  appearance: none;
+  background: var(--admin-range-track);
+  border-radius: 2px;
+  outline: none;
+}
+
+.admin-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--admin-range-accent);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  transition: transform 0.12s;
+}
+
+.admin-range::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.admin-range::-webkit-slider-thumb:active {
+  transform: scale(0.95);
+}
+
+.admin-range-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 52px;
+  flex-shrink: 0;
+}
+
+.admin-range-input {
+  width: 38px;
+  padding: 3px 4px;
+  border: 1px solid var(--admin-border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--admin-text);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  background: var(--admin-surface);
+  -moz-appearance: textfield;
+}
+
+.admin-range-input::-webkit-inner-spin-button,
+.admin-range-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.admin-range-input:focus {
+  border-color: var(--admin-input-focus);
+}
+
+.admin-range-unit {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--admin-text-tertiary);
+}
+
+
+/* ── Color row ── */
+
+.admin-color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-color-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--admin-border);
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.admin-color-swatch::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.admin-color-swatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+
+
+/* ── Segmented control ── */
+
+.admin-segmented {
+  background: var(--admin-surface-muted);
+  border-radius: 8px;
+  gap: 4px;
+  padding: 3px;
+  display: flex;
+}
+
+.admin-segmented__btn {
+  flex: 1;
+  padding: 3px 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 400;
+  cursor: pointer;
+  background: transparent;
+  color: var(--admin-text);
+  transition: all 0.15s ease;
+}
+
+.admin-segmented__btn:hover {
+  color: var(--admin-text);
+}
+
+.admin-segmented__btn--active {
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-sm);
+}
+
+
+/* ── Field description ── */
+
+.admin-desc {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--admin-text-secondary);
+  line-height: 1.45;
+  margin: 2px 0px 10px 0px;
+}
+
+.admin-desc-link {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--admin-text-secondary);
+  text-decoration: none;
+  margin: 6px 0 0 0;
+  transition: color 0.15s;
+}
+
+.admin-desc-link:hover {
+  color: var(--admin-text);
+}
+
+
+/* ── Required asterisk ── */
+
+.admin-required {
+  color: var(--admin-danger);
+  margin-left: 2px;
+}
+
+
+/* ── Field group / form ── */
+
+.admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0px;
+}
+
+.admin-field--toggle {
+  gap: 4px;
+}
+
+.admin-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--admin-text-secondary);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--admin-surface-muted);
+}
+
+
+/* ── Toggle row (label + toggle inline) ── */
+
+.admin-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Floating-label Input
+   ══════════════════════════════════════════════════════════ */
+
+.admin-float-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 0px;
+}
+
+.admin-float-field {
+  position: relative;
+}
+
+.admin-float-input {
+  font-family: var(--admin-font);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  border: 1.5px solid var(--admin-border);
+  border-radius: 10px;
+  padding: 18px 12px 6px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.admin-float-input:focus {
+  border-color: var(--admin-text);
+}
+
+.admin-float-label {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--admin-text-secondary);
+  pointer-events: none;
+  transition: all 0.15s ease;
+  transform-origin: left center;
+}
+
+.admin-float-input:focus + .admin-float-label,
+.admin-float-input:not(:placeholder-shown) + .admin-float-label {
+  top: 8px;
+  transform: translateY(0);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--admin-text-secondary);
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Radio Option Card (layout selector / option picker)
+   ══════════════════════════════════════════════════════════ */
+
+.admin-option-card {
+  cursor: pointer;
+  text-align: left;
+  background: none;
+  border: 1.5px solid var(--admin-border);
+  border-radius: 15px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 7rem;
+  width: 100%;
+  padding: 16px;
+  transition: border-color .15s, background .15s;
+  display: flex;
+}
+
+.admin-option-card--active {
+  border-color: var(--admin-text);
+  background: var(--admin-surface);
+  outline: 1px solid var(--admin-text);
+}
+
+.admin-option-card-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-option-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--admin-text);
+  font-family: var(--admin-font);
+}
+
+.admin-option-card-sub {
+  color: var(--admin-text-secondary);
+  margin-top: 0px;
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 500;
+}
+
+.admin-radio {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid var(--admin-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: border-color 0.15s ease;
+}
+
+.admin-radio--checked {
+  border-color: var(--admin-text);
+  background: var(--admin-primary);
+}
+
+.admin-radio-dot {
+  background: var(--admin-surface);
+  border-radius: 50%;
+  width: 8px;
+  height: 8px;
+  place-self: center;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Preset / Tag Pill Selector
+   ══════════════════════════════════════════════════════════ */
+
+.admin-presets {
+  flex-wrap: wrap;
+  gap: 8px;
+  display: flex;
+  margin-top: 16px;
+}
+
+.admin-preset {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border: 1.5px solid var(--admin-surface-muted);
+  background: var(--admin-surface-muted) !important;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--admin-text-secondary);
+  cursor: pointer;
+  font-family: var(--admin-font);
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.admin-preset--active {
+  color: var(--admin-accent);
+  border-color: var(--admin-accent-tint, #E2ECFB);
+  padding-right: 7px;
+  background: var(--admin-accent-tint, #E2ECFB) !important;
+}
+
+.admin-preset-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.admin-preset-clear:hover {
+  opacity: 1;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Icon Button (small square icon-only action button)
+   ══════════════════════════════════════════════════════════ */
+
+.admin-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--admin-text-secondary);
+  transition: background 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.admin-icon-btn:hover {
+  background: var(--admin-surface-hover);
+  color: var(--admin-text-secondary);
+}
+
+.admin-icon-btn--active {
+  background: var(--admin-accent) !important;
+  color: var(--admin-primary-text) !important;
+}
+
+.admin-icon-btn--has-image {
+  color: var(--admin-accent);
+}
+
+.admin-icon-btn--danger:hover {
+  background: var(--admin-danger-tint);
+  color: var(--admin-danger);
+}
+
+.admin-icon-btn--active-danger {
+  background: var(--admin-danger) !important;
+  color: var(--admin-primary-text) !important;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   Utility tokens (for Tailwind-free usage)
+   ══════════════════════════════════════════════════════════ */
+
+.text-primary   { color: var(--admin-text); }
+.text-secondary { color: var(--admin-text-secondary); }
+.text-tertiary  { color: var(--admin-text-tertiary); }
+.text-muted     { color: var(--admin-text-muted); }
+.text-inverse   { color: var(--admin-text-inverse); }
+.text-danger    { color: var(--admin-danger); }
+.text-accent    { color: var(--admin-accent); }
+
+.bg-page        { background: var(--admin-bg); }
+.bg-surface     { background: var(--admin-surface); }
+.bg-muted       { background: var(--admin-surface-muted); }
+.bg-sunken      { background: var(--admin-surface-sunken); }

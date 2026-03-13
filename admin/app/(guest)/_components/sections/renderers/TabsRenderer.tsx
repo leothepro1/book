@@ -6,6 +6,12 @@
  * Renders both "underline" and "pill" preset variants.
  * Each block is a "tab" with a label, icon slot, and content slot.
  * First tab is active by default.
+ *
+ * COLOR SCHEME INTEGRATION:
+ * All colors derive from section-scoped CSS variables:
+ *   - Tab text:         var(--text) with opacity for inactive
+ *   - Indicator/border: var(--text) for underline, var(--button-bg/fg) for pill
+ *   - Background:       var(--background) inherited from section scope
  */
 
 import { useState } from "react";
@@ -19,8 +25,6 @@ export function TabsUnderlineRenderer(props: SectionRendererProps) {
   const [activeIndex, setActiveIndex] = useState(0);
 
   const padding = (settings.padding as number) ?? 16;
-  const backgroundColor = (settings.backgroundColor as string) || "#ffffff";
-  const indicatorColor = (presetSettings.indicatorColor as string) || "#1a1a1a";
   const alignment = (presetSettings.alignment as string) || "left";
 
   if (blocks.length === 0) return null;
@@ -30,14 +34,14 @@ export function TabsUnderlineRenderer(props: SectionRendererProps) {
   return (
     <section
       data-section-id={section.id}
-      style={{ padding, backgroundColor }}
+      style={{ padding, backgroundColor: "var(--background)" }}
     >
       {/* Tab bar */}
       <div
         style={{
           display: "flex",
           gap: 0,
-          borderBottom: "1px solid #E6E5E3",
+          borderBottom: "1px solid color-mix(in srgb, var(--text, #171717) 12%, transparent)",
           justifyContent: alignment === "center" ? "center" : alignment === "stretch" ? "stretch" : "flex-start",
         }}
       >
@@ -47,7 +51,6 @@ export function TabsUnderlineRenderer(props: SectionRendererProps) {
             block={block}
             active={i === activeIndex}
             onClick={() => setActiveIndex(i)}
-            indicatorColor={indicatorColor}
             stretch={alignment === "stretch"}
           />
         ))}
@@ -68,9 +71,6 @@ export function TabsPillRenderer(props: SectionRendererProps) {
   const [activeIndex, setActiveIndex] = useState(0);
 
   const padding = (settings.padding as number) ?? 16;
-  const backgroundColor = (settings.backgroundColor as string) || "#ffffff";
-  const pillColor = (presetSettings.pillColor as string) || "#1a1a1a";
-  const pillTextColor = (presetSettings.pillTextColor as string) || "#ffffff";
   const gap = (presetSettings.gap as number) ?? 8;
 
   if (blocks.length === 0) return null;
@@ -80,7 +80,7 @@ export function TabsPillRenderer(props: SectionRendererProps) {
   return (
     <section
       data-section-id={section.id}
-      style={{ padding, backgroundColor }}
+      style={{ padding, backgroundColor: "var(--background)" }}
     >
       {/* Pill bar */}
       <div style={{ display: "flex", gap, flexWrap: "wrap" }}>
@@ -101,8 +101,13 @@ export function TabsPillRenderer(props: SectionRendererProps) {
                 fontWeight: 600,
                 cursor: "pointer",
                 transition: "all 0.15s",
-                background: isActive ? pillColor : "#F1F0EE",
-                color: isActive ? pillTextColor : "#666",
+                background: isActive
+                  ? "var(--button-bg, #1a1a1a)"
+                  : "color-mix(in srgb, var(--text, #171717) 8%, transparent)",
+                color: isActive
+                  ? "var(--button-fg, #fff)"
+                  : "var(--text, #171717)",
+                opacity: isActive ? 1 : 0.6,
               }}
             >
               {label}
@@ -125,13 +130,11 @@ function TabButton({
   block,
   active,
   onClick,
-  indicatorColor,
   stretch,
 }: {
   block: ResolvedBlock;
   active: boolean;
   onClick: () => void;
-  indicatorColor: string;
   stretch: boolean;
 }) {
   const label = (block.settings.label as string) || "Flik";
@@ -143,11 +146,14 @@ function TabButton({
       style={{
         padding: "10px 16px",
         border: "none",
-        borderBottom: active ? `2px solid ${indicatorColor}` : "2px solid transparent",
+        borderBottom: active
+          ? "2px solid var(--text, #171717)"
+          : "2px solid transparent",
         background: "transparent",
         fontSize: 14,
         fontWeight: active ? 600 : 500,
-        color: active ? "#1a1a1a" : "#888",
+        color: "var(--text, #171717)",
+        opacity: active ? 1 : 0.5,
         cursor: "pointer",
         transition: "all 0.15s",
         flex: stretch ? 1 : undefined,

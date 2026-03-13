@@ -7,11 +7,13 @@ export function IconElement({ resolved }: { resolved: ResolvedElement }) {
   const size = (settings.size as number) ?? 24;
   const weight = (settings.weight as number) ?? 400;
   const fill = (settings.fill as string) === "filled";
-  const color = (settings.color as string) || "#1a1a1a";
+  // Icon color: use explicit setting if set, otherwise inherit from scheme text color
+  const rawColor = settings.color as string | undefined;
+  const color = rawColor || undefined;
 
   return (
-    <div style={{ textAlign: "center", placeSelf: "center" }}>
-      <MaterialIcon name={name} size={size} weight={weight} fill={fill} color={color} />
+    <div style={{ textAlign: "center", placeSelf: "center", color: "var(--text, #1a1a1a)" }}>
+      <MaterialIcon name={name} size={size} weight={weight} fill={fill} color={color ?? "currentColor"} />
     </div>
   );
 }

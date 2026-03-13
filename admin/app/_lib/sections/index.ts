@@ -88,3 +88,6 @@ export {
 // ─── Resolution ─────────────────────────────────────────────
 export type { LooseCard, PageItem } from "./resolve";
 export { resolvePageItems } from "./resolve";
+
+// ─── Traversal ──────────────────────────────────────────────
+export { collectAllSections } from "./traversal";

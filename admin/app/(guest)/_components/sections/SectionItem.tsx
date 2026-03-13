@@ -4,6 +4,13 @@
  * Uses a static import map keyed by "definitionId/presetKey".
  * Falls back to GenericSectionRenderer for unregistered sections.
  *
+ * COLOR SCHEME INTEGRATION:
+ * When a section has a resolved color scheme, this component wraps
+ * the renderer in a <div> with scheme CSS variables applied as inline
+ * style. All child elements inherit scheme tokens via CSS cascading.
+ * This is the SINGLE integration point — individual renderers never
+ * need to know about color schemes.
+ *
  * Why a static map instead of the registry?
  * The section renderer registry uses registerSectionRenderer() which
  * works great for client-side lookups. But ThemeRenderer is a server
@@ -20,12 +27,15 @@ import type { SectionRendererProps } from "@/app/_lib/sections/types";
 import { GenericSectionRenderer } from "./GenericSectionRenderer";
 import { TabsUnderlineRenderer, TabsPillRenderer } from "./renderers/TabsRenderer";
 import { AccordionDefaultRenderer, AccordionCardRenderer } from "./renderers/AccordionRenderer";
+import { SliderButtonRowRenderer, SliderCardRenderer } from "./renderers/SliderRenderer";
 
 const RENDERER_MAP: Record<string, React.ComponentType<SectionRendererProps>> = {
   "tabs/underline": TabsUnderlineRenderer,
   "tabs/pill": TabsPillRenderer,
   "accordion/default": AccordionDefaultRenderer,
   "accordion/card": AccordionCardRenderer,
+  "slider/button-row": SliderButtonRowRenderer,
+  "slider/card": SliderCardRenderer,
 };
 
 /**
@@ -39,11 +49,21 @@ function sanitizeForClient(props: SectionRendererProps): SectionRendererProps {
 
 export function SectionItem({ renderProps }: { renderProps: SectionRendererProps }) {
   const key = `${renderProps.definition.id}/${renderProps.preset.key}`;
-  const Renderer = RENDERER_MAP[key];
+  const Renderer = RENDERER_MAP[key] ?? GenericSectionRenderer;
+  const sanitized = sanitizeForClient(renderProps);
 
-  if (Renderer) {
-    return <Renderer {...sanitizeForClient(renderProps)} />;
+  const schemeStyle = renderProps.colorScheme?.cssVariables;
+
+  // When a color scheme is active, wrap in a scoping div that sets
+  // CSS custom properties. All descendants inherit via cascading.
+  // When no scheme is active, render the renderer directly (no wrapper overhead).
+  if (schemeStyle) {
+    return (
+      <div data-color-scheme={renderProps.colorScheme!.scheme.id} style={schemeStyle}>
+        <Renderer {...sanitized} />
+      </div>
+    );
   }
 
-  return <GenericSectionRenderer {...sanitizeForClient(renderProps)} />;
+  return <Renderer {...sanitized} />;
 }

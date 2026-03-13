@@ -19,7 +19,7 @@ export function GenericSectionRenderer(props: SectionRendererProps) {
   const pr = isLoose ? 0 : ((settings.paddingRight as number) ?? 0);
   const pb = isLoose ? 0 : ((settings.paddingBottom as number) ?? 0);
   const pl = isLoose ? 0 : ((settings.paddingLeft as number) ?? 0);
-  const backgroundColor = (settings.backgroundColor as string) || "transparent";
+  const backgroundColor = "var(--background, transparent)";
   const hasPadding = pt || pr || pb || pl;
 
   return (

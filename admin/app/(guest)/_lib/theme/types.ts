@@ -39,7 +39,14 @@ export type ThemeConfig = {
   buttons: {
     variant: ButtonVariant;
     radius: ButtonRadius;
+    radiusPx?: number;  // numeric override — takes precedence over enum `radius`
     shadow: ButtonShadow;
+    padding?: {
+      top: number;
+      right: number;
+      bottom: number;
+      left: number;
+    };
   };
 
   typography: {

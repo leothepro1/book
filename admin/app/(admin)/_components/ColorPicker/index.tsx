@@ -53,19 +53,16 @@ function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
 /* ── Canvas drawing ── */
 
 function drawSatVal(ctx: CanvasRenderingContext2D, hue: number, w: number, h: number) {
-  // Base hue fill
   const [r, g, b] = hsvToRgb(hue, 100, 100);
   ctx.fillStyle = `rgb(${r},${g},${b})`;
   ctx.fillRect(0, 0, w, h);
 
-  // White gradient left→right
   const white = ctx.createLinearGradient(0, 0, w, 0);
   white.addColorStop(0, "rgba(255,255,255,1)");
   white.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = white;
   ctx.fillRect(0, 0, w, h);
 
-  // Black gradient top→bottom
   const black = ctx.createLinearGradient(0, 0, 0, h);
   black.addColorStop(0, "rgba(0,0,0,0)");
   black.addColorStop(1, "rgba(0,0,0,1)");
@@ -74,7 +71,7 @@ function drawSatVal(ctx: CanvasRenderingContext2D, hue: number, w: number, h: nu
 }
 
 function drawHueStrip(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  const gradient = ctx.createLinearGradient(0, 0, w, 0);
+  const gradient = ctx.createLinearGradient(0, 0, 0, h);
   for (let i = 0; i <= 6; i++) {
     const [r, g, b] = hsvToRgb((i / 6) * 360, 100, 100);
     gradient.addColorStop(i / 6, `rgb(${r},${g},${b})`);
@@ -102,30 +99,39 @@ export function ColorPickerPopup({ value, onChange, onClose, anchorRef }: ColorP
   const popupRef = useRef<HTMLDivElement>(null);
   const svCanvasRef = useRef<HTMLCanvasElement>(null);
   const hueCanvasRef = useRef<HTMLCanvasElement>(null);
+  const hexInputRef = useRef<HTMLInputElement>(null);
   const isDraggingSV = useRef(false);
   const isDraggingHue = useRef(false);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
 
-  const SV_W = 256, SV_H = 180, HUE_W = 256, HUE_H = 14;
-  const POPUP_W = 276;
+  const SV_W = 220, SV_H = 160, HUE_W = 24, HUE_H = 160;
+  const POPUP_W = 264;
 
-  // Position popup with fixed coords — always above the anchor swatch
+  // Position popup: left-aligned with anchor, above or below
   useEffect(() => {
     if (!anchorRef.current || !popupRef.current) return;
     const anchor = anchorRef.current.getBoundingClientRect();
     const popupH = popupRef.current.offsetHeight;
 
-    let top = anchor.top - popupH - 10;
-    let left = anchor.right - POPUP_W;
+    let top = anchor.top - popupH - 8;
+    let left = anchor.left;
 
     // If not enough room above, flip below
-    if (top < 8) top = anchor.bottom + 10;
-    // Clamp left
-    if (left < 8) left = 8;
+    if (top < 8) top = anchor.bottom + 8;
+    // Clamp right edge
     if (left + POPUP_W > window.innerWidth - 8) left = window.innerWidth - POPUP_W - 8;
+    if (left < 8) left = 8;
 
     setCoords({ top, left });
   }, [anchorRef]);
+
+  // Auto-focus hex input when modal opens
+  useEffect(() => {
+    if (coords && hexInputRef.current) {
+      hexInputRef.current.focus();
+      hexInputRef.current.select();
+    }
+  }, [coords]);
 
   // Close on outside click
   useEffect(() => {
@@ -177,13 +183,13 @@ export function ColorPickerPopup({ value, onChange, onClose, anchorRef }: ColorP
     handleSV(e);
   }, [handleSV]);
 
-  // Hue interaction
-  const handleHue = useCallback((e: { clientX: number }) => {
+  // Hue interaction (vertical)
+  const handleHue = useCallback((e: { clientY: number }) => {
     const canvas = hueCanvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const newH = x * 360;
+    const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+    const newH = y * 360;
     setHsv([newH, hsv[1], hsv[2]]);
     emitColor(newH, hsv[1], hsv[2]);
   }, [hsv, emitColor]);
@@ -211,18 +217,16 @@ export function ColorPickerPopup({ value, onChange, onClose, anchorRef }: ColorP
     };
   }, [handleSV, handleHue]);
 
-  // Hex input change
+  // Hex input change — only commit on valid 6-digit hex
   const handleHexChange = useCallback((val: string) => {
     let v = val.trim();
     if (v && !v.startsWith("#")) v = "#" + v;
     setHexInput(v.toUpperCase());
-    if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(v)) {
+    if (/^#[0-9A-Fa-f]{6}$/.test(v)) {
       const [r, g, b] = hexToRgb(v);
       const newHsv = rgbToHsv(r, g, b);
       setHsv(newHsv);
-      onChange(v.length === 4
-        ? "#" + v[1]+v[1] + v[2]+v[2] + v[3]+v[3]
-        : v);
+      onChange(v);
     }
   }, [onChange]);
 
@@ -238,7 +242,7 @@ export function ColorPickerPopup({ value, onChange, onClose, anchorRef }: ColorP
 
   const svThumbX = (hsv[1] / 100) * SV_W;
   const svThumbY = (1 - hsv[2] / 100) * SV_H;
-  const hueThumbX = (hsv[0] / 360) * HUE_W;
+  const hueThumbY = (hsv[0] / 360) * HUE_H;
   const [previewR, previewG, previewB] = hsvToRgb(hsv[0], hsv[1], hsv[2]);
   const previewHex = rgbToHex(previewR, previewG, previewB);
 
@@ -248,29 +252,32 @@ export function ColorPickerPopup({ value, onChange, onClose, anchorRef }: ColorP
       className="cp-popup"
       style={coords ? { top: coords.top, left: coords.left } : { visibility: "hidden" as const }}
     >
-      {/* SV area */}
-      <div className="cp-sv-wrap" onMouseDown={onSVDown}>
-        <canvas ref={svCanvasRef} width={SV_W} height={SV_H} className="cp-sv-canvas" />
-        <div
-          className="cp-sv-thumb"
-          style={{
-            left: svThumbX,
-            top: svThumbY,
-            borderColor: hsv[2] > 50 ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.9)",
-          }}
-        />
-      </div>
+      <div className="cp-picker-row">
+        {/* SV area */}
+        <div className="cp-sv-wrap" onMouseDown={onSVDown}>
+          <canvas ref={svCanvasRef} width={SV_W} height={SV_H} className="cp-sv-canvas" />
+          <div
+            className="cp-sv-thumb"
+            style={{
+              left: svThumbX,
+              top: svThumbY,
+              borderColor: hsv[2] > 50 ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.9)",
+            }}
+          />
+        </div>
 
-      {/* Hue strip */}
-      <div className="cp-hue-wrap" onMouseDown={onHueDown}>
-        <canvas ref={hueCanvasRef} width={HUE_W} height={HUE_H} className="cp-hue-canvas" />
-        <div className="cp-hue-thumb" style={{ left: hueThumbX }} />
+        {/* Hue strip (vertical) */}
+        <div className="cp-hue-wrap" onMouseDown={onHueDown}>
+          <canvas ref={hueCanvasRef} width={HUE_W} height={HUE_H} className="cp-hue-canvas" />
+          <div className="cp-hue-thumb" style={{ top: hueThumbY }} />
+        </div>
       </div>
 
       {/* Hex + preview */}
       <div className="cp-bottom">
         <div className="cp-preview" style={{ background: previewHex }} />
         <input
+          ref={hexInputRef}
           type="text"
           className="cp-hex-input"
           value={hexInput}

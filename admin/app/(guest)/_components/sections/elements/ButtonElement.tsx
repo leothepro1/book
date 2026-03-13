@@ -40,8 +40,8 @@ const BASE: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   gap: 8,
-  padding: "0.7rem 1.4rem",
-  fontSize: "0.95rem",
+  padding: "var(--button-padding, 0.7rem 1.4rem)" as string,
+  fontSize: "var(--font-size-button, 0.95rem)" as string,
   fontWeight: 600,
   cursor: "pointer",
   textDecoration: "none",
@@ -51,6 +51,14 @@ const BASE: React.CSSProperties = {
   color: "var(--button-fg, #fff)" as string,
   border: "none",
   transition: "opacity 0.15s",
+  backdropFilter: "var(--button-backdrop, none)" as string,
+  WebkitBackdropFilter: "var(--button-backdrop, none)" as string,
+};
+
+const OUTLINE_OVERRIDES: React.CSSProperties = {
+  background: "transparent",
+  color: "var(--outline-button-label, var(--outline-button, #171717))" as string,
+  border: "1px solid var(--outline-button, #171717)" as string,
 };
 
 // ─── Component ───────────────────────────────────────────────
@@ -59,6 +67,7 @@ export function ButtonElement({ resolved }: { resolved: ResolvedElement }) {
   const { settings, action } = resolved;
   const label = (settings.label as string) || "Klicka här";
   const width = (settings.width as string) || "auto";
+  const outline = (settings.outline as boolean) ?? false;
 
   // Icon settings
   const iconName = (settings.icon as string) || "";
@@ -95,6 +104,7 @@ export function ButtonElement({ resolved }: { resolved: ResolvedElement }) {
 
   const style: React.CSSProperties = {
     ...BASE,
+    ...(outline ? OUTLINE_OVERRIDES : {}),
     width: width === "full" ? "100%" : "max-content",
   };
 

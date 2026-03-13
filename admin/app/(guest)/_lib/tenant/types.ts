@@ -4,6 +4,7 @@ import type { FooterConfig } from "../footer/types";
 import type { FeatureFlags } from "../features/types";
 import type { VisibilityRule } from "../rules/types";
 import type { TenantSectionSettings } from "../themes/types";
+import type { ColorScheme, ColorSchemeId } from "@/app/_lib/color-schemes/types";
 
 export type PropertySettings = {
   name: string;
@@ -60,6 +61,61 @@ export type MapConfig = {
   updatedAt: string;
 };
 
+// ─── Page-scoped Header Configuration ───────────────────────
+
+export type HeaderConfig = {
+  /** Logo horizontal alignment within the header bar. */
+  logoPosition: "left" | "center";
+  /** Whether to show a bottom border dividing header from content. */
+  showDivider: boolean;
+  /** Color scheme applied to the header area. */
+  colorSchemeId?: ColorSchemeId;
+  /** Header spacing (px). */
+  paddingTop: number;
+  paddingRight: number;
+  paddingBottom: number;
+  paddingLeft: number;
+};
+
+export const HEADER_DEFAULTS: HeaderConfig = {
+  logoPosition: "left",
+  showDivider: true,
+  paddingTop: 12,
+  paddingRight: 16,
+  paddingBottom: 12,
+  paddingLeft: 16,
+};
+
+// ─── Page-scoped Footer Configuration ───────────────────────
+
+export type FooterActiveMode = "background" | "icon-only";
+
+export type PageFooterConfig = {
+  /** How the active tab is visually indicated. */
+  activeMode: FooterActiveMode;
+  /** Whether text labels are shown below icons. */
+  showLabels: boolean;
+  /** Whether to show a top border dividing footer from content. */
+  showDivider: boolean;
+  /** Color scheme applied to the footer area. */
+  colorSchemeId?: ColorSchemeId;
+  /** Footer container spacing (px). */
+  paddingTop: number;
+  paddingRight: number;
+  paddingBottom: number;
+  paddingLeft: number;
+};
+
+export const PAGE_FOOTER_DEFAULTS: PageFooterConfig = {
+  activeMode: "background",
+  showLabels: true,
+  showDivider: true,
+  paddingTop: 5,
+  paddingRight: 5,
+  paddingBottom: 5,
+  paddingLeft: 5,
+};
+
 export type TenantConfig = {
   supportLinks: SupportLinks;
   tenantId: string;
@@ -100,6 +156,23 @@ export type TenantConfig = {
    * Referenced by map elements via map_id.
    */
   maps?: MapConfig[];
+
+  /**
+   * Tenant-level color scheme definitions.
+   * Sections reference a scheme by ID via colorSchemeId.
+   * The resolve pipeline maps scheme tokens → CSS variables
+   * applied at section scope.
+   */
+  colorSchemes?: ColorScheme[];
+
+  /**
+   * ID of the default color scheme.
+   * New sections automatically receive this scheme.
+   * Legacy sections without colorSchemeId resolve to this scheme.
+   * The default scheme cannot be deleted.
+   * Must always point to a valid scheme in colorSchemes[].
+   */
+  defaultColorSchemeId?: string;
 };
 
 export type SupportLinks = {

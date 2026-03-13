@@ -1,9 +1,11 @@
 "use client";
 
 import type { TenantConfig } from "../_lib/tenant/types";
+import { HEADER_DEFAULTS } from "../_lib/tenant/types";
 import { Bell, Globe, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, usePathname } from "next/navigation";
+import { resolvePageIdFromPathname, getPageLayout } from "@/app/_lib/pages";
 
 function NoNotificationsIcon() {
   return (
@@ -33,8 +35,13 @@ function LogoPlaceholder({ width }: { width: number }) {
 }
 
 export default function GuestHeader({ config }: { config: TenantConfig }) {
+  const pathname = usePathname();
   const params = useSearchParams();
   const lang = (params.get("lang") === "en" ? "en" : "sv") as "sv" | "en";
+
+  // Page layout contract — hide header if page doesn't support it
+  const pageLayout = useMemo(() => getPageLayout(resolvePageIdFromPathname(pathname)), [pathname]);
+  if (!pageLayout.header) return null;
 
   const t = useMemo(() => {
     const sv = {
@@ -56,27 +63,86 @@ export default function GuestHeader({ config }: { config: TenantConfig }) {
 
   const { logoUrl, logoWidth } = config.theme.header;
   const { notificationsEnabled, languageSwitcherEnabled } = config.features;
+  const hdr = { ...HEADER_DEFAULTS, ...config.home?.header };
+
+  // Resolve color scheme CSS vars for header
+  const schemeCssVars = useMemo(() => {
+    if (!hdr.colorSchemeId || !config.colorSchemes) return undefined;
+    const scheme = config.colorSchemes.find((s: any) => s.id === hdr.colorSchemeId);
+    if (!scheme) return undefined;
+    const t = scheme.tokens;
+    return {
+      "--background": t.background,
+      "--text": t.text,
+      "--header-divider": t.outlineButton,
+    } as React.CSSProperties;
+  }, [hdr.colorSchemeId, config.colorSchemes]);
 
   const [showNotifications, setShowNotifications] = useState(false);
 
+  const headerStyle: React.CSSProperties = {
+    ...schemeCssVars,
+    padding: `${hdr.paddingTop}px ${hdr.paddingRight}px ${hdr.paddingBottom}px ${hdr.paddingLeft}px`,
+    ...(hdr.showDivider
+      ? { borderBottom: `1px solid var(--header-divider, color-mix(in srgb, var(--text) 12%, transparent))` }
+      : { borderBottom: "none" }),
+  };
+
+  const isCenter = hdr.logoPosition === "center";
+
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--background)]">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <div className="flex items-center">
-            {logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={logoUrl}
-                alt="Logo"
-                style={{ width: logoWidth ?? 120, height: "auto" }}
-              />
-            ) : (
-              <LogoPlaceholder width={logoWidth ?? 120} />
-            )}
-          </div>
+      <header
+        className="sticky top-0 z-30 bg-[var(--background)]"
+        style={headerStyle}
+      >
+        <div className={`mx-auto flex max-w-6xl items-center ${isCenter ? "justify-between" : "justify-between"}`}>
+          {/* Left slot */}
+          {isCenter ? (
+            <div className="flex items-center gap-3" style={{ flex: "1 1 0", minWidth: 0 }}>
+              {languageSwitcherEnabled && (
+                <button
+                  type="button"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-[var(--text)] hover:bg-white/5"
+                  aria-label={t.language}
+                >
+                  <Globe size={20} />
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logoUrl}
+                  alt="Logo"
+                  style={{ width: logoWidth ?? 120, height: "auto" }}
+                />
+              ) : (
+                <LogoPlaceholder width={logoWidth ?? 120} />
+              )}
+            </div>
+          )}
 
-          <div className="flex items-center gap-3">
+          {/* Center slot (logo when centered) */}
+          {isCenter && (
+            <div className="flex items-center justify-center">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logoUrl}
+                  alt="Logo"
+                  style={{ width: logoWidth ?? 120, height: "auto" }}
+                />
+              ) : (
+                <LogoPlaceholder width={logoWidth ?? 120} />
+              )}
+            </div>
+          )}
+
+          {/* Right slot */}
+          <div className="flex items-center justify-end gap-3" style={isCenter ? { flex: "1 1 0", minWidth: 0 } : undefined}>
             {notificationsEnabled && (
               <button
                 type="button"
@@ -88,7 +154,7 @@ export default function GuestHeader({ config }: { config: TenantConfig }) {
               </button>
             )}
 
-            {languageSwitcherEnabled && (
+            {!isCenter && languageSwitcherEnabled && (
               <button
                 type="button"
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-[var(--text)] hover:bg-white/5"

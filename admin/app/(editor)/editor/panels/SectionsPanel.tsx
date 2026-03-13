@@ -63,6 +63,7 @@ import {
   hasMultipleBlockTypes,
   getPresetForSection,
 } from "@/app/_lib/sections/mutations";
+import { getPageLayout } from "@/app/_lib/pages";
 
 // ─── Drag Scope Types ───────────────────────────────────────
 // Each drag level is scoped to its own DndContext.
@@ -135,6 +136,10 @@ function SectionListPane() {
   const { pushUndo } = usePublishBar();
   const saveDraft = useDraftUpdate();
   const { openDetail } = useEditor();
+
+  // Resolve page layout contract — currently always "home"
+  const pageId = "home";
+  const layout = useMemo(() => getPageLayout(pageId), [pageId]);
 
   const sections: SectionInstance[] = config?.home?.sections ?? [];
 
@@ -396,7 +401,12 @@ function SectionListPane() {
 
   const handlePickSection = useCallback(
     (definitionId: string, presetKey?: string) => {
-      const newSection = createSectionFromPicker(definitionId, presetKey);
+      const cfg = configRef.current;
+      const newSection = createSectionFromPicker(
+        definitionId,
+        presetKey,
+        cfg?.defaultColorSchemeId ?? undefined,
+      );
       if (!newSection) return;
 
       const cur = sectionsRef.current;
@@ -644,9 +654,31 @@ function SectionListPane() {
         <span className="sp-page-name">Startsida</span>
       </div>
 
-      <div className="sp-template-label">Mall</div>
+      {/* ── Header section (if layout supports it) ── */}
+      {layout.header && (
+        <>
+          <div className="sp-template-label">Sidhuvud</div>
+          <div className="sp-list sp-list--header">
+            <div
+              className="sp-row sp-row--header"
+              onClick={() => openDetail({ scope: "header", sectionId: "__header" })}
+            >
+              <div className="sp-row__handle">
+                <EditorIcon name="web_asset" size={16} />
+              </div>
+              <span className="sp-row__name">Sidhuvud</span>
+            </div>
+          </div>
+        </>
+      )}
 
-      {/* ── Section list ── */}
+      {/* ── Body template (if layout uses sections) ── */}
+      {layout.body === "sections" && (
+        <div className="sp-template-label">Mall</div>
+      )}
+
+      {/* ── Section list (if layout uses sections) ── */}
+      {layout.body === "sections" && (
       <div className={`sp-list${isDraggingSection ? " sp-dropzone--active" : ""}`}>
         <DndContext
           id="sections-dnd"
@@ -777,6 +809,25 @@ function SectionListPane() {
           <span>Lägg till element</span>
         </button>
       </div>
+      )}
+
+      {/* ── Footer section (if layout supports it) ── */}
+      {layout.footer && (
+        <>
+          <div className="sp-template-label">Sidfot</div>
+          <div className="sp-list sp-list--header">
+            <div
+              className="sp-row sp-row--header"
+              onClick={() => openDetail({ scope: "footer", sectionId: "__footer" })}
+            >
+              <div className="sp-row__handle">
+                <EditorIcon name="dock_to_bottom" size={16} />
+              </div>
+              <span className="sp-row__name">Sidfot</span>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Section picker modal ── */}
       {pickerInsertIndex !== null && (

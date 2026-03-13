@@ -65,7 +65,7 @@ const indicatorSlot: SlotDefinition = {
         fill: "outlined",
         size: 20,
         weight: 400,
-        color: "#1a1a1a",
+        color: "",
       },
       action: NO_ACTION,
       sortOrder: 0,
@@ -143,7 +143,7 @@ function makeItem(
             fill: "outlined",
             size: 20,
             weight: 400,
-            color: "#1a1a1a",
+            color: "",
           },
           action: NO_ACTION,
           sortOrder: 0,
@@ -183,17 +183,8 @@ const defaultPreset: SectionPreset = {
   minBlocks: 1,
   maxBlocks: 20,
 
-  settingsSchema: [
-    {
-      key: "borderColor",
-      type: "color",
-      label: "Kantfärg",
-      default: "#E6E5E3",
-    },
-  ],
-  settingDefaults: {
-    borderColor: "#E6E5E3",
-  },
+  settingsSchema: [],
+  settingDefaults: {},
 
   changeStrategy: "preserve_compatible",
   migrations: {},
@@ -233,12 +224,6 @@ const cardPreset: SectionPreset = {
 
   settingsSchema: [
     {
-      key: "cardBackground",
-      type: "color",
-      label: "Kortfärg",
-      default: "#F5F5F4",
-    },
-    {
       key: "cardRadius",
       type: "range",
       label: "Hörnradie",
@@ -260,7 +245,6 @@ const cardPreset: SectionPreset = {
     },
   ],
   settingDefaults: {
-    cardBackground: "#F5F5F4",
     cardRadius: 12,
     cardPadding: 16,
   },
