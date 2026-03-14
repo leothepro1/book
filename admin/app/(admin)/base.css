@@ -275,11 +275,6 @@ textarea,
 select,
 .admin-input {
   font-family: var(--admin-font);
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--admin-text);
-  background: var(--admin-surface);
-  border: 1px solid var(--admin-border-strong);
   border-radius: 8px;
 }
 

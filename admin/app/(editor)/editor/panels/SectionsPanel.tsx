@@ -63,7 +63,7 @@ import {
   hasMultipleBlockTypes,
   getPresetForSection,
 } from "@/app/_lib/sections/mutations";
-import { getPageLayout } from "@/app/_lib/pages";
+import { getPageLayout, getPageDefinition, getPageSections, getPageUndoSnapshot, buildSectionsPatch } from "@/app/_lib/pages";
 
 // ─── Drag Scope Types ───────────────────────────────────────
 // Each drag level is scoped to its own DndContext.
@@ -135,13 +135,15 @@ function SectionListPane() {
   const { config } = usePreview();
   const { pushUndo } = usePublishBar();
   const saveDraft = useDraftUpdate();
-  const { openDetail } = useEditor();
+  const { openDetail, inspectorHoveredSectionId, currentPageId } = useEditor();
 
-  // Resolve page layout contract — currently always "home"
-  const pageId = "home";
-  const layout = useMemo(() => getPageLayout(pageId), [pageId]);
+  // Resolve page layout contract from current page
+  const layout = useMemo(() => getPageLayout(currentPageId), [currentPageId]);
 
-  const sections: SectionInstance[] = config?.home?.sections ?? [];
+  const sections: SectionInstance[] = useMemo(
+    () => getPageSections(config, currentPageId),
+    [config, currentPageId],
+  );
 
   // ── Stable refs ──
   // These break the cascade: config/sections change → handler recreated → all props change.
@@ -150,6 +152,8 @@ function SectionListPane() {
   sectionsRef.current = sections;
   const configRef = useRef(config);
   configRef.current = config;
+  const currentPageIdRef = useRef(currentPageId);
+  currentPageIdRef.current = currentPageId;
   const pushUndoRef = useRef(pushUndo);
   pushUndoRef.current = pushUndo;
   const saveDraftRef = useRef(saveDraft);
@@ -205,8 +209,8 @@ function SectionListPane() {
     (updated: SectionInstance[]) => {
       const cfg = configRef.current;
       if (!cfg) return;
-      pushUndoRef.current({ home: cfg.home });
-      saveDraftRef.current({ home: { ...cfg.home, sections: updated } });
+      pushUndoRef.current(getPageUndoSnapshot(cfg, currentPageIdRef.current));
+      saveDraftRef.current(buildSectionsPatch(cfg, currentPageIdRef.current, updated));
     },
     []
   );
@@ -651,7 +655,7 @@ function SectionListPane() {
     <>
       {/* ── Page header ── */}
       <div className="sp-page-header">
-        <span className="sp-page-name">Startsida</span>
+        <span className="sp-page-name">{getPageDefinition(currentPageId).label}</span>
       </div>
 
       {/* ── Header section (if layout supports it) ── */}
@@ -672,9 +676,17 @@ function SectionListPane() {
         </>
       )}
 
-      {/* ── Body template (if layout uses sections) ── */}
-      {layout.body === "sections" && (
+      {/* ── Body template ── */}
+      {layout.body === "sections" ? (
         <div className="sp-template-label">Mall</div>
+      ) : (
+        <>
+          <div className="sp-template-label">Sidinnehåll</div>
+          <div className="sp-fixed-body">
+            <EditorIcon name="lock" size={16} />
+            <span>Denna sida har fast innehåll som styrs av plattformen.</span>
+          </div>
+        </>
       )}
 
       {/* ── Section list (if layout uses sections) ── */}
@@ -723,45 +735,47 @@ function SectionListPane() {
                       onClick={() => openDetail({ sectionId: section.id })}
                       collapsed={!sectionOpen}
                       onToggleCollapse={() => toggleCollapse(section.id)}
-                    />
-                    {/* Section content — only when expanded */}
-                    {sectionOpen && (
-                      <>
-                        {/* "Lägg till X" button at top of section */}
-                        <AddButton
-                          label={`Lägg till ${getAddBlockLabel(section)}`}
-                          indent={1}
-                          onClick={() => handleAddBlock(section.id)}
-                          disabled={!canAddBlock(section)}
-                        />
-                        {/* Block area with DnD */}
-                        {hasChildren && (
-                          <BlockDropZone
-                            sectionId={section.id}
-                            blocks={blocks}
-                            section={section}
-                            isDropTarget={blockZoneActive}
-                            activeDrag={activeDrag}
-                            sensors={sensors}
-                            collapsedIds={collapsedIds}
-                            blockDragStartFactory={handleBlockDragStart}
-                            blockDragEndFactory={handleBlockDragEnd}
-                            onBlockDragCancel={handleBlockDragCancel}
-                            elementDragStartFactory={handleElementDragStart}
-                            elementDragEndFactory={handleElementDragEnd}
-                            onElementDragCancel={handleElementDragCancel}
-                            onToggleCollapse={toggleCollapse}
-                            onToggleBlockVisibility={handleToggleBlockVisibility}
-                            onDeleteBlock={handleDeleteBlock}
-                            onDeleteElement={handleDeleteElement}
-                            getBlockName={getBlockName}
-                            getBlockIcon={getBlockIcon}
-                            openDetail={openDetail}
-                            onAddElement={handleOpenElementPicker}
+                      inspectorHighlight={inspectorHoveredSectionId === section.id}
+                    >
+                      {/* Section content — only when expanded */}
+                      {sectionOpen && (
+                        <>
+                          {/* "Lägg till X" button at top of section */}
+                          <AddButton
+                            label={`Lägg till ${getAddBlockLabel(section)}`}
+                            indent={1}
+                            onClick={() => handleAddBlock(section.id)}
+                            disabled={!canAddBlock(section)}
                           />
-                        )}
-                      </>
-                    )}
+                          {/* Block area with DnD */}
+                          {hasChildren && (
+                            <BlockDropZone
+                              sectionId={section.id}
+                              blocks={blocks}
+                              section={section}
+                              isDropTarget={blockZoneActive}
+                              activeDrag={activeDrag}
+                              sensors={sensors}
+                              collapsedIds={collapsedIds}
+                              blockDragStartFactory={handleBlockDragStart}
+                              blockDragEndFactory={handleBlockDragEnd}
+                              onBlockDragCancel={handleBlockDragCancel}
+                              elementDragStartFactory={handleElementDragStart}
+                              elementDragEndFactory={handleElementDragEnd}
+                              onElementDragCancel={handleElementDragCancel}
+                              onToggleCollapse={toggleCollapse}
+                              onToggleBlockVisibility={handleToggleBlockVisibility}
+                              onDeleteBlock={handleDeleteBlock}
+                              onDeleteElement={handleDeleteElement}
+                              getBlockName={getBlockName}
+                              getBlockIcon={getBlockIcon}
+                              openDetail={openDetail}
+                              onAddElement={handleOpenElementPicker}
+                            />
+                          )}
+                        </>
+                      )}
+                    </SortableSectionRow>
                     {!isDraggingSection && (
                       <SectionDivider onClick={() => handleOpenPicker(index + 1)} />
                     )}
@@ -833,6 +847,7 @@ function SectionListPane() {
       {pickerInsertIndex !== null && (
         <PickerModal
           title="Lägg till sektion"
+          searchPlaceholder="Sök efter sektion..."
           items={pickerData.items}
           categories={pickerData.categories}
           getPresets={getSectionPresets}
@@ -846,6 +861,7 @@ function SectionListPane() {
       {elementPickerOpen && (
         <PickerModal
           title="Lägg till element"
+          searchPlaceholder="Sök efter element..."
           items={elementPickerData.items}
           categories={elementPickerData.categories}
           getPresets={getElementPresets}
@@ -859,6 +875,7 @@ function SectionListPane() {
       {elementPickerTarget && blockElementPickerData.items.length > 0 && (
         <PickerModal
           title="Lägg till element"
+          searchPlaceholder="Sök efter element..."
           items={blockElementPickerData.items}
           categories={blockElementPickerData.categories}
           getPresets={getElementPresets}
@@ -961,8 +978,8 @@ const BlockDropZone = React.memo(function BlockDropZone({
               activeDrag.blockId === block.id;
 
             return (
-              <React.Fragment key={block.id}>
-                <SortableTreeRow
+              <SortableTreeRow
+                  key={block.id}
                   id={block.id}
                   icon={getBlockIcon(section, block)}
                   name={getBlockName(section, block)}
@@ -979,7 +996,7 @@ const BlockDropZone = React.memo(function BlockDropZone({
                   onClick={() =>
                     openDetail({ sectionId, blockId: block.id })
                   }
-                />
+                >
                 {blockOpen && (
                   <>
                     <AddButton
@@ -1005,7 +1022,7 @@ const BlockDropZone = React.memo(function BlockDropZone({
                     )}
                   </>
                 )}
-              </React.Fragment>
+              </SortableTreeRow>
             );
           })}
         </SortableContext>
@@ -1090,6 +1107,7 @@ const ElementDropZone = React.memo(function ElementDropZone({
               id={el.id}
               icon={ELEMENT_ICON_NAMES[el.type] || "widgets"}
               name={getElementName(el.type)}
+              preview={getElementPreview(el)}
               isActive={true}
               indent={2}
               onDelete={() =>
@@ -1114,6 +1132,7 @@ const ElementDropZone = React.memo(function ElementDropZone({
                 <TreeRow
                   icon={ELEMENT_ICON_NAMES[el.type] || "widgets"}
                   name={getElementName(el.type)}
+                  preview={getElementPreview(el)}
                   isActive={true}
                   indent={2}
                   isOverlay
@@ -1174,6 +1193,8 @@ function SortableSectionRow({
   onClick,
   collapsed,
   onToggleCollapse,
+  inspectorHighlight,
+  children,
 }: {
   section: SectionInstance;
   onToggleVisibility: (id: string) => void;
@@ -1181,6 +1202,8 @@ function SortableSectionRow({
   onClick?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  inspectorHighlight?: boolean;
+  children?: React.ReactNode;
 }) {
   const {
     attributes,
@@ -1207,7 +1230,9 @@ function SortableSectionRow({
         dragHandleProps={{ ...attributes, ...listeners }}
         collapsed={collapsed}
         onToggleCollapse={onToggleCollapse}
+        inspectorHighlight={inspectorHighlight}
       />
+      {children}
     </div>
   );
 }
@@ -1218,6 +1243,7 @@ function SortableTreeRow({
   id,
   icon,
   name,
+  preview,
   isActive,
   indent,
   collapsed,
@@ -1225,10 +1251,12 @@ function SortableTreeRow({
   onToggleVisibility,
   onDelete,
   onClick,
+  children,
 }: {
   id: string;
   icon: string;
   name: string;
+  preview?: string | null;
   isActive: boolean;
   indent: number;
   collapsed?: boolean;
@@ -1236,6 +1264,7 @@ function SortableTreeRow({
   onToggleVisibility?: () => void;
   onDelete?: () => void;
   onClick?: () => void;
+  children?: React.ReactNode;
 }) {
   const {
     attributes,
@@ -1257,6 +1286,7 @@ function SortableTreeRow({
       <TreeRow
         icon={icon}
         name={name}
+        preview={preview}
         isActive={isActive}
         indent={indent}
         collapsed={collapsed}
@@ -1266,6 +1296,7 @@ function SortableTreeRow({
         onClick={onClick}
         dragHandleProps={{ ...attributes, ...listeners }}
       />
+      {children}
     </div>
   );
 }
@@ -1281,6 +1312,7 @@ const SectionRow = React.memo(function SectionRow({
   isOverlay,
   collapsed,
   onToggleCollapse,
+  inspectorHighlight,
 }: {
   section: SectionInstance;
   onToggleVisibility: (id: string) => void;
@@ -1290,6 +1322,7 @@ const SectionRow = React.memo(function SectionRow({
   isOverlay?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  inspectorHighlight?: boolean;
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -1314,7 +1347,7 @@ const SectionRow = React.memo(function SectionRow({
 
   return (
     <div
-      className={`sp-row${!section.isActive ? " sp-row--inactive" : ""}${isOverlay ? " sp-row--overlay" : ""}`}
+      className={`sp-row${!section.isActive ? " sp-row--inactive" : ""}${isOverlay ? " sp-row--overlay" : ""}${inspectorHighlight ? " sp-row--inspector-hover" : ""}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={onClick}
@@ -1383,6 +1416,38 @@ function getElementName(type: string): string {
   return def?.name || type;
 }
 
+/** Content fields to extract preview from, ordered by priority. */
+const TEXT_CONTENT_KEYS: Record<string, string[]> = {
+  heading: ["content"],
+  text: ["content"],
+  richtext: ["heading_content", "text_content"],
+  collapsible: ["content"],
+};
+
+/** Strip HTML tags and collapse whitespace. */
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Extract a content preview string for text-based elements.
+ * Returns null for non-text elements or elements with no content yet.
+ */
+function getElementPreview(el: import("@/app/_lib/sections/types").ElementInstance): string | null {
+  const keys = TEXT_CONTENT_KEYS[el.type];
+  if (!keys) return null;
+
+  for (const key of keys) {
+    const raw = el.settings[key];
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const plain = stripHtml(raw);
+    if (!plain) continue;
+    return plain;
+  }
+
+  return null;
+}
+
 const ELEMENT_ICON_NAMES: Record<string, string> = {
   heading: "title",
   text: "view_headline",
@@ -1402,6 +1467,7 @@ const ELEMENT_ICON_NAMES: Record<string, string> = {
 const TreeRow = React.memo(function TreeRow({
   icon,
   name,
+  preview,
   isActive,
   indent,
   collapsed,
@@ -1414,6 +1480,8 @@ const TreeRow = React.memo(function TreeRow({
 }: {
   icon: string;
   name: string;
+  /** Optional content preview shown after the name (for text elements). */
+  preview?: string | null;
   isActive: boolean;
   indent: number;
   collapsed?: boolean;
@@ -1451,7 +1519,10 @@ const TreeRow = React.memo(function TreeRow({
       >
         {isHovered && !isOverlay ? <DragIcon /> : <EditorIcon name={icon} size={16} />}
       </div>
-      <span className="sp-row__name">{name}</span>
+      <span className="sp-row__name">
+        {name}
+        {preview && <span className="sp-row__preview"> - {preview}</span>}
+      </span>
       <div className="sp-row__actions">
         {isActive && isHovered && !isOverlay && onDelete && (
           <Tooltip label="Radera">

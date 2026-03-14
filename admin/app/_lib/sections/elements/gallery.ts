@@ -30,7 +30,6 @@ export const galleryElement: ElementDefinition = {
       type: "imageList",
       label: "Bilder",
       default: [],
-      required: true,
     },
     {
       key: "columns",

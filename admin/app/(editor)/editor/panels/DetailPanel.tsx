@@ -75,11 +75,20 @@ import type {
 import type { HeaderConfig } from "@/app/(guest)/_lib/tenant/types";
 import { HEADER_DEFAULTS, PAGE_FOOTER_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
 import type { PageFooterConfig, FooterActiveMode } from "@/app/(guest)/_lib/tenant/types";
+import {
+  getPageSections,
+  getPageHeader,
+  getPageFooter,
+  getPageUndoSnapshot,
+  buildSectionsPatch,
+  buildHeaderPatch,
+  buildFooterPatch,
+} from "@/app/_lib/pages/config";
 
 // ─── Main Component ─────────────────────────────────────────
 
 export function DetailPanel() {
-  const { detailTarget, goBack, openDetail } = useEditor();
+  const { detailTarget, goBack, openDetail, currentPageId } = useEditor();
   const { config } = usePreview();
   const { pushUndo } = usePublishBar();
   const saveDraft = useDraftUpdate();
@@ -89,7 +98,10 @@ export function DetailPanel() {
     ensureSectionsRegistered().then(() => setRegistryReady(true));
   }, []);
 
-  const sections: SectionInstance[] = config?.home?.sections ?? [];
+  const sections: SectionInstance[] = useMemo(
+    () => getPageSections(config, currentPageId),
+    [config, currentPageId],
+  );
 
   // Resolve what we're editing (body sections only)
   const resolved = useMemo(() => {
@@ -194,8 +206,8 @@ export function DetailPanel() {
         };
       });
 
-      pushUndo({ home: config.home });
-      saveDraft({ home: { ...config.home, sections: updatedSections } });
+      pushUndo(getPageUndoSnapshot(config, currentPageId));
+      saveDraft(buildSectionsPatch(config, currentPageId, updatedSections));
     },
     [config, detailTarget, resolved, sections, pushUndo, saveDraft]
   );
@@ -224,8 +236,8 @@ export function DetailPanel() {
         };
       });
 
-      pushUndo({ home: config.home });
-      saveDraft({ home: { ...config.home, sections: updatedSections } });
+      pushUndo(getPageUndoSnapshot(config, currentPageId));
+      saveDraft(buildSectionsPatch(config, currentPageId, updatedSections));
     },
     [config, detailTarget, sections, pushUndo, saveDraft]
   );
@@ -242,8 +254,8 @@ export function DetailPanel() {
         return { ...section, colorSchemeId: schemeId };
       });
 
-      pushUndo({ home: config.home });
-      saveDraft({ home: { ...config.home, sections: updatedSections } });
+      pushUndo(getPageUndoSnapshot(config, currentPageId));
+      saveDraft(buildSectionsPatch(config, currentPageId, updatedSections));
     },
     [config, detailTarget, sections, pushUndo, saveDraft],
   );
@@ -281,6 +293,7 @@ export function DetailPanel() {
         config={config}
         pushUndo={pushUndo}
         saveDraft={saveDraft}
+        pageId={currentPageId}
         goBack={goBack}
       />
     );
@@ -292,6 +305,7 @@ export function DetailPanel() {
         config={config}
         pushUndo={pushUndo}
         saveDraft={saveDraft}
+        pageId={currentPageId}
         goBack={goBack}
       />
     );
@@ -959,26 +973,23 @@ function HeaderDetailPanel({
   pushUndo,
   saveDraft,
   goBack,
+  pageId,
 }: {
   config: any;
   pushUndo: (snapshot: Record<string, unknown>) => void;
   saveDraft: (changes: any) => any;
   goBack: () => void;
+  pageId: import("@/app/_lib/pages/types").PageId;
 }) {
-  const header: HeaderConfig = { ...HEADER_DEFAULTS, ...config?.home?.header };
+  const header: HeaderConfig = { ...HEADER_DEFAULTS, ...getPageHeader(config, pageId) };
   const schemes = config?.colorSchemes ?? [];
-
-  const snapshot = useCallback(
-    () => ({ home: { header: config?.home?.header ?? {} } }),
-    [config?.home?.header],
-  );
 
   const save = useCallback(
     (patch: Partial<HeaderConfig>) => {
-      pushUndo(snapshot());
-      saveDraft({ home: { header: { ...header, ...patch } } } as any);
+      pushUndo(getPageUndoSnapshot(config, pageId));
+      saveDraft(buildHeaderPatch(config, pageId, { ...header, ...patch }));
     },
-    [pushUndo, snapshot, saveDraft, header],
+    [pushUndo, saveDraft, header, config, pageId],
   );
 
   const handleSpacingChange = useCallback(
@@ -1093,26 +1104,23 @@ function FooterDetailPanel({
   pushUndo,
   saveDraft,
   goBack,
+  pageId,
 }: {
   config: any;
   pushUndo: (snapshot: Record<string, unknown>) => void;
   saveDraft: (changes: any) => any;
   goBack: () => void;
+  pageId: import("@/app/_lib/pages/types").PageId;
 }) {
-  const footer: PageFooterConfig = { ...PAGE_FOOTER_DEFAULTS, ...config?.home?.footer };
+  const footer: PageFooterConfig = { ...PAGE_FOOTER_DEFAULTS, ...getPageFooter(config, pageId) };
   const schemes = config?.colorSchemes ?? [];
-
-  const snapshot = useCallback(
-    () => ({ home: { footer: config?.home?.footer ?? {} } }),
-    [config?.home?.footer],
-  );
 
   const save = useCallback(
     (patch: Partial<PageFooterConfig>) => {
-      pushUndo(snapshot());
-      saveDraft({ home: { footer: { ...footer, ...patch } } } as any);
+      pushUndo(getPageUndoSnapshot(config, pageId));
+      saveDraft(buildFooterPatch(config, pageId, { ...footer, ...patch }));
     },
-    [pushUndo, snapshot, saveDraft, footer],
+    [pushUndo, saveDraft, footer, config, pageId],
   );
 
   const [dropdownOpen, setDropdownOpen] = useState(false);

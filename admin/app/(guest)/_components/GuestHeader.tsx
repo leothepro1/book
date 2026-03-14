@@ -5,7 +5,7 @@ import { HEADER_DEFAULTS } from "../_lib/tenant/types";
 import { Bell, Globe, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useSearchParams, usePathname } from "next/navigation";
-import { resolvePageIdFromPathname, getPageLayout } from "@/app/_lib/pages";
+import { resolvePageIdFromPathname, getPageLayout, getPageHeader } from "@/app/_lib/pages";
 
 function NoNotificationsIcon() {
   return (
@@ -40,7 +40,8 @@ export default function GuestHeader({ config }: { config: TenantConfig }) {
   const lang = (params.get("lang") === "en" ? "en" : "sv") as "sv" | "en";
 
   // Page layout contract — hide header if page doesn't support it
-  const pageLayout = useMemo(() => getPageLayout(resolvePageIdFromPathname(pathname)), [pathname]);
+  const pageId = useMemo(() => resolvePageIdFromPathname(pathname), [pathname]);
+  const pageLayout = useMemo(() => getPageLayout(pageId), [pageId]);
   if (!pageLayout.header) return null;
 
   const t = useMemo(() => {
@@ -63,7 +64,7 @@ export default function GuestHeader({ config }: { config: TenantConfig }) {
 
   const { logoUrl, logoWidth } = config.theme.header;
   const { notificationsEnabled, languageSwitcherEnabled } = config.features;
-  const hdr = { ...HEADER_DEFAULTS, ...config.home?.header };
+  const hdr = { ...HEADER_DEFAULTS, ...getPageHeader(config, pageId) };
 
   // Resolve color scheme CSS vars for header
   const schemeCssVars = useMemo(() => {

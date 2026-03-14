@@ -76,4 +76,11 @@ export type PageDefinition = {
   label: string;
   /** Layout contract — controls rendering and editor UI. */
   layout: PageLayout;
+  /**
+   * Whether this page appears in the editor page switcher.
+   * Pages with editorVisible=false exist in the guest portal
+   * but cannot be targeted by the editor yet.
+   * This is the single source of truth — no separate allowlist.
+   */
+  editorVisible: boolean;
 };

@@ -23,7 +23,6 @@ export const imageElement: ElementDefinition = {
       type: "image",
       label: "Bild",
       default: "",
-      required: true,
     },
     {
       key: "width",

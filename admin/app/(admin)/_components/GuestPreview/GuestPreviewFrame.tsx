@@ -4,8 +4,14 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { usePreview } from "./PreviewContext";
 import { usePublishBar } from "../PublishBar";
 import type { GuestPreviewProps } from "./types";
-import type { ParentToPreviewMessage, PreviewScrollTarget } from "@/app/(preview)/_lib/previewMessages";
+import type {
+  ParentToPreviewMessage,
+  PreviewScrollTarget,
+  InspectorSectionMeta,
+} from "@/app/(preview)/_lib/previewMessages";
 import { isValidPreviewMessage } from "@/app/(preview)/_lib/previewMessages";
+import { getSectionDefinition, getElementDefinition } from "@/app/_lib/sections/registry";
+import { getPageSections } from "@/app/_lib/pages/config";
 import "./preview-spinner.css";
 
 const __DEV__ = process.env.NODE_ENV === "development";
@@ -27,7 +33,17 @@ function GuestPreviewFrame({
   route,
   className = "",
   scrollTarget,
-}: Omit<GuestPreviewProps, "device"> & { scrollTarget?: PreviewScrollTarget | null }) {
+  inspectorActive = false,
+  inspectorPageId = "home",
+  onInspectorHover,
+  onInspectorClick,
+}: Omit<GuestPreviewProps, "device"> & {
+  scrollTarget?: PreviewScrollTarget | null;
+  inspectorActive?: boolean;
+  inspectorPageId?: import("@/app/_lib/pages/types").PageId;
+  onInspectorHover?: (sectionId: string | null) => void;
+  onInspectorClick?: (sectionId: string) => void;
+}) {
   const { config, draftVersion } = usePreview();
   const { hasUnsavedChanges } = usePublishBar();
   const [copied, setCopied] = useState(false);
@@ -74,31 +90,79 @@ function GuestPreviewFrame({
     }
   }, []);
 
+  // ── Build section metadata for inspector ────────────────────
+  const buildInspectorMeta = useCallback((): InspectorSectionMeta[] => {
+    const sections = getPageSections(config, inspectorPageId);
+    return sections
+      .filter((s: any) => s.isActive)
+      .map((s: any) => {
+        let name: string;
+        let icon = "grid_view";
+
+        if (s.definitionId === "__loose-element") {
+          const firstEl = s.blocks?.[0]?.slots?.content?.[0];
+          name = s.title || (firstEl ? (getElementDefinition(firstEl.type)?.name ?? s.definitionId) : s.definitionId);
+          icon = "widgets";
+        } else {
+          const def = getSectionDefinition(s.definitionId);
+          name = s.title || def?.name || s.definitionId;
+          const bt = def?.presets[0]?.blockTypes[0];
+          icon = bt?.icon || "grid_view";
+        }
+
+        return { id: s.id, name, icon };
+      });
+  }, [config, inspectorPageId]);
+
   // ── When bridge signals ready, push full current theme + active scroll target ──
   const scrollTargetRef = useRef(scrollTarget);
   scrollTargetRef.current = scrollTarget;
 
+  // Keep stable refs for inspector callbacks
+  const onInspectorHoverRef = useRef(onInspectorHover);
+  onInspectorHoverRef.current = onInspectorHover;
+  const onInspectorClickRef = useRef(onInspectorClick);
+  onInspectorClickRef.current = onInspectorClick;
+  const inspectorActiveRef = useRef(inspectorActive);
+  inspectorActiveRef.current = inspectorActive;
+
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (!isValidPreviewMessage(event)) return;
-      if (event.data.type === "preview-ready") {
+      const { data } = event;
+
+      if (data.type === "preview-ready") {
         if (__DEV__) console.log("[GuestPreview] Received preview-ready");
         const w = iframeRef.current?.contentWindow;
         if (!w) return;
         if (config?.theme) {
           w.postMessage({ type: "theme-update", theme: config.theme } satisfies ParentToPreviewMessage, window.location.origin);
         }
-        // Re-send current scroll target after iframe reload (DOM may not exist yet,
-        // but PreviewBridge will retry with MutationObserver)
         const target = scrollTargetRef.current;
         if (target) {
           w.postMessage({ type: "scroll-to-target", target } satisfies ParentToPreviewMessage, window.location.origin);
         }
+        // Re-send inspector state after iframe reload
+        if (inspectorActiveRef.current) {
+          w.postMessage({
+            type: "inspector-mode",
+            active: true,
+            sections: buildInspectorMeta(),
+          } satisfies ParentToPreviewMessage, window.location.origin);
+        }
+      }
+
+      // Inspector events from iframe
+      if (data.type === "inspector-hover") {
+        onInspectorHoverRef.current?.(data.sectionId);
+      }
+      if (data.type === "inspector-click") {
+        onInspectorClickRef.current?.(data.sectionId);
       }
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [config]);
+  }, [config, buildInspectorMeta]);
 
   // ── Theme updates → instant CSS vars in iframe ───────────────
   const prevThemeJson = useRef("");
@@ -125,6 +189,15 @@ function GuestPreviewFrame({
     if (!scrollTarget) return;
     postToPreview({ type: "scroll-to-target", target: scrollTarget });
   }, [scrollTarget, postToPreview]);
+
+  // ── Inspector mode → send to iframe when toggled ─────────────
+  useEffect(() => {
+    postToPreview({
+      type: "inspector-mode",
+      active: inspectorActive,
+      sections: inspectorActive ? buildInspectorMeta() : [],
+    });
+  }, [inspectorActive, postToPreview, buildInspectorMeta]);
 
   // ── Copy handler ─────────────────────────────────────────────
   useEffect(() => {

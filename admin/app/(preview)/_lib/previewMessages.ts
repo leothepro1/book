@@ -9,6 +9,7 @@ import type { ThemeConfig } from "@/app/(guest)/_lib/theme/types";
  *  3. On every optimistic config change → "theme-update" (instant CSS vars)
  *  4. After updateDraft persists to DB → "content-refresh" (router.refresh)
  *  5. On editor selection change → "scroll-to-target" (smooth scroll + highlight)
+ *  6. Inspector mode → "inspector-mode" (enable/disable section inspector overlay)
  */
 
 /**
@@ -22,17 +23,31 @@ export type PreviewScrollTarget = {
   elementId?: string;
 };
 
+/** Metadata for a section, sent to the iframe for inspector overlay labels. */
+export type InspectorSectionMeta = {
+  id: string;
+  name: string;
+  icon: string;
+};
+
 export type ParentToPreviewMessage =
   | { type: "theme-update"; theme: ThemeConfig }
   | { type: "content-refresh" }
-  | { type: "scroll-to-target"; target: PreviewScrollTarget };
+  | { type: "scroll-to-target"; target: PreviewScrollTarget }
+  | { type: "inspector-mode"; active: boolean; sections: InspectorSectionMeta[] };
 
 export type PreviewToParentMessage =
-  | { type: "preview-ready" };
+  | { type: "preview-ready" }
+  | { type: "inspector-hover"; sectionId: string | null }
+  | { type: "inspector-click"; sectionId: string };
 
 export type PreviewMessage = ParentToPreviewMessage | PreviewToParentMessage;
 
-const VALID_TYPES = ["theme-update", "content-refresh", "preview-ready", "scroll-to-target"];
+const VALID_TYPES = [
+  "theme-update", "content-refresh", "preview-ready",
+  "scroll-to-target", "inspector-mode",
+  "inspector-hover", "inspector-click",
+];
 
 /** Origin check — same origin for preview iframe */
 export function isValidPreviewMessage(
