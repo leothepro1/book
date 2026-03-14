@@ -60,7 +60,16 @@
       "Bash(pkill -f \"next dev\" 2>/dev/null; rm -f /workspaces/hospitality/admin/.next/dev/lock; sleep 1; npx next dev)",
       "Bash(ls /workspaces/hospitality/admin/app/\\\\\\(guest\\\\\\)/p/\\\\[token\\\\]/stays/)",
       "Bash(fuser -k 3000/tcp 2>/dev/null; fuser -k 3001/tcp 2>/dev/null; rm -f /workspaces/hospitality/admin/.next/dev/lock; echo \"cleaned\")",
-      "Bash(cat /workspaces/hospitality/admin/prisma/schema.prisma | head -15; echo \"---\"; ls /workspaces/hospitality/admin/.env* 2>/dev/null)"
+      "Bash(cat /workspaces/hospitality/admin/prisma/schema.prisma | head -15; echo \"---\"; ls /workspaces/hospitality/admin/.env* 2>/dev/null)",
+      "Bash(cd:*)",
+      "Bash(docker:*)",
+      "Bash(npx prisma:*)",
+      "Bash(node:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
