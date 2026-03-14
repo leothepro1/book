@@ -110,10 +110,7 @@ export function PickerModal({
   const popupRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus search
-  useEffect(() => {
-    requestAnimationFrame(() => searchRef.current?.focus());
-  }, []);
+  // No auto-focus — let user click into search when needed
 
   // Close on outside click
   useEffect(() => {
@@ -403,7 +400,10 @@ export function buildSectionPickerData(): {
   items: PickerItem[];
   categories: PickerCategory[];
 } {
-  const defs = getAllSectionDefinitions();
+  // Locked sections are auto-seeded by the platform — exclude from the picker
+  const defs = getAllSectionDefinitions().filter(
+    (d) => d.scope !== "locked",
+  );
 
   const items: PickerItem[] = defs.map((def) => ({
     id: def.id,
@@ -476,13 +476,21 @@ const ELEMENT_CATEGORY_MAP: Record<string, { primary: string; extra?: string[] }
   divider:     { primary: "layout" },
 };
 
-export function buildElementPickerData(slotDef: SlotDefinition): {
+export function buildElementPickerData(
+  slotDef: SlotDefinition,
+  context?: { pageId?: string; sectionDefinitionId?: string },
+): {
   items: PickerItem[];
   categories: PickerCategory[];
 } {
   const allElements = getAllElementDefinitions();
   const allowed = new Set<string>(slotDef.allowedElements);
-  const validElements = allElements.filter((el) => allowed.has(el.type));
+  const validElements = allElements.filter((el) => {
+    if (!allowed.has(el.type)) return false;
+    if (el.pageScope && el.pageScope !== context?.pageId) return false;
+    if (el.sectionScope && el.sectionScope !== context?.sectionDefinitionId) return false;
+    return true;
+  });
 
   const items: PickerItem[] = validElements.map((el) => {
     const catInfo = ELEMENT_CATEGORY_MAP[el.type] ?? { primary: "text" };

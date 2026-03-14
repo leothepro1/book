@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
-import { updateDraft } from "../../_lib/tenant/updateDraft";
+import { updateDraft, type DraftPatch } from "../../_lib/tenant/updateDraft";
 import { publishDraft, discardDraft } from "../../_lib/tenant/publishDraft";
 import { useNavigationGuard } from "../NavigationGuard";
 
@@ -20,21 +20,20 @@ import { useNavigationGuard } from "../NavigationGuard";
  */
 function pickKeys(
   source: TenantConfig,
-  template: Partial<TenantConfig>,
-): Partial<TenantConfig> {
-  const result: Partial<TenantConfig> = {};
-  for (const key of Object.keys(template) as (keyof TenantConfig)[]) {
-    // Safe: we're reading from a fully typed TenantConfig
-    (result as Record<string, unknown>)[key] = source[key];
+  template: DraftPatch,
+): DraftPatch {
+  const result: Record<string, unknown> = {};
+  for (const key of Object.keys(template)) {
+    result[key] = source[key as keyof TenantConfig];
   }
-  return result;
+  return result as DraftPatch;
 }
 
 /* ── Context value ── */
 
 interface PublishBarContextValue {
   /** Push a snapshot before making a change (for undo). */
-  pushUndo: (snapshot: Partial<TenantConfig>) => void;
+  pushUndo: (snapshot: DraftPatch) => void;
   /** Whether there are unsaved (unpublished) changes. */
   hasUnsavedChanges: boolean;
   /** Mark changes as present without pushing undo (e.g. after external mutation). */
@@ -54,8 +53,8 @@ export function usePublishBar(): PublishBarContextValue {
 /* ── Internal context for the bar UI ── */
 
 interface PublishBarInternalValue {
-  undoStack: Partial<TenantConfig>[];
-  redoStack: Partial<TenantConfig>[];
+  undoStack: DraftPatch[];
+  redoStack: DraftPatch[];
   isUndoing: boolean;
   isPublishing: boolean;
   isLingeringAfterPublish: boolean;
@@ -82,13 +81,13 @@ interface PublishBarProviderProps {
 }
 
 export function PublishBarProvider({ children, getConfig }: PublishBarProviderProps) {
-  const [undoStack, setUndoStack] = useState<Partial<TenantConfig>[]>([]);
-  const [redoStack, setRedoStack] = useState<Partial<TenantConfig>[]>([]);
+  const [undoStack, setUndoStack] = useState<DraftPatch[]>([]);
+  const [redoStack, setRedoStack] = useState<DraftPatch[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
 
-  const pushUndo = useCallback((snapshot: Partial<TenantConfig>) => {
+  const pushUndo = useCallback((snapshot: DraftPatch) => {
     setUndoStack(prev => [...prev, snapshot]);
     setRedoStack([]);
     setHasUnsavedChanges(true);

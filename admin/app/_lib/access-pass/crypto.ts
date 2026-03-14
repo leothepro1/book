@@ -17,20 +17,10 @@ const TOKEN_BYTES = 32; // 256 bits of entropy
 
 // ── Pepper — validated once at module load, not per call ────────────
 
-let _pepper: string | undefined;
+import { env } from "@/app/_lib/env";
 
 function getPepper(): string {
-  if (_pepper !== undefined) return _pepper;
-
-  const pepper = process.env.ACCESS_PASS_PEPPER;
-  if (!pepper || pepper.length < 16) {
-    throw new Error(
-      "ACCESS_PASS_PEPPER env variable is missing or too short (min 16 chars). " +
-        "This is required for access pass token security.",
-    );
-  }
-  _pepper = pepper;
-  return _pepper;
+  return env.ACCESS_PASS_PEPPER;
 }
 
 // ── Token generation ────────────────────────────────────────────────

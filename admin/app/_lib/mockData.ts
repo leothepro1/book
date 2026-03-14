@@ -56,8 +56,9 @@ export function createGlobalMockBooking(tenantId: string) {
     departure,
     adults: 2,
     children: 1,
+    unit: "Hotellrum 2",
     pitchNumber: "A14",
-    
+
     status: "ACTIVE" as const,
     checkedInAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
     checkedOutAt: null,
@@ -99,6 +100,7 @@ export function createGlobalMockHistory(tenantId: string) {
     departure: b1Departure,
     adults: 2,
     children: 1,
+    unit: "Hotellrum 2",
     pitchNumber: "B7",
     status: "COMPLETED" as const,
     checkedInAt: b1Arrival,
@@ -132,6 +134,7 @@ export function createGlobalMockHistory(tenantId: string) {
     departure: b2Departure,
     adults: 2,
     children: 0,
+    unit: "Hotellrum 2",
     pitchNumber: "C3",
     status: "COMPLETED" as const,
     checkedInAt: b2Arrival,

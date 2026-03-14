@@ -8,8 +8,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { cleanupDeletedMedia } from "@/app/_lib/media";
+import { env } from "@/app/_lib/env";
 
-const CLEANUP_SECRET = process.env.MEDIA_CLEANUP_SECRET;
+const CLEANUP_SECRET = env.MEDIA_CLEANUP_SECRET;
 
 export async function POST(req: NextRequest) {
   // Protect with a shared secret (for cron job auth)

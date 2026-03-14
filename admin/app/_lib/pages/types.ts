@@ -67,6 +67,17 @@ export type PageLayout = {
 };
 
 /**
+ * A named layout variant available for a page.
+ * Tenants switch between layouts — they cannot create new ones.
+ */
+export type LayoutVariant = {
+  /** Unique key within this page (e.g. "default", "grid", "minimal"). */
+  id: string;
+  /** Display name shown in the editor. */
+  label: string;
+};
+
+/**
  * Complete page definition — identity + layout + metadata.
  */
 export type PageDefinition = {
@@ -74,8 +85,14 @@ export type PageDefinition = {
   id: PageId;
   /** Display name shown in the editor (Swedish). */
   label: string;
+  /** Material Symbols icon name for the editor page switcher. */
+  icon: string;
   /** Layout contract — controls rendering and editor UI. */
   layout: PageLayout;
+  /** Available layout variants for this page. First is the default. */
+  availableLayouts: readonly LayoutVariant[];
+  /** Default layout ID (must match an entry in availableLayouts). */
+  defaultLayout: string;
   /**
    * Whether this page appears in the editor page switcher.
    * Pages with editorVisible=false exist in the guest portal
@@ -83,4 +100,18 @@ export type PageDefinition = {
    * This is the single source of truth — no separate allowlist.
    */
   editorVisible: boolean;
+  /** If set, this page is only available when this feature flag is true. */
+  requiresFeatureFlag?: string;
+  /** Sub-steps for flow pages (e.g. check-in). Shown as a submenu in the editor page switcher. */
+  steps?: readonly PageStep[];
+};
+
+/**
+ * A step within a multi-step flow page.
+ * Platform-defined — tenants can style but not reorder or remove steps.
+ */
+export type PageStep = {
+  id: string;
+  label: string;
+  icon: string;
 };

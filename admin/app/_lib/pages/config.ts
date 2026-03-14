@@ -5,18 +5,17 @@
  * Single source of truth for mapping PageId → TenantConfig sub-paths.
  * This is the ONLY file that knows where page data lives in TenantConfig.
  *
- * This is a durable API, not a temporary compatibility bridge.
- * If the internal config shape changes (e.g. config.home → config.pages[pageId]),
- * only this file is updated. All consumers remain unchanged.
+ * V2 MIGRATION:
+ *   Page data now lives in config.pages[pageId].
+ *   Legacy data in config.home.{sections,header,footer} is read as fallback
+ *   when config.pages is absent. All WRITES go to config.pages[pageId].
  *
  * Ownership:
- *   - Reads:              getPageSections, getPageHeader, getPageFooter
- *   - Patch building:     buildSectionsPatch, buildHeaderPatch, buildFooterPatch
+ *   - Reads:              getPageSections, getPageHeader (global), getPageFooter (global)
+ *   - Patch building:     buildSectionsPatch, buildHeaderPatch (global), buildFooterPatch (global)
  *   - Undo snapshots:     getPageUndoSnapshot
  *   - Page discovery:     getAllSectionBearingPageIds, getAllResourceBearingPageIds
- *
- * Config shape knowledge is NOT a UI concern.
- * UI components ask this layer — they never access config paths directly.
+ *   - Page config:        getPageConfig, getPageLayoutId, isPageEnabled
  *
  * Design:
  *   - Pure functions (no side effects, no state)
@@ -26,13 +25,32 @@
  */
 
 import type { PageId, PageDefinition } from "./types";
-import { getAllPageDefinitions } from "./registry";
+import { getAllPageDefinitions, getPageDefinition, isPageId } from "./registry";
 import type {
   TenantConfig,
+  PageConfig,
   HeaderConfig,
   PageFooterConfig,
+  StaysCoreConfig,
 } from "@/app/(guest)/_lib/tenant/types";
+import { STAYS_CORE_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
 import type { SectionInstance } from "@/app/_lib/sections/types";
+
+// ═══════════════════════════════════════════════════════════════
+// INTERNAL HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Read the PageConfig for a given page from the v2 pages map.
+ * Returns undefined if no page config exists (legacy or uninitialized).
+ */
+function getPageEntry(
+  config: TenantConfig | null | undefined,
+  pageId: PageId,
+): PageConfig | undefined {
+  if (!config?.pages) return undefined;
+  return config.pages[pageId];
+}
 
 // ═══════════════════════════════════════════════════════════════
 // READ ACCESSORS
@@ -40,55 +58,173 @@ import type { SectionInstance } from "@/app/_lib/sections/types";
 
 /**
  * Read the sections array for a given page.
- * Returns [] for pages without sections or unknown pages.
+ *
+ * Accepts string to avoid unsafe `as PageId` casts at call sites.
+ * Unknown page IDs safely return [].
+ *
+ * Priority: config.pages[pageId].sections → legacy fallback → []
+ * Legacy fallback: config.home.sections (only for "home" page)
  */
 export function getPageSections(
   config: TenantConfig | null | undefined,
-  pageId: PageId,
+  pageId: PageId | string,
 ): SectionInstance[] {
   if (!config) return [];
-  switch (pageId) {
-    case "home":
-      return config.home?.sections ?? [];
-    default:
-      return [];
-  }
+  if (!isPageId(pageId)) return [];
+
+  // V2 path: config.pages[pageId].sections
+  const entry = getPageEntry(config, pageId);
+  if (entry) return entry.sections ?? [];
+
+  // Legacy fallback: only "home" had sections in v1
+  if (pageId === "home") return config.home?.sections ?? [];
+
+  return [];
 }
 
 /**
- * Read the header config for a given page.
+ * Read the global header config.
  *
- * SHARED RESOURCE: Header config is currently a singleton stored in
- * config.home.header. All pages that support a header share the same
- * configuration. The editor presents header editing as page-scoped UI,
- * but the underlying resource is shared.
- *
- * Next step for per-page ownership: add a `header` field to each page's
- * config object, then add page-specific cases to this switch.
+ * Priority: config.globalHeader → legacy per-page fallback → undefined
+ * The pageId parameter is kept for API compatibility but is ignored —
+ * header config is globally shared across all pages.
  */
 export function getPageHeader(
   config: TenantConfig | null | undefined,
-  pageId: PageId,
+  _pageId?: PageId,
 ): HeaderConfig | undefined {
   if (!config) return undefined;
-  // All pages share the global header config (stored in home)
+
+  // Global header (canonical location)
+  if (config.globalHeader) return config.globalHeader;
+
+  // Legacy fallback: old per-page storage or config.home.header
+  const homeEntry = getPageEntry(config, "home");
+  if ((homeEntry as any)?.header) return (homeEntry as any).header;
   return config.home?.header;
 }
 
 /**
- * Read the footer config for a given page.
+ * Read the global footer config.
  *
- * SHARED RESOURCE: Same pattern as header — singleton stored in
- * config.home.footer, shared across all footer-capable pages.
- * See getPageHeader() for architectural notes on future per-page ownership.
+ * Priority: config.globalFooter → legacy per-page fallback → undefined
+ * The pageId parameter is kept for API compatibility but is ignored —
+ * footer config is globally shared across all pages.
  */
 export function getPageFooter(
   config: TenantConfig | null | undefined,
-  pageId: PageId,
+  _pageId?: PageId,
 ): PageFooterConfig | undefined {
   if (!config) return undefined;
-  // All pages share the global footer config (stored in home)
+
+  // Global footer (canonical location)
+  if (config.globalFooter) return config.globalFooter;
+
+  // Legacy fallback: old per-page storage or config.home.footer
+  const homeEntry = getPageEntry(config, "home");
+  if ((homeEntry as any)?.footer) return (homeEntry as any).footer;
   return config.home?.footer;
+}
+
+/**
+ * Read the active layout ID for a page.
+ * Falls back to the page's defaultLayout from the registry.
+ */
+export function getPageLayoutId(
+  config: TenantConfig | null | undefined,
+  pageId: PageId,
+): string {
+  const entry = getPageEntry(config, pageId);
+  if (entry?.layoutId) return entry.layoutId;
+  return getPageDefinition(pageId).defaultLayout;
+}
+
+/**
+ * Check whether a page is enabled for this tenant.
+ * Defaults to true if no explicit config exists.
+ */
+export function isPageEnabled(
+  config: TenantConfig | null | undefined,
+  pageId: PageId,
+): boolean {
+  const entry = getPageEntry(config, pageId);
+  if (entry) return entry.enabled;
+  return true; // Pages are enabled by default
+}
+
+/**
+ * Get the full PageConfig for a page, with safe defaults.
+ */
+export function getPageConfig(
+  config: TenantConfig | null | undefined,
+  pageId: PageId,
+): PageConfig {
+  const entry = getPageEntry(config, pageId);
+  if (entry) return entry;
+
+  const def = getPageDefinition(pageId);
+  return {
+    enabled: true,
+    layoutId: def.defaultLayout,
+    sections: getPageSections(config, pageId),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STAYS-SPECIFIC ACCESSORS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Read the stays core config, merging stored values over defaults.
+ */
+export function getStaysCoreConfig(
+  config: TenantConfig | null | undefined,
+): StaysCoreConfig {
+  // Primary source: bokningar section settings + presetSettings
+  const sections = getPageSections(config, "stays");
+  const bokningar = sections.find((s) => s.definitionId === "bokningar");
+  if (bokningar) {
+    const merged = { ...bokningar.presetSettings, ...bokningar.settings };
+    return {
+      heading: (merged.heading as string) || STAYS_CORE_DEFAULTS.heading,
+      description: (merged.description as string) ?? "",
+      headingSize: 28,
+      headingMarginBottom: (merged.headingMarginBottom as number) ?? STAYS_CORE_DEFAULTS.headingMarginBottom,
+      layout: (merged.layout as "tabs" | "list") || STAYS_CORE_DEFAULTS.layout,
+      cardShadow: (merged.cardShadow as boolean) ?? STAYS_CORE_DEFAULTS.cardShadow,
+      tabCurrentLabel: (merged.tabCurrentLabel as string) || STAYS_CORE_DEFAULTS.tabCurrentLabel,
+      tabPreviousLabel: (merged.tabPreviousLabel as string) || STAYS_CORE_DEFAULTS.tabPreviousLabel,
+      cardImageUrl: (merged.cardImageUrl as string) ?? STAYS_CORE_DEFAULTS.cardImageUrl,
+      paddingTop: (merged.paddingTop as number) ?? STAYS_CORE_DEFAULTS.paddingTop,
+      paddingRight: (merged.paddingRight as number) ?? STAYS_CORE_DEFAULTS.paddingRight,
+      paddingBottom: (merged.paddingBottom as number) ?? STAYS_CORE_DEFAULTS.paddingBottom,
+      paddingLeft: (merged.paddingLeft as number) ?? STAYS_CORE_DEFAULTS.paddingLeft,
+      colorSchemeId: bokningar.colorSchemeId,
+    };
+  }
+
+  // Fallback: legacy coreComponent storage
+  const stored = getPageEntry(config, "stays")?.coreComponent;
+  if (!stored) return STAYS_CORE_DEFAULTS;
+  return { ...STAYS_CORE_DEFAULTS, ...stored };
+}
+
+/**
+ * Build a save patch that writes updated stays core config.
+ */
+export function buildStaysCorePatch(
+  config: TenantConfig,
+  core: Partial<StaysCoreConfig>,
+): Partial<TenantConfig> {
+  const current = getPageConfig(config, "stays");
+  const merged = { ...getStaysCoreConfig(config), ...core };
+
+  return {
+    pages: {
+      ...config.pages,
+      stays: { ...current, coreComponent: merged },
+    },
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -99,20 +235,24 @@ export function getPageFooter(
  * Build the undo snapshot for a page's content.
  * Returns a Partial<TenantConfig> that captures the current state.
  *
- * The PublishBar undo system stores these snapshots and applies them
- * via updateConfig() to restore previous state.
+ * Includes page-scoped data (sections, layout) and global shared
+ * resources (header, footer) since both can be edited from any page.
  */
 export function getPageUndoSnapshot(
   config: TenantConfig | null | undefined,
   pageId: PageId,
 ): Partial<TenantConfig> {
   if (!config) return {};
-  switch (pageId) {
-    case "home":
-      return { home: config.home };
-    default:
-      return {};
-  }
+
+  const pageConfig = getPageConfig(config, pageId);
+
+  return {
+    pages: {
+      [pageId]: pageConfig,
+    },
+    globalHeader: config.globalHeader,
+    globalFooter: config.globalFooter,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -121,51 +261,81 @@ export function getPageUndoSnapshot(
 
 /**
  * Build a save patch that writes updated sections for a page.
- * Returns a Partial<TenantConfig> to pass to saveDraft().
+ * All writes go to config.pages[pageId] (v2 path).
  */
 export function buildSectionsPatch(
   config: TenantConfig,
   pageId: PageId,
   sections: SectionInstance[],
 ): Partial<TenantConfig> {
-  switch (pageId) {
-    case "home":
-      return { home: { ...config.home, sections } };
-    default:
-      return {};
-  }
+  const current = getPageConfig(config, pageId);
+
+  return {
+    pages: {
+      ...config.pages,
+      [pageId]: { ...current, sections },
+    },
+  };
 }
 
 /**
- * Build a save patch that writes updated header config for a page.
+ * Build a save patch that writes updated global header config.
+ * The pageId parameter is kept for API compatibility but is ignored.
  */
 export function buildHeaderPatch(
-  config: TenantConfig,
-  pageId: PageId,
+  _config: TenantConfig,
+  _pageId: PageId,
   header: HeaderConfig,
 ): Partial<TenantConfig> {
-  switch (pageId) {
-    case "home":
-      return { home: { ...config.home, header } } as Partial<TenantConfig>;
-    default:
-      return {};
-  }
+  return { globalHeader: header };
 }
 
 /**
- * Build a save patch that writes updated footer config for a page.
+ * Build a save patch that writes updated global footer config.
+ * The pageId parameter is kept for API compatibility but is ignored.
  */
 export function buildFooterPatch(
-  config: TenantConfig,
-  pageId: PageId,
+  _config: TenantConfig,
+  _pageId: PageId,
   footer: PageFooterConfig,
 ): Partial<TenantConfig> {
-  switch (pageId) {
-    case "home":
-      return { home: { ...config.home, footer } } as Partial<TenantConfig>;
-    default:
-      return {};
-  }
+  return { globalFooter: footer };
+}
+
+/**
+ * Build a save patch that writes updated layout ID for a page.
+ */
+export function buildLayoutPatch(
+  config: TenantConfig,
+  pageId: PageId,
+  layoutId: string,
+): Partial<TenantConfig> {
+  const current = getPageConfig(config, pageId);
+
+  return {
+    pages: {
+      ...config.pages,
+      [pageId]: { ...current, layoutId },
+    },
+  };
+}
+
+/**
+ * Build a save patch that toggles a page's enabled state.
+ */
+export function buildEnabledPatch(
+  config: TenantConfig,
+  pageId: PageId,
+  enabled: boolean,
+): Partial<TenantConfig> {
+  const current = getPageConfig(config, pageId);
+
+  return {
+    pages: {
+      ...config.pages,
+      [pageId]: { ...current, enabled },
+    },
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -175,10 +345,6 @@ export function buildFooterPatch(
 /**
  * Returns all PageIds where the platform defines body === "sections".
  * Driven by the page registry (layout contract), not by config presence.
- * A page is section-bearing by platform capability, regardless of
- * whether its config currently contains data.
- *
- * Used by traversal.ts to collect all sections across pages.
  */
 export function getAllSectionBearingPageIds(): PageId[] {
   return getAllPageDefinitions()
@@ -189,10 +355,6 @@ export function getAllSectionBearingPageIds(): PageId[] {
 /**
  * Returns all PageIds where the platform defines header or footer.
  * Driven by the page registry, not by config presence.
- * A page is resource-bearing by platform capability, regardless of
- * whether its config currently exists.
- *
- * Used by color scheme reference detection.
  */
 export function getAllResourceBearingPageIds(): PageId[] {
   return getAllPageDefinitions()
@@ -229,7 +391,6 @@ export function getPreviewRoute(pageId: PageId): string {
 /**
  * Returns the page definitions that should appear in the editor
  * page switcher. Derived from the page registry's editorVisible flag.
- * No separate allowlist — the registry is the single source of truth.
  */
 export function getEditorPages(): PageDefinition[] {
   return getAllPageDefinitions().filter((p) => p.editorVisible);

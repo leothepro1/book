@@ -28,7 +28,20 @@ import "../_components/GuestPreview/preview.css";
 import "../_components/admin-page.css";
 import "./home.css";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
-import type { Card, ArchivedCard } from "@/app/(guest)/_lib/portal/homeLinks";
+import type { Card, ArchivedCard, HomeLink } from "@/app/(guest)/_lib/portal/homeLinks";
+
+// Cards are intentionally home-scoped legacy content, not part of PageConfig.
+// This type provides a safe patch shape for card-only updates without `as any`.
+// Card saves don't include sections/header/footer — deepmerge in updateDraft()
+// preserves fields not present in the patch.
+type HomeCardsPatch = {
+  home: {
+    version: 1;
+    links: import("@/app/(guest)/_lib/portal/homeLinks").HomeLink[];
+    cards: Card[];
+    archivedCards: ArchivedCard[];
+  };
+};
 import { getCardTypeConfig, CARD_TYPE_LIST, isCategoryFriendly } from "@/app/_lib/cardTypes/registry";
 import type { PanelKey as RegistryPanelKey } from "@/app/_lib/cardTypes/registry";
 import { updateDraft } from "../_lib/tenant/updateDraft";
@@ -117,8 +130,8 @@ function ArchivePageInner() {
 
   const handlePermanentDelete = useCallback((id: string) => {
     const updatedArchive = archivedCards.filter(c => c.id !== id);
-    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards: updatedArchive } } as any);
-    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards: updatedArchive } } as any); notifyDraftSaved(); });
+    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards: updatedArchive } } as HomeCardsPatch);
+    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards: updatedArchive } } as HomeCardsPatch); notifyDraftSaved(); });
   }, [cards, archivedCards, config, updateConfig, notifyDraftSaved]);
 
   const handleRestore = useCallback((archived: ArchivedCard) => {
@@ -126,8 +139,8 @@ function ArchivePageInner() {
     const restoredCard: Card = { ...cardData, isActive: false, sortOrder: cards.length };
     const updatedCards = [...cards, restoredCard];
     const updatedArchive = archivedCards.filter(c => c.id !== archived.id);
-    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards: updatedArchive } } as any);
-    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards: updatedArchive } } as any); notifyDraftSaved(); });
+    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards: updatedArchive } } as HomeCardsPatch);
+    startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards: updatedArchive } } as HomeCardsPatch); notifyDraftSaved(); });
   }, [cards, archivedCards, config, updateConfig, notifyDraftSaved]);
 
   return (
@@ -2531,7 +2544,7 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
 
   // ── Helpers ──────────────────────────────────────────────────────
   const homeSnapshot = useCallback(() =>
-    ({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards } } as any),
+    ({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards } } as HomeCardsPatch),
   [config, cards, archivedCards]);
 
   /** Save cards with undo snapshot + optimistic update + debounced server persist. */
@@ -2541,7 +2554,7 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
   const saveHome = useCallback((newCards: Card[], newArchive?: ArchivedCard[]) => {
     pushUndo(homeSnapshot());
     const archive = newArchive ?? archivedCards;
-    const payload = { home: { version: 1, links: config?.home?.links || [], cards: newCards, archivedCards: archive } } as any;
+    const payload: HomeCardsPatch = { home: { version: 1, links: config?.home?.links || [], cards: newCards, archivedCards: archive } };
 
     // Instant optimistic update (local state only — no server call, no iframe refresh)
     updateConfig(payload);
@@ -2682,7 +2695,7 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
       return idx >= 0 ? { ...c, sortOrder: idx } : c;
     });
 
-    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: updated, archivedCards } } as any);
+    updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: updated, archivedCards } } as HomeCardsPatch);
   }, [cards, config, archivedCards, updateConfig, getParentCategory, setDomDropTarget]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
@@ -2816,7 +2829,7 @@ function HomePageInner({ onNavigateToArchive }: { onNavigateToArchive: () => voi
     pointerYRef.current = null;
     dropZoneCooldownCatRef.current = null;
     if (cardsBeforeDragRef.current) {
-      updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: cardsBeforeDragRef.current, archivedCards } } as any);
+      updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: cardsBeforeDragRef.current, archivedCards } } as HomeCardsPatch);
       cardsBeforeDragRef.current = null;
     }
   }, [config, archivedCards, updateConfig, setDomDropTarget]);

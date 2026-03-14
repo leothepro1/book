@@ -233,6 +233,21 @@ model AccessPassEvent {
 }
 
 // ============================================================================
+// WEBHOOK IDEMPOTENCY
+// ============================================================================
+
+/// Tracks processed webhook events to ensure idempotency.
+/// Before processing any event, check if svix-id already exists.
+/// If yes, return 200 immediately (already handled).
+model WebhookEvent {
+  id          String   @id                    // svix-id from webhook header
+  eventType   String
+  processedAt DateTime @default(now())
+
+  @@index([id])
+}
+
+// ============================================================================
 // WALLET CARD DESIGN (Per-tenant card styling for Apple/Google Wallet)
 // ============================================================================
 

@@ -155,7 +155,12 @@ const classic: ThemeManifest = {
       ],
     },
 
-    // Future: shop, account, stays, check-in, check-out, help-center
+    stays: {
+      name: "Bokningar",
+      sections: [],
+    },
+
+    // Future: shop, account, check-in, check-out, help-center
   },
 };
 

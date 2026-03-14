@@ -138,10 +138,11 @@ type SettingsFormProps = {
  * Groups fields by `field.group` if present.
  */
 export function SettingsForm({ schema, values, onChange }: SettingsFormProps) {
-  // Group fields (skip hidden)
+  // Group fields (skip hidden + visibleWhen guard)
   const grouped = new Map<string, SettingField[]>();
   for (const field of schema) {
     if (field.hidden) continue;
+    if (field.visibleWhen && values[field.visibleWhen.key] !== field.visibleWhen.value) continue;
     const group = field.group || "__default";
     const list = grouped.get(group) || [];
     list.push(field);

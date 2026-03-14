@@ -281,6 +281,7 @@ function resolveLooseElementSection(
     category: "content" as const,
     tags: [],
     thumbnail: "",
+    scope: "free" as const,
     settingsSchema: [],
     settingDefaults: {},
     presets: [],

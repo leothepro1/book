@@ -97,8 +97,8 @@ export type HomeConfig = {
    */
   sections: import("@/app/_lib/sections/types").SectionInstance[];
   archivedCards: ArchivedCard[];
-  /** Page-scoped header configuration. Falls back to HEADER_DEFAULTS if absent. */
+  /** @deprecated Legacy v1 field. Now stored in TenantConfig.globalHeader. Read-only for migration. */
   header?: import("@/app/(guest)/_lib/tenant/types").HeaderConfig;
-  /** Page-scoped footer configuration. Falls back to PAGE_FOOTER_DEFAULTS if absent. */
+  /** @deprecated Legacy v1 field. Now stored in TenantConfig.globalFooter. Read-only for migration. */
   footer?: import("@/app/(guest)/_lib/tenant/types").PageFooterConfig;
 };

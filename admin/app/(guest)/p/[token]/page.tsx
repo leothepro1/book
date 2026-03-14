@@ -21,7 +21,7 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
   const config = await getTenantConfig(booking.tenantId ?? "default", { preferDraft: isPreview });
 
   if (isPreview) {
-    console.log(`[PortalHome] Preview render: ${(config.home?.cards as any[])?.length ?? 0} cards, draft=${isPreview}`);
+    console.log(`[PortalHome] Preview render: ${config.home?.cards?.length ?? 0} cards, draft=${isPreview}`);
   }
 
   const bookingStatus = getBookingStatus(booking);

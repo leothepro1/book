@@ -15,7 +15,7 @@
 
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import { collectAllSections } from "@/app/_lib/sections/traversal";
-import { getAllResourceBearingPageIds, getPageHeader, getPageFooter } from "@/app/_lib/pages/config";
+import { getPageHeader, getPageFooter } from "@/app/_lib/pages/config";
 
 /**
  * Collects all color scheme IDs referenced anywhere in the tenant
@@ -33,13 +33,11 @@ export function collectReferencedSchemeIds(config: TenantConfig): Set<string> {
     }
   }
 
-  // Page-scoped resources (header + footer across all capable pages)
-  for (const pageId of getAllResourceBearingPageIds()) {
-    const header = getPageHeader(config, pageId);
-    if (header?.colorSchemeId) ids.add(header.colorSchemeId);
-    const footer = getPageFooter(config, pageId);
-    if (footer?.colorSchemeId) ids.add(footer.colorSchemeId);
-  }
+  // Global header + footer
+  const header = getPageHeader(config);
+  if (header?.colorSchemeId) ids.add(header.colorSchemeId);
+  const footer = getPageFooter(config);
+  if (footer?.colorSchemeId) ids.add(footer.colorSchemeId);
 
   return ids;
 }

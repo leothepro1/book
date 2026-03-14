@@ -278,6 +278,7 @@ export const tabsSection: SectionDefinition = {
   category: "navigation",
   tags: ["tabs", "flikar", "navigation", "tabbad"],
   thumbnail: "",
+  scope: "free",
 
   settingsSchema: [
     {

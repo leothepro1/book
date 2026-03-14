@@ -7,3 +7,4 @@
 import "./tabs";
 import "./accordion";
 import "./slider";
+import "./bokningar";

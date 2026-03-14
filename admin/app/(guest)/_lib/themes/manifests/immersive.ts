@@ -135,6 +135,11 @@ const immersive: ThemeManifest = {
         },
       ],
     },
+
+    stays: {
+      name: "Bokningar",
+      sections: [],
+    },
   },
 };
 

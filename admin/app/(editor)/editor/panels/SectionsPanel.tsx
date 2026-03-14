@@ -39,7 +39,7 @@ import { usePublishBar } from "@/app/(admin)/_components/PublishBar";
 import { useDraftUpdate } from "@/app/(admin)/_hooks/useDraftUpdate";
 import type { SectionInstance, ElementInstance, BlockInstance } from "@/app/_lib/sections/types";
 import { createSectionId, createBlockId } from "@/app/_lib/sections/types";
-import { ensureSectionsRegistered, getElementDefinition, getSectionDefinition } from "@/app/_lib/sections/registry";
+import { ensureSectionsRegistered, getElementDefinition, getSectionDefinition, getAllSectionDefinitions } from "@/app/_lib/sections/registry";
 import { Tooltip } from "@/app/_components/Tooltip";
 import { EditorIcon } from "@/app/_components/EditorIcon";
 import { useEditor } from "../EditorContext";
@@ -189,6 +189,41 @@ function SectionListPane() {
     ensureSectionsRegistered().then(() => setRegistryReady(true));
   }, []);
 
+  // ── Auto-seed locked sections (generic: any definition with scope=locked + lockedTo) ──
+  const hasSeededRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!registryReady || !config) return;
+    if (hasSeededRef.current === currentPageId) return;
+
+    // Find all locked definitions that target this page
+    const lockedDefs = getAllSectionDefinitions().filter(
+      (d) => d.scope === "locked" && d.lockedTo === currentPageId,
+    );
+    if (lockedDefs.length === 0) {
+      hasSeededRef.current = currentPageId;
+      return;
+    }
+
+    const current = getPageSections(config, currentPageId);
+    const existingDefIds = new Set(current.map((s) => s.definitionId));
+    const toSeed: SectionInstance[] = [];
+
+    for (const def of lockedDefs) {
+      if (existingDefIds.has(def.id)) continue;
+      const defaults = def.createDefault();
+      toSeed.push({
+        id: createSectionId(),
+        sortOrder: 0,
+        ...defaults,
+      });
+    }
+
+    hasSeededRef.current = currentPageId;
+    if (toSeed.length > 0) {
+      saveDraftRef.current(buildSectionsPatch(config, currentPageId, [...toSeed, ...current]));
+    }
+  }, [registryReady, config, currentPageId]);
+
   // ── Element picker (test) ──
   const [elementPickerOpen, setElementPickerOpen] = useState(false);
 
@@ -268,6 +303,35 @@ function SectionListPane() {
           blocks: s.blocks.map((b) =>
             b.id === blockId ? { ...b, isActive: !b.isActive } : b
           ),
+        };
+      });
+      saveSections(updated);
+    },
+    [saveSections]
+  );
+
+  const handleToggleElementVisibility = useCallback(
+    (sectionId: string, blockId: string, elementId: string) => {
+      const updated = sectionsRef.current.map((s) => {
+        if (s.id !== sectionId) return s;
+        return {
+          ...s,
+          blocks: s.blocks.map((b) => {
+            if (b.id !== blockId) return b;
+            return {
+              ...b,
+              slots: Object.fromEntries(
+                Object.entries(b.slots).map(([k, els]) => [
+                  k,
+                  els.map((el) =>
+                    el.id === elementId
+                      ? { ...el, isActive: !(el.isActive ?? true) }
+                      : el
+                  ),
+                ]),
+              ),
+            };
+          }),
         };
       });
       saveSections(updated);
@@ -362,8 +426,14 @@ function SectionListPane() {
 
   const blockElementPickerData = useMemo(() => {
     if (!elementPickerSlotDef) return { items: [], categories: [] };
-    return buildElementPickerData(elementPickerSlotDef);
-  }, [elementPickerSlotDef]);
+    const section = elementPickerTarget
+      ? sections.find((s) => s.id === elementPickerTarget.sectionId)
+      : undefined;
+    return buildElementPickerData(elementPickerSlotDef, {
+      pageId: currentPageId,
+      sectionDefinitionId: section?.definitionId,
+    });
+  }, [elementPickerSlotDef, elementPickerTarget, sections, currentPageId]);
 
   const handleOpenElementPicker = useCallback(
     (sectionId: string, blockId: string) => {
@@ -733,12 +803,12 @@ function SectionListPane() {
                       onToggleVisibility={handleToggleVisibility}
                       onDelete={handleRequestDelete}
                       onClick={() => openDetail({ sectionId: section.id })}
-                      collapsed={!sectionOpen}
-                      onToggleCollapse={() => toggleCollapse(section.id)}
+                      collapsed={section.locked ? true : !sectionOpen}
+                      onToggleCollapse={section.locked ? undefined : () => toggleCollapse(section.id)}
                       inspectorHighlight={inspectorHoveredSectionId === section.id}
                     >
-                      {/* Section content — only when expanded */}
-                      {sectionOpen && (
+                      {/* Locked sections are flat — no children */}
+                      {!section.locked && sectionOpen && (
                         <>
                           {/* "Lägg till X" button at top of section */}
                           <AddButton
@@ -765,6 +835,7 @@ function SectionListPane() {
                               onElementDragCancel={handleElementDragCancel}
                               onToggleCollapse={toggleCollapse}
                               onToggleBlockVisibility={handleToggleBlockVisibility}
+                              onToggleElementVisibility={handleToggleElementVisibility}
                               onDeleteBlock={handleDeleteBlock}
                               onDeleteElement={handleDeleteElement}
                               getBlockName={getBlockName}
@@ -918,6 +989,7 @@ const BlockDropZone = React.memo(function BlockDropZone({
   onElementDragCancel,
   onToggleCollapse,
   onToggleBlockVisibility,
+  onToggleElementVisibility,
   onDeleteBlock,
   onDeleteElement,
   getBlockName,
@@ -940,6 +1012,7 @@ const BlockDropZone = React.memo(function BlockDropZone({
   onElementDragCancel: () => void;
   onToggleCollapse: (id: string) => void;
   onToggleBlockVisibility: (sectionId: string, blockId: string) => void;
+  onToggleElementVisibility: (sectionId: string, blockId: string, elementId: string) => void;
   onDeleteBlock: (sectionId: string, blockId: string) => void;
   onDeleteElement: (sectionId: string, blockId: string, elementId: string) => void;
   getBlockName: (section: SectionInstance, block: BlockInstance) => string;
@@ -990,7 +1063,7 @@ const BlockDropZone = React.memo(function BlockDropZone({
                   onToggleVisibility={() =>
                     onToggleBlockVisibility(sectionId, block.id)
                   }
-                  onDelete={() =>
+                  onDelete={section.locked ? undefined : () =>
                     onDeleteBlock(sectionId, block.id)
                   }
                   onClick={() =>
@@ -999,12 +1072,14 @@ const BlockDropZone = React.memo(function BlockDropZone({
                 >
                 {blockOpen && (
                   <>
+                    {!section.locked && (
                     <AddButton
                       label="Lägg till element"
                       indent={2}
                       onClick={() => onAddElement(sectionId, block.id)}
                       disabled={!canAddElement(section, block)}
                     />
+                    )}
                     {hasElements && (
                       <ElementDropZone
                         sectionId={sectionId}
@@ -1016,8 +1091,10 @@ const BlockDropZone = React.memo(function BlockDropZone({
                         elementDragStartFactory={elementDragStartFactory}
                         elementDragEndFactory={elementDragEndFactory}
                         onElementDragCancel={onElementDragCancel}
+                        onToggleElementVisibility={onToggleElementVisibility}
                         onDeleteElement={onDeleteElement}
                         openDetail={openDetail}
+                        locked={section.locked}
                       />
                     )}
                   </>
@@ -1062,8 +1139,10 @@ const ElementDropZone = React.memo(function ElementDropZone({
   elementDragStartFactory,
   elementDragEndFactory,
   onElementDragCancel,
+  onToggleElementVisibility,
   onDeleteElement,
   openDetail,
+  locked,
 }: {
   sectionId: string;
   blockId: string;
@@ -1074,8 +1153,10 @@ const ElementDropZone = React.memo(function ElementDropZone({
   elementDragStartFactory: (sectionId: string, blockId: string) => (event: DragStartEvent) => void;
   elementDragEndFactory: (sectionId: string, blockId: string) => (event: DragEndEvent) => void;
   onElementDragCancel: () => void;
+  onToggleElementVisibility: (sectionId: string, blockId: string, elementId: string) => void;
   onDeleteElement: (sectionId: string, blockId: string, elementId: string) => void;
   openDetail: (target: { sectionId: string; blockId?: string; elementId?: string }) => void;
+  locked?: boolean;
 }) {
   // Memoize curried handlers (sectionId + blockId stable for this instance)
   const onElementDragStart = useMemo(
@@ -1108,9 +1189,13 @@ const ElementDropZone = React.memo(function ElementDropZone({
               icon={ELEMENT_ICON_NAMES[el.type] || "widgets"}
               name={getElementName(el.type)}
               preview={getElementPreview(el)}
-              isActive={true}
+              isActive={el.isActive ?? true}
               indent={2}
-              onDelete={() =>
+              noDragHandle
+              onToggleVisibility={() =>
+                onToggleElementVisibility(sectionId, blockId, el.id)
+              }
+              onDelete={locked ? undefined : () =>
                 onDeleteElement(sectionId, blockId, el.id)
               }
               onClick={() =>
@@ -1133,9 +1218,10 @@ const ElementDropZone = React.memo(function ElementDropZone({
                   icon={ELEMENT_ICON_NAMES[el.type] || "widgets"}
                   name={getElementName(el.type)}
                   preview={getElementPreview(el)}
-                  isActive={true}
+                  isActive={el.isActive ?? true}
                   indent={2}
                   isOverlay
+                  noDragHandle
                 />
               );
             })()
@@ -1247,6 +1333,7 @@ function SortableTreeRow({
   isActive,
   indent,
   collapsed,
+  noDragHandle,
   onToggleCollapse,
   onToggleVisibility,
   onDelete,
@@ -1260,6 +1347,7 @@ function SortableTreeRow({
   isActive: boolean;
   indent: number;
   collapsed?: boolean;
+  noDragHandle?: boolean;
   onToggleCollapse?: () => void;
   onToggleVisibility?: () => void;
   onDelete?: () => void;
@@ -1290,11 +1378,12 @@ function SortableTreeRow({
         isActive={isActive}
         indent={indent}
         collapsed={collapsed}
+        noDragHandle={noDragHandle}
         onToggleCollapse={onToggleCollapse}
         onToggleVisibility={onToggleVisibility}
         onDelete={onDelete}
         onClick={onClick}
-        dragHandleProps={{ ...attributes, ...listeners }}
+        dragHandleProps={noDragHandle ? undefined : { ...attributes, ...listeners }}
       />
       {children}
     </div>
@@ -1329,6 +1418,7 @@ const SectionRow = React.memo(function SectionRow({
   // Resolve section icon from definition
   const sectionIcon = (() => {
     if (section.definitionId === "__loose-element") return "widgets";
+    if (section.definitionId === "bokningar") return "confirmation_number";
     const def = getSectionDefinition(section.definitionId);
     const bt = def?.presets[0]?.blockTypes[0];
     return bt?.icon || "grid_view";
@@ -1352,7 +1442,7 @@ const SectionRow = React.memo(function SectionRow({
       onMouseLeave={() => setIsHovered(false)}
       onClick={onClick}
     >
-      {onToggleCollapse && (
+      {onToggleCollapse ? (
         <button
           type="button"
           className="sp-row__chevron"
@@ -1361,6 +1451,10 @@ const SectionRow = React.memo(function SectionRow({
         >
           <EditorIcon name={collapsed ? "chevron_right" : "expand_more"} size={16} />
         </button>
+      ) : (
+        <span className="sp-row__chevron" aria-hidden="true" style={{ visibility: "hidden" }}>
+          <EditorIcon name="chevron_right" size={16} />
+        </span>
       )}
       <div
         className="sp-row__handle"
@@ -1373,7 +1467,7 @@ const SectionRow = React.memo(function SectionRow({
       <span className="sp-row__name">{sectionName}</span>
 
       <div className="sp-row__actions">
-        {section.isActive && isHovered && !isOverlay && (
+        {section.isActive && isHovered && !isOverlay && !section.locked && (
           <Tooltip label="Radera">
             <button
               type="button"
@@ -1471,6 +1565,7 @@ const TreeRow = React.memo(function TreeRow({
   isActive,
   indent,
   collapsed,
+  noDragHandle,
   onToggleCollapse,
   onToggleVisibility,
   onDelete,
@@ -1485,6 +1580,7 @@ const TreeRow = React.memo(function TreeRow({
   isActive: boolean;
   indent: number;
   collapsed?: boolean;
+  noDragHandle?: boolean;
   onToggleCollapse?: () => void;
   onToggleVisibility?: () => void;
   onDelete?: () => void;
@@ -1512,13 +1608,19 @@ const TreeRow = React.memo(function TreeRow({
           <EditorIcon name={collapsed ? "chevron_right" : "expand_more"} size={16} />
         </button>
       )}
-      <div
-        className="sp-row__handle"
-        {...(dragHandleProps ?? {})}
-        title="Dra för att sortera"
-      >
-        {isHovered && !isOverlay ? <DragIcon /> : <EditorIcon name={icon} size={16} />}
-      </div>
+      {noDragHandle ? (
+        <div className="sp-row__handle">
+          <EditorIcon name={icon} size={16} />
+        </div>
+      ) : (
+        <div
+          className="sp-row__handle"
+          {...(dragHandleProps ?? {})}
+          title="Dra för att sortera"
+        >
+          {isHovered && !isOverlay ? <DragIcon /> : <EditorIcon name={icon} size={16} />}
+        </div>
+      )}
       <span className="sp-row__name">
         {name}
         {preview && <span className="sp-row__preview"> - {preview}</span>}

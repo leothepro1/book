@@ -190,6 +190,18 @@ export type ElementDefinition = {
   skipPresetPicker?: boolean;
 
   /**
+   * Restricts this element to a specific page. If set, the element
+   * cannot be added to any other page's sections.
+   */
+  pageScope?: import("@/app/_lib/pages/types").PageId;
+
+  /**
+   * Restricts this element to a specific section definition.
+   * If set, the element cannot be added to other section types.
+   */
+  sectionScope?: string;
+
+  /**
    * Available presets — named starting configurations.
    * First preset is the default. Min 1 required.
    */
@@ -224,6 +236,9 @@ export type ElementInstance = {
 
   /** Display order within the parent slot (ascending). */
   sortOrder: number;
+
+  /** Whether this element is visible. Defaults to true when omitted. */
+  isActive?: boolean;
 
   /** ISO 8601 — element becomes visible at this time. */
   scheduledShow?: string;
@@ -505,6 +520,39 @@ export type SectionDefinition = {
   /** Thumbnail URL for the section picker. */
   thumbnail: string;
 
+  // ─── Scope & Access Control ───
+
+  /**
+   * Whether this section can be freely added/removed by tenants
+   * or is platform-controlled (locked).
+   *
+   *   "free"   — tenant can add, delete, reorder (default behaviour)
+   *   "locked" — auto-seeded by the platform, cannot be deleted
+   */
+  scope: "free" | "locked";
+
+  /**
+   * For locked sections: restricts this section to a specific page.
+   * The auto-seed effect only creates the section on this page.
+   * Ignored for "free" scope sections.
+   */
+  lockedTo?: import("@/app/_lib/pages/types").PageId;
+
+  /**
+   * Platform-admin contract for DetailPanel rendering.
+   *
+   * When set, DetailPanel ONLY renders controls whose field key
+   * appears in this array. Fields not listed are hidden even if
+   * they exist in settingsSchema or presetSettingsSchema.
+   *
+   * When undefined (all "free" sections), all fields are rendered
+   * — backward-compatible with the existing behaviour.
+   *
+   * This is enforced generically in DetailPanel — no section-specific
+   * conditional rendering needed.
+   */
+  editableFields?: string[];
+
   // ─── Section-Level Settings (shared across all presets) ───
 
   /** Settings schema shared by all presets. */
@@ -557,6 +605,12 @@ export type SectionInstance = {
 
   /** Whether this section is visible on the guest portal. */
   isActive: boolean;
+
+  /**
+   * Locked sections cannot be deleted by the tenant.
+   * Used for platform-controlled sections like "Bokningar" on the stays page.
+   */
+  locked?: boolean;
 
   /** Section-level settings overrides (shared across presets). */
   settings: Record<string, unknown>;

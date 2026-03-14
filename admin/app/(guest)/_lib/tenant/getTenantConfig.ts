@@ -1,5 +1,6 @@
 import { prisma } from "@/app/_lib/db/prisma";
 import type { TenantConfig } from "./types";
+import { migrateToV2Pages } from "@/app/_lib/pages/migrate";
 
 /**
  * Resolves the full TenantConfig for a tenant.
@@ -36,12 +37,12 @@ export async function getTenantConfig(
     : tenant.settings;
 
   if (!raw || typeof raw !== "object") {
-    return defaults;
+    return migrateToV2Pages(defaults);
   }
 
   const stored = raw as Record<string, unknown>;
 
-  return mergeConfig(defaults, stored, tenant.id);
+  return migrateToV2Pages(mergeConfig(defaults, stored, tenant.id));
 }
 
 /**
@@ -76,6 +77,11 @@ function mergeConfig(
     themeSettings: (stored.themeSettings as Record<string, unknown>) ?? {},
     themeId: (stored.themeId as string | null) ?? null,
     themeVersion: (stored.themeVersion as string | null) ?? null,
+    // Preserve v2 pages if already stored
+    pages: (stored.pages as TenantConfig["pages"]) ?? undefined,
+    // Preserve global header/footer if already stored
+    globalHeader: (stored.globalHeader as TenantConfig["globalHeader"]) ?? undefined,
+    globalFooter: (stored.globalFooter as TenantConfig["globalFooter"]) ?? undefined,
   } as TenantConfig;
 }
 

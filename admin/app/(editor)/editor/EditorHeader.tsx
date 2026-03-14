@@ -75,16 +75,23 @@ export function EditorHeader() {
 
 function PageSwitcher() {
   const [open, setOpen] = useState(false);
+  const [submenuPageId, setSubmenuPageId] = useState<PageId | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const { currentPageId, setCurrentPageId } = useEditor();
 
   const pages = useMemo(() => getEditorPages(), []);
-  const currentLabel = getPageDefinition(currentPageId).label;
+  const currentDef = getPageDefinition(currentPageId);
+  const currentLabel = currentDef.label;
+
+  const submenuDef = submenuPageId ? getPageDefinition(submenuPageId) : null;
 
   useEffect(() => {
     if (!open) return;
     const handle = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSubmenuPageId(null);
+      }
     };
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
@@ -93,6 +100,12 @@ function PageSwitcher() {
   const handleSelect = (pageId: PageId) => {
     setCurrentPageId(pageId);
     setOpen(false);
+    setSubmenuPageId(null);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    setSubmenuPageId(null);
   };
 
   return (
@@ -100,30 +113,53 @@ function PageSwitcher() {
       <button
         type="button"
         className="editor-header__page-trigger"
-        onClick={() => setOpen(!open)}
+        onClick={() => { setOpen(!open); setSubmenuPageId(null); }}
       >
+        <EditorIcon name={currentDef.icon} size={18} className="editor-header__page-icon" />
         <span>{currentLabel}</span>
-        <EditorIcon name="unfold_more" size={16} className="editor-header__page-chevron" />
+        <EditorIcon name="keyboard_arrow_down" size={20} className="editor-header__page-chevron" />
       </button>
       {open && (
         <ul className="sf-dropdown__menu editor-header__page-menu">
-          {pages.map((page) => {
-            const isActive = page.id === currentPageId;
-            return (
+          {submenuDef && submenuDef.steps ? (
+            <>
               <li
-                key={page.id}
-                className={`sf-dropdown__item${isActive ? " sf-dropdown__item--active" : ""}`}
-                onClick={() => handleSelect(page.id)}
+                className="sf-dropdown__item sf-dropdown__item--back"
+                onClick={() => setSubmenuPageId(null)}
               >
-                <span style={{ flex: 1 }}>{page.label}</span>
-                <span
-                  className={`material-symbols-rounded sf-dropdown__check${isActive ? " sf-dropdown__check--visible" : ""}`}
-                >
-                  check
-                </span>
+                <EditorIcon name="chevron_left" size={18} />
+                <span style={{ flex: 1, fontWeight: 500 }}>{submenuDef.label}</span>
               </li>
-            );
-          })}
+              <li className="sf-dropdown__divider" />
+              {submenuDef.steps.map((step) => (
+                <li
+                  key={step.id}
+                  className="sf-dropdown__item"
+                  onClick={() => handleClose()}
+                >
+                  <EditorIcon name={step.icon} size={18} className="editor-header__page-icon" />
+                  <span style={{ flex: 1 }}>{step.label}</span>
+                </li>
+              ))}
+            </>
+          ) : (
+            pages.map((page) => {
+              const hasSteps = page.steps && page.steps.length > 0;
+              return (
+                <li
+                  key={page.id}
+                  className={`sf-dropdown__item${page.id === currentPageId ? " sf-dropdown__item--active" : ""}`}
+                  onClick={() => hasSteps ? setSubmenuPageId(page.id) : handleSelect(page.id)}
+                >
+                  <EditorIcon name={page.icon} size={18} className="editor-header__page-icon" />
+                  <span style={{ flex: 1 }}>{page.label}</span>
+                  {hasSteps && (
+                    <EditorIcon name="chevron_right" size={18} className="editor-header__page-icon" />
+                  )}
+                </li>
+              );
+            })
+          )}
         </ul>
       )}
     </div>

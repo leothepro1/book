@@ -339,6 +339,7 @@ export const sliderSection: SectionDefinition = {
   category: "navigation",
   tags: ["slider", "horizontal", "scroll", "knappar", "snabblänkar"],
   thumbnail: "",
+  scope: "free",
 
   settingsSchema: [
     {

@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
+import type { DraftPatch } from "@/app/(admin)/_lib/tenant/updateDraft";
 import type { DraftUpdateEvent } from "./types";
 import merge from "deepmerge";
 
@@ -19,7 +20,7 @@ interface PreviewContextValue {
   lastUpdated: Date | null;
   refresh: () => void;
   isConnected: boolean;
-  updateConfig: (changes: Partial<TenantConfig>) => void;
+  updateConfig: (changes: DraftPatch) => void;
   /** Call after updateDraft() completes to trigger content refresh in iframe */
   notifyDraftSaved: () => void;
   /** Increments each time a draft is persisted to DB */
@@ -82,7 +83,7 @@ export function PreviewProvider({
 
   // Optimistic update — merges changes into local state instantly (no DB roundtrip)
   // Arrays are fully replaced (not concatenated) to match updateDraft server behavior
-  const updateConfig = useCallback((changes: Partial<TenantConfig>) => {
+  const updateConfig = useCallback((changes: DraftPatch) => {
     setConfig(prev => {
       if (!prev) return prev;
       return merge<TenantConfig>(prev, changes as TenantConfig, { arrayMerge: overwriteArrays });

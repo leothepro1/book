@@ -14,7 +14,6 @@
 .g-container {
   max-width: 72rem;
   margin: 0 auto;
-  padding: 14px 17px 124px;
 }
 
 .g-hero {
@@ -80,6 +79,17 @@
   font-size: 20px;
   font-weight: 700;
   font-family: var(--font-heading);
+  color: var(--text);
+}
+
+.g-description {
+  font-size: 15px;
+  font-weight: 400;
+  font-family: var(--font-body);
+  color: var(--text);
+  line-height: 1.5;
+  text-align: left;
+  margin: 0;
 }
 
 .g-body {

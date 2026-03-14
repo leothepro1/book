@@ -260,6 +260,12 @@ export type SettingField = {
   hideLabel?: boolean;
   /** Unit label displayed next to range input (e.g. "%", "px"). */
   unit?: string;
+  /**
+   * Conditional visibility: this field is only shown when another field
+   * has a specific value. Example: { key: "layout", value: "tabs" }
+   * means this field is only visible when the "layout" field equals "tabs".
+   */
+  visibleWhen?: { key: string; value: unknown };
 };
 
 // ─── Section Component Contract ──────────────────────────

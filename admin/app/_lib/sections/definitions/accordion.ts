@@ -281,6 +281,7 @@ export const accordionSection: SectionDefinition = {
   category: "content",
   tags: ["accordion", "dragspel", "faq", "frågor", "expanderbar"],
   thumbnail: "",
+  scope: "free",
 
   settingsSchema: [
     {

@@ -14,7 +14,7 @@
  * No database migration required — page definitions are code-level constants.
  */
 
-import type { PageId, PageDefinition, PageLayout } from "./types";
+import type { PageId, PageDefinition, PageLayout, LayoutVariant } from "./types";
 
 // ═══════════════════════════════════════════════════════════════
 // PAGE DEFINITIONS
@@ -24,37 +24,62 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
   {
     id: "home",
     label: "Startsida",
+    icon: "storefront",
     layout: { header: true, body: "sections", footer: true },
+    availableLayouts: [{ id: "default", label: "Standard" }],
+    defaultLayout: "default",
     editorVisible: true,
   },
   {
     id: "stays",
     label: "Bokningar",
-    layout: { header: true, body: "fixed", footer: true },
+    icon: "calendar_today",
+    layout: { header: true, body: "sections", footer: true },
+    availableLayouts: [{ id: "default", label: "Standard" }],
+    defaultLayout: "default",
     editorVisible: true,
   },
   {
     id: "account",
-    label: "Konto",
+    label: "Kundkonton",
+    icon: "person",
     layout: { header: true, body: "fixed", footer: true },
-    editorVisible: false,
+    availableLayouts: [{ id: "default", label: "Standard" }],
+    defaultLayout: "default",
+    editorVisible: true,
   },
   {
     id: "check-in",
-    label: "Incheckning",
+    label: "Checka in",
+    icon: "task_alt",
     layout: { header: true, body: "fixed", footer: false },
-    editorVisible: false,
+    availableLayouts: [{ id: "default", label: "Standard" }],
+    defaultLayout: "default",
+    editorVisible: true,
+    steps: [
+      { id: "tasks", label: "Uppgifter", icon: "assignment" },
+      { id: "find-booking", label: "Bokning", icon: "frame_inspect" },
+      { id: "sign", label: "Signera", icon: "draw" },
+      { id: "success", label: "Incheckning klar", icon: "trophy" },
+      { id: "wallet-card", label: "Walletcard", icon: "wallet" },
+    ],
   },
   {
     id: "help-center",
     label: "Hjälpcenter",
+    icon: "help",
     layout: { header: false, body: "fixed", footer: false },
+    availableLayouts: [{ id: "default", label: "Standard" }],
+    defaultLayout: "default",
     editorVisible: false,
   },
   {
     id: "support",
     label: "Support",
+    icon: "support_agent",
     layout: { header: false, body: "fixed", footer: false },
+    availableLayouts: [{ id: "default", label: "Standard" }],
+    defaultLayout: "default",
     editorVisible: false,
   },
 ] as const;
@@ -67,6 +92,11 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
 const PAGE_MAP = new Map<PageId, PageDefinition>(
   PAGE_DEFINITIONS.map((p) => [p.id, p]),
 );
+
+/** Type guard: checks whether a string is a valid PageId. */
+export function isPageId(id: string): id is PageId {
+  return PAGE_MAP.has(id as PageId);
+}
 
 /**
  * Default layout used when a page definition is not found.
@@ -91,7 +121,10 @@ export function getPageDefinition(pageId: PageId | string): PageDefinition {
   return {
     id: pageId as PageId,
     label: pageId,
+    icon: "article",
     layout: DEFAULT_LAYOUT,
+    availableLayouts: [{ id: "default", label: "Standard" }],
+    defaultLayout: "default",
     editorVisible: false,
   };
 }

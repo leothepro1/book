@@ -1,5 +1,6 @@
 import { prisma } from "../../../_lib/db/prisma";
 import { createGlobalMockBooking } from "@/app/_lib/mockData";
+import { env } from "@/app/_lib/env";
 
 export async function resolveBookingFromToken(token?: string | null) {
   if (!token) return null;
@@ -8,12 +9,9 @@ export async function resolveBookingFromToken(token?: string | null) {
   if (token === "preview" || token === "test") {
     console.log(`[resolveBooking] ${token.toUpperCase()} mode - using global mock`);
 
-    // Use the same tenant as the admin dev fallback (getCurrentTenant.ts)
-    const DEV_ORG_ID = "org_3ARDCw7QTcQ0s1v0KCbF1DSrLip";
-
     try {
-      const firstTenant = process.env.NODE_ENV === "development"
-        ? await prisma.tenant.findUnique({ where: { clerkOrgId: DEV_ORG_ID } })
+      const firstTenant = process.env.NODE_ENV === "development" && env.DEV_ORG_ID
+        ? await prisma.tenant.findUnique({ where: { clerkOrgId: env.DEV_ORG_ID } })
         : await prisma.tenant.findFirst();
 
       if (firstTenant) {

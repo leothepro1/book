@@ -1,8 +1,9 @@
 import { headers } from 'next/headers';
 import { Webhook } from 'svix';
 import { prisma } from '@/app/_lib/db/prisma';
+import { env } from '@/app/_lib/env';
 
-const webhookSecret = process.env.CLERK_WEBHOOK_SECRET || '';
+const webhookSecret = env.CLERK_WEBHOOK_SECRET;
 
 export async function POST(req: Request) {
   const headersList = await headers();
@@ -31,54 +32,61 @@ export async function POST(req: Request) {
     return new Response('Error: Verification failed', { status: 400 });
   }
 
-  const eventType = evt.type;
-
-  // Handle organization.created event
-  if (eventType === 'organization.created') {
-    const { id, name, slug, created_by } = evt.data;
-    
-    console.log('📝 Organization created:', name);
-
-    // Skapa tenant i databasen
-    await prisma.tenant.create({
-      data: {
-        clerkOrgId: id,
-        name: name,
-        slug: slug || name.toLowerCase().replace(/\s+/g, '-'),
-        ownerClerkUserId: created_by,
-        settings: getDefaultTenantSettings(name),
-      },
-    });
-
-    console.log('✅ Tenant synced to database');
+  // ── Idempotency: check if this event was already processed ──
+  const existing = await prisma.webhookEvent.findUnique({
+    where: { id: svix_id },
+  });
+  if (existing) {
+    return new Response('Already processed', { status: 200 });
   }
 
-  // Handle organization.updated event
-  if (eventType === 'organization.updated') {
-    const { id, name } = evt.data;
-    
-    console.log('📝 Organization updated:', name);
+  const eventType: string = evt.type;
 
-    await prisma.tenant.update({
-      where: { clerkOrgId: id },
-      data: { name },
+  // ── Process event inside a transaction with idempotency record ──
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Double-check inside transaction (race condition guard)
+      const alreadyProcessed = await tx.webhookEvent.findUnique({
+        where: { id: svix_id },
+      });
+      if (alreadyProcessed) return;
+
+      if (eventType === 'organization.created') {
+        const { id, name, slug, created_by } = evt.data;
+        await tx.tenant.create({
+          data: {
+            clerkOrgId: id,
+            name: name,
+            slug: slug || name.toLowerCase().replace(/\s+/g, '-'),
+            ownerClerkUserId: created_by,
+            settings: getDefaultTenantSettings(name),
+          },
+        });
+      }
+
+      if (eventType === 'organization.updated') {
+        const { id, name } = evt.data;
+        await tx.tenant.update({
+          where: { clerkOrgId: id },
+          data: { name },
+        });
+      }
+
+      if (eventType === 'organization.deleted') {
+        const { id } = evt.data;
+        await tx.tenant.delete({
+          where: { clerkOrgId: id },
+        });
+      }
+
+      // Record this event as processed
+      await tx.webhookEvent.create({
+        data: { id: svix_id, eventType },
+      });
     });
-
-    console.log('✅ Tenant updated');
-  }
-
-  // Handle organization.deleted event
-  if (eventType === 'organization.deleted') {
-    const { id } = evt.data;
-    
-    console.log('📝 Organization deleted:', id);
-
-    // Soft delete eller hard delete beroende på din policy
-    await prisma.tenant.delete({
-      where: { clerkOrgId: id },
-    });
-
-    console.log('✅ Tenant deleted');
+  } catch (err) {
+    console.error(`[Webhook] Error processing ${eventType}:`, err);
+    return new Response('Error: Processing failed', { status: 500 });
   }
 
   return new Response('Webhook received', { status: 200 });

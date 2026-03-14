@@ -7,10 +7,19 @@ import type { InputJsonValue } from "@prisma/client/runtime/library";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import merge from "deepmerge";
 
+/** Deeply partial TenantConfig — matches deepmerge's actual merge semantics. */
+export type DraftPatch = {
+  [K in keyof TenantConfig]?: TenantConfig[K] extends (infer U)[]
+    ? U[]
+    : TenantConfig[K] extends Record<string, unknown>
+      ? Partial<TenantConfig[K]>
+      : TenantConfig[K];
+};
+
 const overwriteArrays: merge.Options["arrayMerge"] = (_target, source) => source;
 
 export async function updateDraft(
-  changes: Partial<TenantConfig>
+  changes: DraftPatch
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const { userId } = await getAuth();

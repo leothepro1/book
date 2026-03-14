@@ -28,6 +28,7 @@ import { sanitizeSectionSettings } from "./sanitizeSettings";
 import { migrateSettings } from "./migrations";
 import { resolvePageItems } from "@/app/_lib/sections/resolve";
 import { ensureSectionsRegistered } from "@/app/_lib/sections/registry";
+import { getPageSections } from "@/app/_lib/pages/config";
 
 const DEFAULT_PAGE_PADDING = 17;
 import { CategorySection } from "../../_components/cards/CategorySection";
@@ -179,9 +180,21 @@ export async function ThemeRenderer({
   };
 
   // ── Content feed: sections + cards interleaved by sortOrder ──
-  const pageItems = templateKey === "home"
-    ? resolvePageItems(config.home.cards ?? [], config.home.sections ?? [], config)
-    : [];
+  // Cards are home-specific legacy content; sections are per-page via config accessor.
+  //
+  // Two section namespaces exist:
+  //   1. Theme manifest slots (templateSlots) — defined by the theme author
+  //   2. Tenant page sections (pageSections) — placed by the tenant in the editor
+  // If a section type was already rendered via a theme slot, skip it in the
+  // content feed to prevent double-rendering the same section type.
+  const themeRenderedTypes = new Set(
+    [...headerSlots, ...templateSlots, ...footerSlots].map((s) => s.type),
+  );
+  const pageCards = templateKey === "home" ? (config.home?.cards ?? []) : [];
+  const pageSections = getPageSections(config, templateKey);
+  const pageItems = resolvePageItems(pageCards, pageSections, config).filter(
+    (item) => item.kind !== "section" || !themeRenderedTypes.has(item.renderProps.definition.id),
+  );
 
   return (
     <MapsProvider maps={config.maps ?? []}>

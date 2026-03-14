@@ -9,6 +9,7 @@
  *
  * This section has no custom settings — all content comes from
  * config.home.cards which is managed in the admin Home editor.
+ * Cards are home-specific legacy content and always read from config.home.
  */
 
 import { resolveHomeItems } from "../../../../_components/cards/resolveHomeItems";
@@ -18,7 +19,7 @@ import { registerSection } from "../../registry";
 import type { SectionProps } from "../../types";
 
 function CardFeedStandard({ config, token }: SectionProps) {
-  const items = resolveHomeItems(config.home.cards ?? []);
+  const items = resolveHomeItems(config.home?.cards ?? []);
 
   if (items.length === 0) return null;
 

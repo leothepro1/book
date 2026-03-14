@@ -5,6 +5,8 @@ import type { FeatureFlags } from "../features/types";
 import type { VisibilityRule } from "../rules/types";
 import type { TenantSectionSettings } from "../themes/types";
 import type { ColorScheme, ColorSchemeId } from "@/app/_lib/color-schemes/types";
+import type { SectionInstance } from "@/app/_lib/sections/types";
+import type { PageId } from "@/app/_lib/pages/types";
 
 export type PropertySettings = {
   name: string;
@@ -61,7 +63,7 @@ export type MapConfig = {
   updatedAt: string;
 };
 
-// ─── Page-scoped Header Configuration ───────────────────────
+// ─── Global Header Configuration ────────────────────────────
 
 export type HeaderConfig = {
   /** Logo horizontal alignment within the header bar. */
@@ -86,7 +88,7 @@ export const HEADER_DEFAULTS: HeaderConfig = {
   paddingLeft: 16,
 };
 
-// ─── Page-scoped Footer Configuration ───────────────────────
+// ─── Global Footer Configuration ────────────────────────────
 
 export type FooterActiveMode = "background" | "icon-only";
 
@@ -116,6 +118,73 @@ export const PAGE_FOOTER_DEFAULTS: PageFooterConfig = {
   paddingLeft: 5,
 };
 
+// ─── Stays Page Configuration ────────────────────────────────
+
+export type StaysCoreConfig = {
+  /** Page heading text (may contain HTML from richtext). */
+  heading: string;
+  /** Optional description shown below heading (may contain HTML). */
+  description: string;
+  /** Heading font size (px). */
+  headingSize: number;
+  /** Space below heading (px). */
+  headingMarginBottom: number;
+  /** Layout mode: "tabs" (grouped by current/previous) or "list" (flat chronological). */
+  layout: "tabs" | "list";
+  /** Tab label for current/upcoming bookings. */
+  tabCurrentLabel: string;
+  /** Tab label for previous bookings. */
+  tabPreviousLabel: string;
+  /** Whether booking cards have a box-shadow. */
+  cardShadow: boolean;
+  /** Fallback hero image URL for booking cards. */
+  cardImageUrl: string;
+  /** Section padding (px). */
+  paddingTop: number;
+  paddingRight: number;
+  paddingBottom: number;
+  paddingLeft: number;
+  /** Color scheme applied to the stays page body. */
+  colorSchemeId?: ColorSchemeId;
+};
+
+export const STAYS_CORE_DEFAULTS: StaysCoreConfig = {
+  heading: "Bokningar",
+  description: "",
+  headingSize: 22,
+  headingMarginBottom: 10,
+  layout: "tabs",
+  cardShadow: true,
+  tabCurrentLabel: "Aktuella",
+  tabPreviousLabel: "Tidigare",
+  cardImageUrl:
+    "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=600&q=60",
+  paddingTop: 19,
+  paddingRight: 17,
+  paddingBottom: 124,
+  paddingLeft: 17,
+};
+
+// ─── Per-Page Configuration (v2) ─────────────────────────────
+
+/**
+ * Per-page configuration stored in TenantConfig.pages[pageId].
+ *
+ * Each page can have its own sections, header, and footer config.
+ * Tenants cannot create or delete pages — only the platform defines pages.
+ * Tenants can enable/disable pages and switch layouts via layoutId.
+ */
+export type PageConfig = {
+  /** Whether this page is active for the tenant. */
+  enabled: boolean;
+  /** Which layout variant is active for this page. */
+  layoutId: string;
+  /** Section instances placed on this page (section-bearing pages only). */
+  sections: SectionInstance[];
+  /** Stays-specific core config (heading, tabs, card image). */
+  coreComponent?: StaysCoreConfig;
+};
+
 export type TenantConfig = {
   supportLinks: SupportLinks;
   tenantId: string;
@@ -125,6 +194,28 @@ export type TenantConfig = {
   footer: FooterConfig;
   features: FeatureFlags;
   rules: VisibilityRule[];
+
+  /**
+   * Global header configuration shared across all pages.
+   * Previously stored per-page in pages[pageId].header.
+   */
+  globalHeader?: HeaderConfig;
+
+  /**
+   * Global footer configuration shared across all pages.
+   * Previously stored per-page in pages[pageId].footer.
+   */
+  globalFooter?: PageFooterConfig;
+
+  /**
+   * Per-page configuration (v2).
+   * Keyed by PageId. Each entry stores sections, layout,
+   * and enabled state for that page.
+   *
+   * This is the canonical location for page-scoped data.
+   * Legacy data in `home.sections` is migrated on read via migrateToV2Pages().
+   */
+  pages?: Partial<Record<PageId, PageConfig>>;
 
   /** Active portal theme ID. null = no theme selected yet. */
   themeId: string | null;

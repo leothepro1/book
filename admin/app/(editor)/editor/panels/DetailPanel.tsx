@@ -356,7 +356,7 @@ export function DetailPanel() {
         )}
 
         {/* Universal section control: Color Scheme selector */}
-        {resolved.level === "section" && config?.colorSchemes && config.colorSchemes.length > 0 && (
+        {resolved.level === "section" && config?.colorSchemes && config.colorSchemes.length > 0 && (!resolved._editableFields || resolved._editableFields.has("colorSchemeId")) && (
           <ColorSchemeSelect
             schemes={config.colorSchemes}
             value={currentColorSchemeId}
@@ -373,21 +373,25 @@ export function DetailPanel() {
           />
         )}
 
-        {/* Accordion: Avstånd — inside body, right after form */}
-        <SpacingAccordion
-          paddingTop={(resolved.values.paddingTop as number) ?? 0}
-          paddingRight={(resolved.values.paddingRight as number) ?? 0}
-          paddingBottom={(resolved.values.paddingBottom as number) ?? 0}
-          paddingLeft={(resolved.values.paddingLeft as number) ?? 0}
-          onChange={handleChange}
-        />
+        {/* Accordion: Avstånd — hidden when editableFields is set and doesn't include padding */}
+        {(!resolved._editableFields || resolved._editableFields.has("paddingTop")) && (
+          <SpacingAccordion
+            paddingTop={(resolved.values.paddingTop as number) ?? 0}
+            paddingRight={(resolved.values.paddingRight as number) ?? 0}
+            paddingBottom={(resolved.values.paddingBottom as number) ?? 0}
+            paddingLeft={(resolved.values.paddingLeft as number) ?? 0}
+            onChange={handleChange}
+          />
+        )}
 
-        {/* Accordion: Schemalägg */}
-        <ScheduleAccordion
-          scheduledShow={(resolved.values.scheduledShow as string) ?? undefined}
-          scheduledHide={(resolved.values.scheduledHide as string) ?? undefined}
-          onChange={handleChange}
-        />
+        {/* Accordion: Schemalägg — hidden when editableFields is set and doesn't include scheduling */}
+        {(!resolved._editableFields || resolved._editableFields.has("scheduledShow")) && (
+          <ScheduleAccordion
+            scheduledShow={(resolved.values.scheduledShow as string) ?? undefined}
+            scheduledHide={(resolved.values.scheduledHide as string) ?? undefined}
+            onChange={handleChange}
+          />
+        )}
 
         {/* Content tree removed — direct navigation to element panels */}
       </div>
@@ -1260,6 +1264,14 @@ type ResolvedTarget = {
   values: Record<string, unknown>;
   /** Keys that belong to presetSettings (section level only). */
   _presetSettingKeys?: Set<string>;
+  /** Element type key (element level only). */
+  _elementType?: string;
+  /**
+   * Platform-admin contract: when set, only these field keys are editable.
+   * Used by locked sections to restrict which controls DetailPanel shows.
+   * Undefined means "show all fields" (default for free sections).
+   */
+  _editableFields?: Set<string>;
 };
 
 function resolveTarget(
@@ -1275,10 +1287,19 @@ function resolveTarget(
     const preset = def?.presets.find((p) => p.key === section.presetKey);
     const sectionSchema = def?.settingsSchema ?? [];
     const presetSchema = preset?.settingsSchema ?? [];
+    const fullSchema = [...sectionSchema, ...presetSchema];
+
+    // editableFields guard: filter schema to only platform-allowed fields
+    const editable = def?.editableFields;
+    const editableSet = editable ? new Set(editable) : undefined;
+    const filteredSchema = editableSet
+      ? fullSchema.filter((f) => editableSet.has(f.key))
+      : fullSchema;
+
     return {
       level: "section",
       name: section.title || def?.name || section.definitionId,
-      schema: [...sectionSchema, ...presetSchema],
+      schema: filteredSchema,
       values: {
         ...section.presetSettings,
         ...section.settings,
@@ -1286,6 +1307,7 @@ function resolveTarget(
         scheduledHide: section.scheduledHide ?? (section.settings?.scheduledHide as string | undefined),
       },
       _presetSettingKeys: new Set(presetSchema.map((f) => f.key)),
+      _editableFields: editableSet,
     } as ResolvedTarget;
   }
 
@@ -1327,6 +1349,7 @@ function resolveTarget(
       scheduledShow: element.scheduledShow ?? (element.settings?.scheduledShow as string | undefined),
       scheduledHide: element.scheduledHide ?? (element.settings?.scheduledHide as string | undefined),
     },
+    _elementType: element.type,
   };
 }
 
