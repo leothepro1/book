@@ -17,6 +17,7 @@ import { useState, useEffect, useRef } from "react";
 import { usePublishBarInternal } from "@/app/(admin)/_components/PublishBar/PublishBarContext";
 import { Tooltip } from "@/app/_components/Tooltip";
 import { EditorIcon } from "@/app/_components/EditorIcon";
+import { useEditor } from "./EditorContext";
 import "@/app/(admin)/_components/PublishBar/publish-bar.css";
 
 export function EditorPublishBar() {
@@ -32,12 +33,24 @@ export function EditorPublishBar() {
     handlePublish,
   } = usePublishBarInternal();
 
+  const { inspectorActive, setInspectorActive } = useEditor();
+
   const canUndo = undoStack.length > 0 && !isUndoing && !isLingeringAfterPublish;
   const canRedo = redoStack.length > 0 && !isUndoing && !isLingeringAfterPublish;
   const canPublish = hasUnsavedChanges && !isPublishing && !isLingeringAfterPublish;
 
   return (
     <div className="editor-publish">
+      <Tooltip label={inspectorActive ? "Inaktivera inspektör" : "Aktivera inspektör"}>
+        <button
+          type="button"
+          className={`editor-publish__icon-btn editor-publish__inspector${inspectorActive ? " editor-publish__inspector--active" : ""}`}
+          onClick={() => setInspectorActive(!inspectorActive)}
+          aria-label={inspectorActive ? "Inaktivera inspektör" : "Aktivera inspektör"}
+        >
+          <EditorIcon name="web_traffic" size={20} />
+        </button>
+      </Tooltip>
       <div className="editor-publish__group">
         <Tooltip label="Ångra">
           <button

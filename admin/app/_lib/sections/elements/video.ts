@@ -23,7 +23,6 @@ export const videoElement: ElementDefinition = {
       type: "video",
       label: "Video",
       default: "",
-      required: true,
     },
     {
       key: "autoplay",

@@ -36,7 +36,7 @@ const contentSlot: SlotDefinition = {
   key: "content",
   name: "Innehåll",
   description: "Flikens textinnehåll — rubrik och brödtext.",
-  allowedElements: ["heading", "text", "image", "video", "gallery", "button", "divider"],
+  allowedElements: ["heading", "text", "richtext", "image", "video", "gallery", "button", "divider", "icon", "collapsible", "map"],
   minElements: 1,
   maxElements: 8,
   defaultElements: [
@@ -284,14 +284,14 @@ export const tabsSection: SectionDefinition = {
       key: "padding",
       type: "range",
       label: "Padding",
-      default: 16,
+      default: 0,
       min: 0,
       max: 64,
       step: 4,
     },
   ],
   settingDefaults: {
-    padding: 16,
+    padding: 0,
   },
 
   presets: [underlinePreset, pillPreset],

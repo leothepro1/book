@@ -1,0 +1,74 @@
+{
+  "name": "Hospitality Platform",
+
+  // ── Base image ──
+  // Node 24 on Debian Bookworm — matches production runtime.
+  // Universal image adds git, curl, jq, docker CLI out of the box.
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
+
+  // ── Machine recommendation ──
+  // 4-core / 16GB is the sweet spot for Next.js + Turbopack + Prisma.
+  // 2-core works but Turbopack compilations are noticeably slower.
+  // To change: Codespaces → "..." menu → "Change machine type".
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb"
+  },
+
+  // ── Ports ──
+  "forwardPorts": [3000, 5432],
+  "portsAttributes": {
+    "3000": {
+      "label": "Dev Server",
+      "onAutoForward": "notify"
+    },
+    "5432": {
+      "label": "PostgreSQL",
+      "onAutoForward": "silent"
+    }
+  },
+
+  // ── Lifecycle scripts ──
+  // postCreateCommand: runs ONCE when the codespace is first created.
+  // postStartCommand: runs EVERY time the codespace starts (including resume from pause).
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postStartCommand": "bash .devcontainer/start.sh",
+
+  // ── Environment ──
+  "remoteEnv": {
+    "NEXT_TELEMETRY_DISABLED": "1",
+    "NODE_OPTIONS": "--max-old-space-size=4096"
+  },
+
+  // ── VS Code settings ──
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.tabSize": 2,
+        "typescript.tsdk": "admin/node_modules/typescript/lib",
+        "typescript.enablePromptUseWorkspaceTsdk": true,
+        "files.eol": "\n",
+        "search.exclude": {
+          "**/node_modules": true,
+          "**/.next": true,
+          "**/admin/.next": true
+        }
+      },
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "prisma.prisma",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  },
+
+  // ── Features ──
+  // Docker-in-Docker for db:up script (runs PostgreSQL in container).
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  }
+}

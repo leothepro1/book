@@ -82,6 +82,7 @@ export function FieldImage({ field, value, onChange }: Props) {
         onConfirm={handleLibraryConfirm}
         currentValue={src}
         uploadFolder="sections"
+        accept="image"
       />
     </FieldWrapper>
   );

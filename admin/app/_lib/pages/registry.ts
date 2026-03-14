@@ -25,31 +25,37 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
     id: "home",
     label: "Startsida",
     layout: { header: true, body: "sections", footer: true },
+    editorVisible: true,
   },
   {
     id: "stays",
     label: "Bokningar",
     layout: { header: true, body: "fixed", footer: true },
+    editorVisible: true,
   },
   {
     id: "account",
     label: "Konto",
     layout: { header: true, body: "fixed", footer: true },
+    editorVisible: false,
   },
   {
     id: "check-in",
     label: "Incheckning",
     layout: { header: true, body: "fixed", footer: false },
+    editorVisible: false,
   },
   {
     id: "help-center",
     label: "Hjälpcenter",
     layout: { header: false, body: "fixed", footer: false },
+    editorVisible: false,
   },
   {
     id: "support",
     label: "Support",
     layout: { header: false, body: "fixed", footer: false },
+    editorVisible: false,
   },
 ] as const;
 
@@ -86,6 +92,7 @@ export function getPageDefinition(pageId: PageId | string): PageDefinition {
     id: pageId as PageId,
     label: pageId,
     layout: DEFAULT_LAYOUT,
+    editorVisible: false,
   };
 }
 

@@ -24,7 +24,7 @@ export function TabsUnderlineRenderer(props: SectionRendererProps) {
   const { section, settings, presetSettings, blocks } = props;
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const padding = (settings.padding as number) ?? 16;
+  const padding = (settings.padding as number) ?? 0;
   const alignment = (presetSettings.alignment as string) || "left";
 
   if (blocks.length === 0) return null;
@@ -70,7 +70,7 @@ export function TabsPillRenderer(props: SectionRendererProps) {
   const { section, settings, presetSettings, blocks } = props;
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const padding = (settings.padding as number) ?? 16;
+  const padding = (settings.padding as number) ?? 0;
   const gap = (presetSettings.gap as number) ?? 8;
 
   if (blocks.length === 0) return null;

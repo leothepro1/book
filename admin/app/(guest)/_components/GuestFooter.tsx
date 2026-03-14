@@ -6,7 +6,7 @@ import { usePathname, useParams } from "next/navigation";
 import type { TenantConfig } from "../_lib/tenant/types";
 import { PAGE_FOOTER_DEFAULTS } from "../_lib/tenant/types";
 import type { ColorScheme } from "@/app/_lib/color-schemes/types";
-import { resolvePageIdFromPathname, getPageLayout } from "@/app/_lib/pages";
+import { resolvePageIdFromPathname, getPageLayout, getPageFooter } from "@/app/_lib/pages";
 import "./guest-footer.css";
 
 type FooterKey = "home" | "stays" | "account";
@@ -70,7 +70,8 @@ export default function GuestFooter({ config }: { config: TenantConfig }) {
   const params = useParams<{ token?: string; slug?: string }>();
 
   // Page layout contract — hide footer if page doesn't support it
-  const pageLayout = useMemo(() => getPageLayout(resolvePageIdFromPathname(pathname)), [pathname]);
+  const pageId = useMemo(() => resolvePageIdFromPathname(pathname), [pathname]);
+  const pageLayout = useMemo(() => getPageLayout(pageId), [pageId]);
   if (!pageLayout.footer) return null;
 
   // KRITISK FIX: Använd preview mode base OM vi är i /preview/
@@ -105,7 +106,7 @@ export default function GuestFooter({ config }: { config: TenantConfig }) {
     ];
   }, [token]);
 
-  const ftr = { ...PAGE_FOOTER_DEFAULTS, ...config.home?.footer };
+  const ftr = { ...PAGE_FOOTER_DEFAULTS, ...getPageFooter(config, pageId) };
   const iconOnly = ftr.activeMode === "icon-only";
 
   // Resolve color scheme CSS vars for footer

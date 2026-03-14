@@ -8,7 +8,7 @@
  * PublishBarProvider (which manages publish workflow).
  *
  * State ownership:
- *   EditorContext   → UI state (active rail, selected section, panel navigation)
+ *   EditorContext   → UI state (active rail, selected section, panel navigation, inspector)
  *   PreviewContext  → Data state (config, optimistic updates, iframe sync)
  *   PublishBar      → Workflow state (undo/redo, publish, dirty tracking)
  *
@@ -24,6 +24,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { PageId } from "@/app/_lib/pages/types";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -80,6 +81,18 @@ export type EditorContextValue = {
 
   /** Navigate to settings panel, optionally opening a specific accordion. */
   navigateToSettings: (accordion?: string) => void;
+
+  /** Which page the editor is currently editing. Default "home". */
+  currentPageId: PageId;
+  setCurrentPageId: (pageId: PageId) => void;
+
+  /** Whether the section inspector overlay is active in the preview iframe. */
+  inspectorActive: boolean;
+  setInspectorActive: (active: boolean) => void;
+
+  /** Section ID currently hovered via inspector (for sp-row highlight sync). null = none. */
+  inspectorHoveredSectionId: string | null;
+  setInspectorHoveredSectionId: (id: string | null) => void;
 };
 
 // ─── Context ────────────────────────────────────────────────
@@ -93,6 +106,9 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const [detailTarget, setDetailTarget] = useState<DetailTarget | null>(null);
   const [settingsAccordion, setSettingsAccordion] = useState<string | null>(null);
+  const [currentPageId, setCurrentPageIdRaw] = useState<PageId>("home");
+  const [inspectorActive, setInspectorActive] = useState(false);
+  const [inspectorHoveredSectionId, setInspectorHoveredSectionId] = useState<string | null>(null);
 
   const selectSection = useCallback((id: string | null) => {
     setSelectedSectionId(id);
@@ -110,6 +126,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     setDetailTarget(target);
     setSelectedSectionId(target.sectionId);
     setActiveRail("sections");
+    setInspectorHoveredSectionId(null);
   }, []);
 
   const goBack = useCallback(() => {
@@ -119,6 +136,24 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const closeDetail = useCallback(() => {
     setDetailTarget(null);
     setSelectedSectionId(null);
+  }, []);
+
+  /**
+   * Switch the editor to a different page.
+   * Resets ALL editor state that would be unsafe to carry across pages:
+   *   - detail target (section/block/element selection)
+   *   - selected section ID
+   *   - settings accordion hint
+   *   - inspector hover state
+   *   - active rail returns to sections
+   */
+  const handleSetCurrentPageId = useCallback((pageId: PageId) => {
+    setCurrentPageIdRaw(pageId);
+    setActiveRail("sections");
+    setSelectedSectionId(null);
+    setDetailTarget(null);
+    setSettingsAccordion(null);
+    setInspectorHoveredSectionId(null);
   }, []);
 
   const navigateToSettings = useCallback((accordion?: string) => {
@@ -141,6 +176,12 @@ export function EditorProvider({ children }: { children: ReactNode }) {
         closeDetail,
         settingsAccordion,
         navigateToSettings,
+        currentPageId,
+        setCurrentPageId: handleSetCurrentPageId,
+        inspectorActive,
+        setInspectorActive,
+        inspectorHoveredSectionId,
+        setInspectorHoveredSectionId,
       }}
     >
       {children}
