@@ -13,7 +13,7 @@ import type { Booking, BookingStatus as PrismaBookingStatus } from "@prisma/clie
 
 // ── PMS Provider ────────────────────────────────────────────
 
-export const PmsProviderSchema = z.enum(["manual", "mews", "apaleo", "opera"]);
+export const PmsProviderSchema = z.enum(["manual", "mews", "apaleo", "opera", "fake"]);
 export type PmsProvider = z.infer<typeof PmsProviderSchema>;
 
 // ── Integration Status ──────────────────────────────────────

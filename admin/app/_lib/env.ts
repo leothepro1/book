@@ -26,6 +26,7 @@ const envSchema = z.object({
   CRON_SECRET: z.string().min(16, "CRON_SECRET must be at least 16 characters"),
 
   // Service vars — optional at boot, validated on first use via accessor
+  CLERK_SECRET_KEY: z.string().optional(),
   CLERK_WEBHOOK_SECRET: z.string().optional(),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),
@@ -35,6 +36,11 @@ const envSchema = z.object({
 
   /** Clerk org ID for dev mode mock auth. Must NOT be set in production. */
   DEV_ORG_ID: z.string().optional(),
+
+  /** Real Clerk user ID of the org owner — used as acting user for Clerk API
+   *  calls in dev mode where the session user is mocked as "dev_user".
+   *  Must NOT be set in production. */
+  DEV_OWNER_USER_ID: z.string().optional(),
 });
 
 // ── Validation ─────────────────────────────────────────────────
@@ -53,17 +59,27 @@ function validateEnv() {
 
   const parsed = result.data;
 
-  // Guard: DEV_ORG_ID must never be set in production
+  // Guard: DEV_* vars must never be set in production
   if (process.env.NODE_ENV === "production" && parsed.DEV_ORG_ID) {
     throw new Error(
       "[env] DEV_ORG_ID is set in production — this is a security risk. Remove it from the production environment.",
     );
   }
+  if (process.env.NODE_ENV === "production" && parsed.DEV_OWNER_USER_ID) {
+    throw new Error(
+      "[env] DEV_OWNER_USER_ID is set in production — this is a security risk. Remove it from the production environment.",
+    );
+  }
 
-  // Guard: DEV_ORG_ID must be set in development
+  // Guard: DEV_* vars must be set in development
   if (process.env.NODE_ENV === "development" && !parsed.DEV_ORG_ID) {
     throw new Error(
       "[env] DEV_ORG_ID is required in development mode. Add it to .env.local.",
+    );
+  }
+  if (process.env.NODE_ENV === "development" && !parsed.DEV_OWNER_USER_ID) {
+    throw new Error(
+      "[env] DEV_OWNER_USER_ID is required in development mode. Add it to .env.local.",
     );
   }
 
@@ -98,6 +114,9 @@ export const env = {
   CRON_SECRET: parsed.CRON_SECRET,
 
   // Lazy — throw on first access if missing
+  get CLERK_SECRET_KEY() {
+    return required("CLERK_SECRET_KEY", parsed.CLERK_SECRET_KEY);
+  },
   get CLERK_WEBHOOK_SECRET() {
     return required("CLERK_WEBHOOK_SECRET", parsed.CLERK_WEBHOOK_SECRET);
   },
@@ -117,4 +136,5 @@ export const env = {
   // Truly optional
   MEDIA_CLEANUP_SECRET: parsed.MEDIA_CLEANUP_SECRET,
   DEV_ORG_ID: parsed.DEV_ORG_ID,
+  DEV_OWNER_USER_ID: parsed.DEV_OWNER_USER_ID,
 } as const;

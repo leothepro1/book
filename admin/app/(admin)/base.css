@@ -13,9 +13,9 @@
   /* Surface / Background */
   --admin-bg:            #F9F8F7;
   --admin-surface:       #FFFFFF;
-  --admin-surface-hover: #F3F3F3;
-  --admin-surface-active:#EAE8E6;
-  --admin-surface-muted: #F1F0EE;
+  --admin-surface-hover: #F9F8F7;
+  --admin-surface-active:#F0EFED;
+  --admin-surface-muted: #f0efed;
   --admin-surface-sunken:#ECEBEA;
 
   /* Sidebar */
@@ -233,8 +233,8 @@ select {
 label,
 .admin-label {
   font-family: var(--admin-font);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 450;
   color: var(--admin-text);
   display: block;
   margin-bottom: 7px;
@@ -598,14 +598,14 @@ a:hover {
   width: 100%;
   padding: 8px 10px;
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 450;
   color: var(--admin-text);
   border: none;
   background: none;
   cursor: pointer;
   border-radius: 8px;
   text-align: left;
-  gap: 10px;
+  gap: 8px;
   transition: background 0.1s;
 }
 
@@ -1038,7 +1038,8 @@ a:hover {
 }
 
 .admin-float-input:focus {
-  border-color: var(--admin-text);
+  border-color: var(--admin-accent);
+  outline: 1px solid var(--admin-accent);
 }
 
 .admin-float-label {

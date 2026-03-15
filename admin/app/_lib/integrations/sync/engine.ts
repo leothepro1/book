@@ -12,6 +12,7 @@
  * - Failed jobs are retried with exponential backoff
  * - Dead jobs update TenantIntegration.status to "error"
  * - Consecutive failures tracked for circuit breaker
+ * - Individual booking failures tracked in BookingSyncError for retry
  */
 
 import { prisma } from "@/app/_lib/db/prisma";
@@ -24,20 +25,18 @@ import { recordFailure, recordSuccess } from "./circuit-breaker";
 import { toPrismaBookingStatus } from "../prisma-mapping";
 import type { PmsProvider, NormalizedBooking, SyncResult } from "../types";
 
+const MAX_BOOKING_ERROR_ATTEMPTS = 5;
+
 /**
  * Run a sync job that has already been claimed (status = "running").
- * The job is identified by jobId — the caller (run-jobs route) passes
- * the ID from the job returned by claimNextPendingJob().
  */
 export async function runSyncJob(jobId: string): Promise<void> {
-  // Load the already-claimed job
   const job = await prisma.syncJob.findUnique({ where: { id: jobId } });
   if (!job || job.status !== "running") return;
 
   await logSyncEvent(job.tenantId, job.provider, "sync.started", { jobId });
 
   try {
-    // Load integration
     const integration = await prisma.tenantIntegration.findUnique({
       where: { tenantId: job.tenantId },
     });
@@ -48,30 +47,37 @@ export async function runSyncJob(jobId: string): Promise<void> {
         data: { status: "dead", lastError: "Integration not active" },
       });
       await logSyncEvent(job.tenantId, job.provider, "sync.failed", {
-        jobId,
-        error: "Integration not active",
+        jobId, error: "Integration not active",
       });
       return;
     }
 
-    // Decrypt credentials
     const credentials = decryptCredentials(
       Buffer.from(integration.credentialsEncrypted),
       Buffer.from(integration.credentialsIv),
     );
 
-    // Resolve adapter
     const provider = integration.provider as PmsProvider;
     const adapter = getAdapter(provider, credentials);
 
-    // Call syncBookings
+    // Retry previously failed bookings before main sync
+    await retryFailedBookings(job.tenantId, provider, adapter, credentials);
+
+    // Main sync
     const since = (job.payload as Record<string, unknown> | null)?.since
       ? new Date((job.payload as Record<string, unknown>).since as string)
       : undefined;
 
     const result: SyncResult = await adapter.syncBookings(job.tenantId, since);
 
-    // Success — mark completed, reset consecutive failures
+    // Record individual booking errors for retry
+    for (const err of result.errors) {
+      if (err.externalId !== "BATCH") {
+        await recordBookingError(job.tenantId, provider, err.externalId, err.error);
+      }
+    }
+
+    // Success
     const completedAt = new Date();
     await prisma.syncJob.update({
       where: { id: jobId },
@@ -87,20 +93,7 @@ export async function runSyncJob(jobId: string): Promise<void> {
       cancelled: result.cancelled,
       errorCount: result.errors.length,
     });
-
-    // Log individual sync errors (non-fatal)
-    for (const err of result.errors) {
-      await logSyncEvent(
-        job.tenantId,
-        job.provider,
-        "sync.failed",
-        { jobId, bookingExternalId: err.externalId, error: err.error, retriable: err.retriable },
-        err.externalId,
-        err.error,
-      );
-    }
   } catch (error) {
-    // Failure — record failure, retry or mark dead
     const errorMessage = error instanceof Error ? error.message : String(error);
     const failedAt = new Date();
 
@@ -112,7 +105,6 @@ export async function runSyncJob(jobId: string): Promise<void> {
     await recordFailure(job.tenantId, job.provider as PmsProvider, errorMessage);
 
     if (job.attempt >= job.maxAttempts) {
-      // Mark dead — no more retries, update integration status
       await prisma.syncJob.update({
         where: { id: jobId },
         data: { status: "dead" },
@@ -128,14 +120,10 @@ export async function runSyncJob(jobId: string): Promise<void> {
       });
 
       await logSyncEvent(job.tenantId, job.provider, "sync.failed", {
-        jobId,
-        error: errorMessage,
-        dead: true,
-        attempt: job.attempt,
-        maxAttempts: job.maxAttempts,
+        jobId, error: errorMessage, dead: true,
+        attempt: job.attempt, maxAttempts: job.maxAttempts,
       });
     } else {
-      // Schedule retry
       await enqueueRetry({
         id: job.id,
         tenantId: job.tenantId,
@@ -146,12 +134,74 @@ export async function runSyncJob(jobId: string): Promise<void> {
       });
 
       await logSyncEvent(job.tenantId, job.provider, "sync.failed", {
-        jobId,
-        error: errorMessage,
-        attempt: job.attempt,
-        willRetry: true,
+        jobId, error: errorMessage, attempt: job.attempt, willRetry: true,
       });
     }
+  }
+}
+
+/**
+ * Retry previously failed individual bookings.
+ * Called at the start of each sync job.
+ */
+async function retryFailedBookings(
+  tenantId: string,
+  provider: PmsProvider,
+  adapter: import("../adapter").PmsAdapter,
+  _credentials: Record<string, string>,
+): Promise<void> {
+  const failedBookings = await prisma.bookingSyncError.findMany({
+    where: {
+      tenantId,
+      resolvedAt: null,
+      attempts: { lt: MAX_BOOKING_ERROR_ATTEMPTS },
+    },
+    take: 10,
+  });
+
+  for (const failed of failedBookings) {
+    try {
+      const booking = await adapter.getBooking(tenantId, failed.externalId);
+      if (booking) {
+        await upsertSyncedBooking(booking, provider);
+        await prisma.bookingSyncError.update({
+          where: { id: failed.id },
+          data: { resolvedAt: new Date() },
+        });
+      }
+    } catch {
+      await prisma.bookingSyncError.update({
+        where: { id: failed.id },
+        data: {
+          attempts: { increment: 1 },
+          lastAttemptAt: new Date(),
+        },
+      });
+    }
+  }
+}
+
+/**
+ * Record an individual booking sync error for later retry.
+ */
+async function recordBookingError(
+  tenantId: string,
+  provider: string,
+  externalId: string,
+  error: string,
+): Promise<void> {
+  try {
+    await prisma.bookingSyncError.upsert({
+      where: { tenantId_externalId: { tenantId, externalId } },
+      create: { tenantId, provider, externalId, error },
+      update: {
+        error,
+        attempts: { increment: 1 },
+        lastAttemptAt: new Date(),
+      },
+    });
+  } catch {
+    // Non-critical — don't let error tracking crash the sync
   }
 }
 
@@ -185,13 +235,11 @@ export async function upsertSyncedBooking(
     lastSyncedAt: now,
   };
 
-  // Check if booking exists by externalId
   const existing = await prisma.booking.findUnique({
     where: { externalId: booking.externalId },
   });
 
   if (existing) {
-    // Idempotency: skip if existing data is newer
     if (existing.lastSyncedAt && existing.lastSyncedAt >= now) {
       return "skipped";
     }
@@ -204,7 +252,6 @@ export async function upsertSyncedBooking(
     return "updated";
   }
 
-  // Create new booking — handle P2002 race condition
   try {
     await prisma.booking.create({
       data: {
@@ -219,7 +266,6 @@ export async function upsertSyncedBooking(
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
-      // Race condition — another instance created it first, fall through to update
       await prisma.booking.update({
         where: { externalId: booking.externalId },
         data: bookingData,

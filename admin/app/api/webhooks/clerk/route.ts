@@ -64,11 +64,19 @@ export async function POST(req: Request) {
         });
       }
 
+      // Double-write strategy: updateClerkOrgName() in organisation/actions.ts
+      // writes to both Clerk and DB directly for immediate UI consistency.
+      // This webhook handler serves as a safety net — it syncs changes made
+      // outside our app (e.g. Clerk Dashboard) and provides eventual consistency
+      // in multi-instance deployments. The duplicate write is idempotent and safe.
       if (eventType === 'organization.updated') {
-        const { id, name } = evt.data;
+        const { id, name, slug } = evt.data;
         await tx.tenant.update({
           where: { clerkOrgId: id },
-          data: { name },
+          data: {
+            name,
+            ...(slug ? { slug } : {}),
+          },
         });
       }
 

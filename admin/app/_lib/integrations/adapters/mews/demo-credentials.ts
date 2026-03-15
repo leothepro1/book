@@ -18,5 +18,6 @@ export function getMewsDemoCredentials(): MewsCredentials {
     webhookSecret: "demo-webhook-secret",
     enterpriseId: "",
     useDemoEnvironment: true,
+    initialSyncDays: 90,
   };
 }

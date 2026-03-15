@@ -17,6 +17,7 @@ export const MewsCredentialsSchema = z.object({
     (v) => v === "true" || v === true,
     z.boolean(),
   ),
+  initialSyncDays: z.coerce.number().min(1).max(365).default(90),
 });
 
 export type MewsCredentials = z.infer<typeof MewsCredentialsSchema>;

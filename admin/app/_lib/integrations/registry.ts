@@ -13,6 +13,7 @@ import type { PmsProvider } from "./types";
 import { ManualAdapter } from "./adapters/manual";
 import { MewsAdapter } from "./adapters/mews";
 import { MewsCredentialsSchema } from "./adapters/mews/credentials";
+import { FakeAdapter, FakeCredentialsSchema } from "./adapters/fake";
 
 const manualAdapter = new ManualAdapter();
 
@@ -21,6 +22,7 @@ const manualAdapter = new ManualAdapter();
  *
  * For "manual": returns singleton, credentials ignored.
  * For "mews": requires credentials, returns a new MewsAdapter instance.
+ * For "fake": requires credentials (scenario config), dev only.
  */
 export function getAdapter(
   provider: PmsProvider,
@@ -36,6 +38,17 @@ export function getAdapter(
       }
       const parsed = MewsCredentialsSchema.parse(credentials);
       return new MewsAdapter(parsed);
+    }
+
+    case "fake": {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("Fake adapter is not available in production");
+      }
+      if (!credentials) {
+        throw new Error("Fake adapter requires credentials");
+      }
+      const parsed = FakeCredentialsSchema.parse(credentials);
+      return new FakeAdapter(parsed);
     }
 
     case "apaleo":

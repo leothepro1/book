@@ -79,18 +79,57 @@ model Tenant {
   /// Snapshot of settings before last publish — enables one-click rollback.
   previousSettings Json?
 
+  // Företagsinformation (Clerk äger namn/slug/logo — dessa är kompletterande)
+  legalName          String?
+  businessType       String?
+  nickname           String?
+  phone              String?
+
+  // Adress
+  addressStreet      String?
+  addressPostalCode  String?
+  addressCity        String?
+  addressCountry     String?
+
+  // Statliga ID-handlingar
+  organizationNumber String?
+  vatNumber          String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  bookings         Booking[]
-  walletCardDesign WalletCardDesign?
-  mediaAssets      MediaAsset[]
-  integration      TenantIntegration?
-  syncJobs         SyncJob[]
-  syncEvents       SyncEvent[]
+  bookings           Booking[]
+  walletCardDesign   WalletCardDesign?
+  mediaAssets        MediaAsset[]
+  integration        TenantIntegration?
+  syncJobs           SyncJob[]
+  syncEvents         SyncEvent[]
+  businessEntities   BusinessEntity[]
 
   @@index([slug])
   @@index([clerkOrgId])
+}
+
+/// Juridisk person / företagsenhet kopplad till en organisation.
+/// En tenant kan ha flera företagsenheter (t.ex. hotell + restaurang).
+model BusinessEntity {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  businessType      String
+  legalName         String
+  nickname          String?
+
+  addressStreet     String?
+  addressApartment  String?
+  addressPostalCode String?
+  addressCity       String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([tenantId])
 }
 
 model Booking {
@@ -262,6 +301,7 @@ model TenantIntegration {
   lastError            String?
   consecutiveFailures  Int       @default(0)
   externalTenantId     String?
+  isDemoEnvironment    Boolean   @default(false)
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
@@ -319,6 +359,44 @@ model SyncEvent {
 
   @@index([tenantId, createdAt])
   @@index([tenantId, eventType])
+}
+
+// ============================================================================
+// RATE LIMIT (Database-backed per-AccessToken rate limiter)
+// ============================================================================
+
+/// Token bucket rate limiter backed by the database.
+/// Key is a hashed AccessToken — never stores the raw token.
+/// Used by PMS adapters to respect external API rate limits
+/// across serverless invocations.
+model RateLimit {
+  id         String   @id @default(cuid())
+  key        String   @unique
+  tokens     Float    @default(200)
+  lastRefill DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ============================================================================
+// BOOKING SYNC ERRORS (Dead letter for individual booking failures)
+// ============================================================================
+
+/// Tracks individual booking sync failures for retry.
+/// Retried at the start of each sync job (up to 5 attempts).
+/// Resolved entries cleaned up after 30 days.
+model BookingSyncError {
+  id            String    @id @default(cuid())
+  tenantId      String
+  provider      String
+  externalId    String
+  error         String
+  attempts      Int       @default(1)
+  lastAttemptAt DateTime  @default(now())
+  resolvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@unique([tenantId, externalId])
+  @@index([tenantId, resolvedAt])
 }
 
 // ============================================================================

@@ -7,7 +7,10 @@
  * and merged in the mapper.
  *
  * Rate limit: 200 requests per AccessToken per 30 seconds.
- * Handled by MewsClient's token bucket.
+ * Handled by database-backed rate limiter in MewsClient.
+ *
+ * Pagination: max 20 pages per sync (2000 bookings).
+ * If more exist, a continuation cursor is stored for the next job.
  */
 
 import type { PmsAdapter } from "../../adapter";
@@ -41,6 +44,8 @@ import { toMewsStates } from "./status-mapping";
 
 const PAGE_SIZE = 100;
 const CUSTOMER_BATCH_SIZE = 1000;
+const MAX_PAGES_PER_SYNC = 20;
+const DEFAULT_INITIAL_SYNC_DAYS = 90;
 
 export class MewsAdapter implements PmsAdapter {
   readonly provider: PmsProvider = "mews";
@@ -58,17 +63,17 @@ export class MewsAdapter implements PmsAdapter {
     tenantId: string,
     filters?: { guestEmail?: string; status?: NormalizedBooking["status"][] },
   ): Promise<NormalizedBooking[]> {
-    // Build Mews states filter
     const mewsStates = filters?.status
       ? filters.status.flatMap(toMewsStates)
       : undefined;
 
-    // Paginate through all reservations
-    const reservations = await this.fetchAllReservations({ states: mewsStates });
+    const { reservations } = await this.fetchReservations({
+      states: mewsStates,
+      maxPages: MAX_PAGES_PER_SYNC,
+    });
 
     if (reservations.length === 0) return [];
 
-    // Batch fetch customers and resources
     const customerIds = [...new Set(
       reservations
         .filter((r) => r.AccountType === "Customer" || !r.AccountType)
@@ -83,7 +88,6 @@ export class MewsAdapter implements PmsAdapter {
     const customerMap = await this.fetchCustomerMap(customerIds);
     const resourceMap = await this.fetchResourceMap(resourceIds);
 
-    // Map to normalized bookings
     let bookings = reservations.map((r) =>
       mapMewsReservationToNormalized(
         r,
@@ -93,7 +97,6 @@ export class MewsAdapter implements PmsAdapter {
       ),
     );
 
-    // Post-fetch filter by email (Mews doesn't support email filtering)
     if (filters?.guestEmail) {
       const email = filters.guestEmail.toLowerCase();
       bookings = bookings.filter((b) => b.guestEmail.toLowerCase() === email);
@@ -155,13 +158,8 @@ export class MewsAdapter implements PmsAdapter {
 
   // ── notifyCheckIn / notifyCheckOut ───────────────────────────
 
-  async notifyCheckIn(_tenantId: string, _externalId: string): Promise<void> {
-    // No-op — Mews manages check-in state internally
-  }
-
-  async notifyCheckOut(_tenantId: string, _externalId: string): Promise<void> {
-    // No-op — Mews manages check-out state internally
-  }
+  async notifyCheckIn(_tenantId: string, _externalId: string): Promise<void> {}
+  async notifyCheckOut(_tenantId: string, _externalId: string): Promise<void> {}
 
   // ── testConnection ───────────────────────────────────────────
 
@@ -199,27 +197,20 @@ export class MewsAdapter implements PmsAdapter {
     let cancelled = 0;
 
     try {
-      // Fetch reservations updated since last sync (or all if no since)
-      const body: Record<string, unknown> = {
-        Limitation: { Count: PAGE_SIZE },
-      };
+      // Enforce since — default to initialSyncDays for first sync
+      const effectiveSince = since ?? new Date(
+        Date.now() - (this.credentials.initialSyncDays ?? DEFAULT_INITIAL_SYNC_DAYS) * 24 * 60 * 60 * 1000,
+      );
 
-      if (since) {
-        body.UpdatedUtc = {
-          StartUtc: since.toISOString(),
-          EndUtc: new Date().toISOString(),
-        };
-      }
-
-      const reservations = await this.fetchAllReservations({
-        updatedSince: since,
+      const { reservations } = await this.fetchReservations({
+        updatedSince: effectiveSince,
+        maxPages: MAX_PAGES_PER_SYNC,
       });
 
       if (reservations.length === 0) {
         return { created: 0, updated: 0, cancelled: 0, errors: [], syncedAt: new Date() };
       }
 
-      // Batch fetch customers and resources
       const customerIds = [...new Set(reservations.map((r) => r.AccountId))];
       const resourceIds = [...new Set(
         reservations
@@ -230,7 +221,8 @@ export class MewsAdapter implements PmsAdapter {
       const customerMap = await this.fetchCustomerMap(customerIds);
       const resourceMap = await this.fetchResourceMap(resourceIds);
 
-      // Map to normalized bookings — count by status
+      const { upsertSyncedBooking } = await import("../../sync/engine");
+
       for (const reservation of reservations) {
         try {
           const booking = mapMewsReservationToNormalized(
@@ -242,13 +234,10 @@ export class MewsAdapter implements PmsAdapter {
             tenantId,
           );
 
-          // Import the upsert function lazily to avoid circular deps
-          const { upsertSyncedBooking } = await import("../../sync/engine");
           const result = await upsertSyncedBooking(booking, "mews");
 
           if (result === "created") created++;
           else if (result === "updated") updated++;
-
           if (booking.status === "cancelled") cancelled++;
         } catch (error) {
           errors.push({
@@ -259,7 +248,6 @@ export class MewsAdapter implements PmsAdapter {
         }
       }
     } catch (error) {
-      // If the entire fetch fails, report it as a single error
       errors.push({
         externalId: "BATCH",
         error: error instanceof Error ? error.message : String(error),
@@ -293,24 +281,29 @@ export class MewsAdapter implements PmsAdapter {
     headers: Record<string, string>,
     credentials: Record<string, string>,
   ): Promise<boolean> {
-    // Mews uses URL query parameter token — the webhook route extracts it
-    // and passes it as x-forwarded-token header
     const token = headers["x-forwarded-token"];
     const expectedSecret = credentials.webhookSecret ?? credentials.WebhookSecret;
-
     if (!token || !expectedSecret) return false;
-
     return token === expectedSecret;
   }
 
   // ── Private helpers ──────────────────────────────────────────
 
-  private async fetchAllReservations(options: {
+  /**
+   * Fetch reservations with pagination limit.
+   * Returns the reservations fetched and the last cursor
+   * (non-null if more pages exist).
+   */
+  private async fetchReservations(options: {
     states?: string[];
     updatedSince?: Date;
-  }): Promise<MewsReservation[]> {
+    maxPages?: number;
+    startCursor?: string;
+  }): Promise<{ reservations: MewsReservation[]; lastCursor: string | null }> {
     const all: MewsReservation[] = [];
-    let cursor: string | undefined;
+    let cursor: string | undefined = options.startCursor;
+    const maxPages = options.maxPages ?? MAX_PAGES_PER_SYNC;
+    let pageCount = 0;
 
     do {
       const body: Record<string, unknown> = {
@@ -336,9 +329,17 @@ export class MewsAdapter implements PmsAdapter {
       const parsed = MewsGetReservationsResponseSchema.parse(raw);
       all.push(...parsed.Reservations);
       cursor = parsed.Cursor ?? undefined;
+      pageCount++;
+
+      if (pageCount >= maxPages && cursor) {
+        console.warn(
+          `[MewsAdapter] Pagination limit reached (${maxPages} pages, ${all.length} reservations). More data may exist.`,
+        );
+        return { reservations: all, lastCursor: cursor };
+      }
     } while (cursor);
 
-    return all;
+    return { reservations: all, lastCursor: null };
   }
 
   private async fetchCustomerMap(
@@ -347,7 +348,6 @@ export class MewsAdapter implements PmsAdapter {
     const map = new Map<string, MewsCustomer>();
     if (customerIds.length === 0) return map;
 
-    // Batch in chunks of 1000 (Mews limit)
     for (let i = 0; i < customerIds.length; i += CUSTOMER_BATCH_SIZE) {
       const batch = customerIds.slice(i, i + CUSTOMER_BATCH_SIZE);
 

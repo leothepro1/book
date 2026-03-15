@@ -45,7 +45,7 @@
   background: var(--admin-bg);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
 
   transform: translateY(100%);
   opacity: 0;
@@ -102,6 +102,7 @@
   width: 100%;
   min-height: 0;
   padding: 24px 0;
+  gap: 24px;
 }
 
 
@@ -265,6 +266,291 @@
 
 .settings-main {
   flex: 1;
-  overflow-y: auto;
   min-width: 0;
+  overflow: visible;
+}
+
+/* ── Breadcrumb header ── */
+
+.settings-main__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0 12px;
+}
+
+#settings-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#settings-content > div {
+  padding: 16px;
+  background: #fff;
+  border-radius: 0.75rem;
+  box-shadow:
+    0 0.3125rem 0.3125rem -0.15625rem #00000008,
+    0 0.1875rem 0.1875rem -0.09375rem #00000005,
+    0 0.125rem 0.125rem -0.0625rem #00000005,
+    0 0.0625rem 0.0625rem -0.03125rem #00000008,
+    0 0.03125rem 0.03125rem #0000000a,
+    0 0 0 0.0625rem #0000000f;
+}
+
+.settings-main__header-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--admin-text-secondary);
+  transition: background 0.12s, color 0.12s;
+  flex-shrink: 0;
+}
+
+.settings-main__header-icon:hover {
+  background: var(--admin-surface-hover);
+  color: var(--admin-text);
+}
+
+.settings-main__header-chevron {
+  color: var(--admin-text-tertiary);
+  flex-shrink: 0;
+}
+
+.settings-main__header-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--admin-text);
+  letter-spacing: -0.01em;
+}
+
+/* ── Settings modal animations ── */
+
+@keyframes settings-modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes settings-modal-scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ── Button spinner (shared across settings panels) ── */
+
+.btn-spinner {
+  animation: btnSpin 0.6s linear infinite, btnSpinnerIn 0.25s cubic-bezier(0.22, 0.68, 0, 1.04) both;
+  flex-shrink: 0;
+  will-change: width, opacity, margin-left;
+}
+
+.btn-spinner--out {
+  animation: btnSpin 0.6s linear infinite, btnSpinnerOut 0.2s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes btnSpinnerIn {
+  0%   { width: 0; opacity: 0; margin-left: -8px; }
+  70%  { width: 18px; opacity: 1; margin-left: 1px; }
+  100% { width: 16px; opacity: 1; margin-left: 0; }
+}
+
+@keyframes btnSpinnerOut {
+  0%   { width: 16px; opacity: 1; margin-left: 0; }
+  100% { width: 0; opacity: 0; margin-left: -8px; }
+}
+
+/* ── Select PMS button ── */
+
+.settings-btn--select-pms {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 20px;
+  font-family: var(--admin-font);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #2783de;
+  border: none;
+  background: rgba(0, 124, 215, 0.094);
+  width: 100%;
+  border-radius: 8px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.settings-btn--select-pms:hover {
+  background: rgba(0, 124, 215, 0.14);
+  color: #1a6fc2;
+}
+
+.settings-btn--test {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  font-family: var(--admin-font);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  background: #E7F3FB;
+  color: #2783DE;
+  border: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.settings-btn--test:hover:not(:disabled) {
+  background: rgba(0, 124, 215, 0.14);
+  color: #1a6fc2;
+}
+
+.settings-btn--test:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-btn--connect {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  font-family: var(--admin-font);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  background: #2783DE;
+  color: #fff;
+  border: none;
+  transition: background 0.15s;
+}
+
+.settings-btn--connect:hover:not(:disabled) {
+  background: #1a6fc2;
+}
+
+.settings-btn--connect:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-btn--outline {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  font-family: var(--admin-font);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--admin-text);
+  border: 1px solid var(--admin-border);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.settings-btn--outline:hover:not(:disabled) {
+  background: var(--admin-surface-hover);
+  border-color: var(--admin-border-focus);
+}
+
+.settings-btn--outline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-btn--danger {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  font-family: var(--admin-font);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  background: var(--admin-danger-tint);
+  color: var(--admin-danger);
+  border: none;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.settings-btn--danger:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.settings-btn--danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-btn--danger-solid {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  font-family: var(--admin-font);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  background: var(--admin-danger);
+  color: #fff;
+  border: none;
+  transition: opacity 0.15s;
+}
+
+.settings-btn--danger-solid:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.settings-btn--danger-solid:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Skeleton loader ── */
+
+.skel {
+  background: #E6E5E3;
+  border-radius: 6px;
+  animation: skelPulse 1.4s ease-in-out infinite;
+}
+
+.skel--text {
+  border-radius: 6px;
+}
+
+.skel--circle {
+  flex-shrink: 0;
+}
+
+.skel--card {
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+}
+
+@keyframes skelPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@keyframes btnSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }

@@ -9,6 +9,7 @@ import { useNavigationGuard } from './NavigationGuard';
 import { SidebarUserRow } from './SidebarUserRow';
 import { EditorIcon } from '@/app/_components/EditorIcon';
 import { useSettings } from './SettingsContext';
+import { useRole } from './RoleContext';
 
 export function Sidebar() {
   const { isCollapsed, setIsCollapsed } = useSidebar();
@@ -17,6 +18,7 @@ export function Sidebar() {
   const locale: AdminLocale = 'sv';
   const { navigate, isGuarded } = useNavigationGuard();
   const { open: openSettings } = useSettings();
+  const { isAdmin } = useRole();
 
   const isActive = (path: string) => pathname === path;
 
@@ -209,18 +211,20 @@ export function Sidebar() {
             {t(locale, 'integrations')}
           </span>
         </Link>
-        {/* Inställningar */}
-        <button
-          onClick={openSettings}
-          className="w-full flex items-center gap-3 p-2 rounded-lg text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232]"
-        >
-          <EditorIcon name="settings" size={20} />
-          <span className={`text-base tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-            isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-          }`}>
-            Inställningar
-          </span>
-        </button>
+        {/* Inställningar — only visible to org:admin */}
+        {isAdmin && (
+          <button
+            onClick={openSettings}
+            className="w-full flex items-center gap-3 p-2 rounded-lg text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232]"
+          >
+            <EditorIcon name="settings" size={20} />
+            <span className={`text-base tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+            }`}>
+              Inställningar
+            </span>
+          </button>
+        )}
       </nav>
 
       {/* Footer med ikoner - längst ner */}

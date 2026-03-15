@@ -3,6 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useSettings } from './SettingsContext';
 import { EditorIcon } from '@/app/_components/EditorIcon';
+import { IntegrationsContent } from '@/app/(admin)/settings/integrations/IntegrationsContent';
+import { OrganisationContent } from '@/app/(admin)/settings/organisation/OrganisationContent';
+import { UsersContent } from '@/app/(admin)/settings/users/UsersContent';
+import { useRole } from './RoleContext';
 
 const IS_DEV = process.env.NODE_ENV === 'development';
 
@@ -25,22 +29,24 @@ type SettingsNavItem = {
   id: string;
   label: string;
   icon: string;
+  /** If true, only visible to org:admin users */
+  adminOnly?: boolean;
 };
 
 const NAV_ITEMS: { items: SettingsNavItem[]; divider?: boolean }[] = [
   {
     items: [
-      { id: 'organization', label: 'Organisation', icon: 'corporate_fare' },
-      { id: 'users', label: 'Användare', icon: 'person' },
-      { id: 'billing', label: 'Fakturering', icon: 'receipt_long' },
+      { id: 'organization', label: 'Organisation', icon: 'corporate_fare', adminOnly: true },
+      { id: 'users', label: 'Användare', icon: 'face', adminOnly: true },
+      { id: 'billing', label: 'Fakturering', icon: 'receipt_long', adminOnly: true },
     ],
     divider: true,
   },
   {
     items: [
       { id: 'general', label: 'Allmänt', icon: 'storefront' },
-      { id: 'integrations', label: 'Integrationer', icon: 'linked_services' },
-      { id: 'domains', label: 'Domäner', icon: 'globe' },
+      { id: 'integrations', label: 'Integrationer', icon: 'linked_services', adminOnly: true },
+      { id: 'domains', label: 'Domäner', icon: 'globe', adminOnly: true },
       { id: 'notifications', label: 'Aviseringar', icon: 'notifications' },
       { id: 'checkin-checkout', label: 'In- och utcheckning', icon: 'room_service' },
     ],
@@ -50,8 +56,14 @@ const NAV_ITEMS: { items: SettingsNavItem[]; divider?: boolean }[] = [
 export function SettingsPanel() {
   const { isOpen, close } = useSettings();
   const { organization } = useClerkOrganization();
-  const [activeItem, setActiveItem] = useState('organization');
+  const { isAdmin } = useRole();
+  const [activeItem, setActiveItem] = useState(isAdmin ? 'organization' : 'general');
   const [search, setSearch] = useState('');
+  const [resetKey, setResetKey] = useState(0);
+  const [subTitle, setSubTitle] = useState<string | null>(null);
+  const [inviteTrigger, setInviteTrigger] = useState(0);
+  const [headerExtra, setHeaderExtra] = useState<React.ReactNode>(null);
+  const [headerAction, setHeaderAction] = useState<React.ReactNode>(null);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -63,10 +75,11 @@ export function SettingsPanel() {
     return () => { document.body.style.overflow = ''; };
   }, [isOpen]);
 
-  // Filter nav items by search
+  // Filter nav items by search and role
   const filteredGroups = NAV_ITEMS.map((group) => ({
     ...group,
     items: group.items.filter((item) =>
+      (!item.adminOnly || isAdmin) &&
       item.label.toLowerCase().includes(search.toLowerCase())
     ),
   })).filter((group) => group.items.length > 0);
@@ -131,7 +144,7 @@ export function SettingsPanel() {
                   {group.items.map((item) => (
                     <button
                       key={item.id}
-                      onClick={() => setActiveItem(item.id)}
+                      onClick={() => { setActiveItem(item.id); setSubTitle(null); setInviteTrigger(0); setHeaderExtra(null); setHeaderAction(null); }}
                       className={`settings-nav__item ${activeItem === item.id ? 'settings-nav__item--active' : ''}`}
                     >
                       <EditorIcon name={item.icon} size={18} />
@@ -146,9 +159,53 @@ export function SettingsPanel() {
 
           {/* ── Right content (flex 1) ── */}
           <div className="settings-main">
-            <p style={{ color: 'var(--admin-text-secondary)', padding: 24 }}>
-              {activeItem}
-            </p>
+            {/* Breadcrumb header — always visible */}
+            {(() => {
+              const item = NAV_ITEMS.flatMap((g) => g.items).find((i) => i.id === activeItem);
+              if (!item) return null;
+              return (
+                <div className="settings-main__header">
+                  <button
+                    className="settings-main__header-icon"
+                    onClick={() => { setResetKey((k) => k + 1); setSubTitle(null); setInviteTrigger(0); setHeaderExtra(null); setHeaderAction(null); }}
+                    aria-label={`Tillbaka till ${item.label}`}
+                  >
+                    <EditorIcon name={item.icon} size={18} />
+                  </button>
+                  <EditorIcon name="chevron_right" size={16} className="settings-main__header-chevron" />
+                  <h3 className="settings-main__header-title">{subTitle ?? item.label}</h3>
+                  {headerExtra}
+                  {activeItem === 'users' && (
+                    headerAction ?? (
+                      <button
+                        className="settings-btn--connect"
+                        style={{ marginLeft: 'auto', fontSize: 13, padding: '5px 12px' }}
+                        onClick={() => setInviteTrigger((n) => n + 1)}
+                      >
+                        Lägg till användare
+                      </button>
+                    )
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Panel content */}
+            <div id="settings-content">
+              {activeItem === 'organization' ? (
+                <OrganisationContent key={resetKey} onSubTitleChange={setSubTitle} />
+              ) : activeItem === 'users' ? (
+                <UsersContent key={resetKey} onSubTitleChange={setSubTitle} triggerInvite={inviteTrigger} onHeaderExtraChange={setHeaderExtra} onHeaderActionChange={setHeaderAction} />
+              ) : activeItem === 'integrations' ? (
+                <IntegrationsContent key={resetKey} onSubTitleChange={setSubTitle} />
+              ) : (
+                <div key={resetKey} style={{ padding: 0 }}>
+                  <p style={{ color: 'var(--admin-text-secondary)', fontSize: 13 }}>
+                    Kommer snart
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
