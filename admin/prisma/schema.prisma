@@ -15,6 +15,7 @@ enum BookingStatus {
   PRE_CHECKIN
   ACTIVE
   COMPLETED
+  CANCELLED
 }
 
 enum AccessPassType {
@@ -84,6 +85,9 @@ model Tenant {
   bookings         Booking[]
   walletCardDesign WalletCardDesign?
   mediaAssets      MediaAsset[]
+  integration      TenantIntegration?
+  syncJobs         SyncJob[]
+  syncEvents       SyncEvent[]
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -93,6 +97,12 @@ model Booking {
   id       String @id @default(cuid())
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  // PMS integration — links local booking to external PMS counterpart
+  // null for ManualAdapter tenants (existing rows unaffected)
+  externalId      String?    @unique
+  externalSource  String?
+  lastSyncedAt    DateTime?
 
   // Guest identity
   firstName  String
@@ -126,6 +136,7 @@ model Booking {
   @@index([guestEmail])
   @@index([status])
   @@index([arrival])
+  @@index([tenantId, externalId])
 }
 
 model MagicLink {
@@ -233,10 +244,105 @@ model AccessPassEvent {
 }
 
 // ============================================================================
-// WEBHOOK IDEMPOTENCY
+// PMS INTEGRATION (Per-tenant PMS connection config)
 // ============================================================================
 
-/// Tracks processed webhook events to ensure idempotency.
+/// Stores per-tenant PMS integration credentials and state.
+/// Credentials are AES-256-GCM encrypted — never stored in cleartext.
+/// Separate from TenantConfig (which is sent to the editor frontend).
+model TenantIntegration {
+  id                   String    @id @default(cuid())
+  tenantId             String    @unique
+  provider             String
+  credentialsEncrypted Bytes
+  credentialsIv        Bytes
+  status               String    @default("pending")
+  lastSyncAt           DateTime?
+  lastErrorAt          DateTime?
+  lastError            String?
+  consecutiveFailures  Int       @default(0)
+  externalTenantId     String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([provider, externalTenantId])
+}
+
+// ============================================================================
+// SYNC JOBS (Background PMS sync queue)
+// ============================================================================
+
+/// Queue entry for a background PMS sync operation.
+/// Processed one at a time by the job runner API route.
+/// Failed jobs are retried with exponential backoff up to maxAttempts.
+model SyncJob {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider     String
+  status       String    @default("pending")
+  attempt      Int       @default(0)
+  maxAttempts  Int       @default(5)
+  scheduledAt  DateTime  @default(now())
+  startedAt    DateTime?
+  completedAt  DateTime?
+  failedAt     DateTime?
+  lastError    String?
+  payload      Json?
+  createdAt    DateTime  @default(now())
+
+  @@index([tenantId, status])
+  @@index([scheduledAt, status])
+}
+
+// ============================================================================
+// SYNC EVENTS (Immutable audit trail for PMS sync operations)
+// ============================================================================
+
+/// Immutable audit log for all PMS sync activity.
+/// Never deleted, never updated — append-only.
+/// Types: booking.created, booking.updated, booking.cancelled,
+///        sync.started, sync.completed, sync.failed,
+///        connection.tested, connection.failed
+model SyncEvent {
+  id                String   @id @default(cuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider          String
+  eventType         String
+  bookingExternalId String?
+  payload           Json?
+  error             String?
+  createdAt         DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, eventType])
+}
+
+// ============================================================================
+// WEBHOOK DEDUP (PMS integration webhook idempotency)
+// ============================================================================
+
+/// Database-level unique constraint for PMS webhook deduplication.
+/// The dedupKey is a composite of provider + webhook event ID.
+/// Entries older than 7 days are cleaned up by the poller.
+model WebhookDedup {
+  id        String   @id @default(cuid())
+  dedupKey  String   @unique
+  provider  String
+  tenantId  String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// ============================================================================
+// WEBHOOK IDEMPOTENCY (Clerk webhooks)
+// ============================================================================
+
+/// Tracks processed Clerk webhook events to ensure idempotency.
 /// Before processing any event, check if svix-id already exists.
 /// If yes, return 200 immediately (already handled).
 model WebhookEvent {

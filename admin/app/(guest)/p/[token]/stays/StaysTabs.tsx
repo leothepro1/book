@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import type { Booking } from "@prisma/client";
-import { BookingStatus } from "@prisma/client";
+import type { NormalizedBooking } from "@/app/_lib/integrations/types";
 import "./stays.css";
 
 type Props = {
-  currentBookings: Booking[];
-  previousBookings: Booking[];
+  currentBookings: NormalizedBooking[];
+  previousBookings: NormalizedBooking[];
   lang: "sv" | "en";
   layout: "tabs" | "list";
   cardShadow?: boolean;
@@ -43,20 +42,20 @@ export default function StaysTabs({
   const previousLabel = tabPreviousLabel || (lang === "en" ? "Previous" : "Tidigare");
   const heroImage = cardImageUrl || DEFAULT_IMAGE;
 
-  function getBadgeText(booking: Booking): string {
-    if (booking.status === BookingStatus.ACTIVE) {
+  function getBadgeText(booking: NormalizedBooking): string {
+    if (booking.status === "active") {
       return lang === "en" ? "Checked in" : "Incheckad";
     }
-    if (booking.status === BookingStatus.COMPLETED) {
+    if (booking.status === "completed") {
       return lang === "en" ? "Completed" : "Avslutad";
     }
     return lang === "en" ? "Upcoming" : "Kommande";
   }
 
 
-  function renderCard(b: Booking) {
+  function renderCard(b: NormalizedBooking) {
     return (
-      <div key={b.id} className={`booking-card${cardShadow ? "" : " booking-card--no-shadow"}`}>
+      <div key={b.externalId} className={`booking-card${cardShadow ? "" : " booking-card--no-shadow"}`}>
         <div
           className="booking-card__hero"
           style={{

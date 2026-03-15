@@ -3,6 +3,7 @@ import { getTenantConfig } from "../../../_lib/tenant";
 import AccountClient from "./AccountClient";
 import { createGlobalMockBooking } from "@/app/_lib/mockData";
 import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
+import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 
 export const dynamic = "force-dynamic";
 
@@ -99,15 +100,36 @@ export default async function Page(props: {
 
   const config = await getTenantConfig(booking.tenantId ?? "default");
 
-  const allBookings = await prisma.booking.findMany({
-    where: {
-      tenantId: booking.tenantId,
-      guestEmail: booking.guestEmail,
-    },
-    orderBy: { arrival: "desc" },
-  });
+  // Use adapter to get guest profile data
+  let initial = {
+    firstName: booking.firstName ?? "",
+    lastName: booking.lastName ?? "",
+    guestEmail: booking.guestEmail ?? "",
+    phone: booking.phone ?? "",
+    street: booking.street ?? "",
+    postalCode: booking.postalCode ?? "",
+    city: booking.city ?? "",
+    country: booking.country ?? "",
+  };
 
-  const latest = allBookings[0] ?? booking;
+  try {
+    const adapter = await resolveAdapter(booking.tenantId);
+    const guest = await adapter.getGuest(booking.tenantId, booking.guestEmail);
+    if (guest) {
+      initial = {
+        firstName: guest.firstName,
+        lastName: guest.lastName,
+        guestEmail: guest.email,
+        phone: guest.phone ?? "",
+        street: guest.address.street ?? "",
+        postalCode: guest.address.postalCode ?? "",
+        city: guest.address.city ?? "",
+        country: guest.address.country ?? "",
+      };
+    }
+  } catch (error) {
+    console.error("[ACCOUNT PAGE] Adapter error, using resolved booking:", error);
+  }
 
   return (
     <AccountClient
@@ -116,16 +138,7 @@ export default async function Page(props: {
       guestEmail={booking.guestEmail}
       lang={lang}
       config={config}
-      initial={{
-        firstName: latest.firstName ?? "",
-        lastName: latest.lastName ?? "",
-        guestEmail: latest.guestEmail ?? "",
-        phone: latest.phone ?? "",
-        street: latest.street ?? "",
-        postalCode: latest.postalCode ?? "",
-        city: latest.city ?? "",
-        country: latest.country ?? "",
-      }}
+      initial={initial}
     />
   );
 }

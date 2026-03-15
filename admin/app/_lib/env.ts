@@ -22,6 +22,8 @@ import { z } from "zod";
 const envSchema = z.object({
   // Always required — app cannot start without these
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  INTEGRATION_ENCRYPTION_KEY: z.string().min(32, "INTEGRATION_ENCRYPTION_KEY must be at least 32 characters"),
+  CRON_SECRET: z.string().min(16, "CRON_SECRET must be at least 16 characters"),
 
   // Service vars — optional at boot, validated on first use via accessor
   CLERK_WEBHOOK_SECRET: z.string().optional(),
@@ -92,6 +94,8 @@ function requiredMin(key: string, value: string | undefined, min: number): strin
 export const env = {
   // Always available (validated at boot)
   DATABASE_URL: parsed.DATABASE_URL,
+  INTEGRATION_ENCRYPTION_KEY: parsed.INTEGRATION_ENCRYPTION_KEY,
+  CRON_SECRET: parsed.CRON_SECRET,
 
   // Lazy — throw on first access if missing
   get CLERK_WEBHOOK_SECRET() {

@@ -1,5 +1,8 @@
-import type { Booking } from "@prisma/client";
+import type { NormalizedBooking, NormalizedBookingStatus } from "@/app/_lib/integrations/types";
 
-export type { BookingStatus } from "@prisma/client";
+export type { NormalizedBookingStatus as BookingStatus } from "@/app/_lib/integrations/types";
 
-export type BookingWithStatus = Pick<Booking, "id" | "status" | "checkedInAt" | "checkedOutAt" | "arrival" | "departure">;
+export type BookingWithStatus = Pick<
+  NormalizedBooking,
+  "externalId" | "status" | "checkedInAt" | "checkedOutAt" | "arrival" | "departure"
+>;

@@ -1,8 +1,7 @@
-import { BookingStatus } from "@prisma/client";
-import type { Booking } from "@prisma/client";
+import type { NormalizedBooking } from "@/app/_lib/integrations/types";
 
 type Props = {
-  booking: Booking;
+  booking: NormalizedBooking;
   mutedOpacity: number;
   checkInTime?: string;   // ex "14:00"
   checkOutTime?: string;  // ex "11:00"
@@ -25,8 +24,8 @@ export default function BookingStatusCard({
   const arrival = new Date(booking.arrival);
   const departure = new Date(booking.departure);
 
-  // PRE_CHECKIN
-  if (booking.status === BookingStatus.PRE_CHECKIN) {
+  // upcoming (PRE_CHECKIN)
+  if (booking.status === "upcoming") {
     return (
       <div style={{ display: "grid", gap: 8 }}>
         <div style={{ fontWeight: 700, lineHeight: "1.2em", fontFamily: "var(--font-heading)" }}>Incheckning från</div>
@@ -37,8 +36,8 @@ export default function BookingStatusCard({
     );
   }
 
-  // ACTIVE (checked in)
-  if (booking.status === BookingStatus.ACTIVE) {
+  // active (checked in)
+  if (booking.status === "active") {
     return (
       <div style={{ display: "grid", gap: 8 }}>
         <div style={{ fontWeight: 700, lineHeight: "1.2em", fontFamily: "var(--font-heading)" }}>Utcheckning senast</div>
@@ -49,8 +48,8 @@ export default function BookingStatusCard({
     );
   }
 
-  // COMPLETED (checked out)
-  if (booking.status === BookingStatus.COMPLETED) {
+  // completed (checked out)
+  if (booking.status === "completed") {
     const out = booking.checkedOutAt ? new Date(booking.checkedOutAt) : null;
 
     return (

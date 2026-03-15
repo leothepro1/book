@@ -1,11 +1,12 @@
 import { resolveBookingFromToken } from "../../../_lib/portal/resolveBooking";
-import { prisma } from "../../../../_lib/db/prisma";
 import StaysTabs from "./StaysTabs";
-import { createGlobalMockBooking, createGlobalMockHistory } from "@/app/_lib/mockData";
+import { createMockNormalizedBookings } from "@/app/_lib/mockData";
 import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
 import { getTenantConfig } from "@/app/(guest)/_lib/tenant/getTenantConfig";
 import { getStaysCoreConfig } from "@/app/_lib/pages/config";
 import { resolveColorScheme } from "@/app/_lib/color-schemes/resolve";
+import { resolveAdapter } from "@/app/_lib/integrations/resolve";
+import { prisma } from "../../../../_lib/db/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -46,15 +47,13 @@ export default async function Page(props: {
       const config = await getTenantConfig(tenant.id, { preferDraft: token === "preview" });
       const stays = getStaysCoreConfig(config);
 
-      const mockCurrent = createGlobalMockBooking(tenant.id);
-      const mockHistory = createGlobalMockHistory(tenant.id);
-      const allBookings = [mockCurrent, ...mockHistory];
+      const allMock = createMockNormalizedBookings(tenant.id);
 
       const now = new Date();
-      const currentBookings = allBookings.filter(
+      const currentBookings = allMock.filter(
         (b) => new Date(b.departure) >= now
       );
-      const previousBookings = allBookings.filter(
+      const previousBookings = allMock.filter(
         (b) => new Date(b.departure) < now
       );
 
@@ -72,8 +71,8 @@ export default async function Page(props: {
           )}
 
           <StaysTabs
-            currentBookings={currentBookings as any}
-            previousBookings={previousBookings as any}
+            currentBookings={currentBookings}
+            previousBookings={previousBookings}
             lang={lang}
             layout={stays.layout}
             cardShadow={stays.cardShadow}
@@ -86,7 +85,7 @@ export default async function Page(props: {
     }
   }
 
-  // NORMAL FLOW: Real bookings
+  // NORMAL FLOW: Real bookings via adapter
   const current = await resolveBookingFromToken(token);
 
   if (!current) {
@@ -96,22 +95,21 @@ export default async function Page(props: {
   const config = await getTenantConfig(current.tenantId);
   const stays = getStaysCoreConfig(config);
 
-  const bookings = await prisma.booking.findMany({
-    where: {
-      tenantId: current.tenantId,
-      guestEmail: current.guestEmail,
-    },
-    orderBy: {
-      arrival: "desc",
-    },
-  });
+  let allBookings: import("@/app/_lib/integrations/types").NormalizedBooking[];
+  try {
+    const adapter = await resolveAdapter(current.tenantId);
+    allBookings = await adapter.getBookings(current.tenantId, { guestEmail: current.guestEmail });
+  } catch (error) {
+    console.error("[STAYS PAGE] Adapter error, returning empty:", error);
+    allBookings = [];
+  }
 
   // Split bookings into current and previous
   const now = new Date();
-  const currentBookings = bookings.filter(
+  const currentBookings = allBookings.filter(
     (b) => new Date(b.departure) >= now
   );
-  const previousBookings = bookings.filter(
+  const previousBookings = allBookings.filter(
     (b) => new Date(b.departure) < now
   );
 

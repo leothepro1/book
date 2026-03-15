@@ -17,8 +17,7 @@
  *   for backwards compatibility.
  */
 
-import type { Booking } from "@prisma/client";
-import type { BookingStatus } from "../booking";
+import type { NormalizedBooking, NormalizedBookingStatus } from "@/app/_lib/integrations/types";
 import type { TenantConfig } from "../tenant/types";
 import type { ThemeManifest, ThemeSectionSlot, TenantSectionSettings } from "./types";
 import { ensureRegistered, getTheme, getAllThemes, getSectionComponent, hasTheme } from "./registry";
@@ -40,8 +39,8 @@ export type ThemeRendererProps = {
   /** Which page template to render (e.g. "home", "shop", "account"). */
   templateKey: string;
   config: TenantConfig;
-  booking: Booking;
-  bookingStatus: BookingStatus;
+  booking: NormalizedBooking;
+  bookingStatus: NormalizedBookingStatus;
   token?: string;
 };
 

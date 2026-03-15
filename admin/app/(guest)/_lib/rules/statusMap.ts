@@ -1,18 +1,20 @@
-import { BookingStatus } from "@prisma/client";
+import type { NormalizedBookingStatus } from "@/app/_lib/integrations/types";
 import type { RuleBookingStatus } from "./types";
 
 /**
- * Map global Prisma BookingStatus -> legacy/rules RuleBookingStatus
+ * Map NormalizedBookingStatus -> legacy/rules RuleBookingStatus
  * (rules är kvar bara för visibility-rules)
  */
-export function toRuleBookingStatus(s: BookingStatus): RuleBookingStatus | null {
+export function toRuleBookingStatus(s: NormalizedBookingStatus): RuleBookingStatus | null {
   switch (s) {
-    case BookingStatus.PRE_CHECKIN:
+    case "upcoming":
       return "booked";
-    case BookingStatus.ACTIVE:
+    case "active":
       return "checked_in";
-    case BookingStatus.COMPLETED:
+    case "completed":
       return "checked_out";
+    case "cancelled":
+      return "cancelled";
     default:
       return null;
   }

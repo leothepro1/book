@@ -11,7 +11,7 @@
  *   heroImageUrl  — Background image URL (falls back to default)
  */
 
-import { BookingStatus } from "@prisma/client";
+import type { NormalizedBookingStatus } from "@/app/_lib/integrations/types";
 import { registerSection } from "../../registry";
 import type { SectionProps } from "../../types";
 
@@ -22,7 +22,7 @@ type HeroContainedSettings = {
 const DEFAULT_HERO_IMAGE =
   "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=1600&q=60";
 
-function resolveSubtitle(bookingStatus: BookingStatus, now: Date, departure: Date): string {
+function resolveSubtitle(bookingStatus: NormalizedBookingStatus, now: Date, departure: Date): string {
   const sameDay =
     now.getFullYear() === departure.getFullYear() &&
     now.getMonth() === departure.getMonth() &&
@@ -31,11 +31,11 @@ function resolveSubtitle(bookingStatus: BookingStatus, now: Date, departure: Dat
   if (sameDay) return "Utcheckning idag";
 
   switch (bookingStatus) {
-    case BookingStatus.PRE_CHECKIN:
+    case "upcoming":
       return "Vi ser fram emot din ankomst.";
-    case BookingStatus.ACTIVE:
+    case "active":
       return "Vi hoppas att du har en trevlig vistelse hos oss.";
-    case BookingStatus.COMPLETED:
+    case "completed":
       return "Din vistelse är nu avslutad. Tack för ditt besök.";
     default:
       return "";

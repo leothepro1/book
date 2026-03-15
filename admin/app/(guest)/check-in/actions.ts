@@ -3,6 +3,7 @@
 import { prisma } from "../../_lib/db/prisma";
 import { getTenantConfig } from "../_lib/tenant";
 import { performCheckIn } from "../_lib/booking/actions";
+import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 
 function norm(s?: string) {
   return (s || "").trim();
@@ -166,6 +167,16 @@ export async function checkInCommit(payload: {
   // Perform check-in with signature
   const res = await performCheckIn(booking.id, checkInTime, new Date(), signatureDataUrl);
   if (!res.ok) return { ok: false, message: res.message };
+
+  // Notify PMS adapter (no-op for manual provider)
+  if (!res.already) {
+    try {
+      const adapter = await resolveAdapter(booking.tenantId);
+      await adapter.notifyCheckIn(booking.tenantId, booking.id);
+    } catch (error) {
+      console.error("[CHECK-IN] Adapter notifyCheckIn failed:", error);
+    }
+  }
 
   const nextHref = token ? `/p/${token}` : (next || "/");
   return { ok: true, already: res.already, nextHref };

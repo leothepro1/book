@@ -25,8 +25,7 @@
  *   • Marketplace-ready — themes self-register via registerTheme().
  */
 
-import type { Booking } from "@prisma/client";
-import type { BookingStatus } from "../booking";
+import type { NormalizedBooking, NormalizedBookingStatus } from "@/app/_lib/integrations/types";
 import type { TenantConfig } from "../tenant/types";
 import type { ThemeConfig } from "../theme/types";
 
@@ -287,11 +286,11 @@ export type SectionProps<TSettings extends Record<string, unknown> = Record<stri
   /** Full tenant configuration (for content: cards, links, images). */
   config: TenantConfig;
 
-  /** Current booking data. */
-  booking: Booking;
+  /** Current booking data (normalized — adapter-agnostic). */
+  booking: NormalizedBooking;
 
-  /** Resolved booking status enum. */
-  bookingStatus: BookingStatus;
+  /** Resolved booking status. */
+  bookingStatus: NormalizedBookingStatus;
 
   /** Access token for building internal URLs (check-in, etc.). */
   token?: string;

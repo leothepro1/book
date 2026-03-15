@@ -3,8 +3,7 @@ import { ensureRegistered, getTheme } from "@/app/(guest)/_lib/themes/registry";
 import { getTenantConfig } from "@/app/(guest)/_lib/tenant";
 import { themeToStyleAttr, backgroundStyle, googleFontsUrl } from "@/app/(guest)/_lib/theme";
 import { ThemeRenderer } from "@/app/(guest)/_lib/themes/engine";
-import { BookingStatus } from "@prisma/client";
-import type { Booking } from "@prisma/client";
+import type { NormalizedBooking } from "@/app/_lib/integrations/types";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +58,7 @@ export default async function ThemeDemoPage(props: {
           templateKey="home"
           config={demoConfig}
           booking={DEMO_BOOKING}
-          bookingStatus={BookingStatus.PRE_CHECKIN}
+          bookingStatus="upcoming"
           token="demo"
         />
       </div>
@@ -67,24 +66,24 @@ export default async function ThemeDemoPage(props: {
   );
 }
 
-const DEMO_BOOKING: Booking = {
-  id: "demo-booking",
+const DEMO_BOOKING: NormalizedBooking = {
+  externalId: "demo-booking",
   tenantId: "demo",
   firstName: "Anna",
   lastName: "Lindström",
+  guestName: "Anna Lindström",
   guestEmail: "anna@example.com",
-  phone: null,
-  street: null,
-  postalCode: null,
-  city: null,
-  country: null,
+  guestPhone: null,
   arrival: new Date("2026-06-15"),
   departure: new Date("2026-06-18"),
   unit: "204",
-  status: BookingStatus.PRE_CHECKIN,
+  unitType: null,
+  status: "upcoming",
+  adults: 2,
+  children: 0,
+  extras: [],
+  rawSource: "manual",
   checkedInAt: null,
   checkedOutAt: null,
   signatureCapturedAt: null,
-  signatureDataUrl: null,
-  createdAt: new Date(),
 };

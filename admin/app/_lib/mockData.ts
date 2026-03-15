@@ -2,6 +2,8 @@
  * GLOBAL MOCK DATA - Emma Andersson
  */
 
+import type { NormalizedBooking } from "./integrations/types";
+
 export const MOCK_GUEST = {
   firstName: "Emma",
   lastName: "Andersson",
@@ -156,4 +158,38 @@ export function getAllMockBookings(tenantId: string) {
   const current = createGlobalMockBooking(tenantId);
   const history = createGlobalMockHistory(tenantId);
   return [current, ...history];
+}
+
+/**
+ * Create mock bookings in NormalizedBooking shape.
+ * Used by stays page and other adapter-aware components in preview/test mode.
+ */
+export function createMockNormalizedBookings(tenantId: string): NormalizedBooking[] {
+  const current = createGlobalMockBooking(tenantId);
+  const history = createGlobalMockHistory(tenantId);
+  const all = [current, ...history];
+
+  return all.map((b) => ({
+    externalId: b.id,
+    tenantId: b.tenantId,
+    firstName: b.firstName,
+    lastName: b.lastName,
+    guestName: `${b.firstName} ${b.lastName}`,
+    guestEmail: b.guestEmail,
+    guestPhone: b.phone ?? null,
+    arrival: b.arrival,
+    departure: b.departure,
+    unit: b.unit,
+    unitType: null,
+    status: b.status === "ACTIVE" ? "active" as const
+      : b.status === "COMPLETED" ? "completed" as const
+      : "upcoming" as const,
+    adults: b.adults ?? 0,
+    children: b.children ?? 0,
+    extras: [],
+    rawSource: "manual" as const,
+    checkedInAt: b.checkedInAt ?? null,
+    checkedOutAt: b.checkedOutAt ?? null,
+    signatureCapturedAt: null,
+  }));
 }

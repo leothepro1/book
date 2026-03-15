@@ -1,12 +1,33 @@
 "use server";
 
 import { prisma } from "../../../_lib/db/prisma";
-import { BookingStatus } from "@prisma/client";
+import { mapPrismaStatus } from "@/app/_lib/integrations/types";
+import { toPrismaBookingStatus } from "@/app/_lib/integrations/prisma-mapping";
 import { canCheckIn, canCheckOut, isCheckInTimeReached } from "./status";
+import type { BookingWithStatus } from "./types";
 
 export type ActionResult =
   | { ok: true; bookingId: string; already: boolean }
   | { ok: false; reason: "NOT_FOUND" | "NOT_ALLOWED"; message: string };
+
+/** Map a Prisma Booking row to the shape canCheckIn/canCheckOut expect. */
+function toBookingWithStatus(b: {
+  id: string;
+  status: string;
+  checkedInAt: Date | null;
+  checkedOutAt: Date | null;
+  arrival: Date;
+  departure: Date;
+}): BookingWithStatus {
+  return {
+    externalId: b.id,
+    status: mapPrismaStatus(b.status as Parameters<typeof mapPrismaStatus>[0]),
+    checkedInAt: b.checkedInAt,
+    checkedOutAt: b.checkedOutAt,
+    arrival: b.arrival,
+    departure: b.departure,
+  };
+}
 
 export async function performCheckIn(
   bookingId: string,
@@ -18,23 +39,25 @@ export async function performCheckIn(
     const booking = await tx.booking.findUnique({ where: { id: bookingId } });
     if (!booking) return { ok: false, reason: "NOT_FOUND", message: "Ingen bokning hittades." };
 
+    const normalized = toBookingWithStatus(booking);
+
     // Idempotens
-    if (booking.status === BookingStatus.ACTIVE && booking.checkedInAt) {
+    if (normalized.status === "active" && booking.checkedInAt) {
       return { ok: true, bookingId: booking.id, already: true };
     }
 
-    if (booking.status === BookingStatus.COMPLETED) {
+    if (normalized.status === "completed") {
       return { ok: false, reason: "NOT_ALLOWED", message: "Bokningen är redan avslutad." };
     }
 
     // Gate
-    if (!canCheckIn(booking as any, now) || !isCheckInTimeReached(booking as any, checkInTime, now)) {
+    if (!canCheckIn(normalized, now) || !isCheckInTimeReached(normalized, checkInTime, now)) {
       return { ok: false, reason: "NOT_ALLOWED", message: "Check-in är inte tillgängligt ännu." };
     }
 
     // Race-safe update with signature
-    const updateData: any = {
-      status: BookingStatus.ACTIVE,
+    const updateData: Record<string, unknown> = {
+      status: toPrismaBookingStatus("active"),
       checkedInAt: now,
     };
 
@@ -44,13 +67,13 @@ export async function performCheckIn(
     }
 
     const updated = await tx.booking.updateMany({
-      where: { id: booking.id, status: BookingStatus.PRE_CHECKIN, checkedInAt: null },
+      where: { id: booking.id, status: toPrismaBookingStatus("upcoming"), checkedInAt: null },
       data: updateData,
     });
 
     if (updated.count === 0) {
       const re = await tx.booking.findUnique({ where: { id: booking.id } });
-      if (re?.status === BookingStatus.ACTIVE && re.checkedInAt) {
+      if (re && toBookingWithStatus(re).status === "active" && re.checkedInAt) {
         return { ok: true, bookingId: booking.id, already: true };
       }
       return { ok: false, reason: "NOT_ALLOWED", message: "Kunde inte checka in (status ändrades)." };
@@ -65,25 +88,27 @@ export async function performCheckOut(bookingId: string, now: Date = new Date())
     const booking = await tx.booking.findUnique({ where: { id: bookingId } });
     if (!booking) return { ok: false, reason: "NOT_FOUND", message: "Ingen bokning hittades." };
 
+    const normalized = toBookingWithStatus(booking);
+
     // Idempotens
-    if (booking.status === BookingStatus.COMPLETED && booking.checkedOutAt) {
+    if (normalized.status === "completed" && booking.checkedOutAt) {
       return { ok: true, bookingId: booking.id, already: true };
     }
 
     // Gate
-    if (!canCheckOut(booking as any)) {
+    if (!canCheckOut(normalized)) {
       return { ok: false, reason: "NOT_ALLOWED", message: "Check-out är inte tillgängligt." };
     }
 
     // Race-safe update
     const updated = await tx.booking.updateMany({
-      where: { id: booking.id, status: BookingStatus.ACTIVE, checkedOutAt: null },
-      data: { status: BookingStatus.COMPLETED, checkedOutAt: now },
+      where: { id: booking.id, status: toPrismaBookingStatus("active"), checkedOutAt: null },
+      data: { status: toPrismaBookingStatus("completed"), checkedOutAt: now },
     });
 
     if (updated.count === 0) {
       const re = await tx.booking.findUnique({ where: { id: booking.id } });
-      if (re?.status === BookingStatus.COMPLETED && re.checkedOutAt) {
+      if (re && toBookingWithStatus(re).status === "completed" && re.checkedOutAt) {
         return { ok: true, bookingId: booking.id, already: true };
       }
       return { ok: false, reason: "NOT_ALLOWED", message: "Kunde inte checka ut (status ändrades)." };

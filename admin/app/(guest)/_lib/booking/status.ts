@@ -1,5 +1,4 @@
-import type { BookingWithStatus } from "./types";
-import { BookingStatus } from "@prisma/client";
+import type { BookingWithStatus, BookingStatus } from "./types";
 
 /**
  * Get current booking status
@@ -12,15 +11,15 @@ export function getBookingStatus(booking: BookingWithStatus): BookingStatus {
  * Check if booking can check in
  */
 export function canCheckIn(booking: BookingWithStatus, now: Date = new Date()): boolean {
-  if (booking.status !== BookingStatus.PRE_CHECKIN) return false;
+  if (booking.status !== "upcoming") return false;
   if (booking.checkedInAt) return false;
-  
+
   // Check if arrival date has passed (or is today)
   const arrivalDate = new Date(booking.arrival);
   arrivalDate.setHours(0, 0, 0, 0);
   const nowDate = new Date(now);
   nowDate.setHours(0, 0, 0, 0);
-  
+
   return nowDate >= arrivalDate;
 }
 
@@ -28,10 +27,10 @@ export function canCheckIn(booking: BookingWithStatus, now: Date = new Date()): 
  * Check if booking can check out
  */
 export function canCheckOut(booking: BookingWithStatus): boolean {
-  if (booking.status !== BookingStatus.ACTIVE) return false;
+  if (booking.status !== "active") return false;
   if (!booking.checkedInAt) return false;
   if (booking.checkedOutAt) return false;
-  
+
   return true;
 }
 
@@ -45,7 +44,7 @@ export function isCheckInTimeReached(
 ): boolean {
   const arrival = new Date(booking.arrival);
   const [hours, minutes] = checkInTime.split(":").map(Number);
-  
+
   const checkInDateTime = new Date(
     arrival.getFullYear(),
     arrival.getMonth(),
@@ -55,6 +54,6 @@ export function isCheckInTimeReached(
     0,
     0
   );
-  
+
   return now >= checkInDateTime;
 }

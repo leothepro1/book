@@ -10,18 +10,17 @@
  * Currently: always hidden (returns null).
  * When activated, renders the appropriate action button based on
  * booking status:
- *   - PRE_CHECKIN (time reached)  → "Checka in"  → /check-in?token=
- *   - PRE_CHECKIN (before time)   → "Check-in {time}" (disabled)
- *   - ACTIVE                      → "Öppna dörr"
- *   - COMPLETED                   → hidden
+ *   - upcoming (time reached)  → "Checka in"  → /check-in?token=
+ *   - upcoming (before time)   → "Check-in {time}" (disabled)
+ *   - active                   → "Öppna dörr"
+ *   - completed                → hidden
  */
 
-import type { Booking } from "@prisma/client";
-import type { BookingStatus } from "../_lib/booking";
+import type { NormalizedBooking, NormalizedBookingStatus } from "@/app/_lib/integrations/types";
 
 export type CheckinSlotProps = {
-  booking: Booking;
-  bookingStatus: BookingStatus;
+  booking: NormalizedBooking;
+  bookingStatus: NormalizedBookingStatus;
   token?: string;
   checkInTime?: string;
 };

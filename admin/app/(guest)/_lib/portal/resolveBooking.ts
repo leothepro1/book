@@ -1,8 +1,10 @@
 import { prisma } from "../../../_lib/db/prisma";
-import { createGlobalMockBooking } from "@/app/_lib/mockData";
+import { createMockNormalizedBookings } from "@/app/_lib/mockData";
 import { env } from "@/app/_lib/env";
+import { mapPrismaBookingToNormalized } from "@/app/_lib/integrations/types";
+import type { NormalizedBooking } from "@/app/_lib/integrations/types";
 
-export async function resolveBookingFromToken(token?: string | null) {
+export async function resolveBookingFromToken(token?: string | null): Promise<NormalizedBooking | null> {
   if (!token) return null;
 
   // PREVIEW MODE eller TEST MODE: Använd global mock booking
@@ -15,13 +17,10 @@ export async function resolveBookingFromToken(token?: string | null) {
         : await prisma.tenant.findFirst();
 
       if (firstTenant) {
-        const mockBooking = createGlobalMockBooking(firstTenant.id);
+        const mockBookings = createMockNormalizedBookings(firstTenant.id);
         console.log("[resolveBooking] Mock booking created for tenant:", firstTenant.id, firstTenant.name);
-
-        return {
-          ...mockBooking,
-          tenant: firstTenant,
-        } as any;
+        // Return the first (current/active) mock booking
+        return mockBookings[0] ?? null;
       }
     } catch (error) {
       console.error("[resolveBooking] Mock mode error:", error);
@@ -33,20 +32,19 @@ export async function resolveBookingFromToken(token?: string | null) {
   // NORMAL FLOW: Real bookings
   const magic = await prisma.magicLink.findUnique({
     where: { token },
-    include: { booking: { include: { tenant: true } } },
+    include: { booking: true },
   });
 
   if (magic?.booking) {
     const now = new Date();
     const isExpired = magic.expiresAt < now;
     const isUsed = !!magic.usedAt;
-    if (!isExpired && !isUsed) return magic.booking;
+    if (!isExpired && !isUsed) return mapPrismaBookingToNormalized(magic.booking);
   }
 
   const booking = await prisma.booking.findUnique({
     where: { id: token },
-    include: { tenant: true },
   });
 
-  return booking ?? null;
+  return booking ? mapPrismaBookingToNormalized(booking) : null;
 }
