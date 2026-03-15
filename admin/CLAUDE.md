@@ -200,6 +200,126 @@ Each has a dedicated editor panel.
 
 ---
 
+## PMS integration layer
+
+Aggregator pattern — normalizes data from multiple hotel systems (Mews,
+Apaleo, Opera) into a canonical format. Hotels connect once, platform
+works with normalized data everywhere.
+
+### Adapter contract
+
+Every PMS implements PmsAdapter interface:
+  getBookings, syncBookings, testConnection, notifyCheckIn/Out,
+  verifyWebhookSignature
+
+`resolveAdapter(tenantId)` is the ONLY entry point for platform code.
+Never call PMS APIs directly. Registry maps provider → adapter instance.
+
+Implemented: Mews (production), Fake (dev/test), Manual (no external PMS)
+Planned: Apaleo, Opera
+
+### Credentials & encryption
+
+AES-256-GCM encryption (crypto.ts). 12-byte IV, 16-byte auth tag.
+Key: INTEGRATION_ENCRYPTION_KEY env var (min 32 chars).
+Credentials never logged, never returned to client in cleartext.
+Sensitive fields masked as "••••••••••••••••" in UI.
+
+### Sync machinery
+
+Three cron endpoints drive all syncing:
+  /api/integrations/poll     — every 5 min, enqueue stale syncs + recover stuck jobs
+  /api/integrations/run-jobs — every 1 min, claim and execute pending jobs
+  /api/integrations/cleanup  — daily 03:00, purge old events/jobs/dedup records
+
+All secured with x-cron-secret header.
+
+Sync lifecycle:
+  Poll creates job (pending) → run-jobs claims atomically (prevents double-exec)
+  → circuit breaker check → runSyncJob() → adapter.syncBookings()
+  → upsertSyncedBooking() per booking (idempotent) → recordSuccess/Failure
+
+### Resilience layers
+
+1. Rate limiting — DB-backed token bucket (200 req/30s per accessToken).
+   Key is SHA-256 of token. Survives serverless cold starts.
+2. Circuit breaker — consecutiveFailures counter on TenantIntegration.
+   Opens after 5 failures → status = "error". Resets on 1 success.
+3. Stuck job recovery — Poll detects running > 10 min → resets to pending.
+4. Idempotent upsert — lastSyncedAt prevents webhook + poller race.
+5. Webhook dedup — WebhookDedup table with unique dedupKey.
+6. Individual error tracking — BookingSyncError per booking, max 5 retries.
+7. Retry with backoff — 2^attempt × 60s + jitter, max 30 min.
+
+### Data models
+
+  TenantIntegration — 1:1 with Tenant. Provider, encrypted creds, status, circuit breaker
+  SyncJob — queued sync jobs with status, attempt, backoff scheduling
+  SyncEvent — append-only audit log (90d retention)
+  BookingSyncError — per-booking error tracking with retry count
+  RateLimit — token bucket per accessToken (DB-backed)
+  WebhookDedup — dedup key per webhook event (7d retention)
+
+### Key files
+
+- Core types: `app/_lib/integrations/types.ts`
+- Adapter interface: `app/_lib/integrations/adapter.ts`
+- Registry: `app/_lib/integrations/registry.ts`
+- Resolution: `app/_lib/integrations/resolve.ts`
+- Mews adapter: `app/_lib/integrations/adapters/mews/`
+- Sync engine: `app/_lib/integrations/sync/engine.ts`
+- Scheduler: `app/_lib/integrations/sync/scheduler.ts`
+- Circuit breaker: `app/_lib/integrations/sync/circuit-breaker.ts`
+- Encryption: `app/_lib/integrations/crypto.ts`
+
+### Integration invariants — never violate these
+
+1. resolveAdapter(tenantId) is the only way to get an adapter
+2. All PMS data normalized to NormalizedBooking / NormalizedGuest
+3. Credentials encrypted at rest, decrypted only at call time
+4. One bad booking never aborts entire sync
+5. Sync jobs deduped — only one pending/running per tenant
+6. lastSyncedAt prevents concurrent webhook + poller data races
+7. Circuit breaker uses consecutive failures (works with backoff)
+8. Fake adapter throws in production — dev/test only
+
+---
+
+## Clerk integration
+
+### Auth layer
+
+Production: Clerk handles sessions, JWT, cookies. auth() gives userId/orgId/orgRole.
+Dev: devAuth.ts returns { userId: "dev_user", orgId: DEV_ORG_ID, orgRole: "org:admin" }.
+DEV_OWNER_USER_ID substitutes the real org owner for Clerk API calls in dev.
+
+### Role-based access
+
+ADMIN_ROLE constant defined in roles.ts — single source of truth.
+requireAdmin() guards all destructive server actions.
+RoleContext provides isAdmin to client components.
+Settings panel hides admin-only tabs via adminOnly flag on nav items.
+Settings button hidden in sidebar for org:member.
+
+### Organisation sync
+
+Webhook handler (/api/webhooks/clerk) processes org.created/updated/deleted.
+Svix signature verification + idempotency via WebhookEvent table.
+Double-write strategy: direct DB write for immediate UI + webhook as safety net.
+
+### Feature toggles
+
+Account-level toggles stored as direct Tenant columns (not in JSON settings):
+  checkinEnabled, checkoutEnabled — Boolean, immediate effect, no draft/publish.
+
+### Tenant policies
+
+TenantPolicy model — per-tenant policy documents (booking terms, house rules, etc.).
+Unique constraint on [tenantId, policyId] for fast lookup.
+Public API: getPublicPolicy(tenantSlug, policyId) — no auth required.
+
+---
+
 ## Security invariants
 
 - Env validation via Zod at boot — throws if required vars missing (env.ts)

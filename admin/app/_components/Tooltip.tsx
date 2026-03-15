@@ -44,10 +44,10 @@ import { createPortal } from "react-dom";
 
 // ─── Timing constants (ms) ──────────────────────────────────
 
-const ENTER_DELAY = 600;
-const SCAN_DELAY = 150;
+const ENTER_DELAY = 200;
+const SCAN_DELAY = 50;
 const SCAN_WINDOW = 400;
-const SAME_ELEMENT_COOLDOWN = 2000;
+const SAME_ELEMENT_COOLDOWN = 800;
 const CLICK_SUPPRESS = 600;
 const EXIT_GRACE = 80;
 
@@ -268,21 +268,17 @@ export function Tooltip({
               top: pos?.top ?? -9999,
               left: pos?.left ?? -9999,
               opacity: pos ? 1 : 0,
-              transform: pos
-                ? "translateY(0)"
-                : placement === "bottom"
-                  ? "translateY(-4px)"
-                  : "translateY(4px)",
-              transition: "opacity 0.03s ease-out, transform 0.03s ease-out",
+              transform: "translateY(0)",
+              transition: "none",
               pointerEvents: "none",
               background: "#1a1a1a",
               color: "#fff",
               fontSize: 12,
-              fontWeight: 500,
-              fontFamily: "'Source Sans 3', ui-sans-serif, system-ui, sans-serif",
+              fontWeight: 450,
+              fontFamily: "var(--admin-font)",
               lineHeight: 1,
-              padding: "5px 7px",
-              borderRadius: 4,
+              padding: "7px 9px",
+              borderRadius: 6,
               whiteSpace: "nowrap",
               letterSpacing: "0.01em",
             }}

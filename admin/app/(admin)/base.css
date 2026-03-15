@@ -58,7 +58,7 @@
   --admin-shadow-card:   0 4px 24px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.08);
 
   /* Overlay */
-  --admin-overlay:       rgba(0, 0, 0, 0.57);
+  --admin-overlay:       #00000080;
 
   /* Tabs */
   --admin-tab-bg:        #D7D4CE;
@@ -127,7 +127,7 @@
   --admin-shadow-card:   0 4px 24px rgba(0,0,0,0.4), 0 1px 4px rgba(0,0,0,0.3);
 
   /* Overlay */
-  --admin-overlay:       rgba(0, 0, 0, 0.75);
+  --admin-overlay:       #00000080;
 
   /* Tabs */
   --admin-tab-bg:        #2A2A2A;

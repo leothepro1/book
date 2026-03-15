@@ -6,6 +6,8 @@ import { EditorIcon } from '@/app/_components/EditorIcon';
 import { IntegrationsContent } from '@/app/(admin)/settings/integrations/IntegrationsContent';
 import { OrganisationContent } from '@/app/(admin)/settings/organisation/OrganisationContent';
 import { UsersContent } from '@/app/(admin)/settings/users/UsersContent';
+import { PoliciesContent } from '@/app/(admin)/settings/policies/PoliciesContent';
+import { CheckinContent } from '@/app/(admin)/settings/checkin/CheckinContent';
 import { useRole } from './RoleContext';
 
 const IS_DEV = process.env.NODE_ENV === 'development';
@@ -38,7 +40,7 @@ const NAV_ITEMS: { items: SettingsNavItem[]; divider?: boolean }[] = [
     items: [
       { id: 'organization', label: 'Organisation', icon: 'corporate_fare', adminOnly: true },
       { id: 'users', label: 'Användare', icon: 'face', adminOnly: true },
-      { id: 'billing', label: 'Fakturering', icon: 'receipt_long', adminOnly: true },
+      { id: 'billing', label: 'Fakturering', icon: 'contract', adminOnly: true },
     ],
     divider: true,
   },
@@ -49,6 +51,7 @@ const NAV_ITEMS: { items: SettingsNavItem[]; divider?: boolean }[] = [
       { id: 'domains', label: 'Domäner', icon: 'globe', adminOnly: true },
       { id: 'notifications', label: 'Aviseringar', icon: 'notifications' },
       { id: 'checkin-checkout', label: 'In- och utcheckning', icon: 'room_service' },
+      { id: 'policies', label: 'Policyer', icon: 'docs' },
     ],
   },
 ];
@@ -92,6 +95,7 @@ export function SettingsPanel() {
       className={`settings-panel ${isOpen ? 'settings-panel--open' : ''}`}
       aria-hidden={!isOpen}
     >
+      <div className="settings-panel__overlay" onClick={close} />
       <div className="settings-panel__content">
         {/* Close button — top right */}
         <button
@@ -198,6 +202,10 @@ export function SettingsPanel() {
                 <UsersContent key={resetKey} onSubTitleChange={setSubTitle} triggerInvite={inviteTrigger} onHeaderExtraChange={setHeaderExtra} onHeaderActionChange={setHeaderAction} />
               ) : activeItem === 'integrations' ? (
                 <IntegrationsContent key={resetKey} onSubTitleChange={setSubTitle} />
+              ) : activeItem === 'policies' ? (
+                <PoliciesContent key={resetKey} onSubTitleChange={setSubTitle} />
+              ) : activeItem === 'checkin-checkout' ? (
+                <CheckinContent key={resetKey} onSubTitleChange={setSubTitle} onNavigate={(tab) => { setActiveItem(tab); setSubTitle(null); setResetKey((k) => k + 1); }} />
               ) : (
                 <div key={resetKey} style={{ padding: 0 }}>
                   <p style={{ color: 'var(--admin-text-secondary)', fontSize: 13 }}>

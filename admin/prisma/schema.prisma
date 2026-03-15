@@ -47,6 +47,28 @@ enum AccessPassEventType {
   VALIDATE_DENY
 }
 
+enum LockProvider {
+  fake
+  salto
+  assa_abloy
+  nuki
+  manual
+}
+
+enum KeyStatus {
+  active
+  revoked
+  expired
+}
+
+enum KeyEventType {
+  key_created
+  key_revoked
+  key_expired
+  connection_tested
+  connection_failed
+}
+
 // ============================================================================
 // TENANT & BOOKINGS (Organizations-based)
 // ============================================================================
@@ -95,6 +117,10 @@ model Tenant {
   organizationNumber String?
   vatNumber          String?
 
+  // Feature toggles — account-level, immediate effect (not draft/publish)
+  checkinEnabled     Boolean @default(false)
+  checkoutEnabled    Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -105,9 +131,34 @@ model Tenant {
   syncJobs           SyncJob[]
   syncEvents         SyncEvent[]
   businessEntities   BusinessEntity[]
+  policies           TenantPolicy[]
+  lockIntegration    TenantLockIntegration?
 
   @@index([slug])
   @@index([clerkOrgId])
+}
+
+/// Tenant-scoped policy documents (booking terms, house rules, etc.).
+/// Each policy is identified by a stable string ID (e.g. "booking-terms").
+/// Lookup: unique constraint on [tenantId, policyId] for fast retrieval.
+model TenantPolicy {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Stable identifier — matches POLICY_ITEMS[].id in the frontend.
+  /// Values: "booking-terms", "checkin-terms", "house-rules",
+  ///         "privacy-policy", "terms-of-service"
+  policyId  String
+
+  /// The policy content as plain text (authored by the tenant).
+  content   String   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, policyId])
+  @@index([tenantId])
 }
 
 /// Juridisk person / företagsenhet kopplad till en organisation.
@@ -527,4 +578,73 @@ model WalletCardDesign {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ============================================================================
+// DIGITAL KEY INTEGRATION
+// ============================================================================
+
+/// Lock system integration per tenant (1:1).
+/// Follows same pattern as TenantIntegration for PMS.
+model TenantLockIntegration {
+  id                   String       @id @default(cuid())
+  tenantId             String       @unique
+  tenant               Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  provider             LockProvider
+  credentialsEncrypted Bytes?
+  credentialsIv        Bytes?
+  status               String       @default("pending") // active | disconnected | error | pending
+  consecutiveFailures  Int          @default(0)
+  lastTestedAt         DateTime?
+  lastError            String?
+
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  digitalKeys          DigitalKey[]
+  keyEvents            KeyEvent[]
+}
+
+/// A digital key issued to a guest for a specific booking.
+/// One active key per booking per tenant.
+model DigitalKey {
+  id             String    @id @default(cuid())
+  tenantId       String
+  bookingId      String
+  integrationId  String
+  integration    TenantLockIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  keyId          String    // External ID at lock provider
+  provider       LockProvider
+  status         KeyStatus @default(active)
+  validFrom      DateTime
+  validTo        DateTime
+  walletPayload  Json
+  portalPayload  Json
+
+  revokedAt      DateTime?
+  revokedBy      String?   // userId who revoked
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  events         KeyEvent[]
+
+  @@unique([tenantId, bookingId])
+  @@index([tenantId, status])
+}
+
+/// Append-only event log for digital key lifecycle.
+model KeyEvent {
+  id            String    @id @default(cuid())
+  tenantId      String
+  integrationId String
+  integration   TenantLockIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  keyId         String?
+  key           DigitalKey? @relation(fields: [keyId], references: [id], onDelete: SetNull)
+  bookingId     String?
+  eventType     KeyEventType
+  metadata      Json?
+  createdAt     DateTime  @default(now())
 }
