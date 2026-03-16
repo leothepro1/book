@@ -1,12 +1,16 @@
 import { prisma } from "@/app/_lib/db/prisma";
 import type { TenantConfig } from "./types";
 import { migrateToV2Pages } from "@/app/_lib/pages/migrate";
+import { PRIMARY_LOCALE } from "@/app/_lib/translations/locales";
+import { getTenantPrimaryLocale } from "@/app/_lib/translations/tenant-primary-locale";
+import { applyTranslationsToConfig } from "@/app/_lib/translations/merger";
 
 /**
  * Resolves the full TenantConfig for a tenant.
  *
  * preferDraft: true  → merges draftSettings over live (admin preview)
  * preferDraft: false → uses live settings only (guest portal)
+ * locale: optional   → if provided and not primary, applies translations
  *
  * Merge strategy: shallow spread with explicit home.cards handling
  * to prevent deepmerge from concatenating card arrays.
@@ -15,9 +19,10 @@ import { migrateToV2Pages } from "@/app/_lib/pages/migrate";
  */
 export async function getTenantConfig(
   tenantIdOrSlug: string,
-  options?: { preferDraft?: boolean },
+  options?: { preferDraft?: boolean; locale?: string },
 ): Promise<TenantConfig> {
   const useDraft = options?.preferDraft || false;
+  const locale = options?.locale;
 
   const tenant = await prisma.tenant.findFirst({
     where: {
@@ -36,13 +41,61 @@ export async function getTenantConfig(
     ? (tenant.draftSettings ?? tenant.settings)
     : tenant.settings;
 
+  let config: TenantConfig;
   if (!raw || typeof raw !== "object") {
-    return migrateToV2Pages(defaults);
+    config = migrateToV2Pages(defaults);
+  } else {
+    const stored = raw as Record<string, unknown>;
+    config = migrateToV2Pages(mergeConfig(defaults, stored, tenant.id));
   }
 
-  const stored = raw as Record<string, unknown>;
+  // Apply translations if a non-primary locale is requested
+  const tenantPrimaryLocale = await getTenantPrimaryLocale(tenant.id);
 
-  return migrateToV2Pages(mergeConfig(defaults, stored, tenant.id));
+  if (locale && locale !== tenantPrimaryLocale) {
+    // Verify locale is published for this tenant
+    const localeRow = await prisma.tenantLocale.findUnique({
+      where: { tenantId_locale: { tenantId: tenant.id, locale } },
+      select: { published: true },
+    });
+
+    if (!localeRow?.published) {
+      console.warn(`[getTenantConfig] Locale "${locale}" not published for tenant ${tenant.id} — falling back to primary`);
+      return config;
+    }
+
+    const translationMap = await loadTranslationMap(tenant.id, locale, tenantPrimaryLocale);
+    if (translationMap.size > 0) {
+      config = applyTranslationsToConfig(config, translationMap, locale, tenantPrimaryLocale);
+    }
+  }
+
+  return config;
+}
+
+/**
+ * Load all translations for a tenant in one query.
+ * Builds a Map keyed by `${locale}:${resourceId}` → value.
+ * Loads both the requested locale and primary locale for fallback.
+ */
+async function loadTranslationMap(
+  tenantId: string,
+  locale: string,
+  primaryLocale: string = PRIMARY_LOCALE,
+): Promise<Map<string, string>> {
+  const localesToLoad = locale === primaryLocale
+    ? [primaryLocale]
+    : [locale, primaryLocale];
+
+  const rows = await prisma.tenantTranslation.findMany({
+    where: {
+      tenantId,
+      locale: { in: localesToLoad },
+    },
+    select: { locale: true, resourceId: true, value: true },
+  });
+
+  return new Map(rows.map((r) => [`${r.locale}:${r.resourceId}`, r.value]));
 }
 
 /**

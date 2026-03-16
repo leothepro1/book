@@ -5,6 +5,8 @@ import { getBookingStatus } from "../../_lib/booking";
 import { ThemeRenderer } from "../../_lib/themes";
 import "../../_components/cards/cards.css";
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
+import GuestPageShell from "../../_components/GuestPageShell";
+import { getRequestLocale } from "../../_lib/locale/getRequestLocale";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +41,8 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
     return <div style={{ padding: 20, color: "var(--text)" }}>Ingen bokning hittades.</div>;
   }
 
-  const config = await getTenantConfig(booking.tenantId ?? "default", { preferDraft: isPreview });
+  const locale = await getRequestLocale();
+  const config = await getTenantConfig(booking.tenantId ?? "default", { preferDraft: isPreview, locale });
 
   if (isPreview) {
     console.log(`[PortalHome] Preview render: ${config.home?.cards?.length ?? 0} cards, draft=${isPreview}`);
@@ -48,12 +51,14 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
   const bookingStatus = getBookingStatus(booking);
 
   return (
-    <ThemeRenderer
-      templateKey="home"
-      config={config}
-      booking={booking}
-      bookingStatus={bookingStatus}
-      token={token}
-    />
+    <GuestPageShell config={config}>
+      <ThemeRenderer
+        templateKey="home"
+        config={config}
+        booking={booking}
+        bookingStatus={bookingStatus}
+        token={token}
+      />
+    </GuestPageShell>
   );
 }

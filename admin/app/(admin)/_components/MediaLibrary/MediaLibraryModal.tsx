@@ -489,7 +489,7 @@ export function MediaLibraryModal({
           <input
             ref={fileInputRef}
             type="file"
-            accept={ALLOWED_UPLOAD_TYPES.join(",")}
+            accept={accept === "image" ? "image/jpeg,image/png,image/webp,image/avif,image/gif,image/svg+xml" : accept === "video" ? "video/mp4,video/webm,video/quicktime" : ALLOWED_UPLOAD_TYPES.join(",")}
             multiple
             onChange={handleFileInput}
             style={{ display: "none" }}

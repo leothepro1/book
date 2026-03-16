@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { prisma } from "@/app/_lib/db/prisma";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
@@ -8,6 +9,9 @@ import { requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
 
 export type CheckinSettings = {
   checkinEnabled: boolean;
+  earlyCheckinEnabled: boolean;
+  earlyCheckinDays: number;
+  checkinUrl: string;
 };
 
 export type IntegrationPrerequisite = {
@@ -28,8 +32,16 @@ export async function getCheckinSettings(): Promise<CheckinSettings | null> {
   const tenantData = await getCurrentTenant();
   if (!tenantData) return null;
 
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3000";
+  const protocol = host.startsWith("localhost") ? "http" : "https";
+  const checkinUrl = `${protocol}://${host}/check-in`;
+
   return {
     checkinEnabled: tenantData.tenant.checkinEnabled,
+    earlyCheckinEnabled: tenantData.tenant.earlyCheckinEnabled,
+    earlyCheckinDays: tenantData.tenant.earlyCheckinDays,
+    checkinUrl,
   };
 }
 
@@ -186,6 +198,58 @@ export async function toggleCheckin(
     return { ok: true };
   } catch (error) {
     console.error("[toggleCheckin] Error:", error);
+    return { ok: false, error: "Kunde inte uppdatera — försök igen" };
+  }
+}
+
+// ── toggleEarlyCheckin ──────────────────────────────────────
+
+export async function toggleEarlyCheckin(
+  enabled: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard;
+
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return { ok: false, error: "Inte inloggad" };
+
+  try {
+    await prisma.tenant.update({
+      where: { id: tenantData.tenant.id },
+      data: { earlyCheckinEnabled: enabled },
+    });
+    return { ok: true };
+  } catch (error) {
+    console.error("[toggleEarlyCheckin] Error:", error);
+    return { ok: false, error: "Kunde inte uppdatera — försök igen" };
+  }
+}
+
+// ── updateEarlyCheckinDays ──────────────────────────────────
+
+const VALID_EARLY_CHECKIN_DAYS = [0, 1, 2, 3, 5, 7];
+
+export async function updateEarlyCheckinDays(
+  days: number,
+): Promise<{ ok: boolean; error?: string }> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard;
+
+  if (!VALID_EARLY_CHECKIN_DAYS.includes(days)) {
+    return { ok: false, error: "Ogiltigt antal dagar" };
+  }
+
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return { ok: false, error: "Inte inloggad" };
+
+  try {
+    await prisma.tenant.update({
+      where: { id: tenantData.tenant.id },
+      data: { earlyCheckinDays: days },
+    });
+    return { ok: true };
+  } catch (error) {
+    console.error("[updateEarlyCheckinDays] Error:", error);
     return { ok: false, error: "Kunde inte uppdatera — försök igen" };
   }
 }

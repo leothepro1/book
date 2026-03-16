@@ -8,6 +8,7 @@ import { OrganisationContent } from '@/app/(admin)/settings/organisation/Organis
 import { UsersContent } from '@/app/(admin)/settings/users/UsersContent';
 import { PoliciesContent } from '@/app/(admin)/settings/policies/PoliciesContent';
 import { CheckinContent } from '@/app/(admin)/settings/checkin/CheckinContent';
+import { LanguagesContent } from '@/app/(admin)/settings/languages/LanguagesContent';
 import { useRole } from './RoleContext';
 
 const IS_DEV = process.env.NODE_ENV === 'development';
@@ -48,8 +49,9 @@ const NAV_ITEMS: { items: SettingsNavItem[]; divider?: boolean }[] = [
     items: [
       { id: 'general', label: 'Allmänt', icon: 'storefront' },
       { id: 'integrations', label: 'Integrationer', icon: 'linked_services', adminOnly: true },
-      { id: 'domains', label: 'Domäner', icon: 'globe', adminOnly: true },
+      { id: 'domains', label: 'Domäner', icon: 'travel_explore', adminOnly: true },
       { id: 'notifications', label: 'Aviseringar', icon: 'notifications' },
+      { id: 'languages', label: 'Språk', icon: 'translate' },
       { id: 'checkin-checkout', label: 'In- och utcheckning', icon: 'room_service' },
       { id: 'policies', label: 'Policyer', icon: 'docs' },
     ],
@@ -65,6 +67,7 @@ export function SettingsPanel() {
   const [resetKey, setResetKey] = useState(0);
   const [subTitle, setSubTitle] = useState<string | null>(null);
   const [inviteTrigger, setInviteTrigger] = useState(0);
+  const [addLanguageTrigger, setAddLanguageTrigger] = useState(0);
   const [headerExtra, setHeaderExtra] = useState<React.ReactNode>(null);
   const [headerAction, setHeaderAction] = useState<React.ReactNode>(null);
 
@@ -190,6 +193,15 @@ export function SettingsPanel() {
                       </button>
                     )
                   )}
+                  {activeItem === 'languages' && (
+                    <button
+                      className="settings-btn--connect"
+                      style={{ marginLeft: 'auto', fontSize: 13, padding: '5px 12px' }}
+                      onClick={() => setAddLanguageTrigger((n) => n + 1)}
+                    >
+                      Lägg till språk
+                    </button>
+                  )}
                 </div>
               );
             })()}
@@ -204,6 +216,8 @@ export function SettingsPanel() {
                 <IntegrationsContent key={resetKey} onSubTitleChange={setSubTitle} />
               ) : activeItem === 'policies' ? (
                 <PoliciesContent key={resetKey} onSubTitleChange={setSubTitle} />
+              ) : activeItem === 'languages' ? (
+                <LanguagesContent key={resetKey} onSubTitleChange={setSubTitle} triggerAdd={addLanguageTrigger} />
               ) : activeItem === 'checkin-checkout' ? (
                 <CheckinContent key={resetKey} onSubTitleChange={setSubTitle} onNavigate={(tab) => { setActiveItem(tab); setSubTitle(null); setResetKey((k) => k + 1); }} />
               ) : (

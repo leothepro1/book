@@ -118,11 +118,8 @@ export default function DesignClient({ initialConfig }: Props) {
    ════════════════════════════════════════════ */
 
 function DesignInner() {
-  const { config } = usePreview();
-  const getConfig = useCallback(() => config, [config]);
-
   return (
-    <PublishBarProvider getConfig={getConfig}>
+    <PublishBarProvider>
       <DesignInnerContent />
     </PublishBarProvider>
   );

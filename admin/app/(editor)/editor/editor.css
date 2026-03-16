@@ -323,9 +323,8 @@
 }
 
 .editor-publish__btn:disabled {
-    background: #F0EFED;
-    color: #8E8B86;
     cursor: default;
+    opacity: 0.5;
 }
 
 /* ── Body: icon-rail + panel + canvas ── */
@@ -757,8 +756,8 @@
   border: none;
   background: transparent;
   color: var(--admin-accent);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 450;
   cursor: pointer;
   border-radius: 6px;
   transition: background 0.12s;

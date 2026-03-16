@@ -53,6 +53,7 @@ export const buttonElement: ElementDefinition = {
       key: "icon",
       type: "text",
       label: "Ikon",
+      translatable: false,
       default: "",
       group: "Ikon",
       descriptionLink: {

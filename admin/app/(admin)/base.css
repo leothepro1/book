@@ -14,7 +14,7 @@
   --admin-bg:            #F9F8F7;
   --admin-surface:       #FFFFFF;
   --admin-surface-hover: #F9F8F7;
-  --admin-surface-active:#F0EFED;
+  --admin-surface-active:#F1EFEC;
   --admin-surface-muted: #f0efed;
   --admin-surface-sunken:#ECEBEA;
 
@@ -413,15 +413,8 @@ textarea::placeholder {
    Links
    ══════════════════════════════════════════════════════════ */
 
-a {
-  color: var(--admin-accent);
-  text-decoration: none;
-  transition: color 0.2s ease;
-}
 
-a:hover {
-  color: var(--admin-accent-hover);
-}
+
 
 
 /* ══════════════════════════════════════════════════════════

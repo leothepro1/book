@@ -124,24 +124,27 @@ function categoryAwareCollision(args: Parameters<typeof closestCenter>[0]) {
 
 function ArchivePageInner() {
   const { config, updateConfig, notifyDraftSaved } = usePreview();
+  const { pushUndo } = usePublishBar();
   const [isPending, startTransition] = useTransition();
   const cards: Card[] = (config?.home?.cards || []) as Card[];
   const archivedCards: ArchivedCard[] = (config?.home?.archivedCards || []) as ArchivedCard[];
 
   const handlePermanentDelete = useCallback((id: string) => {
+    pushUndo({ home: config?.home } as HomeCardsPatch);
     const updatedArchive = archivedCards.filter(c => c.id !== id);
     updateConfig({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards: updatedArchive } } as HomeCardsPatch);
     startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards, archivedCards: updatedArchive } } as HomeCardsPatch); notifyDraftSaved(); });
-  }, [cards, archivedCards, config, updateConfig, notifyDraftSaved]);
+  }, [cards, archivedCards, config, updateConfig, notifyDraftSaved, pushUndo]);
 
   const handleRestore = useCallback((archived: ArchivedCard) => {
+    pushUndo({ home: config?.home } as HomeCardsPatch);
     const { archivedAt: _at, archivedBy: _by, archivedReason: _r, ...cardData } = archived as any;
     const restoredCard: Card = { ...cardData, isActive: false, sortOrder: cards.length };
     const updatedCards = [...cards, restoredCard];
     const updatedArchive = archivedCards.filter(c => c.id !== archived.id);
     updateConfig({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards: updatedArchive } } as HomeCardsPatch);
     startTransition(async () => { await updateDraft({ home: { version: 1, links: config?.home?.links || [], cards: updatedCards, archivedCards: updatedArchive } } as HomeCardsPatch); notifyDraftSaved(); });
-  }, [cards, archivedCards, config, updateConfig, notifyDraftSaved]);
+  }, [cards, archivedCards, config, updateConfig, notifyDraftSaved, pushUndo]);
 
   return (
     <div className="home-content">
@@ -215,7 +218,7 @@ function HomeClientInner() {
       : "Home";
 
   return (
-    <PublishBarProvider getConfig={getConfig}>
+    <PublishBarProvider>
       <div className={`admin-page${themeDetailOpen ? " admin-page--no-preview" : ""}`}>
         <div className="admin-editor">
           <div className="admin-header">

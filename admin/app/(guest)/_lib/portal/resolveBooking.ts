@@ -36,10 +36,12 @@ export async function resolveBookingFromToken(token?: string | null): Promise<No
   });
 
   if (magic?.booking) {
+    const isDev = process.env.NODE_ENV === "development";
     const now = new Date();
     const isExpired = magic.expiresAt < now;
     const isUsed = !!magic.usedAt;
-    if (!isExpired && !isUsed) return mapPrismaBookingToNormalized(magic.booking);
+    // In dev: ignore expiry and used-state to make testing easier
+    if (isDev || (!isExpired && !isUsed)) return mapPrismaBookingToNormalized(magic.booking);
   }
 
   const booking = await prisma.booking.findUnique({

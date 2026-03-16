@@ -1,4 +1,6 @@
 import { resolveBookingFromToken } from "../../../_lib/portal/resolveBooking";
+import GuestPageShell from "../../../_components/GuestPageShell";
+import { getRequestLocale } from "../../../_lib/locale/getRequestLocale";
 import StaysTabs from "./StaysTabs";
 import { createMockNormalizedBookings } from "@/app/_lib/mockData";
 import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
@@ -44,7 +46,8 @@ export default async function Page(props: {
     }
 
     if (tenant) {
-      const config = await getTenantConfig(tenant.id, { preferDraft: token === "preview" });
+      const locale = await getRequestLocale();
+      const config = await getTenantConfig(tenant.id, { preferDraft: token === "preview", locale });
       const stays = getStaysCoreConfig(config);
 
       const allMock = createMockNormalizedBookings(tenant.id);
@@ -64,23 +67,25 @@ export default async function Page(props: {
       };
 
       return (
-        <div className="g-container" style={containerStyle}>
-          <h1 className="g-heading" style={{ fontSize: stays.headingSize, marginBottom: stays.description ? 8 : stays.headingMarginBottom }} dangerouslySetInnerHTML={{ __html: stays.heading }} />
-          {stays.description && (
-            <p className="g-description" style={{ marginBottom: stays.headingMarginBottom }} dangerouslySetInnerHTML={{ __html: stays.description }} />
-          )}
+        <GuestPageShell config={config}>
+          <div className="g-container" style={containerStyle}>
+            <h1 className="g-heading" style={{ fontSize: stays.headingSize, marginBottom: stays.description ? 8 : stays.headingMarginBottom }} dangerouslySetInnerHTML={{ __html: stays.heading }} />
+            {stays.description && (
+              <p className="g-description" style={{ marginBottom: stays.headingMarginBottom }} dangerouslySetInnerHTML={{ __html: stays.description }} />
+            )}
 
-          <StaysTabs
-            currentBookings={currentBookings}
-            previousBookings={previousBookings}
-            lang={lang}
-            layout={stays.layout}
-            cardShadow={stays.cardShadow}
-            tabCurrentLabel={stays.tabCurrentLabel}
-            tabPreviousLabel={stays.tabPreviousLabel}
-            cardImageUrl={stays.cardImageUrl}
-          />
-        </div>
+            <StaysTabs
+              currentBookings={currentBookings}
+              previousBookings={previousBookings}
+              lang={lang}
+              layout={stays.layout}
+              cardShadow={stays.cardShadow}
+              tabCurrentLabel={stays.tabCurrentLabel}
+              tabPreviousLabel={stays.tabPreviousLabel}
+              cardImageUrl={stays.cardImageUrl}
+            />
+          </div>
+        </GuestPageShell>
       );
     }
   }
@@ -92,7 +97,8 @@ export default async function Page(props: {
     return <div className="g-container">No booking found.</div>;
   }
 
-  const config = await getTenantConfig(current.tenantId);
+  const locale = await getRequestLocale();
+  const config = await getTenantConfig(current.tenantId, { locale });
   const stays = getStaysCoreConfig(config);
 
   let allBookings: import("@/app/_lib/integrations/types").NormalizedBooking[];
@@ -120,21 +126,23 @@ export default async function Page(props: {
   };
 
   return (
-    <div className="g-container" style={containerStyle}>
-      <h1 className="g-heading" style={{ fontSize: stays.headingSize, marginBottom: stays.description ? 8 : stays.headingMarginBottom }} dangerouslySetInnerHTML={{ __html: stays.heading }} />
-      {stays.description && (
-        <p className="g-description" style={{ marginBottom: stays.headingMarginBottom }} dangerouslySetInnerHTML={{ __html: stays.description }} />
-      )}
+    <GuestPageShell config={config}>
+      <div className="g-container" style={containerStyle}>
+        <h1 className="g-heading" style={{ fontSize: stays.headingSize, marginBottom: stays.description ? 8 : stays.headingMarginBottom }} dangerouslySetInnerHTML={{ __html: stays.heading }} />
+        {stays.description && (
+          <p className="g-description" style={{ marginBottom: stays.headingMarginBottom }} dangerouslySetInnerHTML={{ __html: stays.description }} />
+        )}
 
-      <StaysTabs
-        currentBookings={currentBookings}
-        previousBookings={previousBookings}
-        lang={lang}
-        layout={stays.layout}
-        tabCurrentLabel={stays.tabCurrentLabel}
-        tabPreviousLabel={stays.tabPreviousLabel}
-        cardImageUrl={stays.cardImageUrl}
-      />
-    </div>
+        <StaysTabs
+          currentBookings={currentBookings}
+          previousBookings={previousBookings}
+          lang={lang}
+          layout={stays.layout}
+          tabCurrentLabel={stays.tabCurrentLabel}
+          tabPreviousLabel={stays.tabPreviousLabel}
+          cardImageUrl={stays.cardImageUrl}
+        />
+      </div>
+    </GuestPageShell>
   );
 }

@@ -118,8 +118,10 @@ model Tenant {
   vatNumber          String?
 
   // Feature toggles — account-level, immediate effect (not draft/publish)
-  checkinEnabled     Boolean @default(false)
-  checkoutEnabled    Boolean @default(false)
+  checkinEnabled        Boolean @default(false)
+  checkoutEnabled       Boolean @default(false)
+  earlyCheckinEnabled   Boolean @default(false)
+  earlyCheckinDays      Int     @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -133,6 +135,8 @@ model Tenant {
   businessEntities   BusinessEntity[]
   policies           TenantPolicy[]
   lockIntegration    TenantLockIntegration?
+  locales            TenantLocale[]
+  translations       TenantTranslation[]
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -647,4 +651,51 @@ model KeyEvent {
   eventType     KeyEventType
   metadata      Json?
   createdAt     DateTime  @default(now())
+}
+
+// ============================================================================
+// TRANSLATIONS
+// ============================================================================
+
+enum TranslationNamespace {
+  PLATFORM
+  TENANT
+  LOCKED
+}
+
+model TenantLocale {
+  id         String   @id @default(cuid())
+  tenantId   String
+  locale     String   // BCP-47: "en", "de", "fr", "sv" etc.
+  published  Boolean  @default(false)
+  primary    Boolean  @default(false) // only one per tenant
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  translations TenantTranslation[]
+
+  @@unique([tenantId, locale])
+  @@index([tenantId, published])
+}
+
+model TenantTranslation {
+  id           String               @id @default(cuid())
+  tenantId     String
+  locale       String
+  resourceId   String               // ResourceId branded string
+  namespace    TranslationNamespace
+  value             String               // published value — what guests see
+  draftValue        String?              // unpublished value — null means no pending draft
+  sourceDigest      String               // digest of source when value was published
+  draftSourceDigest String?              // digest of source when draftValue was saved
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantLocale TenantLocale @relation(fields: [tenantId, locale], references: [tenantId, locale], onDelete: Cascade)
+
+  @@unique([tenantId, locale, resourceId])
+  @@index([tenantId, locale])
+  @@index([tenantId, resourceId])
 }

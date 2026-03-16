@@ -15,8 +15,7 @@
  * the EditorShell layout. All logic lives in child components.
  */
 
-import { useCallback } from "react";
-import { PreviewProvider, usePreview } from "@/app/(admin)/_components/GuestPreview";
+import { PreviewProvider } from "@/app/(admin)/_components/GuestPreview";
 import { PublishBarProvider } from "@/app/(admin)/_components/PublishBar";
 import { EditorProvider } from "./EditorContext";
 import { EditorShell } from "./EditorShell";
@@ -26,25 +25,11 @@ import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 export default function EditorClient({ initialConfig }: { initialConfig: TenantConfig }) {
   return (
     <PreviewProvider initialConfig={initialConfig}>
-      <EditorInner />
+      <PublishBarProvider>
+        <EditorProvider>
+          <EditorShell />
+        </EditorProvider>
+      </PublishBarProvider>
     </PreviewProvider>
-  );
-}
-
-/**
- * Inner wrapper that has access to PreviewProvider context.
- * Needed because PublishBarProvider requires a getConfig callback
- * that reads from PreviewProvider.
- */
-function EditorInner() {
-  const { config } = usePreview();
-  const getConfig = useCallback(() => config, [config]);
-
-  return (
-    <PublishBarProvider getConfig={getConfig}>
-      <EditorProvider>
-        <EditorShell />
-      </EditorProvider>
-    </PublishBarProvider>
   );
 }

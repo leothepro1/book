@@ -249,7 +249,7 @@ export function UsersContent({ onSubTitleChange, triggerInvite, onHeaderExtraCha
       setInviteResults(null);
       onSubTitleChange?.("Lägg till användare");
       onHeaderExtraChange?.(null);
-      onHeaderActionChange?.(null);
+      onHeaderActionChange?.(<></>);
     }
   }, [triggerInvite, onSubTitleChange]);
 

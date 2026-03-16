@@ -13,6 +13,7 @@ import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import type { DraftPatch } from "@/app/(admin)/_lib/tenant/updateDraft";
 import type { DraftUpdateEvent } from "./types";
 import merge from "deepmerge";
+import { configChannel } from "@/app/_lib/translations/config-channel";
 
 interface PreviewContextValue {
   config: TenantConfig | null;
@@ -89,6 +90,11 @@ export function PreviewProvider({
       return merge<TenantConfig>(prev, changes as TenantConfig, { arrayMerge: overwriteArrays });
     });
   }, []);
+
+  // Emit config to translation panel channel on every change
+  useEffect(() => {
+    if (config) configChannel.emit(config);
+  }, [config]);
 
   // Signal that updateDraft() has persisted to DB — triggers content refresh in iframe
   const notifyDraftSaved = useCallback(() => {

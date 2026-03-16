@@ -267,7 +267,7 @@ function SectionListPane() {
       const section = sectionsRef.current.find((s) => s.id === id);
       if (!section) return;
 
-      if (section.blocks.length === 0) {
+      if ((section.blocks ?? []).length === 0) {
         const updated = sectionsRef.current
           .filter((s) => s.id !== id)
           .map((s, i) => ({ ...s, sortOrder: i }));
@@ -276,7 +276,7 @@ function SectionListPane() {
         setDeleteConfirm({
           sectionId: id,
           sectionTitle: section.title || section.definitionId,
-          blockCount: section.blocks.length,
+          blockCount: (section.blocks ?? []).length,
         });
       }
     },

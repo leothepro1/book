@@ -41,10 +41,8 @@ export default function MapsClient({ initialConfig }: Props) {
 }
 
 function MapsInner() {
-  const { config } = usePreview();
-  const getConfig = useCallback(() => config, [config]);
   return (
-    <PublishBarProvider getConfig={getConfig}>
+    <PublishBarProvider>
       <MapsContent />
     </PublishBarProvider>
   );

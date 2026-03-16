@@ -99,7 +99,7 @@
 .users-role-btn {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: start;
   flex: 1;
   padding: 16px;
   font-family: var(--admin-font);
@@ -196,15 +196,14 @@
   font-weight: 500;
   cursor: pointer;
   border-radius: 8px;
-  border: 1px solid #F0EFED;
-  background: #F0EFED;
-  color: #303030;
+  border: none;
+  background: #007cd718;
+  color: var(--admin-accent);
   transition: background 0.15s, border-color 0.15s;
 }
 
 .users-actions-btn:hover {
-  background: #E6E5E3;
-  border-color: #E6E5E3;
+  background: rgba(0, 124, 215, 0.14);
 }
 
 /* ── Bulk action buttons (table header selection mode) ── */

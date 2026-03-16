@@ -1,5 +1,7 @@
 import { prisma } from "../../../../_lib/db/prisma";
 import { getTenantConfig } from "../../../_lib/tenant";
+import GuestPageShell from "../../../_components/GuestPageShell";
+import { getRequestLocale } from "../../../_lib/locale/getRequestLocale";
 import AccountClient from "./AccountClient";
 import { createGlobalMockBooking } from "@/app/_lib/mockData";
 import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
@@ -44,16 +46,18 @@ export default async function Page(props: {
 
     if (tenant) {
       const mockBooking = createGlobalMockBooking(tenant.id);
-      const config = await getTenantConfig(tenant.id);
+      const locale = await getRequestLocale();
+      const config = await getTenantConfig(tenant.id, { locale });
 
       return (
-        <AccountClient
-          token={token}
-          tenantId={tenant.id}
-          guestEmail={mockBooking.guestEmail!}
-          lang={lang}
-          config={config}
-          initial={{
+        <GuestPageShell config={config}>
+          <AccountClient
+            token={token}
+            tenantId={tenant.id}
+            guestEmail={mockBooking.guestEmail!}
+            lang={lang}
+            config={config}
+            initial={{
             firstName: mockBooking.firstName ?? "",
             lastName: mockBooking.lastName ?? "",
             guestEmail: mockBooking.guestEmail ?? "",
@@ -63,7 +67,8 @@ export default async function Page(props: {
             city: mockBooking.city ?? "",
             country: mockBooking.country ?? "",
           }}
-        />
+          />
+        </GuestPageShell>
       );
     }
   }
@@ -98,7 +103,8 @@ export default async function Page(props: {
     );
   }
 
-  const config = await getTenantConfig(booking.tenantId ?? "default");
+  const localeForConfig = await getRequestLocale();
+  const config = await getTenantConfig(booking.tenantId ?? "default", { locale: localeForConfig });
 
   // Use adapter to get guest profile data
   let initial = {
@@ -132,13 +138,15 @@ export default async function Page(props: {
   }
 
   return (
-    <AccountClient
-      token={booking.id}
-      tenantId={booking.tenantId}
-      guestEmail={booking.guestEmail}
-      lang={lang}
-      config={config}
-      initial={initial}
-    />
+    <GuestPageShell config={config}>
+      <AccountClient
+        token={booking.id}
+        tenantId={booking.tenantId}
+        guestEmail={booking.guestEmail}
+        lang={lang}
+        config={config}
+        initial={initial}
+      />
+    </GuestPageShell>
   );
 }

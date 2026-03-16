@@ -15,6 +15,7 @@ export const iconElement: ElementDefinition = {
       key: "name",
       type: "text",
       label: "Ikon",
+      translatable: false,
       descriptionLink: {
         href: "https://fonts.google.com/icons",
         label: "Se tillgängliga ikoner",

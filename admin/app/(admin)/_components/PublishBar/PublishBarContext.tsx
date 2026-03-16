@@ -12,6 +12,8 @@ import {
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import { updateDraft, type DraftPatch } from "../../_lib/tenant/updateDraft";
 import { publishDraft, discardDraft } from "../../_lib/tenant/publishDraft";
+import { hasDraftChanges } from "../../_lib/tenant/getDraftDiff";
+import { usePreview } from "../GuestPreview/PreviewContext";
 import { useNavigationGuard } from "../NavigationGuard";
 
 /**
@@ -74,70 +76,104 @@ export function usePublishBarInternal(): PublishBarInternalValue {
 
 /* ── Provider ── */
 
-interface PublishBarProviderProps {
-  children: ReactNode;
-  /** Supply current config so undo/redo can snapshot properly. */
-  getConfig: () => TenantConfig | null;
-}
+const DIFF_DEBOUNCE_MS = 500;
 
-export function PublishBarProvider({ children, getConfig }: PublishBarProviderProps) {
+export function PublishBarProvider({ children }: { children: ReactNode }) {
+  const { config, updateConfig, notifyDraftSaved } = usePreview();
+
   const [undoStack, setUndoStack] = useState<DraftPatch[]>([]);
   const [redoStack, setRedoStack] = useState<DraftPatch[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
+  const [isLingeringAfterPublish, setIsLingeringAfterPublish] = useState(false);
+
+  const configRef = useRef(config);
+  configRef.current = config;
+  const diffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lingerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Check for draft changes on mount — show publish bar if existing draft differs from live
+  useEffect(() => {
+    hasDraftChanges().then(setHasUnsavedChanges);
+  }, []);
+
+  // Debounced server diff check — called after every draft mutation
+  const checkDraftDiff = useCallback(() => {
+    if (diffTimerRef.current) clearTimeout(diffTimerRef.current);
+    diffTimerRef.current = setTimeout(() => {
+      hasDraftChanges().then(setHasUnsavedChanges);
+    }, DIFF_DEBOUNCE_MS);
+  }, []);
+
+  // Cleanup timers
+  useEffect(() => {
+    return () => {
+      if (diffTimerRef.current) clearTimeout(diffTimerRef.current);
+      if (lingerTimer.current) clearTimeout(lingerTimer.current);
+    };
+  }, []);
 
   const pushUndo = useCallback((snapshot: DraftPatch) => {
     setUndoStack(prev => [...prev, snapshot]);
     setRedoStack([]);
+    // Optimistically show dirty, then verify with server
     setHasUnsavedChanges(true);
-  }, []);
+    checkDraftDiff();
+  }, [checkDraftDiff]);
 
   const markDirty = useCallback(() => {
     setHasUnsavedChanges(true);
-  }, []);
+    checkDraftDiff();
+  }, [checkDraftDiff]);
 
   const handleUndo = useCallback(async () => {
     if (undoStack.length === 0 || isUndoing) return;
     setIsUndoing(true);
 
     const previousSnapshot = undoStack[undoStack.length - 1];
-    const config = getConfig();
-    if (config) {
-      // Snapshot current state for redo — pick only the keys that the undo snapshot contains
-      const redoSnapshot = pickKeys(config, previousSnapshot);
+    const currentConfig = configRef.current;
+    if (currentConfig) {
+      const redoSnapshot = pickKeys(currentConfig, previousSnapshot);
       setRedoStack(prev => [...prev, redoSnapshot]);
     }
 
     setUndoStack(prev => prev.slice(0, -1));
-    await updateDraft(previousSnapshot);
 
-    if (undoStack.length <= 1) {
-      await discardDraft();
-      setHasUnsavedChanges(false);
-    }
+    // Apply undo: update local state + persist to DB
+    updateConfig(previousSnapshot);
+    await updateDraft(previousSnapshot);
+    notifyDraftSaved();
+
     setIsUndoing(false);
-  }, [undoStack, isUndoing, getConfig]);
+
+    // Recompute dirty state from server truth
+    checkDraftDiff();
+  }, [undoStack, isUndoing, updateConfig, notifyDraftSaved, checkDraftDiff]);
 
   const handleRedo = useCallback(async () => {
     if (redoStack.length === 0 || isUndoing) return;
     setIsUndoing(true);
 
     const redoSnapshot = redoStack[redoStack.length - 1];
-    const config = getConfig();
-    if (config) {
-      const undoSnapshot = pickKeys(config, redoSnapshot);
+    const currentConfig = configRef.current;
+    if (currentConfig) {
+      const undoSnapshot = pickKeys(currentConfig, redoSnapshot);
       setUndoStack(prev => [...prev, undoSnapshot]);
     }
 
     setRedoStack(prev => prev.slice(0, -1));
-    await updateDraft(redoSnapshot);
-    setHasUnsavedChanges(true);
-    setIsUndoing(false);
-  }, [redoStack, isUndoing, getConfig]);
 
-  const [isLingeringAfterPublish, setIsLingeringAfterPublish] = useState(false);
-  const lingerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Apply redo: update local state + persist to DB
+    updateConfig(redoSnapshot);
+    await updateDraft(redoSnapshot);
+    notifyDraftSaved();
+
+    setIsUndoing(false);
+
+    // Recompute dirty state from server truth
+    checkDraftDiff();
+  }, [redoStack, isUndoing, updateConfig, notifyDraftSaved, checkDraftDiff]);
 
   const handlePublish = useCallback(async () => {
     if (isPublishing) return;

@@ -265,6 +265,8 @@ export type SettingField = {
    * means this field is only visible when the "layout" field equals "tabs".
    */
   visibleWhen?: { key: string; value: unknown };
+  /** When false, this field is excluded from the translation system even if its type is translatable. */
+  translatable?: boolean;
 };
 
 // ─── Section Component Contract ──────────────────────────

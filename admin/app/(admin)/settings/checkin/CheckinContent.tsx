@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { EditorIcon } from "@/app/_components/EditorIcon";
-import { getCheckinSettings, getCheckInPrerequisiteStatus, toggleCheckin } from "./actions";
+import { getCheckinSettings, getCheckInPrerequisiteStatus, toggleCheckin, toggleEarlyCheckin, updateEarlyCheckinDays } from "./actions";
 import type { CheckInPrerequisiteStatus } from "./actions";
 import { useSettings } from "@/app/(admin)/_components/SettingsContext";
 
@@ -94,23 +94,166 @@ function TimeInput({ value, onChange }: { value: string; onChange: (v: string) =
   );
 }
 
+// ── Early Checkin Days Dropdown ───────────────────────────────
+
+const EARLY_CHECKIN_OPTIONS = [
+  { value: 0, label: "Samma dag" },
+  { value: 1, label: "1 dag före ankomst" },
+  { value: 2, label: "2 dagar före ankomst" },
+  { value: 3, label: "3 dagar före ankomst" },
+  { value: 5, label: "5 dagar före ankomst" },
+  { value: 7, label: "7 dagar före ankomst" },
+];
+
+function EarlyCheckinDaysDropdown({ value, onChange }: { value: number; onChange: (days: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
+  const selected = EARLY_CHECKIN_OPTIONS.find((o) => o.value === value) ?? EARLY_CHECKIN_OPTIONS[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const handle = (e: MouseEvent) => {
+      if (
+        triggerRef.current?.contains(e.target as Node) ||
+        menuRef.current?.contains(e.target as Node)
+      ) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [open]);
+
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 0 });
+
+  useEffect(() => {
+    if (open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setMenuPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+  }, [open]);
+
+  return (
+    <div style={{ paddingTop: 14 }}>
+      <label className="admin-label">Tillåt incheckning upp till</label>
+      <div className="sf-dropdown">
+        <button
+          ref={triggerRef}
+          type="button"
+          className="sf-dropdown__trigger"
+          onClick={() => setOpen(!open)}
+        >
+          <span className="sf-dropdown__text">{selected.label}</span>
+          <EditorIcon name="expand_more" size={16} className="sf-dropdown__chevron" />
+        </button>
+        {open && createPortal(
+          <ul
+            ref={menuRef}
+            className="sf-dropdown__menu"
+            style={{ position: "fixed", top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          >
+            {EARLY_CHECKIN_OPTIONS.map((opt) => (
+              <li
+                key={opt.value}
+                className={`sf-dropdown__item${opt.value === value ? " sf-dropdown__item--active" : ""}`}
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+              >
+                <span style={{ flex: 1 }}>{opt.label}</span>
+                <span className={`material-symbols-rounded sf-dropdown__check${opt.value === value ? " sf-dropdown__check--visible" : ""}`}>check</span>
+              </li>
+            ))}
+          </ul>,
+          document.body,
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Copy URL Input ────────────────────────────────────────
+
+function CopyUrlInput({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div style={{ position: "relative", marginTop: 12 }}>
+      <input
+        type="text"
+        value={value}
+        disabled
+        className="admin-float-input"
+        style={{
+          width: "100%",
+          padding: "10px 40px 10px 12px",
+          fontSize: 13,
+          color: "var(--admin-text-secondary)",
+          background: "var(--admin-bg, #f5f5f5)",
+          cursor: "default",
+        }}
+      />
+      <button
+        onClick={handleCopy}
+        style={{
+          position: "absolute",
+          right: 8,
+          top: "50%",
+          transform: "translateY(-50%)",
+          border: "none",
+          background: "none",
+          cursor: "pointer",
+          padding: 4,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: copied ? "#1a7f37" : "var(--admin-text-secondary)",
+          transition: "color 0.15s",
+        }}
+        aria-label="Kopiera URL"
+      >
+        <EditorIcon name={copied ? "check" : "content_copy"} size={18} />
+      </button>
+    </div>
+  );
+}
+
 type CheckinContentProps = {
   onSubTitleChange?: (title: string | null) => void;
   onNavigate?: (tab: string) => void;
 };
 
 export function CheckinContent({ onSubTitleChange, onNavigate }: CheckinContentProps) {
+  const { close: closeSettings } = useSettings();
   const [enabled, setEnabled] = useState(false);
+  const [earlyCheckinEnabled, setEarlyCheckinEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [showPrereqModal, setShowPrereqModal] = useState(false);
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
+  const [showEarlyCheckinModal, setShowEarlyCheckinModal] = useState(false);
+  const [showEarlyCheckinDeactivate, setShowEarlyCheckinDeactivate] = useState(false);
+  const [earlyCheckinToggling, setEarlyCheckinToggling] = useState(false);
+  const [earlyCheckinDays, setEarlyCheckinDays] = useState(0);
+  const [checkinUrl, setCheckinUrl] = useState("");
   const [checkInTime, setCheckInTime] = useState("15:00");
   const [checkOutTime, setCheckOutTime] = useState("11:00");
 
   useEffect(() => {
     getCheckinSettings().then((data) => {
-      if (data) setEnabled(data.checkinEnabled);
+      if (data) {
+        setEnabled(data.checkinEnabled);
+        setEarlyCheckinEnabled(data.earlyCheckinEnabled);
+        setEarlyCheckinDays(data.earlyCheckinDays);
+        setCheckinUrl(data.checkinUrl);
+      }
       setLoading(false);
     });
   }, []);
@@ -201,6 +344,181 @@ export function CheckinContent({ onSubTitleChange, onNavigate }: CheckinContentP
             </div>
           </div>
         </div>
+      )}
+
+      {enabled && (
+        <div>
+          <h4 style={{ fontSize: 14, fontWeight: 600, color: "var(--admin-text)", marginBottom: 16 }}>
+            Tillåt tidig incheckning
+          </h4>
+          <div style={{
+            border: "1px solid var(--admin-border)",
+            borderRadius: 10,
+            overflow: "hidden",
+          }}>
+            <div style={{
+              display: "flex", alignItems: "center", gap: 14,
+              padding: "16px 14px",
+            }}>
+            <EditorIcon name="schedule" size={20} style={{ color: "var(--admin-text-secondary)", flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 500, color: "var(--admin-text)", lineHeight: "1em", marginBottom: 4 }}>
+                Tidig incheckning
+              </div>
+              <div style={{ fontSize: 12, color: "var(--admin-text-secondary)", lineHeight: 1.4 }}>
+                Gör det möjligt för gäster att begära tidigare ankomst än ordinarie incheckningstid.
+              </div>
+            </div>
+            {earlyCheckinEnabled ? (
+              <button
+                className="settings-btn--danger"
+                style={{ fontSize: 13, padding: "5px 12px" }}
+                disabled={earlyCheckinToggling}
+                onClick={() => setShowEarlyCheckinDeactivate(true)}
+              >
+                Avaktivera
+              </button>
+            ) : (
+              <button
+                className="settings-btn--connect"
+                style={{ fontSize: 13, padding: "5px 12px" }}
+                onClick={() => setShowEarlyCheckinModal(true)}
+              >
+                Aktivera
+              </button>
+            )}
+            </div>
+            {earlyCheckinEnabled && (
+              <div style={{ padding: "0 14px 16px", borderTop: "1px solid var(--admin-border)" }}>
+                <EarlyCheckinDaysDropdown
+                  value={earlyCheckinDays}
+                  onChange={async (days) => {
+                    setEarlyCheckinDays(days);
+                    await updateEarlyCheckinDays(days);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {enabled && (
+        <div>
+          <h4 style={{ fontSize: 14, fontWeight: 600, color: "var(--admin-text)", marginBottom: 16 }}>
+            Konfigurera
+          </h4>
+          <div style={{
+            border: "1px solid var(--admin-border)",
+            borderRadius: 10,
+            overflow: "hidden",
+          }}>
+            {/* Inställningar */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 14,
+              padding: "16px 14px",
+            }}>
+              <EditorIcon name="design_services" size={20} style={{ color: "var(--admin-text-secondary)", flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 500, color: "var(--admin-text)", lineHeight: "1em", marginBottom: 4 }}>
+                  Inställningar
+                </div>
+                <div style={{ fontSize: 12, color: "var(--admin-text-secondary)", lineHeight: 1.4 }}>
+                  Konfigurera layout, ordning och innehåll för in- och utcheckning.
+                </div>
+              </div>
+              <button
+                className="settings-btn--connect"
+                style={{ fontSize: 13, padding: "5px 12px" }}
+                onClick={() => {
+                  closeSettings();
+                  window.location.href = "/editor";
+                }}
+              >
+                Anpassa
+              </button>
+            </div>
+
+            {/* Divider */}
+            <div style={{ height: 1, background: "var(--admin-border)", margin: "0 14px" }} />
+
+            {/* URL */}
+            <div style={{ padding: "16px 14px" }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 14,
+              }}>
+                <EditorIcon name="link" size={20} style={{ color: "var(--admin-text-secondary)", flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: "var(--admin-text)", lineHeight: "1em", marginBottom: 4 }}>
+                    URL
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--admin-text-secondary)", lineHeight: 1.4 }}>
+                    Använd denna URL där gäster ska komma åt in- och utcheckning.
+                  </div>
+                </div>
+                <button
+                  className="settings-btn--connect"
+                  style={{ fontSize: 13, padding: "5px 12px" }}
+                  onClick={() => onNavigate?.("domains")}
+                >
+                  Hantera
+                </button>
+              </div>
+              <CopyUrlInput value={checkinUrl} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEarlyCheckinDeactivate && createPortal(
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setShowEarlyCheckinDeactivate(false)}
+        >
+          <div style={{ position: "absolute", inset: 0, background: "var(--admin-overlay)", animation: "settings-modal-fade-in 0.15s ease" }} />
+          <div
+            style={{
+              position: "relative", zIndex: 1, background: "var(--admin-surface)",
+              borderRadius: 16, padding: 24, width: 380,
+              animation: "settings-modal-scale-in 0.2s cubic-bezier(0.32, 0.72, 0, 1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: 17, fontWeight: 600, marginBottom: 8 }}>
+              Avaktivera tidig incheckning?
+            </h3>
+            <p style={{ fontSize: 14, color: "var(--admin-text-secondary)", lineHeight: 1.5, marginBottom: 20 }}>
+              Gäster kommer inte längre kunna begära tidig incheckning via portalen.
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="settings-btn--outline" onClick={() => setShowEarlyCheckinDeactivate(false)}>
+                Avbryt
+              </button>
+              <button
+                className="settings-btn--danger-solid"
+                disabled={earlyCheckinToggling}
+                onClick={async () => {
+                  setEarlyCheckinToggling(true);
+                  const result = await toggleEarlyCheckin(false);
+                  if (result.ok) setEarlyCheckinEnabled(false);
+                  setEarlyCheckinToggling(false);
+                  setShowEarlyCheckinDeactivate(false);
+                }}
+              >
+                <ButtonSpinner visible={earlyCheckinToggling} />
+                Avaktivera
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {showEarlyCheckinModal && (
+        <EarlyCheckinModal
+          onClose={() => setShowEarlyCheckinModal(false)}
+          onActivated={() => { setEarlyCheckinEnabled(true); setShowEarlyCheckinModal(false); }}
+        />
       )}
 
       {showDeactivateConfirm && createPortal(
@@ -412,7 +730,7 @@ function PrerequisiteModal({
               <div style={{ height: 1, background: "#E6E5E3", margin: "20px 0" }} />
 
               {/* Description */}
-              <p style={{ fontSize: 13, color: "var(--admin-text-secondary)", lineHeight: 1.6, marginBottom: 0 }}>
+              <p style={{ fontSize: 14, color: "#616161", lineHeight: 1.6, marginBottom: 0 }}>
                 När digital incheckning är aktiverad kan gäster checka in och ut via portalen
                 och få tillgång till sin digitala nyckel direkt i mobilen.
               </p>
@@ -431,7 +749,7 @@ function PrerequisiteModal({
                   onChange={(e) => setConfirmed(e.target.checked)}
                   style={{ width: 16, height: 16, marginTop: 2, cursor: "inherit", accentColor: "var(--admin-accent)" }}
                 />
-                <span style={{ fontSize: 13, color: "var(--admin-text)", lineHeight: 1.5 }}>
+                <span style={{ fontSize: 14, color: "#616161", lineHeight: 1.6 }}>
                   Jag bekräftar att organisationen ansvarar för sina policyer och
                   behandling av gästdata via portalen
                 </span>
@@ -561,5 +879,124 @@ function PrerequisiteCard({
         Konfigurera
       </button>
     </div>
+  );
+}
+
+// ── Early Checkin Modal ───────────────────────────────────────
+
+function EarlyCheckinModal({
+  onClose,
+  onActivated,
+}: {
+  onClose: () => void;
+  onActivated: () => void;
+}) {
+  const [activating, setActivating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleActivate() {
+    setActivating(true);
+    const result = await toggleEarlyCheckin(true);
+    setActivating(false);
+    if (result.ok) {
+      onActivated();
+    } else {
+      setError(result.error ?? "Kunde inte aktivera");
+    }
+  }
+
+  return createPortal(
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 200,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+      onClick={onClose}
+    >
+      <div style={{
+        position: "absolute", inset: 0,
+        background: "var(--admin-overlay)",
+        animation: "settings-modal-fade-in 0.15s ease",
+      }} />
+      <div
+        style={{
+          position: "relative", zIndex: 1,
+          background: "var(--admin-surface)",
+          borderRadius: 16, width: 520,
+          maxHeight: "85vh", display: "flex", flexDirection: "column",
+          animation: "settings-modal-scale-in 0.2s cubic-bezier(0.32, 0.72, 0, 1)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          background: "#F9F8F7", borderBottom: "1px solid #E6E5E3",
+          padding: "20px 20px 12px 20px", borderRadius: "16px 16px 0 0",
+        }}>
+          <div>
+            <h3 style={{ fontSize: 17, fontWeight: 600 }}>Aktivera tidig incheckning</h3>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "none", background: "transparent",
+              cursor: "pointer", color: "var(--admin-text-secondary)",
+            }}
+            aria-label="Stäng"
+          >
+            <EditorIcon name="close" size={20} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: 20, flex: 1, overflowY: "auto" }}>
+
+          {error && (
+            <div style={{
+              padding: "12px 14px", borderRadius: 10,
+              background: "#FBE9E7", color: "#C62828",
+              fontSize: 13, fontWeight: 500,
+              display: "flex", alignItems: "center", gap: 8, marginBottom: 16,
+            }}>
+              <EditorIcon name="error" size={18} />
+              <span style={{ flex: 1 }}>{error}</span>
+            </div>
+          )}
+
+          <p style={{ fontSize: 14, color: "#616161", lineHeight: 1.6, marginBottom: 0 }}>
+            När funktionen är aktiverad kan gäster checka in upp till ett visst antal
+            dagar före ankomst. Digitala nycklar eller accesskort aktiveras fortfarande
+            först vid ordinarie incheckningstid.
+          </p>
+
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "flex-end",
+          padding: "12px 20px 20px", borderTop: "1px solid #E6E5E3",
+          gap: 8,
+        }}>
+          <button
+            className="settings-btn--outline"
+            style={{ border: "none" }}
+            onClick={onClose}
+          >
+            Avbryt
+          </button>
+          <button
+            className="settings-btn--connect"
+            disabled={activating}
+            onClick={handleActivate}
+          >
+            <ButtonSpinner visible={activating} />
+            Aktivera
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
