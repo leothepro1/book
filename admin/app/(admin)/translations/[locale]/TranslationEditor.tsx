@@ -319,9 +319,14 @@ export function TranslationEditor({ locale: initialLocale }: { locale: string })
           <div className="tx-sidebar__label">{activeTypeLabel}</div>
           {loading ? (
             <>
-              <div className="skel" style={{ height: 36, margin: "4px 16px", borderRadius: 8 }} />
-              <div className="skel" style={{ height: 36, margin: "4px 16px", borderRadius: 8 }} />
-              <div className="skel" style={{ height: 36, margin: "4px 16px", borderRadius: 8 }} />
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="tx-sidebar__item" style={{ pointerEvents: "none" }}>
+                  <div className="skel skel--text" style={{ width: `${50 + (i % 3) * 20}%`, height: 14 }} />
+                  <span className="tx-sidebar__item-count">
+                    <div className="skel skel--text" style={{ width: 28, height: 12 }} />
+                  </span>
+                </div>
+              ))}
             </>
           ) : sidebarItems.length > 0 ? (
             sidebarItems.map((item) => (
@@ -346,12 +351,47 @@ export function TranslationEditor({ locale: initialLocale }: { locale: string })
         {/* ── Content ── */}
         <div className="tx-content">
           {loading ? (
-            <div>
-              <div className="skel" style={{ width: 120, height: 14, borderRadius: 6, marginBottom: 16 }} />
-              <div className="skel" style={{ width: "100%", height: 80, borderRadius: 10, marginBottom: 12 }} />
-              <div className="skel" style={{ width: "100%", height: 80, borderRadius: 10, marginBottom: 12 }} />
-              <div className="skel" style={{ width: "100%", height: 80, borderRadius: 10 }} />
-            </div>
+            <>
+              {/* Page title skeleton */}
+              <div className="tx-content__page-title">
+                <div className="skel skel--text" style={{ width: 140, height: 20 }} />
+              </div>
+
+              {/* Section card skeleton */}
+              <div className="tx-content__fields">
+                {/* Section label */}
+                <div className="tx-content__section-label">
+                  <div className="skel skel--text" style={{ width: 100, height: 16 }} />
+                </div>
+                {/* Column headers */}
+                <div className="tx-field__column-headers">
+                  <div className="tx-field__column-header-type" />
+                  <div className="tx-field__column-header">
+                    <div className="skel skel--text" style={{ width: 60, height: 14 }} />
+                  </div>
+                  <div className="tx-field__column-header">
+                    <div className="skel skel--text" style={{ width: 50, height: 14 }} />
+                  </div>
+                </div>
+                {/* Field rows */}
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="tx-field">
+                    <div className="tx-field__columns">
+                      <div className="tx-field__type">
+                        <div className="skel skel--text" style={{ width: `${60 + (i % 3) * 15}%`, height: 14 }} />
+                        <div className="skel skel--text" style={{ width: 80, height: 12, marginTop: 2 }} />
+                      </div>
+                      <div className="tx-field__source">
+                        <div className="skel skel--text" style={{ width: `${50 + (i % 2) * 30}%`, height: 14 }} />
+                      </div>
+                      <div className="tx-field__target">
+                        <div className="skel skel--text" style={{ width: `${40 + (i % 3) * 20}%`, height: 14 }} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : currentItemData ? (
             <>
             <h2 className="tx-content__page-title">

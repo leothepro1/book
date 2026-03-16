@@ -110,6 +110,28 @@ export type MediaLibraryModalProps = {
   title?: string;
   /** Filter selectable items by media type. "image" = images only, "video" = videos only, undefined = all. */
   accept?: "image" | "video";
+  /** "modal" (default) renders as portal overlay. "inline" renders directly without portal/overlay. */
+  mode?: "modal" | "inline";
+  /** Ref to trigger file upload externally (for inline mode header button) */
+  uploadTriggerRef?: React.MutableRefObject<(() => void) | null>;
+  /** Ref to control selection externally */
+  selectionRef?: React.MutableRefObject<{
+    selectAll: (ids: string[]) => void;
+    clearAll: () => void;
+    getPageItemIds: () => string[];
+  } | null>;
+  /** Slot rendered between toolbar and content (e.g. column headers) */
+  slotAfterToolbar?: React.ReactNode;
+  /** Page-based pagination for inline mode. Zero-indexed. */
+  page?: number;
+  /** Items per page for inline mode pagination. Default: 50. */
+  pageSize?: number;
+  /** Callback with total item count for external pagination controls */
+  onTotalCount?: (count: number) => void;
+  /** Expose selected IDs for external UI (inline mode multi-select) */
+  onSelectionChange?: (ids: Set<string>) => void;
+  /** External control: show only these IDs */
+  filterToIds?: Set<string> | null;
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -125,10 +147,20 @@ export function MediaLibraryModal({
   uploadFolder = "sections",
   title = "Mediabibliotek",
   accept,
+  mode = "modal",
+  uploadTriggerRef,
+  selectionRef,
+  slotAfterToolbar,
+  page = 0,
+  pageSize = 50,
+  onTotalCount,
+  onSelectionChange,
+  filterToIds,
 }: MediaLibraryModalProps) {
-  const { state, actions } = useMediaLibrary(open ? folder : "__disabled__");
+  const { state, actions } = useMediaLibrary(open ? folder : "__disabled__", mode === "inline" ? 200 : 18);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<"grid" | "list">(mode === "inline" ? "list" : "grid");
   const [sortOpen, setSortOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -137,6 +169,26 @@ export function MediaLibraryModal({
   const [isDragging, setIsDragging] = useState(false);
   const [headerStuck, setHeaderStuck] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Expose upload trigger for external buttons (inline mode)
+  useEffect(() => {
+    if (uploadTriggerRef) {
+      uploadTriggerRef.current = () => fileInputRef.current?.click();
+    }
+  }, [uploadTriggerRef]);
+
+  // Expose selection controls
+  const paginatedItemsRef = useRef<string[]>([]);
+  useEffect(() => {
+    if (selectionRef) {
+      selectionRef.current = {
+        selectAll: (ids) => setSelectedIds(new Set(ids)),
+        clearAll: () => setSelectedIds(new Set()),
+        getPageItemIds: () => paginatedItemsRef.current,
+      };
+    }
+  }, [selectionRef]);
+
   const sortRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -341,10 +393,8 @@ export function MediaLibraryModal({
     [onClose]
   );
 
-  if (!open) return null;
-
-  // Filter items by accepted media type (for selection — upload still allows all)
-  const filteredItems = accept
+  // Filter items by accepted media type
+  const allFilteredItems = accept
     ? state.items.filter((i) => {
         if (accept === "video") return i.mimeType.startsWith("video/") || i.resourceType === "video";
         if (accept === "image") return i.mimeType.startsWith("image/");
@@ -352,25 +402,39 @@ export function MediaLibraryModal({
       })
     : state.items;
 
+  // Report total count for external pagination (must be before early return)
+  useEffect(() => {
+    onTotalCount?.(state.totalCount);
+  }, [state.totalCount, onTotalCount]);
+
+  // Notify parent of selection changes
+  useEffect(() => {
+    if (mode === "inline") onSelectionChange?.(selectedIds);
+  }, [selectedIds, mode, onSelectionChange]);
+
+  // Apply pagination + optional filter-to-selected in inline mode
+  const paginatedItems = mode === "inline"
+    ? allFilteredItems.slice(page * pageSize, (page + 1) * pageSize)
+    : allFilteredItems;
+
+  paginatedItemsRef.current = paginatedItems.map((i) => i.id);
+
+  const filteredItems = (mode === "inline" && filterToIds)
+    ? paginatedItems.filter((i) => filterToIds.has(i.id))
+    : paginatedItems;
+
+  // Auto-load more when paginated beyond loaded items
+  const needsMore = mode === "inline" && (page + 1) * pageSize > allFilteredItems.length && state.hasMore && !state.isLoadingMore;
+  useEffect(() => {
+    if (needsMore) actions.loadMore();
+  }, [needsMore]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!open) return null;
+
   const selectedAsset = filteredItems.find((i) => i.id === selectedId);
 
-  return createPortal(
-    <>
-      {/* Overlay */}
-      <div
-        className={`ml-overlay ${isVisible ? "ml-overlay--open" : ""}`}
-        aria-hidden="true"
-      />
-
-      {/* Modal */}
-      <div
-        className={`ml-modal ${isVisible ? "ml-modal--open" : ""}`}
-        onClick={handleBackdropClick}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-      >
-        <div className="ml-container">
+  const containerContent = (
+        <div className={`ml-container ${mode === "inline" ? "ml-container--inline" : ""}`}>
           {/* ── Sticky Header ── */}
           <div className={`ml-sticky-header ${headerStuck ? "ml-sticky-header--stuck" : ""}`}>
           {/* ── Header ── */}
@@ -448,7 +512,7 @@ export function MediaLibraryModal({
               </div>
 
               {/* View dropdown */}
-              <div className="ml-sort-wrap" ref={viewRef}>
+              <div className="ml-sort-wrap ml-view-switcher" ref={viewRef}>
                 <button
                   type="button"
                   className="ml-sort-btn"
@@ -485,6 +549,8 @@ export function MediaLibraryModal({
           </div>
           </div>{/* end ml-sticky-header */}
 
+          {slotAfterToolbar}
+
           {/* ── Media Grid / Content ── */}
           <input
             ref={fileInputRef}
@@ -511,19 +577,34 @@ export function MediaLibraryModal({
               </button>
               <span className="ml-dropzone-text">eller, dra och släpp här</span>
             </div>
-            {state.isLoading && pendingUploads.length === 0 ? (
-              <div className="ml-grid">
-                {Array.from({ length: 10 }).map((_, i) => (
-                  <div key={i} className="ml-item ml-item--skeleton">
-                    <div className="ml-item-thumb">
-                      <div className="ml-skeleton-shimmer" />
+            {(state.isLoading || (state.isLoadingMore && filteredItems.length === 0)) && pendingUploads.length === 0 ? (
+              viewMode === "list" ? (
+                <div className="ml-list">
+                  {Array.from({ length: pageSize || 18 }).map((_, i) => (
+                    <div key={i} className="ml-list-item ml-item--skeleton">
+                      <div className="ml-list-check" />
+                      <div className="ml-list-thumb"><div className="ml-skeleton-shimmer" /></div>
+                      <span className="ml-list-name"><div className="skel skel--text" style={{ width: `${55 + (i % 4) * 12}%`, height: 14 }} /></span>
+                      <span className="ml-list-detail"><div className="skel skel--text" style={{ width: 32, height: 14 }} /></span>
+                      <span className="ml-list-detail"><div className="skel skel--text" style={{ width: 44, height: 14 }} /></span>
+                      <span className="ml-list-detail"><div className="skel skel--text" style={{ width: 56, height: 14 }} /></span>
                     </div>
-                    <div className="ml-item-meta">
-                      <div className="ml-skeleton-text" />
+                  ))}
+                </div>
+              ) : (
+                <div className="ml-grid">
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <div key={i} className="ml-item ml-item--skeleton">
+                      <div className="ml-item-thumb">
+                        <div className="ml-skeleton-shimmer" />
+                      </div>
+                      <div className="ml-item-meta">
+                        <div className="ml-skeleton-text" />
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
             ) : state.error && pendingUploads.length === 0 ? (
               <div className="ml-empty">
                 <p className="ml-empty-text">Kunde inte hämta media</p>
@@ -570,8 +651,19 @@ export function MediaLibraryModal({
                       <MediaListItem
                         key={item.id}
                         item={item}
-                        selected={item.id === selectedId}
-                        onSelect={() => setSelectedId(item.id === selectedId ? null : item.id)}
+                        selected={mode === "inline" ? selectedIds.has(item.id) : item.id === selectedId}
+                        onSelect={() => {
+                          if (mode === "inline") {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(item.id)) next.delete(item.id);
+                              else next.add(item.id);
+                              return next;
+                            });
+                          } else {
+                            setSelectedId(item.id === selectedId ? null : item.id);
+                          }
+                        }}
                       />
                     ))}
                   </div>
@@ -615,9 +707,18 @@ export function MediaLibraryModal({
             </div>
           </div>
         </div>
+  );
+
+  if (mode === "inline") return containerContent;
+
+  return createPortal(
+    <>
+      <div className={`ml-overlay ${isVisible ? "ml-overlay--open" : ""}`} aria-hidden="true" />
+      <div className={`ml-modal ${isVisible ? "ml-modal--open" : ""}`} onClick={handleBackdropClick} role="dialog" aria-modal="true" aria-label={title}>
+        {containerContent}
       </div>
     </>,
-    document.body
+    document.body,
   );
 }
 
@@ -667,6 +768,7 @@ function PendingListItem({ pending }: { pending: PendingUpload }) {
 
   return (
     <div className="ml-list-item ml-item--pending">
+      <div className="ml-list-check" />
       <div className="ml-list-thumb">
         {pending.previewUrl ? (
           <>

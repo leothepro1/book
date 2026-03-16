@@ -559,3 +559,8 @@
 .tx-empty__text {
   font-size: 14px;
 }
+
+/* Slightly darker skeleton for translation panel */
+.tx .skel {
+  background: #E4E1DD;
+}

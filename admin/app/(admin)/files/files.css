@@ -1,0 +1,393 @@
+/* ── Files page — reset container constraints ── */
+.container:has(.files-page) {
+  max-width: none;
+  padding: 0;
+  height: 100vh;
+  overflow: visible;
+}
+
+/* ── Files page layout overrides ── */
+
+.files-page .admin-header {
+  border-bottom: none;
+  justify-content: space-between;
+  align-items: center;
+  height: auto;
+  padding: 16px;
+  display: flex;
+}
+
+.files-page .admin-content {
+  padding: 0;
+  margin: 0 16px;
+  background: #fff;
+  box-shadow: 0 .3125rem .3125rem -.15625rem #00000008, 0 .1875rem .1875rem -.09375rem #00000005, 0 .125rem .125rem -.0625rem #00000005, 0 .0625rem .0625rem -.03125rem #00000008, 0 .03125rem .03125rem #0000000a, 0 0 0 .0625rem #0000000f;
+  border-radius: .75rem;
+  overflow: visible !important;
+}
+
+.files-page .ml-toolbar {
+  background: transparent;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  display: flex;
+  border-bottom: 1px solid #F0EFED;
+}
+
+.files-page .ml-content {
+  padding: 0;
+  overflow: visible !important;
+}
+
+.files-page .ml-container--inline {
+  overflow: visible !important;
+}
+
+.files-page .files-inner {
+  overflow: visible !important;
+}
+
+.files-page .ml-list-item {
+  padding: 12px 16px;
+}
+
+.files-page {
+  overflow: visible !important;
+  height: auto !important;
+}
+
+.files-page .admin-editor {
+  overflow: visible !important;
+  height: auto !important;
+}
+
+.files-page .ml-sticky-header {
+  position: static;
+}
+
+
+/* ── Column headers ── */
+
+.ml-column-headers {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--admin-border);
+  font-size: 14px;
+  font-weight: 500;
+  color: #303030;
+  background: #f9f8f7;
+}
+
+.ml-column-headers__check {
+  width: 18px;
+  flex-shrink: 0;
+}
+
+.ml-column-headers__thumb {
+  width: 40px;
+  flex-shrink: 0;
+}
+
+.ml-column-headers__name {
+  flex: 1;
+  min-width: 0;
+}
+
+.ml-column-headers__detail {
+  width: 12%;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+/* Column headers sticky within admin-content scroll container */
+.files-column-headers {
+  display: flex;
+  align-items: center;
+  height: 43px;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--admin-border);
+  font-size: 14px;
+  font-weight: 500;
+  color: #303030;
+  background: #f9f8f7;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+/* ── Header checkbox (iOS style, blue accent) ── */
+
+.files-header-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid var(--admin-border);
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.files-header-check:hover:not(.files-header-check--active):not(.files-header-check--partial) {
+  border-color: #999;
+}
+
+.files-header-check__icon {
+  color: #fff;
+  font-size: 14px !important;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.15s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.files-header-check--active {
+  background: var(--admin-accent);
+  border-color: var(--admin-accent);
+}
+
+.files-header-check--active .files-header-check__icon {
+  opacity: 1;
+  transform: scale(1);
+  animation: filesCheckDraw 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.files-header-check--partial {
+  background: var(--admin-accent);
+  border-color: var(--admin-accent);
+}
+
+.files-header-check--partial .files-header-check__icon {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@keyframes filesCheckDraw {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-8deg);
+    clip-path: inset(0 100% 0 0);
+  }
+  50% {
+    opacity: 1;
+    clip-path: inset(0 40% 0 0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* ── Selection toolbar ── */
+
+.files-column-headers--selection {
+  display: flex;
+  align-items: center;
+  gap: 0px;
+}
+
+.files-selection__label {
+    color: var(--admin-text);
+    font-size: 14px;
+    line-height: 1em;
+    margin-left: 16px;
+    font-weight: 450;
+     margin-right: 6px;
+}
+
+.files-selection__chevron {
+  display: flex;
+  align-items: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--admin-text-secondary);
+  padding: 0;
+}
+
+.files-selection__dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 200px;
+  background: var(--admin-surface);
+  border-radius: 12px;
+  padding: 4px;
+  z-index: 50;
+  box-shadow: 0 20px 24px #1919190d, 0 5px 8px #19191907, 0 0 0 1px #2a1c0012;
+  animation: .12s ease-out settings-dropdown-in;
+}
+
+.files-selection__dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--admin-text);
+  text-align: left;
+}
+
+.files-selection__dropdown-item:hover {
+  background: #F1F0EF;
+}
+
+.files-selection__delete {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 8px;
+  background: #e56458;
+  color: #fff;
+  font-family: var(--admin-font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-left: 16px;
+}
+
+.files-selection__delete:hover {
+  opacity: 0.8;
+}
+
+.files-selection__filter {
+    color: var(--admin-text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    display: flex;
+    margin-left: auto;
+}
+
+/* ── iOS toggle (reused from editor sf-toggle) ── */
+
+.files-page .sf-toggle {
+  position: relative;
+  width: 43px;
+  height: 24px;
+  border: none;
+  border-radius: 999px;
+  background: var(--admin-toggle-off);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.25s ease;
+}
+
+.files-page .sf-toggle--on {
+  background: var(--admin-toggle-on);
+}
+
+.files-page .sf-toggle__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: block;
+}
+
+.files-page .sf-toggle--on .sf-toggle__thumb {
+  transform: translateX(19px);
+}
+
+.files-page .sf-toggle__icon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px !important;
+  line-height: 1;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.files-page .sf-toggle__icon--check {
+  left: 4px;
+  color: #fff;
+  opacity: 1;
+}
+
+.files-page .sf-toggle__icon--remove {
+  right: 4px;
+  color: #fff;
+  opacity: 0;
+}
+
+
+/* Match list item details to column headers */
+.files-page .ml-list-detail {
+  width: 12%;
+}
+
+/* ── Pagination ── */
+
+.files-pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--admin-border);
+  background: #F9F8F7;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+}
+
+.files-pagination__nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border: none;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #E4E3DF;
+}
+
+.files-pagination__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--admin-text);
+  transition: background 0.12s;
+}
+
+.files-pagination__btn:hover:not(:disabled) {
+  background: #D6D5D1;
+}
+
+.files-pagination__btn:disabled {
+  color: var(--admin-text-secondary);
+  opacity: 0.4;
+  cursor: default;
+}
+
+.files-pagination__label {
+  font-size: 14px;
+  line-height: 1em;
+  color: var(--admin-text-secondary);
+}

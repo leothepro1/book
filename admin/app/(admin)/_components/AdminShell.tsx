@@ -13,7 +13,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
 
   return (
     <main className={`flex-1 transition-all duration-300 ease-in-out overflow-y-auto ${
-      isCollapsed ? 'ml-16' : 'ml-64'
+      isCollapsed ? 'ml-16' : 'ml-[270px]'
     }`} style={{ background: 'var(--admin-bg)' }}>
       <div className="container mx-auto py-8 px-6">
         {children}

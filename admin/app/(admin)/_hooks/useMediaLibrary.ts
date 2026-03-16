@@ -43,7 +43,7 @@ export type MediaLibraryActions = {
 
 // ─── Hook ───────────────────────────────────────────────────
 
-export function useMediaLibrary(folder?: string) {
+export function useMediaLibrary(folder?: string, pageSize: number = 18) {
   const [items, setItems] = useState<MediaAssetDTO[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -94,7 +94,7 @@ export function useMediaLibrary(folder?: string) {
     if (debouncedSearch) params.set("search", debouncedSearch);
     params.set("orderBy", sort.orderBy);
     params.set("orderDir", sort.orderDir);
-    params.set("limit", "18");
+    params.set("limit", String(pageSize));
 
     setIsLoading(true);
     setError(null);
@@ -127,7 +127,7 @@ export function useMediaLibrary(folder?: string) {
     if (debouncedSearch) params.set("search", debouncedSearch);
     params.set("orderBy", sort.orderBy);
     params.set("orderDir", sort.orderDir);
-    params.set("limit", "18");
+    params.set("limit", String(pageSize));
     params.set("cursor", nextCursor);
 
     setIsLoadingMore(true);
