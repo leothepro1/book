@@ -125,13 +125,7 @@ export function ColorPickerPopup({ value, onChange, onClose, anchorRef }: ColorP
     setCoords({ top, left });
   }, [anchorRef]);
 
-  // Auto-focus hex input when modal opens
-  useEffect(() => {
-    if (coords && hexInputRef.current) {
-      hexInputRef.current.focus();
-      hexInputRef.current.select();
-    }
-  }, [coords]);
+  // No auto-focus — preserve editor text selection
 
   // Close on outside click
   useEffect(() => {
@@ -179,6 +173,7 @@ export function ColorPickerPopup({ value, onChange, onClose, anchorRef }: ColorP
   }, [hsv, emitColor]);
 
   const onSVDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
     isDraggingSV.current = true;
     handleSV(e);
   }, [handleSV]);
@@ -195,6 +190,7 @@ export function ColorPickerPopup({ value, onChange, onClose, anchorRef }: ColorP
   }, [hsv, emitColor]);
 
   const onHueDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
     isDraggingHue.current = true;
     handleHue(e);
   }, [handleHue]);
@@ -246,11 +242,19 @@ export function ColorPickerPopup({ value, onChange, onClose, anchorRef }: ColorP
   const [previewR, previewG, previewB] = hsvToRgb(hsv[0], hsv[1], hsv[2]);
   const previewHex = rgbToHex(previewR, previewG, previewB);
 
+  // Prevent mousedown on popup from stealing editor focus/selection
+  const preventFocusLoss = useCallback((e: React.MouseEvent) => {
+    // Allow hex input to receive focus when clicked directly
+    if ((e.target as HTMLElement).tagName === "INPUT") return;
+    e.preventDefault();
+  }, []);
+
   return (
     <div
       ref={popupRef}
       className="cp-popup"
       style={coords ? { top: coords.top, left: coords.left } : { visibility: "hidden" as const }}
+      onMouseDown={preventFocusLoss}
     >
       <div className="cp-picker-row">
         {/* SV area */}

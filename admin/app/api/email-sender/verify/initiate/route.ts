@@ -79,19 +79,26 @@ export async function POST(req: Request) {
   const confirmUrl = `${appUrl}/api/email-sender/verify/confirm?token=${token}`;
 
   // Send verification email — from platform noreply, never from unverified address
-  // Using resendClient directly here because this is a platform-level email,
-  // not a tenant event email. sendEmailEvent() is for tenant notifications.
   try {
     const html = await render(
       VerifySender({ confirmUrl, platformName: "Bedfront" }),
     );
 
-    await resendClient.emails.send({
-      from: "Bedfront <noreply@bedfront.com>",
-      to: parsed.emailFrom,
-      subject: `Verifiera din avsändare – ${parsed.emailFrom}`,
-      html,
-    });
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `\n[email-dev] Sender verification`,
+        `\n  To:      ${parsed.emailFrom}`,
+        `\n  Confirm: ${confirmUrl}`,
+        `\n  HTML:    ${html.length} chars\n`,
+      );
+    } else {
+      await resendClient.emails.send({
+        from: "Bedfront <noreply@bedfront.com>",
+        to: parsed.emailFrom,
+        subject: `Verifiera din avsändare – ${parsed.emailFrom}`,
+        html,
+      });
+    }
   } catch (err) {
     // Log but don't fail — token is already saved, user can retry
     console.error("[email-sender] Failed to send verification email:", err);

@@ -58,7 +58,7 @@
   position: absolute;
   inset: 0;
   z-index: 1;
-  background: #F1EFEC;
+  background: #fafafa;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -118,7 +118,7 @@
 .settings-layout {
   display: flex;
   flex: 1;
-  max-width: 980px;
+  max-width: 1080px;
   margin: 0 auto;
   width: 100%;
   min-height: 0;
@@ -157,8 +157,8 @@
   align-items: center;
   gap: 10px;
   padding: 16px;
-  border-bottom: 1px solid #E6E5E3;
-  background: #F9F8F7;
+  border-bottom: 1px solid #ebebeb;
+  background: #fafafa;
 }
 
 .settings-nav__org-avatar {
@@ -259,7 +259,7 @@
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  color: var(--admin-text-secondary);
+  color: #4b4c4d;
   cursor: pointer;
   text-align: left;
   transition: background 0.12s, color 0.12s;
@@ -271,7 +271,7 @@
 }
 
 .settings-nav__item--active {
-  background: var(--admin-surface-active);
+  background: #ebebeb;
   color: var(--admin-text);
   font-weight: 600;
 }
@@ -452,13 +452,13 @@
   cursor: pointer;
   border-radius: 8px;
   color: #fff;
-  background: #2783de;
+  background: var(--admin-accent);
   border: none;
   transition: background 0.15s;
 }
 
 .settings-btn--connect:hover:not(:disabled) {
-  background: #1f6fc2;
+  background: #005AC2;
 }
 
 .settings-btn--connect:disabled {
@@ -548,7 +548,7 @@
 /* ── Skeleton loader ── */
 
 .skel {
-  background: #EEEBE8;
+  background: #e1e1e1;
   border-radius: 6px;
   animation: skelPulse 1.4s ease-in-out infinite;
 }

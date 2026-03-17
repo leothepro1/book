@@ -2,6 +2,7 @@
 
 import { prisma } from "@/app/_lib/db/prisma";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
+import { getTenantBaseUrl } from "@/app/(admin)/_lib/tenant/getTenantBaseUrl";
 import { requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
 import { isValidLocale, PRIMARY_LOCALE, SUPPORTED_LOCALES } from "@/app/_lib/translations/locales";
 import { getTenantPrimaryLocale, invalidatePrimaryLocaleCache } from "@/app/_lib/translations/tenant-primary-locale";
@@ -427,4 +428,35 @@ export async function setPrimaryLocale(
   invalidateLocaleCache(tenantId);
 
   return { ok: true };
+}
+
+// ── getLocalePreviewUrl ──────────────────────────────────────
+
+/**
+ * Build the guest-portal URL for a specific locale.
+ *
+ * Primary locale → /{base}/p/preview
+ * Other locales  → /{base}/{locale}/p/preview
+ *
+ * Uses getTenantBaseUrl() so future custom-domain support
+ * propagates automatically.
+ */
+export async function getLocalePreviewUrl(
+  localeCode: string,
+): Promise<string | null> {
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return null;
+
+  const baseUrl = await getTenantBaseUrl();
+  if (!baseUrl) return null;
+
+  const tenantId = tenantData.tenant.id;
+  const primaryLocale = await getTenantPrimaryLocale(tenantId);
+
+  // Primary locale has no prefix
+  if (localeCode === primaryLocale) {
+    return `${baseUrl}/p/preview`;
+  }
+
+  return `${baseUrl}/${localeCode}/p/preview`;
 }

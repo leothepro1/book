@@ -122,6 +122,9 @@ export const env = {
     return required("RESEND_API_KEY", parsed.RESEND_API_KEY);
   },
   get UNSUBSCRIBE_SECRET() {
+    if (process.env.NODE_ENV === "development" && !parsed.UNSUBSCRIBE_SECRET) {
+      return "dev_unsubscribe_secret_placeholder_32ch";
+    }
     return requiredMin("UNSUBSCRIBE_SECRET", parsed.UNSUBSCRIBE_SECRET, 32);
   },
   get RESEND_WEBHOOK_SECRET() {
@@ -146,6 +149,9 @@ export const env = {
     return requiredMin("ACCESS_PASS_PEPPER", parsed.ACCESS_PASS_PEPPER, 16);
   },
   get GUEST_SESSION_SECRET() {
+    if (process.env.NODE_ENV === "development" && !parsed.GUEST_SESSION_SECRET) {
+      return "dev_guest_session_secret_placeholder_32";
+    }
     return requiredMin("GUEST_SESSION_SECRET", parsed.GUEST_SESSION_SECRET, 32);
   },
 

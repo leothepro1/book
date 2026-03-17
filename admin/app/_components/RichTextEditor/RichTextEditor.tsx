@@ -82,6 +82,7 @@ export function RichTextEditor({
   const alignListRef = useRef<HTMLUListElement>(null);
   const [selectedImg, setSelectedImg] = useState<HTMLImageElement | null>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  const pendingColorRef = useRef<string | null>(null);
   const [htmlView, setHtmlView] = useState(false);
   const colorBtnRef = useRef<HTMLButtonElement>(null);
   const savedSelectionRef = useRef<Range | null>(null);
@@ -214,8 +215,15 @@ export function RichTextEditor({
     setColorPickerOpen(true);
   }, []);
 
-  const applyTextColor = useCallback((hex: string) => {
-    // Restore saved selection
+  const stageTextColor = useCallback((hex: string) => {
+    pendingColorRef.current = hex;
+  }, []);
+
+  const commitTextColor = useCallback(() => {
+    const hex = pendingColorRef.current;
+    if (!hex) return;
+    pendingColorRef.current = null;
+    // Restore saved selection and apply color once
     const saved = savedSelectionRef.current;
     if (saved && editorRef.current) {
       const sel = document.getSelection();
@@ -225,6 +233,7 @@ export function RichTextEditor({
       }
     }
     document.execCommand("foreColor", false, hex);
+    savedSelectionRef.current = null;
     emitChange();
   }, [emitChange]);
 
@@ -411,8 +420,8 @@ export function RichTextEditor({
           {colorPickerOpen && createPortal(
             <ColorPickerPopup
               value="#000000"
-              onChange={applyTextColor}
-              onClose={() => { setColorPickerOpen(false); savedSelectionRef.current = null; }}
+              onChange={stageTextColor}
+              onClose={() => { commitTextColor(); setColorPickerOpen(false); }}
               anchorRef={colorBtnRef}
             />,
             document.body,

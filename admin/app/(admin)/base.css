@@ -11,10 +11,10 @@
 :root,
 [data-theme="light"] {
   /* Surface / Background */
-  --admin-bg:            #F9F8F7;
+  --admin-bg:            #f1f1f1;
   --admin-surface:       #FFFFFF;
-  --admin-surface-hover: #F9F8F7;
-  --admin-surface-active:#F1EFEC;
+  --admin-surface-hover: #fafafa;
+  --admin-surface-active:#f3f3f3;
   --admin-surface-muted: #f0efed;
   --admin-surface-sunken:#ECEBEA;
 
@@ -22,13 +22,13 @@
   --admin-sidebar:       #FFFFFF;
 
   /* Borders */
-  --admin-border:        #E6E5E3;
+  --admin-border:        #ebebeb;
   --admin-border-strong: #E6E5E3;
   --admin-border-focus:  #D0D0D0;
 
   /* Text */
   --admin-text:          #303030;
-  --admin-text-secondary:#5F5E59;
+  --admin-text-secondary:#616161;
   --admin-text-tertiary: #a19e99;
   --admin-text-muted:    #a19e99;
   --admin-text-inverse:  #FFFFFF;
@@ -39,8 +39,8 @@
   --admin-primary-text:  #FFFFFF;
 
   /* Accent (blue) */
-  --admin-accent:        #2783DE;
-  --admin-accent-hover:  #1F6FC2;
+  --admin-accent:        #0072F5;
+  --admin-accent-hover:  #005AC2;
   --admin-accent-text:   #FFFFFF;
 
   /* Danger */

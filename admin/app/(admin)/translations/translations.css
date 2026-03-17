@@ -198,6 +198,32 @@
   background: #005BB0;
 }
 
+.tx-header__preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1em;
+  cursor: pointer;
+  background: none;
+  color: var(--admin-text);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.tx-header__preview:hover {
+  background: var(--admin-surface-hover);
+  border-color: #C4C4C4;
+}
+
+.tx-header__preview:active {
+  background: #E8E7E5;
+}
 
 .tx-header__stat--translated {
   color: #1a7f37;
@@ -247,7 +273,7 @@
   width: 100%;
   padding: 8px 16px;
   border: none;
-  border-left: 3px solid transparent;
+  border-left: 4px solid transparent;
   background: none;
   cursor: pointer;
   font-size: 14px;
@@ -258,13 +284,13 @@
 }
 
 .tx-sidebar__item:hover {
-  background: #F1F0EF;
+  background: #f7f7f7;
 }
 
 .tx-sidebar__item--active {
-  background: #F1F0EF;
+  background: #f3f3f3;
   font-weight: 500;
-  border-left: 3px solid var(--admin-accent);
+  border-left: 4px solid #303030;
 }
 
 .tx-sidebar__item-icon {
@@ -274,16 +300,17 @@
 
 .tx-sidebar__item-count {
   margin-left: auto;
-  font-size: 12px;
-  color: var(--admin-text-secondary);
+  font-size: 13px;
+  color: #616161;
   font-weight: 400;
 }
 
 /* ── Content area ── */
 
 .tx-content {
-  overflow-y: auto;
-  padding: 32px 40px;
+    padding: 32px 40px;
+    overflow-y: auto;
+    background: #f1f1f1;
 }
 
 .tx-content__page-title {
@@ -331,7 +358,7 @@
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--admin-border);
-  background: #FDFDFD;
+  background: #f7f7f7;
 }
 
 .tx-field__column-header-type {
@@ -400,7 +427,7 @@
   border-right: 1px solid var(--admin-border);
   display: flex;
   align-items: center;
-  background: #f9f8f7;
+  background: #f3f3f3;
 }
 
 .tx-field__target {
@@ -464,7 +491,7 @@
 /* Toolbar blends into the target header */
 .tx-field__target--richtext .rt-toolbar {
   border-radius: 0;
-  background: #f9f8f7;
+  background: #f3f3f3;
   border-bottom: 1px solid var(--admin-border);
   flex-wrap: wrap;
   min-width: 0;
@@ -562,5 +589,5 @@
 
 /* Slightly darker skeleton for translation panel */
 .tx .skel {
-  background: #E4E1DD;
+  background: #D4D4D4;
 }

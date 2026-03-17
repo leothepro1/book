@@ -117,7 +117,19 @@
       "Bash(ls -la '/workspaces/hospitality/admin/app/\\(editor\\)/editor/')",
       "Bash(ls -la '/workspaces/hospitality/admin/app/\\(editor\\)/editor/fields/')",
       "Bash(ls -la '/workspaces/hospitality/admin/app/\\(editor\\)/editor/panels/')",
-      "Bash(cat /workspaces/hospitality/admin/app/\\\\\\(editor\\\\\\)/editor/panels/SectionsPanel.tsx)"
+      "Bash(cat /workspaces/hospitality/admin/app/\\\\\\(editor\\\\\\)/editor/panels/SectionsPanel.tsx)",
+      "WebFetch(domain:docs.mews.com)",
+      "WebFetch(domain:mews-systems.gitbook.io)",
+      "WebSearch",
+      "Bash(sudo apt:*)",
+      "Bash(ngrok version:*)",
+      "Bash(ngrok config:*)",
+      "Bash(openssl rand:*)",
+      "WebFetch(domain:developer.saltosystems.com)",
+      "Bash(mkdir:*)",
+      "Bash(echo:*)",
+      "Bash(source:*)",
+      "Bash(set:*)"
     ]
   }
 }

@@ -14,6 +14,7 @@ import {
   deleteTranslation,
   hasTranslationDrafts,
   publishTranslations,
+  getLocalePreviewUrl,
 } from "@/app/(admin)/settings/languages/actions";
 import type { LocaleRecord, TranslationFieldData, TranslationPanelResponse } from "@/app/(admin)/settings/languages/actions";
 import { getResourceTypes } from "@/app/_lib/translations/resource-types";
@@ -287,6 +288,16 @@ export function TranslationEditor({ locale: initialLocale }: { locale: string })
         {/* End center dropdowns */}
 
         <div className="tx-header__spacer" />
+
+        <button
+          className="tx-header__preview"
+          onClick={async () => {
+            const url = await getLocalePreviewUrl(locale);
+            if (url) window.open(url, "_blank");
+          }}
+        >
+          Visa
+        </button>
 
         <button
           className={`tx-header__save ${hasDrafts && !isPublishing && !isLingeringAfterPublish ? "tx-header__save--active" : ""}`}

@@ -568,7 +568,7 @@ background: var(--admin-surface-hover);
   width: 100%;
   height: 100%;
   border-radius: .375rem;
-  background: #EEEBE8;
+  background: #e1e1e1;
   animation: skelPulse 1.4s ease-in-out infinite;
 }
 .ml-skeleton-text {

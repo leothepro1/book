@@ -4,6 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { EditorIcon } from "@/app/_components/EditorIcon";
 import { Tooltip } from "@/app/_components/Tooltip";
+import { RichTextEditor } from "@/app/_components/RichTextEditor";
+import type { RichTextEditorHandle } from "@/app/_components/RichTextEditor";
+import { MediaLibraryModal } from "@/app/(admin)/_components/MediaLibrary";
 import { getPolicies, savePolicy } from "./actions";
 import type { PolicyRecord } from "./actions";
 
@@ -111,6 +114,8 @@ export function PoliciesContent({ onSubTitleChange }: PoliciesContentProps) {
   }
 
   const hasChanges = content !== originalContent;
+  const editorHandleRef = useRef<RichTextEditorHandle | null>(null);
+  const [mediaOpen, setMediaOpen] = useState(false);
 
   return (
     <div>
@@ -211,16 +216,25 @@ export function PoliciesContent({ onSubTitleChange }: PoliciesContentProps) {
 
             {/* Body */}
             <div style={{ padding: 20, flex: 1, overflowY: "auto" }}>
-              <textarea
-                className="admin-float-input"
-                placeholder={editingPolicy.placeholder}
+              <RichTextEditor
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
-                style={{
-                  width: "100%", minHeight: 180, padding: "12px 14px",
-                  resize: "vertical", fontSize: 14, lineHeight: 1.6,
-                  fontFamily: "var(--admin-font)",
+                onChange={setContent}
+                placeholder={editingPolicy.placeholder}
+                minHeight={180}
+                maxHeight={400}
+                showMediaPicker
+                onRequestMediaPicker={() => setMediaOpen(true)}
+                editorHandle={editorHandleRef}
+              />
+              <MediaLibraryModal
+                open={mediaOpen}
+                onClose={() => setMediaOpen(false)}
+                onConfirm={(asset) => {
+                  setMediaOpen(false);
+                  editorHandleRef.current?.insertImage(asset.url, asset.filename || "", asset.id);
                 }}
+                title="Välj bild"
+                accept="image"
               />
             </div>
 

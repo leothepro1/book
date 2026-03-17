@@ -22,6 +22,8 @@ import { resolveTemplateHtml } from "./template-overrides";
 import type { EmailEventType } from "./registry";
 import type { ResolvedEmailTemplate } from "./types";
 
+const IS_DEV = process.env.NODE_ENV === "development";
+
 // ── getResolvedTemplate ─────────────────────────────────────────
 
 /**
@@ -138,8 +140,33 @@ export async function sendEmailEvent(
     `tenant=${tenantId}&email=${encodeURIComponent(to)}&` +
     `token=${unsubscribeToken}`;
 
-  // 5. Send via Resend
+  // 5. Send via Resend (or log in dev mode)
   try {
+    if (IS_DEV) {
+      // Dev mode: log to console instead of sending via Resend.
+      // The full pipeline runs (template resolution, branding, variables)
+      // so the UI and data layer behave identically to production.
+      console.log(
+        `\n[email-dev] ════════════════════════════════════════`,
+        `\n  Event:   ${eventType}`,
+        `\n  To:      ${to}`,
+        `\n  From:    ${resolved.from}`,
+        `\n  Subject: ${renderedSubject}`,
+        `\n  Preview: ${renderedPreviewText}`,
+        `\n  HTML:    ${finalHtml.length} chars`,
+        `\n════════════════════════════════════════════════════\n`,
+      );
+
+      // Update log as SENT so the UI reflects success
+      await prisma.emailSendLog.update({
+        where: { id: logEntry.id },
+        data: { status: "SENT", resendId: `dev_${Date.now()}` },
+      });
+
+      await recordEmailSend(tenantId, to, eventType);
+      return;
+    }
+
     const { data, error } = await resendClient.emails.send({
       from: resolved.from,
       to,

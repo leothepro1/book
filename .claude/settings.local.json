@@ -69,7 +69,24 @@
       "Bash(ls:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(DEV_ORG_ID=\"\" DEV_OWNER_USER_ID=\"\" npm run build 2>&1)",
+      "Bash(npx tsx:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npx eslint:*)",
+      "Bash(DEV_ORG_ID=\"\" DEV_OWNER_USER_ID=\"\" npm run build 2>&1 | tail -10)",
+      "Bash(find . -type f \\\\\\(-name *email* -o -name *mail* -o -name *resend* -o -name *notification* -o -name *template* \\\\\\))",
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js|jsx|prisma\\)$\")",
+      "Bash(DEV_ORG_ID= DEV_OWNER_USER_ID= npm run build)",
+      "Bash(grep -v '^$')",
+      "Bash(vercel:*)",
+      "WebFetch(domain:admin-plum-sigma.vercel.app)",
+      "Bash(nslookup:*)",
+      "Bash(dig bedfront.com +short)",
+      "Bash(host bedfront.com)",
+      "Bash(npm ls:*)",
+      "Bash(find \"/workspaces/hospitality/admin/app/\\(admin\\)\" -maxdepth 1 -type d)",
+      "Bash(git status:*)"
     ]
   }
 }

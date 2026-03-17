@@ -50,10 +50,37 @@ type EmailContentProps = {
 
 // ── Main component ──────────────────────────────────────────────
 
+type EmailView = "main" | "guest-notifications" | "template-preview";
+
+const GUEST_NOTIFICATION_CATEGORIES = [
+  {
+    label: "Bekräftelser",
+    items: [
+      { id: "BOOKING_CONFIRMED", title: "Bokningsbekräftelse", desc: "Skickas när en bokning registreras" },
+      { id: "MAGIC_LINK", title: "Inloggningslänk", desc: "Skickas när en gäst begär en ny inloggningslänk" },
+    ],
+  },
+  {
+    label: "Vistelse",
+    items: [
+      { id: "CHECK_IN_CONFIRMED", title: "Incheckningsbekräftelse", desc: "Skickas när en gäst checkar in" },
+      { id: "CHECK_OUT_CONFIRMED", title: "Utcheckningsbekräftelse", desc: "Skickas när en gäst checkar ut" },
+    ],
+  },
+  {
+    label: "Support",
+    items: [
+      { id: "SUPPORT_REPLY", title: "Supportmeddelande", desc: "Skickas när ni svarar på ett gästärende" },
+    ],
+  },
+];
+
 export function EmailContent({ onSubTitleChange }: EmailContentProps) {
+  const [view, setView] = useState<EmailView>("main");
   const [templates, setTemplates] = useState<EmailTemplateRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [editing, setEditing] = useState<EmailTemplateDetail | null>(null);
+  const [previewing, setPreviewing] = useState<EmailTemplateDetail | null>(null);
 
   // Editor form state
   const [subject, setSubject] = useState("");
@@ -77,45 +104,90 @@ export function EmailContent({ onSubTitleChange }: EmailContentProps) {
   // Sender info
   const [senderInfo, setSenderInfo] = useState<TenantSenderInfo | null>(null);
   const [senderLoaded, setSenderLoaded] = useState(false);
-  const [newEmailFrom, setNewEmailFrom] = useState("");
+  const [senderEmail, setSenderEmail] = useState("");
+  const [senderDirty, setSenderDirty] = useState(false);
+  const [senderTouched, setSenderTouched] = useState(false);
   const [isInitiating, setIsInitiating] = useState(false);
-  const [senderToast, setSenderToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [showSentToast, setShowSentToast] = useState(false);
+  const [sendBtnExiting, setSendBtnExiting] = useState(false);
 
   // Load data
   useEffect(() => {
     getEmailTemplates().then((rows) => { setTemplates(rows); setLoaded(true); });
-    getTenantSenderInfo().then((info) => { setSenderInfo(info); setSenderLoaded(true); });
+    getTenantSenderInfo().then((info) => {
+      setSenderInfo(info);
+      setSenderLoaded(true);
+      if (info) {
+        // If there's a pending verification, show that email in the input
+        // Otherwise show the current active address
+        const display = info.pendingEmailFrom
+          ?? info.emailFrom
+          ?? (info.portalSlug ? `noreply@${info.portalSlug}.bedfront.com` : "noreply@bedfront.com");
+        setSenderEmail(display);
+      }
+    });
   }, []);
 
   // Auto-clear toasts
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 5000); return () => clearTimeout(t); }, [toast]);
-  useEffect(() => { if (!senderToast) return; const t = setTimeout(() => setSenderToast(null), 5000); return () => clearTimeout(t); }, [senderToast]);
+  useEffect(() => { if (!showSentToast) return; const t = setTimeout(() => setShowSentToast(false), 4000); return () => clearTimeout(t); }, [showSentToast]);
 
   // ── Sender handler ──────────────────────────────────────────────
 
-  async function handleInitiateVerification() {
-    if (!newEmailFrom.trim()) return;
+  // Email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const currentAddress = senderInfo?.emailFrom ?? (senderInfo?.portalSlug ? `noreply@${senderInfo.portalSlug}.bedfront.com` : "noreply@bedfront.com");
+  const senderIsValid = emailRegex.test(senderEmail);
+  const senderHasChanged = senderEmail !== currentAddress;
+  const showSenderError = senderTouched && senderDirty && !senderIsValid && senderEmail.length > 0;
+  const hasPending = !!senderInfo?.pendingEmailFrom;
+  const isPendingEmail = hasPending && senderEmail === senderInfo?.pendingEmailFrom;
+  const isNewEmail = senderIsValid && senderHasChanged && senderEmail !== senderInfo?.pendingEmailFrom;
+  const showSendBtn = isNewEmail && !sendBtnExiting;
+  const showPendingBadge = isPendingEmail && !sendBtnExiting;
+
+  function handleSenderEmailChange(value: string) {
+    setSenderEmail(value);
+    setSenderDirty(true);
+  }
+
+  async function sendVerification(email?: string) {
+    const target = email ?? senderEmail.trim();
     setIsInitiating(true);
-    setSenderToast(null);
     try {
       const res = await fetch("/api/email-sender/verify/initiate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailFrom: newEmailFrom.trim() }),
+        body: JSON.stringify({ emailFrom: target }),
       });
       const data = await res.json();
       if (res.ok && data.sent) {
-        setNewEmailFrom("");
-        setSenderToast({ type: "success", message: `Verifieringslänk skickad till ${newEmailFrom.trim()}` });
+        // Show spinner → disabled for 1.5s → slide out → show pending
+        setSendBtnExiting(true);
+        await new Promise((r) => setTimeout(r, 1500));
+        setSendBtnExiting(false);
+        setShowSentToast(true);
+        setSenderDirty(false);
+        setSenderTouched(false);
         const info = await getTenantSenderInfo();
         setSenderInfo(info);
-      } else {
-        setSenderToast({ type: "error", message: data.error ?? "Kunde inte skicka verifieringslänk" });
+        // Keep input showing the pending email
+        if (info?.pendingEmailFrom) setSenderEmail(info.pendingEmailFrom);
       }
     } catch {
-      setSenderToast({ type: "error", message: "Något gick fel" });
+      // silent
     }
     setIsInitiating(false);
+  }
+
+  async function handleInitiateVerification() {
+    if (!senderIsValid || !senderHasChanged) return;
+    await sendVerification();
+  }
+
+  async function handleResendVerification() {
+    if (!senderInfo?.pendingEmailFrom) return;
+    await sendVerification(senderInfo.pendingEmailFrom);
   }
 
   // ── Template editor handlers ────────────────────────────────────
@@ -136,7 +208,11 @@ export function EmailContent({ onSubTitleChange }: EmailContentProps) {
 
   function closeEditor() {
     setEditing(null);
-    onSubTitleChange?.(null);
+    if (view === "guest-notifications") {
+      onSubTitleChange?.("Gästaviseringar");
+    } else {
+      onSubTitleChange?.(null);
+    }
     setToast(null);
     getEmailTemplates().then(setTemplates);
   }
@@ -220,124 +296,206 @@ export function EmailContent({ onSubTitleChange }: EmailContentProps) {
   const previewTextRef = useRef<HTMLInputElement>(null);
   const htmlRef = useRef<HTMLTextAreaElement>(null);
 
-  const portalSlug = senderInfo?.portalSlug ?? null;
+  const cardStyle: React.CSSProperties = {
+    background: "#fff",
+    borderRadius: "0.75rem",
+    padding: 16,
+    boxShadow: "0 5px 5px -2.5px #00000008, 0 3px 3px -1.5px #00000005, 0 2px 2px -1px #00000005, 0 1px 1px -0.5px #00000008, 0 0.5px 0.5px #0000000a, 0 0 0 1px #0000000f",
+  };
+
+  // ── Template preview view ────────────────────────────────────
+
+  if (view === "template-preview" && previewing) {
+    const resolvedSubject = previewing.resolved.subject
+      .replace(/\{\{(\w+)\}\}/g, (_, key) => {
+        const vars: Record<string, string> = { hotelName: "Grand Hotel Stockholm", guestName: "Anna Lindgren" };
+        return vars[key] ?? `{{${key}}}`;
+      });
+    const rawHtml = previewing.override.html ?? previewing.defaults.html;
+    // Strip inline styles that constrain the layout (max-width, padding, border-radius, background on outer wrappers)
+    const resolvedHtml = rawHtml
+      .replace(/background-color:\s*#f6f6f6/gi, "background-color:#fff")
+      .replace(/padding:\s*40px\s+0/gi, "padding:0")
+      .replace(/padding:\s*40px\s+32px/gi, "padding:16px")
+      .replace(/max-width:\s*600px/gi, "max-width:100%")
+      .replace(/border-radius:\s*8px/gi, "border-radius:0")
+      .replace(/margin:\s*0\s+auto/gi, "margin:0");
+
+    return (
+      <div className="email-root">
+        <div style={cardStyle}>
+          <div className="email-preview-card">
+            <div className="email-preview-card__subject">
+              <span className="email-preview-card__subject-label">Ämne:</span> {resolvedSubject}
+            </div>
+            <div className="email-preview-card__body">
+              <iframe
+                srcDoc={resolvedHtml}
+                title="E-postförhandsgranskning"
+                sandbox="allow-same-origin"
+                className="email-preview-card__iframe"
+                onLoad={(e) => {
+                  const iframe = e.currentTarget;
+                  const doc = iframe.contentDocument;
+                  if (doc) {
+                    iframe.style.height = doc.documentElement.scrollHeight + "px";
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Guest notifications view ─────────────────────────────────
+
+  if (view === "guest-notifications" && !editing) {
+    return (
+      <div className="email-root">
+        <div style={cardStyle}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {GUEST_NOTIFICATION_CATEGORIES.map((cat) => (
+              <div key={cat.label} className="email-cat">
+                <div className="email-cat__header">{cat.label}</div>
+                {cat.items.map((item, ii) => (
+                  <div key={item.id}>
+                    {ii > 0 && <div className="email-nav__divider" />}
+                    <button
+                      className="email-cat__item"
+                      onClick={async () => {
+                        const detail = await getEmailTemplateDetail(item.id);
+                        if (detail) {
+                          setPreviewing(detail);
+                          setView("template-preview");
+                          onSubTitleChange?.(item.title);
+                        }
+                      }}
+                    >
+                      <div className="email-nav__text">
+                        <div className="email-nav__label">{item.title}</div>
+                        <div className="email-nav__desc">{item.desc}</div>
+                      </div>
+                      <EditorIcon name="chevron_right" size={18} style={{ color: "var(--admin-text-tertiary)", flexShrink: 0 }} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── List view ─────────────────────────────────────────────────
 
-  if (!editing) {
+  if (!editing && view === "main") {
     return (
-      <div>
+      <div className="email-root">
         {/* ── Container 1: Avsändaradress ── */}
-        <div style={{ marginBottom: 24 }}>
+        <div style={cardStyle}>
           <h4 style={{ fontSize: 15, fontWeight: 600, color: "var(--admin-text)", marginBottom: 4 }}>
             Avsändaradress
           </h4>
           <p className="admin-desc" style={{ marginBottom: 12 }}>
-            E-post till gäster skickas från denna adress. Verifiera en ny adress för att ändra.
+            E-post till gäster skickas från denna adress. Ändra genom att skriva in en ny och verifiera den.
           </p>
 
-          {senderLoaded && senderInfo && (
-            <>
-              {/* Current active address */}
-              <div style={{ marginBottom: 12, padding: "10px 14px", background: "var(--admin-surface-secondary, #f7f7f7)", borderRadius: 8 }}>
-                <p style={{ fontSize: 14, fontWeight: 500, color: "var(--admin-text)", margin: 0, fontFamily: "monospace" }}>
-                  {senderInfo.emailFrom ?? (portalSlug ? `noreply@${portalSlug}.bedfront.com` : "noreply@bedfront.com")}
+          {senderLoaded ? (
+            <div>
+              {/* Input with inline action */}
+              <div className="email-sender__wrap">
+                <input
+                  type="email"
+                  className={[
+                    "email-sender__input",
+                    showSenderError ? "email-sender__input--error" : "",
+                    (showSendBtn || showPendingBadge || sendBtnExiting) ? "email-sender__input--has-action" : "",
+                  ].filter(Boolean).join(" ")}
+                  value={senderEmail}
+                  onChange={(e) => handleSenderEmailChange(e.target.value)}
+                  onBlur={() => setSenderTouched(true)}
+                  onKeyDown={(e) => e.key === "Enter" && senderIsValid && senderHasChanged && handleInitiateVerification()}
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+
+                {/* Inline: Send button — slides in when valid + changed */}
+                <div className={`email-sender__inline ${(showSendBtn || sendBtnExiting) ? "email-sender__inline--visible" : "email-sender__inline--hidden"}`}>
+                  <button
+                    className="email-sender__send-btn"
+                    disabled={isInitiating || sendBtnExiting}
+                    onClick={handleInitiateVerification}
+                  >
+                    <ButtonSpinner visible={isInitiating || sendBtnExiting} />
+                    {!isInitiating && !sendBtnExiting && "Verifiera"}
+                  </button>
+                </div>
+
+                {/* Inline: Pending badge — shows when input matches pending email */}
+                <div className={`email-sender__inline ${showPendingBadge ? "email-sender__inline--visible" : "email-sender__inline--hidden"}`}>
+                  <span className="email-sender__pending-badge">Ej verifierad</span>
+                </div>
+              </div>
+
+              {/* Error — slides down */}
+              <div className={`email-sender__slide ${showSenderError ? "email-sender__slide--visible" : "email-sender__slide--hidden"}`}>
+                <div className="email-sender__error">
+                  <EditorIcon name="report" size={16} style={{ flexShrink: 0 }} />
+                  <span>Ange en giltig e-postadress</span>
+                </div>
+              </div>
+
+              {/* Pending info — slides down when pending email is showing */}
+              <div className={`email-sender__slide ${isPendingEmail ? "email-sender__slide--visible" : "email-sender__slide--hidden"}`}>
+                <p className="email-sender__pending-info">
+                  Bekräfta att du har åtkomst till den här e-postadressen.{" "}
+                  <a onClick={handleResendVerification}>Skicka om verifiering</a>
                 </p>
               </div>
 
-              {/* Pending verification banner */}
-              {senderInfo.pendingEmailFrom && (
-                <div style={{
-                  padding: "12px 14px", marginBottom: 12, borderRadius: 8,
-                  background: "#FFF8E1", border: "1px solid #FFE082",
-                }}>
-                  <p style={{ fontSize: 14, color: "#7B6100", margin: 0, lineHeight: 1.5 }}>
-                    Väntar på verifiering — bekräftelsemejl skickat till{" "}
-                    <strong>{senderInfo.emailVerificationSentTo}</strong>.
-                  </p>
-                </div>
-              )}
-
-              {/* Change address form */}
-              {!senderInfo.pendingEmailFrom && (
-                <div className="email-domain__add">
-                  <input
-                    type="email"
-                    className="email-domain__add-input"
-                    value={newEmailFrom}
-                    onChange={(e) => setNewEmailFrom(e.target.value)}
-                    placeholder="t.ex. noreply@ditthotell.se"
-                    onKeyDown={(e) => e.key === "Enter" && handleInitiateVerification()}
-                  />
-                  <button
-                    className="settings-btn--connect"
-                    disabled={isInitiating || !newEmailFrom.trim()}
-                    onClick={handleInitiateVerification}
-                  >
-                    <ButtonSpinner visible={isInitiating} />
-                    Skicka verifieringslänk
-                  </button>
-                </div>
-              )}
-
-              {senderToast && (
-                <div className={`email-toast ${senderToast.type === "success" ? "email-toast--success" : "email-toast--error"}`} style={{ marginTop: 8 }}>
-                  {senderToast.message}
-                </div>
-              )}
-            </>
-          )}
-
-          {!senderLoaded && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div className="skel skel--text" style={{ width: 280, height: 14 }} />
-              <div className="skel skel--text" style={{ width: 200, height: 36 }} />
             </div>
+          ) : (
+            <div className="skel skel--text" style={{ width: "100%", height: 42, borderRadius: 10 }} />
           )}
         </div>
 
         {/* ── Container 2: E-postmallar ── */}
-        <div>
-          <h4 style={{ fontSize: 15, fontWeight: 600, color: "var(--admin-text)", marginBottom: 4 }}>
-            E-postmallar
-          </h4>
-          <p className="admin-desc" style={{ marginBottom: 16 }}>
-            Anpassa innehållet i automatiska e-postutskick till gäster.
-          </p>
+        <div style={cardStyle}>
+          <div className="email-nav">
+            <button
+              className="email-nav__item"
+            onClick={() => { setView("guest-notifications"); onSubTitleChange?.("Gästaviseringar"); }}
+          >
+            <EditorIcon name="person" size={20} style={{ color: "var(--admin-text-secondary)", flexShrink: 0 }} />
+            <div className="email-nav__text">
+              <div className="email-nav__label">Gästaviseringar</div>
+              <div className="email-nav__desc">Meddela gäster om boknings- och kontohändelser</div>
+            </div>
+            <EditorIcon name="chevron_right" size={18} style={{ color: "var(--admin-text-tertiary)", flexShrink: 0, marginLeft: "auto" }} />
+          </button>
+          <div className="email-nav__divider" />
+          <button
+            className="email-nav__item"
+            onClick={() => {/* TODO: open staff notifications */}}
+          >
+            <EditorIcon name="group" size={20} style={{ color: "var(--admin-text-secondary)", flexShrink: 0 }} />
+            <div className="email-nav__text">
+              <div className="email-nav__label">Personalaviseringar</div>
+              <div className="email-nav__desc">Meddela personal om nya bokningshändelser</div>
+            </div>
+            <EditorIcon name="chevron_right" size={18} style={{ color: "var(--admin-text-tertiary)", flexShrink: 0, marginLeft: "auto" }} />
+            </button>
+          </div>
+        </div>
 
-          {!loaded ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 0, border: "1px solid var(--admin-border)", borderRadius: 10, overflow: "hidden" }}>
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, borderTop: i > 0 ? "1px solid var(--admin-border)" : "none" }}>
-                  <div className="skel" style={{ width: 18, height: 18, borderRadius: "50%" }} />
-                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-                    <div className="skel skel--text" style={{ width: 140, height: 14 }} />
-                    <div className="skel skel--text" style={{ width: 200, height: 10 }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="email-list">
-              {templates.map((tpl) => (
-                <button
-                  key={tpl.eventType}
-                  className="email-list__row"
-                  onClick={() => openEditor(tpl.eventType)}
-                >
-                  <EditorIcon name="mail" size={18} style={{ color: "var(--admin-text-secondary)", flexShrink: 0 }} />
-                  <div className="email-list__info">
-                    <div className="email-list__label">{tpl.label}</div>
-                    <div className="email-list__desc">{tpl.description}</div>
-                  </div>
-                  <span className={`email-list__badge ${tpl.hasOverride ? "email-list__badge--custom" : "email-list__badge--default"}`}>
-                    {tpl.hasOverride ? "Anpassad" : "Standard"}
-                  </span>
-                  <EditorIcon name="chevron_right" size={18} style={{ color: "var(--admin-text-tertiary)", flexShrink: 0 }} />
-                </button>
-              ))}
-            </div>
-          )}
+        {/* Toast — fixed bottom center, outside both containers */}
+        <div className={`email-sender__toast ${showSentToast ? "email-sender__toast--visible" : "email-sender__toast--hidden"}`}>
+          <div className="email-sender__toast-inner">
+            Verifieringsmeddelande skickat.
+          </div>
         </div>
       </div>
     );
@@ -345,6 +503,7 @@ export function EmailContent({ onSubTitleChange }: EmailContentProps) {
 
   // ── Editor view ───────────────────────────────────────────────
 
+  if (!editing) return null;
   const variables = editing.variables;
 
   return (
