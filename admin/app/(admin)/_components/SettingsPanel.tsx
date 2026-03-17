@@ -56,10 +56,11 @@ const NAV_ITEMS: { items: SettingsNavItem[]; divider?: boolean }[] = [
 ];
 
 export function SettingsPanel() {
-  const { isOpen, close } = useSettings();
+  const { isOpen, close, activeTab, setActiveTab } = useSettings();
   const { organization } = useClerkOrganization();
   const { isAdmin } = useRole();
-  const [activeItem, setActiveItem] = useState(isAdmin ? 'organization' : 'general');
+  const defaultTab = isAdmin ? 'organization' : 'general';
+  const activeItem = activeTab ?? defaultTab;
   const [search, setSearch] = useState('');
   const [resetKey, setResetKey] = useState(0);
   const [subTitle, setSubTitle] = useState<string | null>(null);
@@ -148,7 +149,7 @@ export function SettingsPanel() {
                   {group.items.map((item) => (
                     <button
                       key={item.id}
-                      onClick={() => { setActiveItem(item.id); setSubTitle(null); setInviteTrigger(0); setHeaderExtra(null); setHeaderAction(null); }}
+                      onClick={() => { setActiveTab(item.id); setSubTitle(null); setInviteTrigger(0); setHeaderExtra(null); setHeaderAction(null); }}
                       className={`settings-nav__item ${activeItem === item.id ? 'settings-nav__item--active' : ''}`}
                     >
                       <EditorIcon name={item.icon} size={18} />
@@ -171,7 +172,7 @@ export function SettingsPanel() {
                 <div className="settings-main__header">
                   <button
                     className="settings-main__header-icon"
-                    onClick={() => { setResetKey((k) => k + 1); setSubTitle(null); setInviteTrigger(0); setHeaderExtra(null); setHeaderAction(null); }}
+                    onClick={() => { setActiveTab(activeItem); setResetKey((k) => k + 1); setSubTitle(null); setInviteTrigger(0); setHeaderExtra(null); setHeaderAction(null); }}
                     aria-label={`Tillbaka till ${item.label}`}
                   >
                     <EditorIcon name={item.icon} size={18} />
@@ -216,9 +217,9 @@ export function SettingsPanel() {
               ) : activeItem === 'languages' ? (
                 <LanguagesContent key={resetKey} onSubTitleChange={setSubTitle} triggerAdd={addLanguageTrigger} />
               ) : activeItem === 'email' ? (
-                <EmailContent key={resetKey} onSubTitleChange={setSubTitle} />
+                <EmailContent key={resetKey} onSubTitleChange={setSubTitle} onHeaderExtraChange={setHeaderExtra} />
               ) : activeItem === 'checkin-checkout' ? (
-                <CheckinContent key={resetKey} onSubTitleChange={setSubTitle} onNavigate={(tab) => { setActiveItem(tab); setSubTitle(null); setResetKey((k) => k + 1); }} />
+                <CheckinContent key={resetKey} onSubTitleChange={setSubTitle} onNavigate={(tab) => { setActiveTab(tab); setSubTitle(null); setResetKey((k) => k + 1); }} />
               ) : (
                 <div key={resetKey} style={{ padding: 0 }}>
                   <p style={{ color: 'var(--admin-text-secondary)', fontSize: 13 }}>

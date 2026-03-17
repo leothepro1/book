@@ -93,6 +93,7 @@ export async function getTenantSenderInfo(): Promise<TenantSenderInfo | null> {
 
 export type TenantEmailBranding = {
   logoUrl: string | null;
+  logoWidth: number | null;
   accentColor: string | null;
 };
 
@@ -101,6 +102,7 @@ export async function getTenantEmailBranding(): Promise<TenantEmailBranding | nu
   if (!tenantData) return null;
   return {
     logoUrl: tenantData.tenant.emailLogoUrl,
+    logoWidth: tenantData.tenant.emailLogoWidth,
     accentColor: tenantData.tenant.emailAccentColor,
   };
 }
@@ -276,6 +278,20 @@ export async function resetEmailTemplate(
   } catch (error) {
     console.error("[resetEmailTemplate] Error:", error);
     return { ok: false, error: "Kunde inte återställa mallen — försök igen" };
+  }
+}
+
+// ── getAdminEmail ───────────────────────────────────────────────
+
+export async function getAdminEmail(): Promise<string | null> {
+  const IS_DEV = process.env.NODE_ENV === "development";
+  if (IS_DEV) return "dev@localhost";
+  try {
+    const { currentUser } = await import("@clerk/nextjs/server");
+    const user = await currentUser();
+    return user?.emailAddresses?.[0]?.emailAddress ?? null;
+  } catch {
+    return null;
   }
 }
 

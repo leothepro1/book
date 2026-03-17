@@ -134,6 +134,7 @@ model Tenant {
 
   // Email branding — logo and accent color injected into all templates
   emailLogoUrl          String?   // Cloudinary URL
+  emailLogoWidth        Int?      // Logo width in px (default 120)
   emailAccentColor      String?   // hex e.g. "#1A56DB"
 
   // Feature toggles — account-level, immediate effect (not draft/publish)

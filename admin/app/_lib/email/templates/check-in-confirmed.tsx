@@ -1,6 +1,6 @@
 import { Text, Section, Link } from "@react-email/components";
 import * as React from "react";
-import { EmailLayout } from "./_layout";
+import { EmailLayout, h1Style } from "./_layout";
 
 import type { EmailBranding } from "../branding";
 
@@ -50,9 +50,10 @@ export default function CheckInConfirmed(props: CheckInConfirmedProps) {
   const btnStyle = { ...ctaButton, ...(branding?.accentColor ? { backgroundColor: branding.accentColor } : {}) };
   return (
     <EmailLayout hotelName={hotelName} branding={branding}>
-      <Text style={body}>Välkommen, {guestName}!</Text>
+      <Text style={h1Style}>Välkommen till {hotelName}</Text>
+      <Text style={body}>Hej {guestName},</Text>
       <Text style={body}>
-        Du är incheckad på {hotelName}.
+        Du är nu incheckad.
       </Text>
       <Section style={detailsBox}>
         <Text style={detailRow}>

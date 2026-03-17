@@ -40,7 +40,7 @@ async function getResolvedTemplate(
       where: { id: tenantId },
       select: {
         id: true, name: true, emailFrom: true, emailFromName: true,
-        portalSlug: true, emailLogoUrl: true, emailAccentColor: true,
+        portalSlug: true, emailLogoUrl: true, emailLogoWidth: true, emailAccentColor: true,
       },
     }),
     prisma.emailTemplate.findUnique({

@@ -197,7 +197,7 @@ export function Sidebar() {
         {/* Inställningar — only visible to org:admin */}
         {isAdmin && (
           <button
-            onClick={openSettings}
+            onClick={() => openSettings()}
             className="w-full flex items-center gap-3 p-2 rounded-lg text-[#5d5c5b] hover:bg-[#E6E5E3] hover:text-[#323232]"
           >
             <span

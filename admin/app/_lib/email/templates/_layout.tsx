@@ -30,15 +30,32 @@ const card: React.CSSProperties = {
   padding: "40px 32px",
 };
 
-const headerStyle: React.CSSProperties = {
-  fontSize: "14px",
-  fontWeight: 600,
-  color: "#1a1a1a",
-  letterSpacing: "0.5px",
-  textTransform: "uppercase" as const,
+const responsiveStyles = `
+  @media only screen and (max-width: 620px) {
+    .email-card { padding: 32px 17px !important; }
+  }
+`;
+
+const brandZone: React.CSSProperties = {
   paddingBottom: "24px",
   borderBottom: "1px solid #e5e5e5",
   marginBottom: "32px",
+};
+
+const brandText: React.CSSProperties = {
+  fontSize: "28px",
+  fontWeight: 700,
+  color: "#1a1a1a",
+  lineHeight: "36px",
+  margin: "0",
+};
+
+export const h1Style: React.CSSProperties = {
+  fontSize: "24px",
+  fontWeight: 700,
+  color: "#1a1a1a",
+  lineHeight: "32px",
+  margin: "0 0 16px 0",
 };
 
 const footerStyle: React.CSSProperties = {
@@ -54,18 +71,22 @@ const footerStyle: React.CSSProperties = {
 export function EmailLayout({ hotelName, children, branding }: EmailLayoutProps) {
   return (
     <Html>
-      <Head />
+      <Head>
+        <style dangerouslySetInnerHTML={{ __html: responsiveStyles }} />
+      </Head>
       <Body style={outer}>
-        <Container style={card}>
-          {branding?.logoUrl && (
-            <Img
-              src={branding.logoUrl}
-              alt={hotelName}
-              height="48"
-              style={{ maxHeight: "48px", width: "auto", marginBottom: "24px" }}
-            />
-          )}
-          <Text style={headerStyle}>{hotelName}</Text>
+        <Container style={card} className="email-card">
+          <Section style={brandZone}>
+            {branding?.logoUrl ? (
+              <Img
+                src={branding.logoUrl}
+                alt={hotelName}
+                style={{ width: `${branding.logoWidth ?? 120}px`, height: "auto" }}
+              />
+            ) : (
+              <Text style={brandText}>{hotelName}</Text>
+            )}
+          </Section>
           <Section>{children}</Section>
           <Text style={footerStyle}>
             Du får detta mail eftersom du har en bokning hos {hotelName}.

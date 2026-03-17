@@ -1,6 +1,6 @@
 import { Text, Section } from "@react-email/components";
 import * as React from "react";
-import { EmailLayout } from "./_layout";
+import { EmailLayout, h1Style } from "./_layout";
 
 import type { EmailBranding } from "../branding";
 
@@ -45,6 +45,7 @@ export default function BookingCancelled(props: BookingCancelledProps) {
   const { guestName, hotelName, bookingRef, cancellationReason, branding } = props;
   return (
     <EmailLayout hotelName={hotelName} branding={branding}>
+      <Text style={h1Style}>Din bokning har avbokats</Text>
       <Text style={body}>Hej {guestName},</Text>
       <Text style={body}>
         Din bokning på {hotelName} (nr {bookingRef}) har avbokats.

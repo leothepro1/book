@@ -85,8 +85,8 @@
 
 .settings-panel__close {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: 20px;
+  right: 20px;
   z-index: 10;
   display: flex;
   align-items: center;
@@ -94,15 +94,15 @@
   width: 36px;
   height: 36px;
   border: none;
-  background: var(--admin-surface-muted);
-  border-radius: 50%;
+  background: #ebebeb;
+  border-radius: 8px;
   cursor: pointer;
-  color: var(--admin-text-secondary);
+  color: #404040;
   transition: background 0.15s, color 0.15s, transform 0.2s;
 }
 
 .settings-panel__close:hover {
-  background: var(--admin-surface-active);
+  background: #dadada;
   color: var(--admin-text);
 }
 
@@ -118,7 +118,7 @@
 .settings-layout {
   display: flex;
   flex: 1;
-  max-width: 1080px;
+  max-width: 1130px;
   margin: 0 auto;
   width: 100%;
   min-height: 0;
@@ -219,9 +219,9 @@
   width: 100%;
   height: 34px;
   padding: 0 10px 0 32px;
-  border: 1px solid #E6E5E3;
+  border: 1px solid #ebebeb;
   border-radius: 8px;
-  background: #F9F8F7;
+  background: #fff;
   font-size: 14px;
   font-weight: 400;
   color: var(--admin-text);
@@ -232,7 +232,7 @@
 }
 
 .settings-nav__search::placeholder {
-  color: var(--admin-text-tertiary);
+  color: #616161;
 }
 
 .settings-nav__search:focus {
@@ -245,7 +245,7 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 0 16px 16px;
+  padding: 0 9px 9px;
 }
 
 .settings-nav__item {
@@ -259,7 +259,7 @@
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  color: #4b4c4d;
+  color: #303030;
   cursor: pointer;
   text-align: left;
   transition: background 0.12s, color 0.12s;
@@ -275,7 +275,11 @@
   color: var(--admin-text);
   font-weight: 600;
 }
-
+.settings-nav__item--active:hover {
+  background: #ebebeb;
+  color: var(--admin-text);
+  font-weight: 600;
+}
 .settings-nav__divider {
   height: 1px;
   background: var(--admin-border);
@@ -296,7 +300,7 @@
 .settings-main__header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0px;
   padding: 10px 0 12px;
 }
 
@@ -331,7 +335,7 @@
   background: none;
   border-radius: 6px;
   cursor: pointer;
-  color: var(--admin-text-secondary);
+  color: #303030;
   transition: background 0.12s, color 0.12s;
   flex-shrink: 0;
 }
@@ -348,6 +352,7 @@
 
 .settings-main__header-title {
   font-size: 18px;
+  margin-left: 3px;
   font-weight: 600;
   color: var(--admin-text);
   letter-spacing: -0.01em;
@@ -493,6 +498,32 @@
   cursor: not-allowed;
 }
 
+.settings-btn--muted {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  font-family: var(--admin-font);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  background: #E3E3E3;
+  color: #303030;
+  border: none;
+  transition: background 0.15s;
+}
+
+.settings-btn--muted:hover:not(:disabled) {
+  background: #D5D5D5;
+}
+
+.settings-btn--muted:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .settings-btn--danger {
   display: inline-flex;
   justify-content: center;
@@ -616,23 +647,23 @@
 }
 
 .sf-dropdown__menu {
-  z-index: 300;
-  background: var(--admin-surface);
-  border: none;
-  border-radius: 12px;
-  margin: 0;
-  padding: 4px;
-  list-style: none;
-  animation: .12s ease-out settings-dropdown-in;
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  min-width: 200px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  box-shadow: 0 20px 24px #1919190d, 0 5px 8px #19191907, 0 0 0 1px #2a1c0012;
+    z-index: 300;
+    background: var(--admin-surface);
+    border: none;
+    border-radius: 12px;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 200px;
+    margin: 0;
+    padding: 7px;
+    list-style: none;
+    animation: .12s ease-out settings-dropdown-in;
+    display: flex;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    box-shadow: 0 20px 24px #1919190d, 0 5px 8px #19191907, 0 0 0 1px #2a1c0012;
 }
 
 .sf-dropdown__item {
@@ -649,16 +680,16 @@
 }
 
 .sf-dropdown__item:hover {
-  background: #F1F0EF;
+  background: #fafafa;
 }
 
 .sf-dropdown__item--active {
-  background: #F1F0EF;
+  background: #ebebeb;
   color: #1a1a1a;
 }
 
 .sf-dropdown__item--active:hover {
-  background: #F1F0EF;
+  background: #ebebeb;
 }
 
 .sf-dropdown__check {

@@ -1,16 +1,23 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { EditorIcon } from "@/app/_components/EditorIcon";
+import { useSettings } from "@/app/(admin)/_components/SettingsContext";
+import { MediaLibraryModal } from "@/app/(admin)/_components/MediaLibrary";
+import type { MediaLibraryResult } from "@/app/(admin)/_components/MediaLibrary";
+import "@/app/(admin)/_components/ImageUpload/image-upload.css";
+import "@/app/(admin)/files/files.css";
 import {
   getEmailTemplates,
   getEmailTemplateDetail,
   saveEmailTemplate,
   resetEmailTemplate,
   sendTestEmail,
+  getAdminEmail,
   getTenantSenderInfo,
+  getTenantEmailBranding,
 } from "./actions";
-import type { EmailTemplateRow, EmailTemplateDetail, TenantSenderInfo } from "./actions";
+import type { EmailTemplateRow, EmailTemplateDetail, TenantSenderInfo, TenantEmailBranding } from "./actions";
 import "./email.css";
 
 // ── ButtonSpinner ───────────────────────────────────────────────
@@ -46,11 +53,15 @@ function ButtonSpinner({ visible }: { visible: boolean }) {
 
 type EmailContentProps = {
   onSubTitleChange?: (title: string | null) => void;
+  onHeaderExtraChange?: (node: React.ReactNode) => void;
 };
 
 // ── Main component ──────────────────────────────────────────────
 
-type EmailView = "main" | "guest-notifications" | "template-preview";
+type EmailView = "main" | "guest-notifications" | "template-preview" | "customize-templates";
+
+const DEFAULT_LOGO_WIDTH = 120;
+const VALID_HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
 const GUEST_NOTIFICATION_CATEGORIES = [
   {
@@ -75,12 +86,20 @@ const GUEST_NOTIFICATION_CATEGORIES = [
   },
 ];
 
-export function EmailContent({ onSubTitleChange }: EmailContentProps) {
-  const [view, setView] = useState<EmailView>("main");
+const ALL_TEMPLATE_IDS = GUEST_NOTIFICATION_CATEGORIES.flatMap((c) => c.items);
+
+export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailContentProps) {
+  const { subPath, setSubPath } = useSettings();
   const [templates, setTemplates] = useState<EmailTemplateRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [editing, setEditing] = useState<EmailTemplateDetail | null>(null);
   const [previewing, setPreviewing] = useState<EmailTemplateDetail | null>(null);
+
+  // Derive view from subPath
+  const view: EmailView = subPath === "customize" ? "customize-templates"
+    : subPath?.startsWith("guest/") ? "template-preview"
+    : subPath === "guest" ? "guest-notifications"
+    : "main";
 
   // Editor form state
   const [subject, setSubject] = useState("");
@@ -101,6 +120,25 @@ export function EmailContent({ onSubTitleChange }: EmailContentProps) {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
+  // Test send modal
+  const [showTestModal, setShowTestModal] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [adminEmail, setAdminEmail] = useState<string | null>(null);
+  const [showTestToast, setShowTestToast] = useState(false);
+
+  // Customize-templates state
+  const [branding, setBranding] = useState<TenantEmailBranding | null>(null);
+  const [brandingLogoUrl, setBrandingLogoUrl] = useState<string | null>(null);
+  const [brandingLogoWidth, setBrandingLogoWidth] = useState(DEFAULT_LOGO_WIDTH);
+  const [brandingAccentColor, setBrandingAccentColor] = useState("#1A56DB");
+  const [hexInput, setHexInput] = useState("#1A56DB");
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [customizePreviewIdx, setCustomizePreviewIdx] = useState(0);
+  const [customizeDetails, setCustomizeDetails] = useState<Map<string, EmailTemplateDetail>>(new Map());
+  const [customizePreviewHtml, setCustomizePreviewHtml] = useState("");
+  const [isSavingBranding, setIsSavingBranding] = useState(false);
+  const [showBrandingSavedToast, setShowBrandingSavedToast] = useState(false);
+
   // Sender info
   const [senderInfo, setSenderInfo] = useState<TenantSenderInfo | null>(null);
   const [senderLoaded, setSenderLoaded] = useState(false);
@@ -114,12 +152,11 @@ export function EmailContent({ onSubTitleChange }: EmailContentProps) {
   // Load data
   useEffect(() => {
     getEmailTemplates().then((rows) => { setTemplates(rows); setLoaded(true); });
+    getAdminEmail().then(setAdminEmail);
     getTenantSenderInfo().then((info) => {
       setSenderInfo(info);
       setSenderLoaded(true);
       if (info) {
-        // If there's a pending verification, show that email in the input
-        // Otherwise show the current active address
         const display = info.pendingEmailFrom
           ?? info.emailFrom
           ?? (info.portalSlug ? `noreply@${info.portalSlug}.bedfront.com` : "noreply@bedfront.com");
@@ -128,9 +165,35 @@ export function EmailContent({ onSubTitleChange }: EmailContentProps) {
     });
   }, []);
 
+  // Restore view from hash on mount
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    if (!subPath) return;
+    restoredRef.current = true;
+
+    if (subPath === "guest") {
+      onSubTitleChange?.("Gästaviseringar");
+    } else if (subPath === "customize") {
+      openCustomize();
+    } else if (subPath.startsWith("guest/")) {
+      const eventType = subPath.split("/")[1];
+      const cat = GUEST_NOTIFICATION_CATEGORIES.flatMap((c) => c.items).find((i) => i.id === eventType);
+      if (cat) {
+        onSubTitleChange?.(cat.title);
+        getEmailTemplateDetail(eventType).then((detail) => {
+          if (detail) setPreviewing(detail);
+        });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subPath, onSubTitleChange]);
+
   // Auto-clear toasts
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 5000); return () => clearTimeout(t); }, [toast]);
   useEffect(() => { if (!showSentToast) return; const t = setTimeout(() => setShowSentToast(false), 4000); return () => clearTimeout(t); }, [showSentToast]);
+  useEffect(() => { if (!showTestToast) return; const t = setTimeout(() => setShowTestToast(false), 4000); return () => clearTimeout(t); }, [showTestToast]);
+  useEffect(() => { if (!showBrandingSavedToast) return; const t = setTimeout(() => setShowBrandingSavedToast(false), 4000); return () => clearTimeout(t); }, [showBrandingSavedToast]);
 
   // ── Sender handler ──────────────────────────────────────────────
 
@@ -188,6 +251,131 @@ export function EmailContent({ onSubTitleChange }: EmailContentProps) {
   async function handleResendVerification() {
     if (!senderInfo?.pendingEmailFrom) return;
     await sendVerification(senderInfo.pendingEmailFrom);
+  }
+
+  // ── Preview header buttons ─────────────────────────────────────
+
+  // Set header buttons when in template-preview view
+  useEffect(() => {
+    if (view === "template-preview" && previewing) {
+      onHeaderExtraChange?.(
+        <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+          <button
+            className="settings-btn--muted"
+            style={{ fontSize: 13, padding: "5px 12px" }}
+            onClick={() => setShowTestModal(true)}
+          >
+            Skicka test
+          </button>
+          <button
+            className="settings-btn--connect"
+            style={{ fontSize: 13, padding: "5px 12px" }}
+            onClick={() => {
+              if (previewing) {
+                openEditor(previewing.eventType);
+              }
+            }}
+          >
+            Redigera kod
+          </button>
+        </div>
+      );
+    } else if (view === "guest-notifications") {
+      onHeaderExtraChange?.(
+        <button
+          className="settings-btn--muted"
+          style={{ marginLeft: "auto", fontSize: 13, padding: "5px 12px" }}
+          onClick={() => openCustomize()}
+        >
+          Anpassa e-postmallar
+        </button>
+      );
+    } else {
+      onHeaderExtraChange?.(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, previewing]);
+
+  async function handleSendTestFromPreview() {
+    if (!previewing) return;
+    setIsSendingTest(true);
+    const result = await sendTestEmail(previewing.eventType);
+    setIsSendingTest(false);
+    if (result.ok) {
+      setShowTestModal(false);
+      setShowTestToast(true);
+    }
+  }
+
+  // ── Customize templates ─────────────────────────────────────────
+
+  async function openCustomize() {
+    setSubPath("customize");
+    onSubTitleChange?.("Anpassa e-postmallar");
+
+    // Load branding
+    const b = await getTenantEmailBranding();
+    if (b) {
+      setBranding(b);
+      setBrandingLogoUrl(b.logoUrl);
+      setBrandingLogoWidth(b.logoWidth ?? DEFAULT_LOGO_WIDTH);
+      setBrandingAccentColor(b.accentColor ?? "#1A56DB");
+      setHexInput(b.accentColor ?? "#1A56DB");
+    }
+
+    // Load first template detail for preview
+    const firstId = ALL_TEMPLATE_IDS[0]?.id;
+    if (firstId) {
+      setCustomizePreviewIdx(0);
+      const detail = await getEmailTemplateDetail(firstId);
+      if (detail) {
+        setCustomizeDetails((m) => new Map(m).set(firstId, detail));
+        setCustomizePreviewHtml(detail.override.html ?? detail.defaults.html);
+      }
+    }
+  }
+
+  async function navigateCustomizePreview(direction: -1 | 1) {
+    const newIdx = customizePreviewIdx + direction;
+    if (newIdx < 0 || newIdx >= ALL_TEMPLATE_IDS.length) return;
+    setCustomizePreviewIdx(newIdx);
+    const id = ALL_TEMPLATE_IDS[newIdx].id;
+
+    // Use cached detail or fetch
+    let detail = customizeDetails.get(id);
+    if (!detail) {
+      detail = await getEmailTemplateDetail(id) ?? undefined;
+      if (detail) {
+        setCustomizeDetails((m) => new Map(m).set(id, detail!));
+      }
+    }
+    if (detail) {
+      setCustomizePreviewHtml(detail.override.html ?? detail.defaults.html);
+    }
+  }
+
+  const handleMediaSelect = useCallback((asset: MediaLibraryResult) => {
+    setBrandingLogoUrl(asset.url);
+    setLibraryOpen(false);
+  }, []);
+
+  async function saveBranding() {
+    setIsSavingBranding(true);
+    try {
+      const body: Record<string, unknown> = {};
+      body.logoUrl = brandingLogoUrl;
+      body.logoWidth = brandingLogoWidth;
+      body.accentColor = brandingAccentColor;
+      await fetch("/api/email-branding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      setShowBrandingSavedToast(true);
+    } catch {
+      // silent
+    }
+    setIsSavingBranding(false);
   }
 
   // ── Template editor handlers ────────────────────────────────────
@@ -303,6 +491,227 @@ export function EmailContent({ onSubTitleChange }: EmailContentProps) {
     boxShadow: "0 5px 5px -2.5px #00000008, 0 3px 3px -1.5px #00000005, 0 2px 2px -1px #00000005, 0 1px 1px -0.5px #00000008, 0 0.5px 0.5px #0000000a, 0 0 0 1px #0000000f",
   };
 
+  // ── Customize templates view ─────────────────────────────────
+
+  if (view === "customize-templates") {
+    const currentTemplate = ALL_TEMPLATE_IDS[customizePreviewIdx];
+    const currentDetail = currentTemplate ? customizeDetails.get(currentTemplate.id) : null;
+
+    // Resolve preview HTML with branding overrides applied
+    const rawPreviewHtml = customizePreviewHtml;
+    const resolvedCustomizeHtml = rawPreviewHtml
+      .replace(/background-color:\s*#f6f6f6/gi, "background-color:#fff")
+      .replace(/padding:\s*40px\s+0/gi, "padding:0")
+      .replace(/padding:\s*40px\s+32px/gi, "padding:16px")
+      .replace(/max-width:\s*600px/gi, "max-width:100%")
+      .replace(/border-radius:\s*8px/gi, "border-radius:0")
+      .replace(/margin:\s*0\s+auto/gi, "margin:0");
+
+    return (
+      <div className="email-root">
+        {/* Container 1: Logotyp */}
+        <div style={cardStyle}>
+          <h4 className="email-customize__title">Logotyp</h4>
+          {brandingLogoUrl ? (
+            <div className="img-upload">
+              <div className="img-upload-result">
+                <div className="img-upload-result-thumb">
+                  <img src={brandingLogoUrl} alt="" className="img-upload-result-img" />
+                </div>
+                <div className="img-upload-result-meta">
+                  <span className="img-upload-result-filename">
+                    {brandingLogoUrl.split("/").pop() || "logotyp"}
+                  </span>
+                  <button
+                    type="button"
+                    className="design-logo-btn design-logo-btn-edit"
+                    onClick={() => setLibraryOpen(true)}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z" /></svg>
+                    <span>Ändra</span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="img-upload-trash-btn"
+                  onClick={() => setBrandingLogoUrl(null)}
+                  aria-label="Ta bort logotyp"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path fillRule="evenodd" d="m6.83 0-.35.15-1.33 1.33-.15.35V3H0v1h2v11.5l.5.5h11l.5-.5V4h2V3h-5V1.83l-.15-.35L9.52.15 9.17 0H6.83ZM10 3v-.96L8.96 1H7.04L6 2.04V3h4ZM5 4H3v11h10V4H5Zm2 3v5H6V7h1Zm3 .5V7H9v5h1V7.5Z" fill="currentColor"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="img-upload">
+              <div
+                className="img-upload-empty"
+                onClick={() => setLibraryOpen(true)}
+                style={{ cursor: "pointer" }}
+              >
+                <svg className="img-upload-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path fillRule="evenodd" d="M3.5 0 3 .5v23l.5.5h17l.5-.5v-16l-.15-.35-7-7L13.5 0h-10ZM4 23V1h9v6.5l.5.5H20v15H4ZM19.3 7 14 1.7V7h5.3Z" fill="currentColor" />
+                </svg>
+                <span className="img-upload-empty-text">
+                  Välj fil att ladda upp,<br />eller dra och släpp här
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div style={{ marginTop: 16 }}>
+            <label className="email-customize__label">Logotypstorlek</label>
+            <div className="sf-range-row">
+              <div
+                className="sf-range__track"
+                ref={(el) => {
+                  if (!el) return;
+                  const onDown = (e: PointerEvent) => {
+                    e.preventDefault();
+                    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                    const rect = el.getBoundingClientRect();
+                    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    const v = Math.round(24 + ratio * (400 - 24));
+                    setBrandingLogoWidth(v);
+                  };
+                  const onMove = (e: PointerEvent) => {
+                    if (!el.hasPointerCapture(e.pointerId)) return;
+                    const rect = el.getBoundingClientRect();
+                    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    const v = Math.round(24 + ratio * (400 - 24));
+                    setBrandingLogoWidth(v);
+                  };
+                  el.onpointerdown = onDown;
+                  el.onpointermove = onMove;
+                  el.onpointerup = () => {};
+                }}
+              >
+                <div className="sf-range__fill" style={{ width: `${((brandingLogoWidth - 24) / (400 - 24)) * 100}%` }} />
+                <div className="sf-range__thumb" style={{ left: `${((brandingLogoWidth - 24) / (400 - 24)) * 100}%` }} />
+              </div>
+              <div className="sf-range-input-wrap">
+                <input
+                  type="number"
+                  className="sf-range-input"
+                  value={brandingLogoWidth}
+                  min={24}
+                  max={400}
+                  step={1}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (!isNaN(v)) setBrandingLogoWidth(Math.min(400, Math.max(24, v)));
+                  }}
+                />
+                <span className="sf-range-unit">px</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Container 2: Färger */}
+        <div style={cardStyle}>
+          <h4 className="email-customize__title">Färger</h4>
+          <label className="email-customize__label">Accentfärg</label>
+          <div className="sf-color-row">
+            <input
+              type="color"
+              className="sf-color-swatch"
+              value={VALID_HEX.test(brandingAccentColor) ? brandingAccentColor : "#1A56DB"}
+              onChange={(e) => { setBrandingAccentColor(e.target.value); setHexInput(e.target.value); }}
+            />
+            <input
+              type="text"
+              className="sf-input sf-input--color-hex"
+              value={hexInput}
+              onChange={(e) => {
+                setHexInput(e.target.value);
+                if (VALID_HEX.test(e.target.value)) {
+                  setBrandingAccentColor(e.target.value);
+                }
+              }}
+              onBlur={() => { if (!VALID_HEX.test(hexInput)) setHexInput(brandingAccentColor); }}
+              maxLength={9}
+            />
+          </div>
+        </div>
+
+        {/* Container 3: Preview carousel */}
+        <div style={cardStyle}>
+          <div className="email-customize__preview-header">
+            <span className="email-customize__preview-name">{currentTemplate?.title ?? ""}</span>
+            <div className="email-customize__preview-nav">
+              <div className="files-pagination__nav">
+                <button
+                  className="files-pagination__btn"
+                  disabled={customizePreviewIdx === 0}
+                  onClick={() => navigateCustomizePreview(-1)}
+                  aria-label="Föregående mall"
+                >
+                  <EditorIcon name="chevron_left" size={20} />
+                </button>
+                <button
+                  className="files-pagination__btn"
+                  disabled={customizePreviewIdx >= ALL_TEMPLATE_IDS.length - 1}
+                  onClick={() => navigateCustomizePreview(1)}
+                  aria-label="Nästa mall"
+                >
+                  <EditorIcon name="chevron_right" size={20} />
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="email-preview-card">
+            <div className="email-preview-card__body">
+              <iframe
+                srcDoc={resolvedCustomizeHtml}
+                title="E-postförhandsgranskning"
+                sandbox="allow-same-origin"
+                className="email-preview-card__iframe"
+                onLoad={(e) => {
+                  const iframe = e.currentTarget;
+                  const doc = iframe.contentDocument;
+                  if (doc) {
+                    iframe.style.height = doc.documentElement.scrollHeight + "px";
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Save button */}
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            className="settings-btn--connect"
+            disabled={isSavingBranding}
+            onClick={saveBranding}
+          >
+            <ButtonSpinner visible={isSavingBranding} />
+            Spara ändringar
+          </button>
+        </div>
+
+        {/* Branding saved toast */}
+        <div className={`email-sender__toast ${showBrandingSavedToast ? "email-sender__toast--visible" : "email-sender__toast--hidden"}`}>
+          <div className="email-sender__toast-inner">
+            Ändringarna har sparats.
+          </div>
+        </div>
+
+        <MediaLibraryModal
+          open={libraryOpen}
+          onClose={() => setLibraryOpen(false)}
+          onConfirm={handleMediaSelect}
+          currentValue={brandingLogoUrl || undefined}
+          uploadFolder="email"
+          accept="image"
+          title="Välj logotyp"
+        />
+      </div>
+    );
+  }
+
   // ── Template preview view ────────────────────────────────────
 
   if (view === "template-preview" && previewing) {
@@ -345,6 +754,79 @@ export function EmailContent({ onSubTitleChange }: EmailContentProps) {
             </div>
           </div>
         </div>
+
+        {/* Send test modal */}
+        {showTestModal && (
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
+            onClick={() => { if (!isSendingTest) setShowTestModal(false); }}
+          >
+            <div style={{ position: "absolute", inset: 0, background: "var(--admin-overlay)", animation: "settings-modal-fade-in 0.15s ease" }} />
+            <div
+              style={{
+                position: "relative", zIndex: 1, background: "var(--admin-surface)",
+                borderRadius: 16, padding: 0, width: 440, boxShadow: "none",
+                animation: "settings-modal-scale-in 0.2s cubic-bezier(0.32, 0.72, 0, 1)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                background: "#F9F8F7", borderBottom: "1px solid #E6E5E3",
+                padding: "20px 20px 12px 20px", borderRadius: "16px 16px 0 0",
+              }}>
+                <h3 style={{ fontSize: 17, fontWeight: 600 }}>Skicka testmeddelande</h3>
+                <button
+                  onClick={() => { if (!isSendingTest) setShowTestModal(false); }}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: "max-content", height: "max-content",
+                    border: "none", background: "transparent",
+                    borderRadius: "50%", cursor: "pointer", color: "var(--admin-text-secondary)",
+                  }}
+                  aria-label="Stäng"
+                >
+                  <EditorIcon name="close" size={20} />
+                </button>
+              </div>
+              {/* Body */}
+              <div style={{ padding: 20 }}>
+                <p style={{ fontSize: 14, lineHeight: 1.55, color: "var(--admin-text-secondary)", margin: 0 }}>
+                  E-postmeddelande kommer att skickas till{" "}
+                  <strong style={{ color: "var(--admin-text)" }}>{adminEmail ?? "..."}</strong>
+                </p>
+              </div>
+              {/* Footer */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "12px 20px 20px", borderTop: "1px solid var(--admin-border)" }}>
+                <button
+                  className="settings-btn--outline"
+                  style={{ border: "none" }}
+                  disabled={isSendingTest}
+                  onClick={() => setShowTestModal(false)}
+                >
+                  Avbryt
+                </button>
+                <button
+                  className="settings-btn--connect"
+                  style={{ minWidth: 80 }}
+                  disabled={isSendingTest}
+                  onClick={handleSendTestFromPreview}
+                >
+                  <ButtonSpinner visible={isSendingTest} />
+                  {!isSendingTest && "Skicka"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Test toast */}
+        <div className={`email-sender__toast ${showTestToast ? "email-sender__toast--visible" : "email-sender__toast--hidden"}`}>
+          <div className="email-sender__toast-inner">
+            Verifieringsmeddelande skickat.
+          </div>
+        </div>
       </div>
     );
   }
@@ -368,7 +850,7 @@ export function EmailContent({ onSubTitleChange }: EmailContentProps) {
                         const detail = await getEmailTemplateDetail(item.id);
                         if (detail) {
                           setPreviewing(detail);
-                          setView("template-preview");
+                          setSubPath(`guest/${item.id}`);
                           onSubTitleChange?.(item.title);
                         }
                       }}
@@ -467,7 +949,7 @@ export function EmailContent({ onSubTitleChange }: EmailContentProps) {
           <div className="email-nav">
             <button
               className="email-nav__item"
-            onClick={() => { setView("guest-notifications"); onSubTitleChange?.("Gästaviseringar"); }}
+            onClick={() => { setSubPath("guest"); onSubTitleChange?.("Gästaviseringar"); }}
           >
             <EditorIcon name="person" size={20} style={{ color: "var(--admin-text-secondary)", flexShrink: 0 }} />
             <div className="email-nav__text">

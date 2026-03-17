@@ -12,6 +12,7 @@ import { requireAdmin, getAuth } from "@/app/(admin)/_lib/auth/devAuth";
 
 const bodySchema = z.object({
   logoUrl: z.string().url().nullable().optional(),
+  logoWidth: z.number().int().min(24).max(400).nullable().optional(),
   accentColor: z
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/, "Måste vara ett giltigt hex-värde")
@@ -47,8 +48,9 @@ export async function PATCH(req: Request) {
   }
 
   // Build partial update — only fields present in body
-  const data: Record<string, string | null> = {};
+  const data: Record<string, string | number | null> = {};
   if ("logoUrl" in parsed) data.emailLogoUrl = parsed.logoUrl ?? null;
+  if ("logoWidth" in parsed) data.emailLogoWidth = parsed.logoWidth ?? null;
   if ("accentColor" in parsed) data.emailAccentColor = parsed.accentColor ?? null;
 
   if (Object.keys(data).length === 0) {
@@ -58,7 +60,7 @@ export async function PATCH(req: Request) {
   const updated = await prisma.tenant.update({
     where: { id: tenant.id },
     data,
-    select: { emailLogoUrl: true, emailAccentColor: true },
+    select: { emailLogoUrl: true, emailLogoWidth: true, emailAccentColor: true },
   });
 
   return NextResponse.json(updated);
