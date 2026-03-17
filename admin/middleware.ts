@@ -11,6 +11,12 @@ const isPublicRoute = createRouteMatcher([
   '/check-out(.*)',
   '/preview/(.*)',
   '/api/webhooks/(.*)',
+  '/api/admin/(.*)',
+  '/api/email-sender/verify/confirm(.*)',
+  '/sign-in(.*)',
+  '/sign-up(.*)',
+  '/auth/(.*)',
+  '/unsubscribe(.*)',
 ]);
 
 // All valid locale codes as a Set for O(1) lookup
@@ -186,13 +192,23 @@ export default middleware;
 
 export const config = {
   matcher: [
-    '/(admin)(.*)',
-    '/(api(?!/webhooks))(.*)',
+    // Admin routes — all pages in (admin) route group
     '/dashboard(.*)',
     '/design(.*)',
     '/home(.*)',
+    '/files(.*)',
+    '/maps(.*)',
+    '/menus(.*)',
+    '/settings(.*)',
+    '/translations(.*)',
+    '/themes(.*)',
+    '/editor(.*)',
+    '/preview-demo(.*)',
+    '/preview-test(.*)',
     '/sign-in(.*)',
     '/sign-up(.*)',
+    // API routes (except webhooks — those handle their own auth)
+    '/(api(?!/webhooks))(.*)',
     // Guest portal paths — needed for locale detection
     '/p/(.*)',
     '/check-in(.*)',

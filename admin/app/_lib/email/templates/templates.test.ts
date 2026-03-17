@@ -53,3 +53,44 @@ describe("renderDefaultTemplate", () => {
     });
   }
 });
+
+// ── VerifySender template ─────────────────────────────────────
+
+import { render } from "@react-email/components";
+import VerifySender from "./verify-sender";
+
+describe("VerifySender email template", () => {
+  it("renders confirm URL as a link", async () => {
+    const html = await render(
+      VerifySender({
+        confirmUrl: "https://bedfront.com/api/email-sender/verify/confirm?token=abc123",
+        platformName: "Bedfront",
+      }),
+    );
+    expect(html).toContain("confirm?token=abc123");
+    expect(html).toContain("Verifiera e-postadress");
+  });
+
+  it("renders heading and expiry notice", async () => {
+    const html = await render(
+      VerifySender({ confirmUrl: "https://example.com", platformName: "Bedfront" }),
+    );
+    expect(html).toContain("Bekräfta din e-postadress");
+    expect(html).toContain("24 timmar");
+  });
+
+  it("renders platform name in layout", async () => {
+    const html = await render(
+      VerifySender({ confirmUrl: "https://example.com", platformName: "My Platform" }),
+    );
+    expect(html).toContain("My Platform");
+  });
+
+  it("is valid HTML", async () => {
+    const html = await render(
+      VerifySender({ confirmUrl: "https://example.com", platformName: "Test" }),
+    );
+    expect(html).toContain("<html");
+    expect(html).toContain("</html>");
+  });
+});

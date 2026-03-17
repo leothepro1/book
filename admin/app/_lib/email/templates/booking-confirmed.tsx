@@ -2,7 +2,9 @@ import { Text, Section, Link } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./_layout";
 
-type BookingConfirmedProps = Record<string, string>;
+import type { EmailBranding } from "../branding";
+
+type BookingConfirmedProps = Record<string, string> & { branding?: EmailBranding };
 
 const body: React.CSSProperties = {
   fontSize: "16px",
@@ -51,9 +53,10 @@ const closing: React.CSSProperties = {
 };
 
 export default function BookingConfirmed(props: BookingConfirmedProps) {
-  const { guestName, hotelName, checkIn, checkOut, roomType, bookingRef, portalUrl } = props;
+  const { guestName, hotelName, checkIn, checkOut, roomType, bookingRef, portalUrl, branding } = props;
+  const btnStyle = { ...ctaButton, ...(branding?.accentColor ? { backgroundColor: branding.accentColor } : {}) };
   return (
-    <EmailLayout hotelName={hotelName}>
+    <EmailLayout hotelName={hotelName} branding={branding}>
       <Text style={body}>Hej {guestName},</Text>
       <Text style={body}>
         Din bokning på {hotelName} är bekräftad.
@@ -72,7 +75,7 @@ export default function BookingConfirmed(props: BookingConfirmedProps) {
           <span style={detailLabel}>Bokningsnr</span> {bookingRef}
         </Text>
       </Section>
-      <Link href={portalUrl} style={ctaButton}>
+      <Link href={portalUrl} style={btnStyle}>
         Visa din portal
       </Link>
       <Text style={closing}>

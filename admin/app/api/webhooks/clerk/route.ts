@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { Webhook } from 'svix';
 import { prisma } from '@/app/_lib/db/prisma';
 import { env } from '@/app/_lib/env';
+import { generatePortalSlug, tenantDefaultEmailFrom } from '@/app/_lib/tenant/portal-slug';
 
 const webhookSecret = env.CLERK_WEBHOOK_SECRET;
 
@@ -53,12 +54,16 @@ export async function POST(req: Request) {
 
       if (eventType === 'organization.created') {
         const { id, name, slug, created_by } = evt.data;
+        const portalSlug = await generatePortalSlug(name);
+        const emailFrom = tenantDefaultEmailFrom(portalSlug);
         await tx.tenant.create({
           data: {
             clerkOrgId: id,
             name: name,
             slug: slug || name.toLowerCase().replace(/\s+/g, '-'),
             ownerClerkUserId: created_by,
+            portalSlug,
+            emailFrom,
             settings: getDefaultTenantSettings(name),
           },
         });

@@ -44,6 +44,12 @@ export async function resolveBookingFromToken(token?: string | null): Promise<No
     if (isDev || (!isExpired && !isUsed)) return mapPrismaBookingToNormalized(magic.booking);
   }
 
+  // portalToken is the stable /home/[token] URL identifier
+  const byPortalToken = await prisma.booking.findUnique({
+    where: { portalToken: token },
+  });
+  if (byPortalToken) return mapPrismaBookingToNormalized(byPortalToken);
+
   const booking = await prisma.booking.findUnique({
     where: { id: token },
   });

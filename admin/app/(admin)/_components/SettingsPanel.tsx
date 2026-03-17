@@ -12,21 +12,16 @@ import { LanguagesContent } from '@/app/(admin)/settings/languages/LanguagesCont
 import { EmailContent } from '@/app/(admin)/settings/email/EmailContent';
 import { useRole } from './RoleContext';
 
+import { useOrganization } from '@clerk/nextjs';
+
 const IS_DEV = process.env.NODE_ENV === 'development';
 
+const DEV_ORG = { name: 'Dev Organisation', imageUrl: '' };
+
 function useClerkOrganization() {
-  if (IS_DEV) {
-    return {
-      organization: {
-        name: 'Dev Organisation',
-        imageUrl: '',
-      },
-    };
-  }
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { useOrganization } = require('@clerk/nextjs');
-  const { organization } = useOrganization();
-  return { organization };
+  const clerkResult = IS_DEV ? { organization: null } : useOrganization();
+  if (IS_DEV) return { organization: DEV_ORG };
+  return { organization: clerkResult.organization };
 }
 
 type SettingsNavItem = {

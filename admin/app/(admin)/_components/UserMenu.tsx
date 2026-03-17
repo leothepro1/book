@@ -2,21 +2,23 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useSidebar } from './SidebarContext';
+import { useUser, useClerk } from '@clerk/nextjs';
 
 const IS_DEV = process.env.NODE_ENV === 'development';
 
+const DEV_USER = {
+  firstName: 'Dev',
+  fullName: 'Dev User',
+  username: 'dev',
+  primaryEmailAddress: { emailAddress: 'dev@localhost' },
+  imageUrl: '',
+};
+
 function useClerkUser() {
-  if (IS_DEV) {
-    return {
-      user: { firstName: 'Dev', fullName: 'Dev User', username: 'dev', primaryEmailAddress: { emailAddress: 'dev@localhost' }, imageUrl: '' },
-      signOut: () => {},
-    };
-  }
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { useUser, useClerk } = require('@clerk/nextjs');
-  const { user } = useUser();
-  const { signOut } = useClerk();
-  return { user, signOut };
+  const clerkUser = IS_DEV ? { user: null } : useUser();
+  const clerkInstance = IS_DEV ? { signOut: () => {} } : useClerk();
+  if (IS_DEV) return { user: DEV_USER, signOut: () => {} };
+  return { user: clerkUser.user, signOut: clerkInstance.signOut };
 }
 
 interface UserMenuProps {

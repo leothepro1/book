@@ -2,7 +2,9 @@ import { Text, Section, Link } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./_layout";
 
-type CheckInConfirmedProps = Record<string, string>;
+import type { EmailBranding } from "../branding";
+
+type CheckInConfirmedProps = Record<string, string> & { branding?: EmailBranding };
 
 const body: React.CSSProperties = {
   fontSize: "16px",
@@ -44,9 +46,10 @@ const ctaButton: React.CSSProperties = {
 };
 
 export default function CheckInConfirmed(props: CheckInConfirmedProps) {
-  const { guestName, hotelName, roomNumber, checkIn, checkOut, portalUrl } = props;
+  const { guestName, hotelName, roomNumber, checkIn, checkOut, portalUrl, branding } = props;
+  const btnStyle = { ...ctaButton, ...(branding?.accentColor ? { backgroundColor: branding.accentColor } : {}) };
   return (
-    <EmailLayout hotelName={hotelName}>
+    <EmailLayout hotelName={hotelName} branding={branding}>
       <Text style={body}>Välkommen, {guestName}!</Text>
       <Text style={body}>
         Du är incheckad på {hotelName}.
@@ -62,7 +65,7 @@ export default function CheckInConfirmed(props: CheckInConfirmedProps) {
           <span style={detailLabel}>Utcheckning</span> {checkOut}
         </Text>
       </Section>
-      <Link href={portalUrl} style={ctaButton}>
+      <Link href={portalUrl} style={btnStyle}>
         Öppna din portal
       </Link>
     </EmailLayout>

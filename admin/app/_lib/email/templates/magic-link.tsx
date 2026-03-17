@@ -2,7 +2,9 @@ import { Text, Link } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./_layout";
 
-type MagicLinkProps = Record<string, string>;
+import type { EmailBranding } from "../branding";
+
+type MagicLinkProps = Record<string, string> & { branding?: EmailBranding };
 
 const body: React.CSSProperties = {
   fontSize: "16px",
@@ -31,15 +33,17 @@ const securityNote: React.CSSProperties = {
 };
 
 export default function MagicLink(props: MagicLinkProps) {
-  const { guestName, hotelName, magicLink, expiresIn } = props;
+  const { guestName, hotelName, magicLink, expiresIn, branding } = props;
+  const greeting = guestName ? `Hej ${guestName},` : "Hej,";
+  const btnStyle = { ...ctaButton, ...(branding?.accentColor ? { backgroundColor: branding.accentColor } : {}) };
   return (
-    <EmailLayout hotelName={hotelName}>
-      <Text style={body}>Hej {guestName},</Text>
+    <EmailLayout hotelName={hotelName} branding={branding}>
+      <Text style={body}>{greeting}</Text>
       <Text style={body}>
         Klicka på knappen nedan för att logga in på din gästportal
         på {hotelName}.
       </Text>
-      <Link href={magicLink} style={ctaButton}>
+      <Link href={magicLink} style={btnStyle}>
         Logga in
       </Link>
       <Text style={securityNote}>

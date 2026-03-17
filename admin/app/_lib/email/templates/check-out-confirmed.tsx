@@ -2,7 +2,9 @@ import { Text } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./_layout";
 
-type CheckOutConfirmedProps = Record<string, string>;
+import type { EmailBranding } from "../branding";
+
+type CheckOutConfirmedProps = Record<string, string> & { branding?: EmailBranding };
 
 const body: React.CSSProperties = {
   fontSize: "16px",
@@ -18,9 +20,9 @@ const closing: React.CSSProperties = {
 };
 
 export default function CheckOutConfirmed(props: CheckOutConfirmedProps) {
-  const { guestName, hotelName } = props;
+  const { guestName, hotelName, branding } = props;
   return (
-    <EmailLayout hotelName={hotelName}>
+    <EmailLayout hotelName={hotelName} branding={branding}>
       <Text style={body}>Tack för ditt besök, {guestName}.</Text>
       <Text style={body}>
         Vi hoppas att du trivdes på {hotelName}.

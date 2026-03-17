@@ -24,6 +24,14 @@ import { enqueueRetry } from "./scheduler";
 import { recordFailure, recordSuccess } from "./circuit-breaker";
 import { toPrismaBookingStatus } from "../prisma-mapping";
 import type { PmsProvider, NormalizedBooking, SyncResult } from "../types";
+import {
+  triggerBookingConfirmed,
+  triggerCheckInConfirmed,
+  triggerCheckOutConfirmed,
+  triggerBookingCancelled,
+} from "./email-triggers";
+import type { BookingStatus } from "@prisma/client";
+import { generatePortalToken } from "./portal-token";
 
 const MAX_BOOKING_ERROR_ATTEMPTS = 5;
 
@@ -213,12 +221,18 @@ async function recordBookingError(
  * - If the existing row has a newer lastSyncedAt, the update is skipped.
  * - If two concurrent creates race on the same externalId, the P2002
  *   unique constraint violation is caught and falls back to update.
+ *
+ * Email triggers:
+ * - Fires after upsert on status transitions (confirmed, check-in,
+ *   check-out, cancelled). Dedup fields on Booking prevent duplicates
+ *   across repeated sync cycles. Email failures never abort sync.
  */
 export async function upsertSyncedBooking(
   booking: NormalizedBooking,
   provider: PmsProvider,
 ): Promise<"created" | "updated" | "skipped"> {
   const now = new Date();
+  const newStatus = toPrismaBookingStatus(booking.status);
 
   const bookingData = {
     firstName: booking.firstName,
@@ -228,7 +242,7 @@ export async function upsertSyncedBooking(
     arrival: booking.arrival,
     departure: booking.departure,
     unit: booking.unit,
-    status: toPrismaBookingStatus(booking.status),
+    status: newStatus,
     checkedInAt: booking.checkedInAt,
     checkedOutAt: booking.checkedOutAt,
     externalSource: provider,
@@ -249,29 +263,124 @@ export async function upsertSyncedBooking(
       data: bookingData,
     });
 
+    // Lazy backfill: generate portalToken for existing bookings that lack one
+    if (!existing.portalToken) {
+      await prisma.booking.update({
+        where: { id: existing.id },
+        data: { portalToken: generatePortalToken() },
+      });
+    }
+
+    await fireEmailTriggers(existing.id, existing.status, newStatus);
+
     return "updated";
   }
 
+  let createdId: string;
   try {
-    await prisma.booking.create({
+    const created = await prisma.booking.create({
       data: {
         tenantId: booking.tenantId,
         externalId: booking.externalId,
+        portalToken: generatePortalToken(),
         ...bookingData,
       },
     });
-    return "created";
+    createdId = created.id;
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
-      await prisma.booking.update({
+      const updated = await prisma.booking.update({
         where: { externalId: booking.externalId },
         data: bookingData,
       });
+
+      // Lazy backfill on race fallback
+      if (!updated.portalToken) {
+        await prisma.booking.update({
+          where: { id: updated.id },
+          data: { portalToken: generatePortalToken() },
+        });
+      }
+
+      // Race fallback — treat as update, fire triggers
+      await fireEmailTriggers(updated.id, null, newStatus);
       return "updated";
     }
     throw error;
+  }
+
+  // Newly created booking — fire triggers for initial status
+  await fireEmailTriggers(createdId, null, newStatus);
+  return "created";
+}
+
+/**
+ * Fire email triggers based on booking status transitions.
+ * Uses dedup timestamp fields to prevent duplicate emails across
+ * repeated sync cycles. Email failures are swallowed by safeSend
+ * inside each trigger function — they never abort sync.
+ *
+ * previousStatus is null for newly created bookings.
+ */
+async function fireEmailTriggers(
+  bookingId: string,
+  previousStatus: BookingStatus | null,
+  newStatus: BookingStatus,
+): Promise<void> {
+  // Fetch booking with tenant for email triggers
+  const bookingWithTenant = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { tenant: true },
+  });
+  if (!bookingWithTenant) return;
+
+  // BOOKING_CONFIRMED: new booking arriving as PRE_CHECKIN, or status
+  // transition to PRE_CHECKIN (re-confirmation after cancellation)
+  if (
+    newStatus === "PRE_CHECKIN" &&
+    previousStatus !== "PRE_CHECKIN" &&
+    !bookingWithTenant.confirmedEmailSentAt
+  ) {
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: { confirmedEmailSentAt: new Date() },
+    });
+    await triggerBookingConfirmed(bookingWithTenant);
+  }
+
+  // CHECK_IN_CONFIRMED: transition to ACTIVE
+  if (
+    newStatus === "ACTIVE" &&
+    previousStatus !== "ACTIVE" &&
+    !bookingWithTenant.checkedInEmailSentAt
+  ) {
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: { checkedInEmailSentAt: new Date() },
+    });
+    await triggerCheckInConfirmed(bookingWithTenant);
+  }
+
+  // CHECK_OUT_CONFIRMED: transition to COMPLETED
+  if (
+    newStatus === "COMPLETED" &&
+    previousStatus !== "COMPLETED" &&
+    !bookingWithTenant.checkedOutEmailSentAt
+  ) {
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: { checkedOutEmailSentAt: new Date() },
+    });
+    await triggerCheckOutConfirmed(bookingWithTenant);
+  }
+
+  // BOOKING_CANCELLED: transition to CANCELLED
+  // No dedup field — a booking can be cancelled, re-confirmed, and
+  // cancelled again. Each cancellation should send an email.
+  if (newStatus === "CANCELLED" && previousStatus !== "CANCELLED") {
+    await triggerBookingCancelled(bookingWithTenant);
   }
 }

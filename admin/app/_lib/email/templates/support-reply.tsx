@@ -2,7 +2,9 @@ import { Text, Section, Link } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout } from "./_layout";
 
-type SupportReplyProps = Record<string, string>;
+import type { EmailBranding } from "../branding";
+
+type SupportReplyProps = Record<string, string> & { branding?: EmailBranding };
 
 const body: React.CSSProperties = {
   fontSize: "16px",
@@ -37,9 +39,10 @@ const ctaButton: React.CSSProperties = {
 };
 
 export default function SupportReply(props: SupportReplyProps) {
-  const { guestName, hotelName, supportMessage, ticketUrl } = props;
+  const { guestName, hotelName, supportMessage, ticketUrl, branding } = props;
+  const btnStyle = { ...ctaButton, ...(branding?.accentColor ? { backgroundColor: branding.accentColor } : {}) };
   return (
-    <EmailLayout hotelName={hotelName}>
+    <EmailLayout hotelName={hotelName} branding={branding}>
       <Text style={body}>Hej {guestName},</Text>
       <Text style={body}>
         {hotelName} har svarat på ditt ärende:
@@ -47,7 +50,7 @@ export default function SupportReply(props: SupportReplyProps) {
       <Section style={messageBox}>
         <Text style={messageText}>{supportMessage}</Text>
       </Section>
-      <Link href={ticketUrl} style={ctaButton}>
+      <Link href={ticketUrl} style={btnStyle}>
         Visa ärendet
       </Link>
     </EmailLayout>

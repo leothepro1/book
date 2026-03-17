@@ -82,6 +82,11 @@ model Tenant {
   // Tenant identity
   name      String
   slug      String   @unique
+
+  // Portal subdomain — e.g. "grand-hotel-stockholm-x4k9mq"
+  // Generates {name}-{random6}.bedfront.com automatically on creation.
+  // Immutable once set. Nullable for backfill of existing tenants.
+  portalSlug   String?  @unique
   
   // Owner info (convenience - första admin som skapade org)
   ownerClerkUserId String?
@@ -121,6 +126,16 @@ model Tenant {
   emailFrom             String?   // e.g. "noreply@grandhotel.se"
   emailFromName         String?   // e.g. "Grand Hotel"
 
+  // Email sender verification — pending change until confirmed via token
+  pendingEmailFrom        String?
+  emailVerificationToken  String?   @unique
+  emailVerificationExpiry DateTime?
+  emailVerificationSentTo String?
+
+  // Email branding — logo and accent color injected into all templates
+  emailLogoUrl          String?   // Cloudinary URL
+  emailAccentColor      String?   // hex e.g. "#1A56DB"
+
   // Feature toggles — account-level, immediate effect (not draft/publish)
   checkinEnabled        Boolean @default(false)
   checkoutEnabled       Boolean @default(false)
@@ -145,6 +160,7 @@ model Tenant {
   emailSendLogs      EmailSendLog[]
   emailUnsubscribes  EmailUnsubscribe[]
   emailDomains       EmailDomain[]
+  magicLinkTokens    MagicLinkToken[]
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -229,6 +245,16 @@ model Booking {
   // Digital signature
   signatureCapturedAt DateTime?
   signatureDataUrl    String?   @db.Text
+
+  // Portal access — stable URL-safe token for guest portal links.
+  // Generated once on booking creation, never changes.
+  portalToken  String?  @unique
+
+  // Email dedup — timestamps prevent duplicate notification emails
+  // during repeated sync cycles. Null = email not yet sent.
+  confirmedEmailSentAt  DateTime?
+  checkedInEmailSentAt  DateTime?
+  checkedOutEmailSentAt DateTime?
 
   magicLinks   MagicLink[]
   accessPasses AccessPass[]
@@ -825,4 +851,46 @@ model EmailDomain {
 
   @@unique([tenantId, domain])
   @@index([tenantId])
+}
+
+// ============================================================================
+// MAGIC LINK TOKENS (Guest portal email-based authentication)
+// ============================================================================
+
+/// Email-based magic link tokens for guest portal authentication.
+/// Not booking-scoped — a guest authenticates with email, then sees
+/// all bookings for that email address on the tenant.
+/// Tokens are single-use, time-limited, and rate-limited per email.
+model MagicLinkToken {
+  id        String    @id @default(cuid())
+  tenantId  String
+  email     String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([tenantId, email])
+  @@index([expiresAt])
+}
+
+// ============================================================================
+// EMAIL RATE LIMITING (Per-recipient per-event-type throttle)
+// ============================================================================
+
+/// Append-only send log for rate limiting.
+/// We count rows in a rolling time window rather than maintaining counters.
+/// Simple, debuggable, no update races.
+/// Cleaned up daily by /api/integrations/cleanup.
+model EmailRateLimit {
+  id        String         @id @default(cuid())
+  tenantId  String
+  email     String
+  eventType EmailEventType
+  sentAt    DateTime       @default(now())
+
+  @@index([tenantId, email, eventType, sentAt])
 }

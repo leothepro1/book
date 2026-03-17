@@ -58,6 +58,53 @@ const SAMPLE_VARIABLES: Record<string, string> = {
 
 const VALID_EVENT_TYPES = new Set(EMAIL_EVENT_REGISTRY.map((e) => e.type));
 
+// ── getTenantPortalSlug ──────────────────────────────────────────
+
+export async function getTenantPortalSlug(): Promise<string | null> {
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return null;
+  return tenantData.tenant.portalSlug ?? null;
+}
+
+// ── getTenantSenderInfo ─────────────────────────────────────────
+
+export type TenantSenderInfo = {
+  emailFrom: string | null;
+  portalSlug: string | null;
+  pendingEmailFrom: string | null;
+  emailVerificationSentTo: string | null;
+  emailVerificationExpiry: string | null;
+};
+
+export async function getTenantSenderInfo(): Promise<TenantSenderInfo | null> {
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return null;
+  const t = tenantData.tenant;
+  return {
+    emailFrom: t.emailFrom,
+    portalSlug: t.portalSlug,
+    pendingEmailFrom: t.pendingEmailFrom,
+    emailVerificationSentTo: t.emailVerificationSentTo,
+    emailVerificationExpiry: t.emailVerificationExpiry?.toISOString() ?? null,
+  };
+}
+
+// ── getTenantEmailBranding ───────────────────────────────────────
+
+export type TenantEmailBranding = {
+  logoUrl: string | null;
+  accentColor: string | null;
+};
+
+export async function getTenantEmailBranding(): Promise<TenantEmailBranding | null> {
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return null;
+  return {
+    logoUrl: tenantData.tenant.emailLogoUrl,
+    accentColor: tenantData.tenant.emailAccentColor,
+  };
+}
+
 // ── getEmailTemplates ───────────────────────────────────────────
 
 export async function getEmailTemplates(): Promise<EmailTemplateRow[]> {

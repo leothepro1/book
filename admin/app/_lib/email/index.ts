@@ -25,3 +25,5 @@ export {
   generateUnsubscribeToken,
   verifyUnsubscribeToken,
 } from "./unsubscribe-token";
+
+export { cleanupEmailRateLimits } from "./rate-limit";

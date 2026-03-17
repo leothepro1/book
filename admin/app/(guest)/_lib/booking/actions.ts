@@ -4,6 +4,10 @@ import { prisma } from "../../../_lib/db/prisma";
 import { mapPrismaStatus } from "@/app/_lib/integrations/types";
 import { toPrismaBookingStatus } from "@/app/_lib/integrations/prisma-mapping";
 import { canCheckIn, canCheckOut, isCheckInTimeReached } from "./status";
+import {
+  triggerCheckInConfirmed,
+  triggerCheckOutConfirmed,
+} from "@/app/_lib/integrations/sync/email-triggers";
 import type { BookingWithStatus } from "./types";
 
 export type ActionResult =
@@ -79,6 +83,22 @@ export async function performCheckIn(
       return { ok: false, reason: "NOT_ALLOWED", message: "Kunde inte checka in (status ändrades)." };
     }
 
+    // Send check-in email (dedup + fire-and-forget via safeSend)
+    if (!booking.checkedInEmailSentAt) {
+      await tx.booking.update({
+        where: { id: booking.id },
+        data: { checkedInEmailSentAt: now },
+      });
+      const withTenant = await tx.booking.findUnique({
+        where: { id: booking.id },
+        include: { tenant: true },
+      });
+      if (withTenant) {
+        // Fire outside transaction — email must not block or rollback check-in
+        triggerCheckInConfirmed(withTenant).catch(() => {});
+      }
+    }
+
     return { ok: true, bookingId: booking.id, already: false };
   });
 }
@@ -112,6 +132,22 @@ export async function performCheckOut(bookingId: string, now: Date = new Date())
         return { ok: true, bookingId: booking.id, already: true };
       }
       return { ok: false, reason: "NOT_ALLOWED", message: "Kunde inte checka ut (status ändrades)." };
+    }
+
+    // Send check-out email (dedup + fire-and-forget via safeSend)
+    if (!booking.checkedOutEmailSentAt) {
+      await tx.booking.update({
+        where: { id: booking.id },
+        data: { checkedOutEmailSentAt: now },
+      });
+      const withTenant = await tx.booking.findUnique({
+        where: { id: booking.id },
+        include: { tenant: true },
+      });
+      if (withTenant) {
+        // Fire outside transaction — email must not block or rollback check-out
+        triggerCheckOutConfirmed(withTenant).catch(() => {});
+      }
     }
 
     return { ok: true, bookingId: booking.id, already: false };

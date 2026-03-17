@@ -15,6 +15,10 @@ import { getEventDefinition } from "./registry";
 import { renderTemplate, injectPreviewText } from "./template-utils";
 import { renderDefaultTemplate } from "./templates";
 import { generateUnsubscribeToken } from "./unsubscribe-token";
+import { checkEmailRateLimit, recordEmailSend } from "./rate-limit";
+import { tenantFromAddress } from "@/app/_lib/tenant/portal-slug";
+import { resolveBranding } from "./branding";
+import { resolveTemplateHtml } from "./template-overrides";
 import type { EmailEventType } from "./registry";
 import type { ResolvedEmailTemplate } from "./types";
 
@@ -32,7 +36,10 @@ async function getResolvedTemplate(
   const [tenant, override] = await Promise.all([
     prisma.tenant.findUniqueOrThrow({
       where: { id: tenantId },
-      select: { id: true, name: true, emailFrom: true, emailFromName: true },
+      select: {
+        id: true, name: true, emailFrom: true, emailFromName: true,
+        portalSlug: true, emailLogoUrl: true, emailAccentColor: true,
+      },
     }),
     prisma.emailTemplate.findUnique({
       where: { tenantId_eventType: { tenantId, eventType } },
@@ -41,25 +48,28 @@ async function getResolvedTemplate(
 
   const def = getEventDefinition(eventType);
 
-  // Resolve HTML — tenant override takes priority, then react-email default
-  const html =
-    override?.html && override.html.trim().length > 0
-      ? override.html
-      : await renderDefaultTemplate(eventType, variables);
+  // Resolve branding — only applied to platform default templates
+  const branding = resolveBranding(tenant);
+
+  // Render platform default (with branding) as fallback
+  const defaultHtml = await renderDefaultTemplate(eventType, variables, branding);
+
+  // resolveTemplateHtml is the single source of truth for default vs override
+  const { html } = resolveTemplateHtml(eventType, override?.html, defaultHtml);
 
   const subject = override?.subject ?? def.defaultSubject;
   const previewText = override?.previewText ?? def.defaultPreviewText;
 
-  // Resolve from address
-  // emailFrom is set automatically when a domain is verified
-  // via checkDomainVerification() in domain-actions.ts
-  let from: string;
-  if (tenant.emailFrom && tenant.emailFrom.length > 0) {
-    const displayName = tenant.emailFromName ?? tenant.name;
-    from = `${displayName} <${tenant.emailFrom}>`;
-  } else {
-    from = `${tenant.name} <onboarding@resend.dev>`;
-  }
+  // Resolve from address — priority:
+  // 1. Custom emailFrom (tenant verified their own domain)
+  // 2. portalSlug-based: noreply@{slug}.bedfront.com
+  // 3. Fallback: noreply@bedfront.com (no portalSlug)
+  const from = tenantFromAddress(
+    tenant.name,
+    tenant.portalSlug,
+    tenant.emailFrom,
+    tenant.emailFromName,
+  );
 
   return { subject, previewText, html, from };
 }
@@ -75,10 +85,12 @@ async function getResolvedTemplate(
  *
  * Flow:
  *   1. Check unsubscribe — skip silently if opted out
- *   2. Create send log entry (QUEUED)
- *   3. Resolve template + render
- *   4. Send via Resend with List-Unsubscribe headers
- *   5. Update log entry (SENT or FAILED)
+ *   2. Check rate limit — skip silently if exceeded
+ *   3. Create send log entry (QUEUED)
+ *   4. Resolve template + render
+ *   5. Send via Resend with List-Unsubscribe headers
+ *   6. Update log entry (SENT or FAILED)
+ *   7. Record send for rate limiting
  */
 export async function sendEmailEvent(
   tenantId: string,
@@ -94,7 +106,16 @@ export async function sendEmailEvent(
   });
   if (unsubscribed) return;
 
-  // 2. Create send log entry
+  // 2. Check rate limit — skip silently if exceeded
+  const allowed = await checkEmailRateLimit(tenantId, to, eventType);
+  if (!allowed) {
+    console.warn(
+      `[email] Rate limit reached: ${eventType} to ${to} for tenant ${tenantId}`,
+    );
+    return;
+  }
+
+  // 3. Create send log entry
   const logEntry = await prisma.emailSendLog.create({
     data: { tenantId, eventType, toEmail: to, status: "QUEUED" },
   });
@@ -146,6 +167,9 @@ export async function sendEmailEvent(
         resendId: data?.id ?? null,
       },
     });
+
+    // 7. Record send for rate limiting
+    await recordEmailSend(tenantId, to, eventType);
   } catch (err) {
     // Ensure log is updated even on unexpected errors
     if (err instanceof Error && !err.message.startsWith("[email] Resend")) {

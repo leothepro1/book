@@ -26,7 +26,9 @@ const ROUTE_TO_SLUG: Readonly<Record<string, string>> = {
   "/p/[token]/support": "support",
 } as const;
 
-const SHARE_URL = "https://hospitality-8hca.onrender.com/p/test";
+// Share URL uses the app's base URL for now. Once tenant context is
+// available in PreviewContext, this should use portalSlugToUrl(tenant.portalSlug).
+const SHARE_URL = `${process.env.NEXT_PUBLIC_APP_URL || "https://bedfront.com"}/p/test`;
 const COPY_FEEDBACK_MS = 2000;
 
 function GuestPreviewFrame({

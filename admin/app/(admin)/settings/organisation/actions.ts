@@ -27,6 +27,7 @@ export type TenantOrgData = {
   addressCountry: string | null;
   organizationNumber: string | null;
   vatNumber: string | null;
+  portalSlug: string | null;
 };
 
 export type OrgMember = {
@@ -96,6 +97,7 @@ export async function getOrganisationData(): Promise<OrganisationDataResponse> {
     addressCountry: tenant.addressCountry,
     organizationNumber: tenant.organizationNumber,
     vatNumber: tenant.vatNumber,
+    portalSlug: tenant.portalSlug,
   };
 
   return { clerk, tenant: tenantOrg, members };

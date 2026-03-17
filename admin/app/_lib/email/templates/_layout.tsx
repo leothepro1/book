@@ -5,12 +5,15 @@ import {
   Container,
   Section,
   Text,
+  Img,
 } from "@react-email/components";
 import * as React from "react";
+import type { EmailBranding } from "../branding";
 
 interface EmailLayoutProps {
   hotelName: string;
   children: React.ReactNode;
+  branding?: EmailBranding;
 }
 
 const outer: React.CSSProperties = {
@@ -48,12 +51,20 @@ const footerStyle: React.CSSProperties = {
   borderTop: "1px solid #e5e5e5",
 };
 
-export function EmailLayout({ hotelName, children }: EmailLayoutProps) {
+export function EmailLayout({ hotelName, children, branding }: EmailLayoutProps) {
   return (
     <Html>
       <Head />
       <Body style={outer}>
         <Container style={card}>
+          {branding?.logoUrl && (
+            <Img
+              src={branding.logoUrl}
+              alt={hotelName}
+              height="48"
+              style={{ maxHeight: "48px", width: "auto", marginBottom: "24px" }}
+            />
+          )}
           <Text style={headerStyle}>{hotelName}</Text>
           <Section>{children}</Section>
           <Text style={footerStyle}>

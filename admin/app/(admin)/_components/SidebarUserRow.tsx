@@ -1,23 +1,21 @@
 'use client';
 
+import { useUser } from '@clerk/nextjs';
+
 const IS_DEV = process.env.NODE_ENV === 'development';
 
+const DEV_USER = {
+  firstName: 'Dev',
+  fullName: 'Dev User',
+  username: 'dev',
+  primaryEmailAddress: { emailAddress: 'dev@localhost' },
+  imageUrl: '',
+};
+
 function useClerkUser() {
-  if (IS_DEV) {
-    return {
-      user: {
-        firstName: 'Dev',
-        fullName: 'Dev User',
-        username: 'dev',
-        primaryEmailAddress: { emailAddress: 'dev@localhost' },
-        imageUrl: '',
-      },
-    };
-  }
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { useUser } = require('@clerk/nextjs');
-  const { user } = useUser();
-  return { user };
+  const clerkResult = IS_DEV ? { user: null } : useUser();
+  if (IS_DEV) return { user: DEV_USER };
+  return { user: clerkResult.user };
 }
 
 export function SidebarUserRow({ isCollapsed }: { isCollapsed: boolean }) {

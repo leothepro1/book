@@ -186,6 +186,31 @@ export function OrganisationContent({ onSubTitleChange }: OrganisationContentPro
           </div>
         </div>
 
+        {/* Portaladress */}
+        {data.tenant.portalSlug && (
+          <div style={{ marginBottom: 4 }}>
+            <h4 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: "var(--admin-text)" }}>
+              Portaladress
+            </h4>
+            <p className="admin-desc" style={{ marginBottom: 8 }}>
+              Gästerna når portalen på denna adress.
+            </p>
+            <a
+              href={`https://${data.tenant.portalSlug}.bedfront.com`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                fontSize: 14, fontWeight: 500, color: "#2783de",
+                textDecoration: "none",
+              }}
+            >
+              {data.tenant.portalSlug}.bedfront.com
+              <EditorIcon name="open_in_new" size={14} style={{ opacity: 0.7 }} />
+            </a>
+          </div>
+        )}
+
         {/* Företagsenheter */}
         {entities.length === 0 ? (
           /* ── Empty state ── */

@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/_lib/db/prisma";
 import { env } from "@/app/_lib/env";
+import { cleanupEmailRateLimits } from "@/app/_lib/email";
 
 const WEBHOOK_DEDUP_TTL_DAYS = 7;
 const SYNC_EVENT_TTL_DAYS = 90;
@@ -56,12 +57,15 @@ export async function GET(request: NextRequest) {
     },
   });
 
+  const emailRateLimits = await cleanupEmailRateLimits();
+
   return NextResponse.json({
     deleted: {
       webhookDedup: webhookDedup.count,
       syncEvents: syncEvents.count,
       syncJobs: syncJobs.count,
       bookingErrors: bookingErrors.count,
+      emailRateLimits,
     },
   });
 }

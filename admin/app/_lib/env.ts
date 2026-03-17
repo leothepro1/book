@@ -29,6 +29,7 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   UNSUBSCRIBE_SECRET: z.string().optional(),
   RESEND_WEBHOOK_SECRET: z.string().optional(),
+  GUEST_SESSION_SECRET: z.string().optional(),
   CLERK_SECRET_KEY: z.string().optional(),
   CLERK_WEBHOOK_SECRET: z.string().optional(),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
@@ -143,6 +144,9 @@ export const env = {
   },
   get ACCESS_PASS_PEPPER() {
     return requiredMin("ACCESS_PASS_PEPPER", parsed.ACCESS_PASS_PEPPER, 16);
+  },
+  get GUEST_SESSION_SECRET() {
+    return requiredMin("GUEST_SESSION_SECRET", parsed.GUEST_SESSION_SECRET, 32);
   },
 
   // Truly optional
