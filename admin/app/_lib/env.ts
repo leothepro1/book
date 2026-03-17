@@ -24,8 +24,11 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   INTEGRATION_ENCRYPTION_KEY: z.string().min(32, "INTEGRATION_ENCRYPTION_KEY must be at least 32 characters"),
   CRON_SECRET: z.string().min(16, "CRON_SECRET must be at least 16 characters"),
+  RESEND_API_KEY: z.string().min(1, "RESEND_API_KEY is required"),
 
   // Service vars — optional at boot, validated on first use via accessor
+  UNSUBSCRIBE_SECRET: z.string().optional(),
+  RESEND_WEBHOOK_SECRET: z.string().optional(),
   CLERK_SECRET_KEY: z.string().optional(),
   CLERK_WEBHOOK_SECRET: z.string().optional(),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
@@ -112,8 +115,15 @@ export const env = {
   DATABASE_URL: parsed.DATABASE_URL,
   INTEGRATION_ENCRYPTION_KEY: parsed.INTEGRATION_ENCRYPTION_KEY,
   CRON_SECRET: parsed.CRON_SECRET,
+  RESEND_API_KEY: parsed.RESEND_API_KEY,
 
   // Lazy — throw on first access if missing
+  get UNSUBSCRIBE_SECRET() {
+    return requiredMin("UNSUBSCRIBE_SECRET", parsed.UNSUBSCRIBE_SECRET, 32);
+  },
+  get RESEND_WEBHOOK_SECRET() {
+    return required("RESEND_WEBHOOK_SECRET", parsed.RESEND_WEBHOOK_SECRET);
+  },
   get CLERK_SECRET_KEY() {
     return required("CLERK_SECRET_KEY", parsed.CLERK_SECRET_KEY);
   },

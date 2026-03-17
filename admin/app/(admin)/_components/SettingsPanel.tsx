@@ -9,6 +9,7 @@ import { UsersContent } from '@/app/(admin)/settings/users/UsersContent';
 import { PoliciesContent } from '@/app/(admin)/settings/policies/PoliciesContent';
 import { CheckinContent } from '@/app/(admin)/settings/checkin/CheckinContent';
 import { LanguagesContent } from '@/app/(admin)/settings/languages/LanguagesContent';
+import { EmailContent } from '@/app/(admin)/settings/email/EmailContent';
 import { useRole } from './RoleContext';
 
 const IS_DEV = process.env.NODE_ENV === 'development';
@@ -52,6 +53,7 @@ const NAV_ITEMS: { items: SettingsNavItem[]; divider?: boolean }[] = [
       { id: 'domains', label: 'Domäner', icon: 'travel_explore', adminOnly: true },
       { id: 'notifications', label: 'Aviseringar', icon: 'notifications' },
       { id: 'languages', label: 'Språk', icon: 'translate' },
+      { id: 'email', label: 'E-post', icon: 'mail', adminOnly: true },
       { id: 'checkin-checkout', label: 'In- och utcheckning', icon: 'room_service' },
       { id: 'policies', label: 'Policyer', icon: 'docs' },
     ],
@@ -218,6 +220,8 @@ export function SettingsPanel() {
                 <PoliciesContent key={resetKey} onSubTitleChange={setSubTitle} />
               ) : activeItem === 'languages' ? (
                 <LanguagesContent key={resetKey} onSubTitleChange={setSubTitle} triggerAdd={addLanguageTrigger} />
+              ) : activeItem === 'email' ? (
+                <EmailContent key={resetKey} onSubTitleChange={setSubTitle} />
               ) : activeItem === 'checkin-checkout' ? (
                 <CheckinContent key={resetKey} onSubTitleChange={setSubTitle} onNavigate={(tab) => { setActiveItem(tab); setSubTitle(null); setResetKey((k) => k + 1); }} />
               ) : (

@@ -117,6 +117,10 @@ model Tenant {
   organizationNumber String?
   vatNumber          String?
 
+  // Email sender identity
+  emailFrom             String?   // e.g. "noreply@grandhotel.se"
+  emailFromName         String?   // e.g. "Grand Hotel"
+
   // Feature toggles — account-level, immediate effect (not draft/publish)
   checkinEnabled        Boolean @default(false)
   checkoutEnabled       Boolean @default(false)
@@ -137,6 +141,10 @@ model Tenant {
   lockIntegration    TenantLockIntegration?
   locales            TenantLocale[]
   translations       TenantTranslation[]
+  emailTemplates     EmailTemplate[]
+  emailSendLogs      EmailSendLog[]
+  emailUnsubscribes  EmailUnsubscribe[]
+  emailDomains       EmailDomain[]
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -657,6 +665,24 @@ model KeyEvent {
 // TRANSLATIONS
 // ============================================================================
 
+enum EmailSendStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  BOUNCED
+  COMPLAINED
+  FAILED
+}
+
+enum EmailEventType {
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  CHECK_IN_CONFIRMED
+  CHECK_OUT_CONFIRMED
+  MAGIC_LINK
+  SUPPORT_REPLY
+}
+
 enum TranslationNamespace {
   PLATFORM
   TENANT
@@ -698,4 +724,105 @@ model TenantTranslation {
   @@unique([tenantId, locale, resourceId])
   @@index([tenantId, locale])
   @@index([tenantId, resourceId])
+}
+
+// ============================================================================
+// EMAIL TEMPLATES (Per-tenant email notification overrides)
+// ============================================================================
+
+/// Per-tenant email template overrides. Null content fields mean
+/// "use platform default" from the email event registry.
+/// One row per tenant per event type — unique constraint enforced.
+model EmailTemplate {
+  id          String         @id @default(cuid())
+  tenantId    String
+  eventType   EmailEventType
+
+  /// Null = use platform default subject
+  subject     String?
+  /// Null = use platform default preview text
+  previewText String?
+  /// Null = use platform default HTML (from react-email components)
+  html        String?        @db.Text
+
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, eventType])
+  @@index([tenantId])
+}
+
+// ============================================================================
+// EMAIL SEND LOG (Append-only audit trail for all outgoing emails)
+// ============================================================================
+
+/// One row per send attempt through sendEmailEvent().
+/// Updated by Resend webhooks as delivery status progresses.
+model EmailSendLog {
+  id          String          @id @default(cuid())
+  tenantId    String
+  eventType   EmailEventType
+  toEmail     String
+  resendId    String?         // Resend's message ID, set after successful send
+  status      EmailSendStatus @default(QUEUED)
+  error       String?         // error message if status = FAILED
+  sentAt      DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([resendId])
+  @@index([toEmail])
+  @@index([tenantId, eventType])
+}
+
+// ============================================================================
+// EMAIL UNSUBSCRIBE (Per-tenant opt-out registry)
+// ============================================================================
+
+/// Stores opt-out per email address per tenant. Once a record exists,
+/// no further emails are sent to that address from that tenant.
+model EmailUnsubscribe {
+  id              String   @id @default(cuid())
+  tenantId        String
+  email           String
+  unsubscribedAt  DateTime @default(now())
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([email])
+}
+
+// ============================================================================
+// EMAIL DOMAINS (Per-tenant sender domain verification via Resend)
+// ============================================================================
+
+enum EmailDomainStatus {
+  PENDING     // added, DNS not yet configured
+  VERIFIED    // Resend confirmed DNS records are correct
+  FAILED      // verification failed
+}
+
+/// Per-tenant sender domain. Once verified, emails are sent from
+/// noreply@[domain] instead of onboarding@resend.dev.
+model EmailDomain {
+  id              String            @id @default(cuid())
+  tenantId        String
+  domain          String            // e.g. "grandhotel.se"
+  resendDomainId  String?           // Resend's domain ID after creation
+  status          EmailDomainStatus @default(PENDING)
+  dnsRecords      Json?             // DNS records returned by Resend
+  verifiedAt      DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, domain])
+  @@index([tenantId])
 }
