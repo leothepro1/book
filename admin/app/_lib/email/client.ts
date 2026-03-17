@@ -2,11 +2,31 @@
  * Resend Client Singleton
  * ═══════════════════════
  *
- * Single Resend instance for the entire application.
- * Uses validated env — never reads process.env directly.
+ * Lazy singleton — instantiated on first call, not at module load.
+ * This prevents the build from failing when RESEND_API_KEY is not
+ * yet configured in the environment (e.g. during Render builds).
  */
 
 import { Resend } from "resend";
 import { env } from "@/app/_lib/env";
 
-export const resendClient: Resend = new Resend(env.RESEND_API_KEY);
+let _client: Resend | null = null;
+
+export function getResendClient(): Resend {
+  if (!_client) {
+    _client = new Resend(env.RESEND_API_KEY);
+  }
+  return _client;
+}
+
+/**
+ * @deprecated Use getResendClient() instead. Kept for barrel export compatibility.
+ */
+export const resendClient = {
+  get emails() {
+    return getResendClient().emails;
+  },
+  get domains() {
+    return getResendClient().domains;
+  },
+};
