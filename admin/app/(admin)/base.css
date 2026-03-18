@@ -11,7 +11,7 @@
 :root,
 [data-theme="light"] {
   /* Surface / Background */
-  --admin-bg:            #f1f1f1;
+  --admin-bg:            #fafafa;
   --admin-surface:       #FFFFFF;
   --admin-surface-hover: #fafafa;
   --admin-surface-active:#f3f3f3;
@@ -34,7 +34,7 @@
   --admin-text-inverse:  #FFFFFF;
 
   /* Primary action (dark buttons) */
-  --admin-primary:       #1A1A1A;
+  --admin-primary:       #3c3c3c;
   --admin-primary-hover: #333333;
   --admin-primary-text:  #FFFFFF;
 
@@ -43,9 +43,14 @@
   --admin-accent-hover:  #005AC2;
   --admin-accent-text:   #FFFFFF;
 
+    /* Primary action (dark buttons) */
+  --dark-primary:       #3c3c3c;
+  --dark-primary-hover: #4c4c4c;
+  --dark-primary-text:  #FFFFFF;
+
   /* Danger */
-  --admin-danger:        #E56458;
-  --admin-danger-tint:   rgba(223, 22, 0, 0.094);
+  --admin-danger:        #EE0000;
+  --admin-danger-tint:   #FFEBEB;
 
   /* Toggle / switch */
   --admin-toggle-off:    #dcdcd7;
@@ -74,6 +79,119 @@
   --admin-dropdown-list-radius:  12px;
   --admin-range-accent:          #2783de;
   --admin-range-track:           #CAE6FF;
+
+  /* Shared field tokens (sf-*) — used by editor + settings */
+  --sf-mono:                     "SF Mono", "Cascadia Code", "Fira Code", monospace;
+  --sf-input-height:             36px;
+  --sf-input-font-size:          13px;
+
+  --sf-range-row-gap:            10px;
+  --sf-range-track-bg:           #dbdbdb;
+  --sf-range-track-height:       4px;
+  --sf-range-track-radius:       2px;
+  --sf-range-track-margin:       12px 0;
+  --sf-range-accent:             #3c3c3c;
+  --sf-range-thumb-size:         15px;
+  --sf-range-thumb-hover-shadow: 0 0 0 9px rgba(26, 26, 26, 0.14);
+  --sf-range-pin-text:           #fff;
+  --sf-range-pin-radius:         6px;
+  --sf-range-pin-padding:        2px 8px 3px 8px;
+  --sf-range-pin-font-size:      13px;
+  --sf-range-input-width:        60px;
+  --sf-range-input-radius:       6px;
+  --sf-range-input-padding:      6px 20px 6px 6px;
+  --sf-range-input-font-size:    12.3px;
+  --sf-range-unit-right:         8px;
+  --sf-range-unit-font-size:     11px;
+
+  --sf-color-row-gap:            8px;
+  --sf-color-swatch-size:        36px;
+  --sf-color-swatch-radius:      8px;
+  --sf-color-swatch-padding:     2px;
+  --sf-color-swatch-inner-radius:5px;
+
+  /* ── Typography scale ── */
+  --font-xs:                     12px;
+  --font-sm:                     13px;
+  --font-md:                     14px;
+  --font-lg:                     15px;
+  --font-xl:                     16px;
+  --font-2xl:                    17px;
+  --font-weight-normal:          400;
+  --font-weight-medium:          500;
+  --font-weight-semibold:        600;
+  --font-weight-bold:            700;
+  --line-height-tight:           1.3;
+  --line-height-normal:          1.5;
+  --line-height-relaxed:         1.6;
+
+  /* ── Spacing scale (8px base) ── */
+  --space-1:                     4px;
+  --space-2:                     8px;
+  --space-3:                     12px;
+  --space-4:                     16px;
+  --space-5:                     20px;
+  --space-6:                     24px;
+  --space-8:                     32px;
+
+  /* ── Border radius scale ── */
+  --radius-xs:                   4px;
+  --radius-sm:                   6px;
+  --radius-md:                   8px;
+  --radius-lg:                   10px;
+  --radius-xl:                   12px;
+  --radius-2xl:                  16px;
+  --radius-full:                 999px;
+
+  /* ── Shadows ── */
+  --shadow-panel:                0 5px 5px -2.5px #00000008,
+                                 0 3px 3px -1.5px #00000005,
+                                 0 2px 2px -1px #00000005,
+                                 0 1px 1px -0.5px #00000008,
+                                 0 0.5px 0.5px #0000000a,
+                                 0 0 0 1px #0000000f;
+  --shadow-dropdown:             0px 0px 0px 1px rgba(64, 87, 109, 0.04),
+                                 0px 6px 20px -4px rgba(64, 87, 109, 0.3);
+  --shadow-modal:                0 16px 48px rgba(0, 0, 0, 0.16);
+
+  /* ── Transitions ── */
+  --ease-default:                cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-spring:                 cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-snappy:                 cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast:               0.12s;
+  --duration-normal:             0.15s;
+  --duration-slow:               0.25s;
+
+  /* ── Component sizes ── */
+  --input-height:                36px;
+  --input-height-sm:             32px;
+  --icon-btn-size:               28px;
+  --header-height:               56px;
+
+  /* ── Dropdown menu ── */
+  --dropdown-radius:             var(--radius-xl);
+  --dropdown-padding:            5px;
+  --dropdown-shadow:             var(--shadow-dropdown);
+  --dropdown-item-padding:       8px 12px;
+  --dropdown-item-radius:        var(--radius-md);
+
+  /* ── Badge / chip ── */
+  --badge-padding:               3px 8px;
+  --badge-radius:                var(--radius-md);
+  --badge-font-size:             var(--font-xs);
+  --badge-font-weight:           var(--font-weight-medium);
+
+  /* ── Modal ── */
+  --modal-radius:                var(--radius-2xl);
+  --modal-shadow:                var(--shadow-modal);
+
+  /* ── File upload empty state ── */
+  --upload-empty-min-height:     96px;
+  --upload-empty-border:         1.5px dashed var(--admin-border);
+  --upload-empty-radius:         0.7rem;
+  --upload-empty-bg:             #f7f7f7;
+  --upload-empty-bg-hover:       #f0f0f0;
+  --upload-empty-padding:        16px;
 }
 
 /* ── Dark Mode ── */
@@ -98,7 +216,7 @@
   /* Text */
   --admin-text:          #ECECEC;
   --admin-text-secondary:#BCBAB6;
-  --admin-text-tertiary: #707070;
+  --admin-text-tertiary: #616161;
   --admin-text-muted:    #555555;
   --admin-text-inverse:  #191919;
 
@@ -143,6 +261,16 @@
   --admin-dropdown-list-radius:  12px;
   --admin-range-accent:          #3B9AEF;
   --admin-range-track:           #1A3A5C;
+
+  /* Dark overrides for design tokens */
+  --sf-range-thumb-hover-shadow: 0 0 0 9px rgba(255, 255, 255, 0.1);
+  --shadow-panel:                0 0 0 1px rgba(255, 255, 255, 0.06),
+                                 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-dropdown:             0px 0px 0px 1px rgba(255, 255, 255, 0.08),
+                                 0px 6px 20px -4px rgba(0, 0, 0, 0.6);
+  --shadow-modal:                0 16px 48px rgba(0, 0, 0, 0.5);
+  --upload-empty-bg:             #2A2A2A;
+  --upload-empty-bg-hover:       #333333;
 }
 
 
@@ -189,7 +317,7 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0;
 }
 
-h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+h1 { font-size: 19px; font-weight: 600; letter-spacing: -0.02em; line-height:1em; }
 h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; }
 h3 { font-size: 18px; font-weight: 600; }
 h4 { font-size: 16px; font-weight: 500; }
@@ -233,7 +361,7 @@ select {
 label,
 .admin-label {
   font-family: var(--admin-font);
-  font-size: 14px;
+  font-size: var(--font-md);
   font-weight: 450;
   color: var(--admin-text);
   display: block;
@@ -241,22 +369,22 @@ label,
 }
 
 .admin-hint {
-  font-size: 13px;
-  font-weight: 400;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-normal);
   color: var(--admin-text-secondary);
-  margin-top: 2px;
+  margin-top: var(--space-1);
 }
 
 .admin-section-title {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-bold);
   color: var(--admin-text);
 }
 
 .admin-section-sub {
-  font-size: 12px;
+  font-size: var(--font-xs);
   color: var(--admin-text-tertiary);
-  margin-top: 2px;
+  margin-top: var(--space-1);
 }
 
 
@@ -275,7 +403,7 @@ textarea,
 select,
 .admin-input {
   font-family: var(--admin-font);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 input:focus,
@@ -301,18 +429,18 @@ textarea::placeholder {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 8px 20px;
-  border-radius: 10px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-lg);
   border: none;
   font-family: var(--admin-font);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   transition:
-    background 0.25s ease,
-    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.25s ease;
+    background var(--duration-slow) ease,
+    transform 0.3s var(--ease-snappy),
+    opacity var(--duration-slow) ease;
   background: var(--admin-primary);
   color: var(--admin-primary-text);
 }
@@ -537,15 +665,15 @@ textarea::placeholder {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 8px 12px;
+  padding: var(--dropdown-item-padding);
   border: 1px solid var(--admin-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--admin-surface);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-medium);
   color: var(--admin-text);
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: border-color var(--duration-normal);
 }
 
 .admin-dropdown__trigger:hover {
@@ -554,23 +682,23 @@ textarea::placeholder {
 
 .admin-dropdown__chevron {
   color: var(--admin-text-muted);
-  transition: transform 0.15s;
+  transition: transform var(--duration-normal);
 }
 
 /* Dropdown list (panel) */
 .admin-dropdown__list {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + var(--space-1));
   left: 0;
   right: 0;
   background: var(--admin-surface);
-  border-radius: 12px;
+  border-radius: var(--dropdown-radius);
   list-style: none;
   margin: 0;
-  padding: 5px;
+  padding: var(--dropdown-padding);
   z-index: 10;
-  box-shadow: 0px 0px 0px 1px rgba(64, 87, 109, .04), 0px 6px 20px -4px rgba(64, 87, 109, .3);
-  animation: .12s ease both admin-dropdown-in;
+  box-shadow: var(--dropdown-shadow);
+  animation: var(--duration-fast) ease both admin-dropdown-in;
 }
 
 .admin-dropdown__list--fixed {
@@ -589,17 +717,17 @@ textarea::placeholder {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 8px 10px;
-  font-size: 14px;
+  padding: var(--dropdown-item-padding);
+  font-size: var(--font-md);
   font-weight: 450;
   color: var(--admin-text);
   border: none;
   background: none;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: var(--dropdown-item-radius);
   text-align: left;
-  gap: 8px;
-  transition: background 0.1s;
+  gap: var(--space-2);
+  transition: background var(--duration-fast);
 }
 
 .admin-dropdown__item:hover {
@@ -860,31 +988,31 @@ textarea::placeholder {
 }
 
 
-/* ── Color row ── */
+/* ── Color picker (sf-color-*) — shared by editor + email ── */
 
-.admin-color-row {
+.sf-color-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sf-color-row-gap);
 }
 
-.admin-color-swatch {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+.sf-color-swatch {
+  width: var(--sf-color-swatch-size);
+  height: var(--sf-color-swatch-size);
   border: 1px solid var(--admin-border);
-  padding: 0;
+  border-radius: var(--sf-color-swatch-radius);
+  padding: var(--sf-color-swatch-padding);
   cursor: pointer;
   flex-shrink: 0;
 }
 
-.admin-color-swatch::-webkit-color-swatch-wrapper {
-  padding: 2px;
+.sf-color-swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
 }
 
-.admin-color-swatch::-webkit-color-swatch {
+.sf-color-swatch::-webkit-color-swatch {
   border: none;
-  border-radius: 5px;
+  border-radius: var(--sf-color-swatch-inner-radius);
 }
 
 
@@ -925,22 +1053,22 @@ textarea::placeholder {
 /* ── Field description ── */
 
 .admin-desc {
-  font-size: 13px;
-  font-weight: 400;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-normal);
   color: var(--admin-text-secondary);
   line-height: 1.45;
-  margin: 2px 0px 10px 0px;
+  margin: var(--space-1) 0px var(--space-3) 0px;
 }
 
 .admin-desc-link {
   display: inline-flex;
   align-items: center;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
   color: var(--admin-text-secondary);
   text-decoration: none;
-  margin: 6px 0 0 0;
-  transition: color 0.15s;
+  margin: var(--space-2) 0 0 0;
+  transition: color var(--duration-normal);
 }
 
 .admin-desc-link:hover {
@@ -1139,9 +1267,9 @@ textarea::placeholder {
 
 .admin-presets {
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   display: flex;
-  margin-top: 16px;
+  margin-top: var(--space-4);
 }
 
 .admin-preset {
@@ -1151,13 +1279,13 @@ textarea::placeholder {
   padding: 5px 11px;
   border: 1.5px solid var(--admin-surface-muted);
   background: var(--admin-surface-muted) !important;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 500;
+  border-radius: var(--radius-full);
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-medium);
   color: var(--admin-text-secondary);
   cursor: pointer;
   font-family: var(--admin-font);
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition: border-color var(--duration-normal) ease, background var(--duration-normal) ease, color var(--duration-normal) ease;
 }
 
 .admin-preset--active {
@@ -1188,14 +1316,14 @@ textarea::placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: var(--icon-btn-size);
+  height: var(--icon-btn-size);
   border: none;
   background: none;
   border-radius: 5px;
   cursor: pointer;
   color: var(--admin-text-secondary);
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background var(--duration-normal) ease, color var(--duration-normal) ease;
   flex-shrink: 0;
 }
 
@@ -1240,3 +1368,52 @@ textarea::placeholder {
 .bg-surface     { background: var(--admin-surface); }
 .bg-muted       { background: var(--admin-surface-muted); }
 .bg-sunken      { background: var(--admin-surface-sunken); }
+
+/* ══════════════════════════════════════════════════════════════
+   File Upload — empty state
+   Container + button. Instances only provide the label text.
+   ══════════════════════════════════════════════════════════════ */
+
+.img-upload-empty {
+  width: 100%;
+  border: var(--upload-empty-border);
+  border-radius: var(--upload-empty-radius);
+  background: var(--upload-empty-bg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--upload-empty-padding);
+  transition: background var(--duration-normal) ease;
+  box-sizing: border-box;
+}
+
+
+.img-upload-empty--drag {
+  border-color: var(--admin-accent);
+  background: var(--upload-empty-bg-hover);
+}
+
+.img-upload-btn {
+    justify-content: center;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 7px 12px;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--radius-md);
+    background: var(--admin-surface);
+    color: var(--admin-text);
+    font-family: var(--admin-font);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    pointer-events: none;
+    transition: background var(--duration-normal) ease, border-color var(--duration-normal) ease;
+    display: inline-flex;
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   Shared field design tokens (sf-*)
+   Referenced by editor.css and email.css for consistent styling.
+   ══════════════════════════════════════════════════════════════ */

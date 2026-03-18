@@ -2,6 +2,7 @@ import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import { themeToStyleAttr, backgroundStyle } from "../_lib/theme";
 import GuestHeader from "./GuestHeader";
 import GuestFooter from "./GuestFooter";
+import { EmbedProvider } from "./EmbedOverlay";
 
 /**
  * Wraps guest portal page content with theme CSS vars, background, header, and footer.
@@ -21,9 +22,11 @@ export default function GuestPageShell({
   return (
     <div style={cssVars} className="g-body">
       <div style={bgStyle} className="min-h-dvh flex flex-col">
-        <GuestHeader config={config} />
-        <main className="flex-1">{children}</main>
-        <GuestFooter config={config} />
+        <EmbedProvider>
+          <GuestHeader config={config} />
+          <main className="flex-1">{children}</main>
+          <GuestFooter config={config} />
+        </EmbedProvider>
       </div>
     </div>
   );

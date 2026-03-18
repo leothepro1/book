@@ -1,5 +1,21 @@
 "use client";
 
+/**
+ * Layout Picker Field
+ * ───────────────────
+ * Image-based dropdown for visual layout selection.
+ * Used by locked sections and any section that offers distinct
+ * visual layouts (e.g. horizontal vs vertical card arrangement).
+ *
+ * Reads options from `field.layoutOptions[]`, each with:
+ *   - value: stored config value
+ *   - label: display text
+ *   - image: thumbnail URL (Cloudinary or similar)
+ *
+ * Follows the same dropdown pattern as FieldSelect but renders
+ * image thumbnails instead of text/icon options.
+ */
+
 import { useState, useRef, useEffect } from "react";
 import type { SettingField } from "@/app/(guest)/_lib/themes/types";
 import { FieldWrapper } from "./FieldRenderer";
@@ -12,10 +28,10 @@ type Props = {
   onChange: (key: string, value: unknown) => void;
 };
 
-export function FieldSelect({ field, value, onChange }: Props) {
-  const options = field.options ?? [];
+export function FieldLayoutPicker({ field, value, onChange }: Props) {
+  const options = field.layoutOptions ?? [];
   const current = (value as string) ?? (field.default as string) ?? "";
-  const selectedOption = options.find((o) => o.value === current);
+  const selected = options.find((o) => o.value === current);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -36,19 +52,18 @@ export function FieldSelect({ field, value, onChange }: Props) {
         <button
           ref={triggerRef}
           type="button"
-          className="sf-dropdown__trigger"
+          className="sf-layout-picker__trigger"
           onClick={() => setOpen(!open)}
         >
-          {selectedOption?.icon && (
-            <span
-              className="material-symbols-rounded"
-              style={{ fontSize: 18, fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24" }}
-            >
-              {selectedOption.icon}
-            </span>
+          {selected?.image && (
+            <img
+              src={selected.image}
+              alt={selected.label}
+              className="sf-layout-picker__thumb"
+            />
           )}
           <span className="sf-dropdown__text">
-            {selectedOption?.label || current}
+            {selected?.label || current}
           </span>
           <EditorIcon name="expand_more" size={16} className="sf-dropdown__chevron" />
         </button>
@@ -57,22 +72,23 @@ export function FieldSelect({ field, value, onChange }: Props) {
             {options.map((opt) => (
               <li
                 key={opt.value}
-                className={`sf-dropdown__item${opt.value === current ? " sf-dropdown__item--active" : ""}`}
+                className={`sf-layout-picker__item${opt.value === current ? " sf-layout-picker__item--active" : ""}`}
                 onClick={() => {
                   onChange(field.key, opt.value);
                   setOpen(false);
                 }}
               >
-                {opt.icon && (
-                  <span
-                    className="material-symbols-rounded"
-                    style={{ fontSize: 18, fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24" }}
-                  >
-                    {opt.icon}
-                  </span>
-                )}
+                <img
+                  src={opt.image}
+                  alt={opt.label}
+                  className="sf-layout-picker__thumb"
+                />
                 <span style={{ flex: 1 }}>{opt.label}</span>
-                <span className={`material-symbols-rounded sf-dropdown__check${opt.value === current ? " sf-dropdown__check--visible" : ""}`}>check</span>
+                <span
+                  className={`material-symbols-rounded sf-dropdown__check${opt.value === current ? " sf-dropdown__check--visible" : ""}`}
+                >
+                  check
+                </span>
               </li>
             ))}
           </ul>

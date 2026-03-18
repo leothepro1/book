@@ -2,6 +2,7 @@
 
 import { prisma } from "@/app/_lib/db/prisma";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
+import { migrateToV2Pages } from "@/app/_lib/pages/migrate";
 import { getCurrentTenant } from "./getCurrentTenant";
 
 /**
@@ -19,18 +20,18 @@ export async function getDraftConfig(): Promise<TenantConfig | null> {
 
   // Prioritera draft om den finns
   if (tenant.draftSettings && typeof tenant.draftSettings === 'object') {
-    return {
+    return migrateToV2Pages({
       tenantId: tenant.id,
       ...(tenant.draftSettings as any),
-    };
+    });
   }
 
   // Fallback till live settings
   if (tenant.settings && typeof tenant.settings === 'object') {
-    return {
+    return migrateToV2Pages({
       tenantId: tenant.id,
       ...(tenant.settings as any),
-    };
+    });
   }
 
   return null;

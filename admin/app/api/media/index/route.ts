@@ -68,7 +68,8 @@ export async function POST(req: NextRequest) {
     const filename = segments[segments.length - 1] || "untitled";
 
     // Determine format and mime type
-    const format = resource?.format || url.split(".").pop()?.split("?")[0] || "unknown";
+    // For raw resources (PDFs), Cloudinary may not return format — infer from filename
+    const format = resource?.format || filename.split(".").pop() || url.split(".").pop()?.split("?")[0] || "unknown";
     const mimeType = inferMimeType(format);
 
     const asset = await createMediaAsset({

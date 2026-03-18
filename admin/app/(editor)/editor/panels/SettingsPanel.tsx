@@ -382,12 +382,7 @@ function LogoAccordion() {
                 onClick={() => setLibraryOpen(true)}
                 style={{ cursor: "pointer" }}
               >
-                <svg className="img-upload-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path fillRule="evenodd" d="M3.5 0 3 .5v23l.5.5h17l.5-.5v-16l-.15-.35-7-7L13.5 0h-10ZM4 23V1h9v6.5l.5.5H20v15H4ZM19.3 7 14 1.7V7h5.3Z" fill="currentColor" />
-                </svg>
-                <span className="img-upload-empty-text">
-                  Välj fil att ladda upp,<br />eller dra och släpp här
-                </span>
+                <span className="img-upload-btn">Ladda upp logotyp</span>
               </div>
             </div>
           )}

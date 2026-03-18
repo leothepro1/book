@@ -1,109 +1,163 @@
-/* ── PublishBar: shared undo/redo/publish UI ── */
+/* ── PublishBar: floating toast ── */
 
 .publish-actions {
-  display: none;
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  z-index: 9999;
+  width: 480px;
+  display: flex;
   align-items: center;
   gap: 12px;
+  padding: 6px 6px 6px 14px;
+  background: linear-gradient(180deg, #171717 0%, #272727 100%);
+  border-radius: 10px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6),
+    0 1px 1px rgba(0, 0, 0, 0.4);
+
+  /* Hidden state */
+  transform: translateX(-50%) translateY(calc(100% + 40px));
+  opacity: 0;
+  pointer-events: none;
+
+  /* Slide out */
+  transition:
+    transform 0.55s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.4s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .publish-actions--visible {
-  display: flex;
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+
+  /* Slide in — iOS spring */
+  transition:
+    transform 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.publish-actions-left {
+/* ── Left: status ── */
+
+.publish-status {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  color: #e3e3e3;
+  flex-shrink: 0;
 }
 
-.publish-action-icon {
+.publish-status__text {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ── Right: actions ── */
+
+.publish-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* ── Discard button (Ignorera) ── */
+
+.publish-discard {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  gap: 6px;
+  min-width: 72px;
+  height: 32px;
+  padding: 0 14px;
   border: none;
-  background: transparent;
-  color: var(--admin-text);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.13);
+  color: #e3e3e3;
+  font-family: var(--admin-font);
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition:
-    background 0.25s ease,
-    opacity 0.25s ease,
-    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: background 0.15s ease;
 }
 
-.publish-action-icon:hover:not(:disabled) {
-  background: var(--admin-surface-hover);
+.publish-discard:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.20);
 }
 
-.publish-action-icon:active:not(:disabled) {
-  transform: scale(0.92);
+.publish-discard:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.10);
 }
 
-.publish-action-icon:disabled {
-  opacity: 0.25;
+.publish-discard:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.publish-btn {
-    color: var(--admin-primary-text, #fff);
-    cursor: pointer;
-    border: none;
-    border-radius: 8px;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    font-family: var(--admin-font);
-    font-size: 14px;
-    font-weight: 600;
-    transition:     transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
-    display: flex;
-    box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.15), inset 0 -2px 0 rgba(0, 0, 0, 0.25);
-    background: linear-gradient(180deg, #5047FF 0%, #5047FF 100%);
-    border: 1px solid rgba(0, 0, 0, 0.1);
+/* ── Save button (Spara) ── */
+
+.publish-save {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 72px;
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 7px;
+  background: #fff;
+  color: #171717;
+  font-family: var(--admin-font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
 
-.publish-btn:hover:not(:disabled) {
-  background: linear-gradient(180deg, #4a41ff 0%, #3E34FF 100%);
-
+.publish-save:hover:not(:disabled) {
+  background: #e8e8e8;
 }
 
-.publish-btn:active:not(:disabled) {
-  transform: translateY(1px);
-  box-shadow:
-    inset 0 2px 3px rgba(0, 0, 0, 0.58),
-    inset 0 1px 0 rgba(255, 255, 255, 0.38);
+.publish-save:active:not(:disabled) {
+  background: #d4d4d4;
 }
 
-.publish-btn:disabled {
-  pointer-events: none;
-  background: var(--admin-border);
-  color: var(--admin-text-secondary);
+.publish-save--done {
+  background: #fff;
+  color: #303030;
 }
+
+.publish-save:disabled:not(.publish-save--done) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Spinner ── */
+
 .publish-spinner {
-  vertical-align: middle;
-  margin-bottom: 2px;
-}
-.publish-spinner {
-  animation: publishSpin 0.6s linear infinite, publishSpinnerIn 0.25s cubic-bezier(0.22, 0.68, 0, 1.04) both;
+  animation: publishSpin 0.6s linear infinite, publishSpinnerIn 0.2s cubic-bezier(0.22, 0.68, 0, 1.04) both;
   flex-shrink: 0;
-  will-change: width, opacity, margin-left;
+  will-change: width, opacity;
 }
 
 .publish-spinner--out {
-  animation: publishSpin 0.6s linear infinite, publishSpinnerOut 0.2s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: publishSpin 0.6s linear infinite, publishSpinnerOut 0.15s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
 @keyframes publishSpinnerIn {
-  0%   { width: 0; opacity: 0; margin-left: -8px; }
-  70%  { width: 20px; opacity: 1; margin-left: 1px; }
-  100% { width: 18px; opacity: 1; margin-left: 0; }
+  0%   { width: 0; opacity: 0; }
+  70%  { width: 16px; opacity: 1; }
+  100% { width: 16px; opacity: 1; }
 }
 
 @keyframes publishSpinnerOut {
-  0%   { width: 18px; opacity: 1; margin-left: 0; }
-  100% { width: 0; opacity: 0; margin-left: -8px; }
+  0%   { width: 16px; opacity: 1; }
+  100% { width: 0; opacity: 0; }
 }
 
 @keyframes publishSpin {
@@ -111,7 +165,18 @@
   to   { transform: rotate(360deg); }
 }
 
+/* ── Error ── */
+
+.publish-error {
+  font-size: 13px;
+  color: #ff6b6b;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+/* ── Reduced motion ── */
+
 @media (prefers-reduced-motion: reduce) {
-  .publish-actions { animation: none !important; transition: none !important; }
-  .publish-btn, .publish-action-icon { transition: none; }
+  .publish-actions { transition: none !important; }
+  .publish-save, .publish-discard { transition: none; }
 }

@@ -66,7 +66,7 @@ export default function CheckInConfirmed(props: CheckInConfirmedProps) {
           <span style={detailLabel}>Utcheckning</span> {checkOut}
         </Text>
       </Section>
-      <Link href={portalUrl} style={btnStyle}>
+      <Link href={portalUrl} style={btnStyle} data-branding="cta">
         Öppna din portal
       </Link>
     </EmailLayout>

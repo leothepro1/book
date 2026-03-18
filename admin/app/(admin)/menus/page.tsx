@@ -1,13 +1,18 @@
-export default function MenusPage() {
-  return (
-    <div className="admin-page admin-page--no-preview">
-      <div className="admin-editor">
-        <div className="admin-header">
-          <h1 className="admin-title">Menyer</h1>
-        </div>
-        <div className="admin-content">
-        </div>
+import { getDraftConfig } from "../_lib/tenant/getDraftConfig";
+import MenusClient from "./MenusClient";
+
+export const dynamic = "force-dynamic";
+
+export default async function MenusPage() {
+  const initialConfig = await getDraftConfig();
+
+  if (!initialConfig) {
+    return (
+      <div style={{ padding: 40 }}>
+        <p style={{ color: "var(--admin-text-secondary)" }}>Ingen konfiguration hittades.</p>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return <MenusClient initialConfig={initialConfig} />;
 }

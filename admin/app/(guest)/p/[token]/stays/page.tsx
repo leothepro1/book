@@ -1,148 +1,117 @@
 import { resolveBookingFromToken } from "../../../_lib/portal/resolveBooking";
 import GuestPageShell from "../../../_components/GuestPageShell";
 import { getRequestLocale } from "../../../_lib/locale/getRequestLocale";
-import StaysTabs from "./StaysTabs";
 import { createMockNormalizedBookings } from "@/app/_lib/mockData";
 import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
 import { getTenantConfig } from "@/app/(guest)/_lib/tenant/getTenantConfig";
-import { getStaysCoreConfig } from "@/app/_lib/pages/config";
-import { resolveColorScheme } from "@/app/_lib/color-schemes/resolve";
+import { getBookingStatus } from "../../../_lib/booking";
+import { ThemeRenderer } from "../../../_lib/themes";
+import { BookingsProvider } from "../../../_components/sections";
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { prisma } from "../../../../_lib/db/prisma";
+import type { NormalizedBooking } from "@/app/_lib/integrations/types";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Split bookings into current (departure >= now) and previous (departure < now).
+ */
+function splitBookings(all: NormalizedBooking[]) {
+  const now = new Date();
+  return {
+    currentBookings: all.filter((b) => new Date(b.departure) >= now),
+    previousBookings: all.filter((b) => new Date(b.departure) < now),
+  };
+}
+
 export default async function Page(props: {
   params: Promise<{ token?: string }>;
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await props.params;
-  const searchParams = (await props.searchParams) ?? {};
-
   const token = params?.token;
-  const lang = (searchParams?.lang === "en" ? "en" : "sv") as "sv" | "en";
+  const isPreview = token === "preview" || token === "test";
 
-  // PREVIEW or TEST MODE: Use global mock bookings
-  console.log("[STAYS PAGE] Token received:", token);
-  if (token === "preview" || token === "test") {
+  // ── Preview / test mode ────────────────────────────────────
+  if (isPreview) {
     let tenant = null;
 
-  console.log("[STAYS PAGE] Entering preview/test mode");
-    // Try to get tenant from auth (for preview mode)
     try {
       const { userId, orgId } = await getAuth();
       if (userId && orgId) {
-        tenant = await prisma.tenant.findUnique({
-          where: { clerkOrgId: orgId },
-        });
+        tenant = await prisma.tenant.findUnique({ where: { clerkOrgId: orgId } });
       }
-    } catch (error) {
-      // Auth failed - OK for /p/test
+    } catch {
+      // Auth failed — OK for /p/test
     }
 
-    // Fallback: use first tenant (for /p/test without auth)
     if (!tenant) {
       tenant = await prisma.tenant.findFirst();
     }
 
-    if (tenant) {
-      const locale = await getRequestLocale();
-      const config = await getTenantConfig(tenant.id, { preferDraft: token === "preview", locale });
-      const stays = getStaysCoreConfig(config);
-
-      const allMock = createMockNormalizedBookings(tenant.id);
-
-      const now = new Date();
-      const currentBookings = allMock.filter(
-        (b) => new Date(b.departure) >= now
-      );
-      const previousBookings = allMock.filter(
-        (b) => new Date(b.departure) < now
-      );
-
-      const resolved = resolveColorScheme(stays.colorSchemeId, config.colorSchemes ?? [], config.defaultColorSchemeId);
-      const containerStyle: React.CSSProperties = {
-        ...resolved?.cssVariables,
-        padding: `${stays.paddingTop}px ${stays.paddingRight}px ${stays.paddingBottom}px ${stays.paddingLeft}px`,
-      };
-
-      return (
-        <GuestPageShell config={config}>
-          <div className="g-container" style={containerStyle}>
-            <h1 className="g-heading" style={{ fontSize: stays.headingSize, marginBottom: stays.description ? 8 : stays.headingMarginBottom }} dangerouslySetInnerHTML={{ __html: stays.heading }} />
-            {stays.description && (
-              <p className="g-description" style={{ marginBottom: stays.headingMarginBottom }} dangerouslySetInnerHTML={{ __html: stays.description }} />
-            )}
-
-            <StaysTabs
-              currentBookings={currentBookings}
-              previousBookings={previousBookings}
-              lang={lang}
-              layout={stays.layout}
-              cardShadow={stays.cardShadow}
-              tabCurrentLabel={stays.tabCurrentLabel}
-              tabPreviousLabel={stays.tabPreviousLabel}
-              cardImageUrl={stays.cardImageUrl}
-            />
-          </div>
-        </GuestPageShell>
-      );
+    if (!tenant) {
+      return <div style={{ padding: 20, color: "var(--text)" }}>Ingen tenant hittades.</div>;
     }
+
+    const locale = await getRequestLocale();
+    const config = await getTenantConfig(tenant.id, { preferDraft: token === "preview", locale });
+    const mockBooking = await resolveBookingFromToken(token);
+
+    if (!mockBooking) {
+      return <div style={{ padding: 20, color: "var(--text)" }}>Ingen bokning hittades.</div>;
+    }
+
+    const allMock = createMockNormalizedBookings(tenant.id);
+    const { currentBookings, previousBookings } = splitBookings(allMock);
+    const bookingStatus = getBookingStatus(mockBooking);
+
+    return (
+      <GuestPageShell config={config}>
+        <BookingsProvider currentBookings={currentBookings} previousBookings={previousBookings}>
+          <ThemeRenderer
+            templateKey="stays"
+            config={config}
+            booking={mockBooking}
+            bookingStatus={bookingStatus}
+            token={token}
+          />
+        </BookingsProvider>
+      </GuestPageShell>
+    );
   }
 
-  // NORMAL FLOW: Real bookings via adapter
-  const current = await resolveBookingFromToken(token);
+  // ── Normal flow: real bookings via adapter ──────────────────
+  const booking = await resolveBookingFromToken(token);
 
-  if (!current) {
-    return <div className="g-container">No booking found.</div>;
+  if (!booking) {
+    return <div style={{ padding: 20, color: "var(--text)" }}>Ingen bokning hittades.</div>;
   }
 
   const locale = await getRequestLocale();
-  const config = await getTenantConfig(current.tenantId, { locale });
-  const stays = getStaysCoreConfig(config);
+  const config = await getTenantConfig(booking.tenantId, { locale });
+  const bookingStatus = getBookingStatus(booking);
 
-  let allBookings: import("@/app/_lib/integrations/types").NormalizedBooking[];
+  let allBookings: NormalizedBooking[];
   try {
-    const adapter = await resolveAdapter(current.tenantId);
-    allBookings = await adapter.getBookings(current.tenantId, { guestEmail: current.guestEmail });
+    const adapter = await resolveAdapter(booking.tenantId);
+    allBookings = await adapter.getBookings(booking.tenantId, { guestEmail: booking.guestEmail });
   } catch (error) {
-    console.error("[STAYS PAGE] Adapter error, returning empty:", error);
+    console.error("[STAYS] Adapter error, returning empty:", error);
     allBookings = [];
   }
 
-  // Split bookings into current and previous
-  const now = new Date();
-  const currentBookings = allBookings.filter(
-    (b) => new Date(b.departure) >= now
-  );
-  const previousBookings = allBookings.filter(
-    (b) => new Date(b.departure) < now
-  );
-
-  const resolved = resolveColorScheme(stays.colorSchemeId, config.colorSchemes ?? [], config.defaultColorSchemeId);
-  const containerStyle: React.CSSProperties = {
-    ...resolved?.cssVariables,
-    padding: `${stays.paddingTop}px ${stays.paddingRight}px ${stays.paddingBottom}px ${stays.paddingLeft}px`,
-  };
+  const { currentBookings, previousBookings } = splitBookings(allBookings);
 
   return (
     <GuestPageShell config={config}>
-      <div className="g-container" style={containerStyle}>
-        <h1 className="g-heading" style={{ fontSize: stays.headingSize, marginBottom: stays.description ? 8 : stays.headingMarginBottom }} dangerouslySetInnerHTML={{ __html: stays.heading }} />
-        {stays.description && (
-          <p className="g-description" style={{ marginBottom: stays.headingMarginBottom }} dangerouslySetInnerHTML={{ __html: stays.description }} />
-        )}
-
-        <StaysTabs
-          currentBookings={currentBookings}
-          previousBookings={previousBookings}
-          lang={lang}
-          layout={stays.layout}
-          tabCurrentLabel={stays.tabCurrentLabel}
-          tabPreviousLabel={stays.tabPreviousLabel}
-          cardImageUrl={stays.cardImageUrl}
+      <BookingsProvider currentBookings={currentBookings} previousBookings={previousBookings}>
+        <ThemeRenderer
+          templateKey="stays"
+          config={config}
+          booking={booking}
+          bookingStatus={bookingStatus}
+          token={token}
         />
-      </div>
+      </BookingsProvider>
     </GuestPageShell>
   );
 }

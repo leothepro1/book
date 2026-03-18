@@ -108,16 +108,15 @@
   border: 1px solid var(--admin-border);
   border-radius: 8px;
   font-size: 13px;
-  font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace;
-  letter-spacing: 0.02em;
+  font-weight: 400;
+  font-family: var(--admin-font);
   color: var(--admin-text);
-  background: var(--admin-surface-muted, #fafafa);
+  background: #fff;
   outline: none;
   text-transform: uppercase;
-  transition: border-color 0.15s;
+  transition: 0.15s;
 }
 
 .cp-hex-input:focus {
-  border-color: var(--admin-border-strong, #c0c0c0);
-  background: var(--admin-surface);
+box-shadow: 0px 0px 0px 4px rgba(241, 241, 241, 1)
 }

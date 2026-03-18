@@ -1,0 +1,107 @@
+/* ═══════════════════════════════════════════════════════════════
+   EmbedOverlay — Fullscreen iframe with iOS slide-in
+   Uses `translate` property (not `transform`) per project conventions.
+   ═══════════════════════════════════════════════════════════════ */
+
+.embed-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
+}
+
+.embed-overlay--open {
+  animation: embed-slide-in 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+.embed-overlay--closing {
+  animation: embed-slide-out 0.25s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+@keyframes embed-slide-in {
+  from { translate: 100% 0; }
+  to   { translate: 0 0; }
+}
+
+@keyframes embed-slide-out {
+  from { translate: 0 0; }
+  to   { translate: 100% 0; }
+}
+
+/* ── Header ── */
+
+.embed-overlay__header {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+  flex-shrink: 0;
+}
+
+.embed-overlay__back {
+  height: 56px;
+  width: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.embed-overlay__title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-heading);
+}
+
+.embed-overlay__external {
+  height: 56px;
+  width: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  opacity: 0.5;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.embed-overlay__external:hover {
+  opacity: 1;
+}
+
+/* ── Content ── */
+
+.embed-overlay__content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.embed-overlay__loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--background);
+  z-index: 1;
+}
+
+.embed-overlay__iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}

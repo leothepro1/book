@@ -23,6 +23,8 @@
  * CSS prefix: sf-* (settings field)
  */
 
+import { useState, useRef, useEffect } from "react";
+import { EditorIcon } from "@/app/_components/EditorIcon";
 import type { SettingField } from "@/app/(guest)/_lib/themes/types";
 import { FieldText } from "./FieldText";
 import { FieldTextarea } from "./FieldTextarea";
@@ -42,6 +44,7 @@ import { FieldMarkers } from "./FieldMarkers";
 import { FieldMapPicker } from "./FieldMapPicker";
 import { FieldVideo } from "./FieldVideo";
 import { FieldImageList } from "./FieldImageList";
+import { FieldLayoutPicker } from "./FieldLayoutPicker";
 
 // ─── Field Dispatcher ───────────────────────────────────────
 
@@ -75,6 +78,7 @@ const FIELD_MAP: Record<string, React.ComponentType<FieldRendererProps>> = {
   mapPicker: FieldMapPicker,
   video: FieldVideo,
   imageList: FieldImageList,
+  layoutPicker: FieldLayoutPicker,
 };
 
 export function FieldRenderer({ field, value, onChange, allValues }: FieldRendererProps) {
@@ -84,6 +88,39 @@ export function FieldRenderer({ field, value, onChange, allValues }: FieldRender
 
 // ─── Field Wrapper (shared layout) ──────────────────────────
 
+function FieldTooltip({ text, anchorRef }: { text: string; anchorRef: React.RefObject<HTMLButtonElement | null> }) {
+  const [pos, setPos] = useState<{ top: number; left: number; arrowLeft: number } | null>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
+  const TIP_W = 240;
+
+  useEffect(() => {
+    if (!anchorRef.current) return;
+    const rect = anchorRef.current.getBoundingClientRect();
+    const anchorCenterX = rect.left + rect.width / 2;
+
+    // Position tooltip: right-aligned with anchor, clamped to viewport
+    let left = anchorCenterX - TIP_W + 20;
+    if (left < 8) left = 8;
+    if (left + TIP_W > window.innerWidth - 8) left = window.innerWidth - TIP_W - 8;
+
+    // Arrow points at anchor center
+    const arrowLeft = anchorCenterX - left;
+
+    setPos({ top: rect.bottom + 8, left, arrowLeft });
+  }, [anchorRef]);
+
+  return (
+    <div
+      ref={tipRef}
+      className="sf-tooltip"
+      style={pos ? { top: pos.top, left: pos.left, width: TIP_W } : { visibility: "hidden" as const }}
+    >
+      <div className="sf-tooltip__arrow" style={pos ? { left: pos.arrowLeft } : undefined} />
+      <p className="sf-tooltip__text">{text}</p>
+    </div>
+  );
+}
+
 export function FieldWrapper({
   field,
   children,
@@ -91,20 +128,50 @@ export function FieldWrapper({
   field: SettingField;
   children: React.ReactNode;
 }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const tooltipBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!showTooltip) return;
+    const handle = (e: MouseEvent) => {
+      if (tooltipBtnRef.current && !tooltipBtnRef.current.contains(e.target as Node)) {
+        setShowTooltip(false);
+      }
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [showTooltip]);
+
   return (
     <div className="sf-field">
       {!field.hideLabel && (
         <>
-          <label className="sf-label" htmlFor={`sf-${field.key}`}>
-            {field.label}
-            {field.required && <span className="sf-required" aria-hidden="true">*</span>}
-          </label>
+          <div className="sf-label-row">
+            <label className="sf-label" htmlFor={`sf-${field.key}`}>
+              {field.label}
+              {field.required && <span className="sf-required" aria-hidden="true">*</span>}
+            </label>
+            {field.tooltip && (
+              <button
+                ref={tooltipBtnRef}
+                type="button"
+                className="sf-tooltip-btn"
+                onClick={() => setShowTooltip(!showTooltip)}
+                aria-label="Hjälp"
+              >
+                <EditorIcon name="help" size={16} />
+              </button>
+            )}
+          </div>
           {field.description && (
             <p className="sf-desc">{field.description}</p>
           )}
         </>
       )}
       {children}
+      {showTooltip && field.tooltip && (
+        <FieldTooltip text={field.tooltip} anchorRef={tooltipBtnRef} />
+      )}
       {field.descriptionLink && (
         <a
           className="sf-desc-link"
@@ -150,8 +217,12 @@ export function SettingsForm({ schema, values, onChange }: SettingsFormProps) {
   }
 
   const allFields: React.ReactNode[] = [];
+  let groupIndex = 0;
   for (const [group, fields] of grouped) {
     if (group !== "__default") {
+      if (groupIndex > 0) {
+        allFields.push(<div key={`gd-${group}`} className="sf-group-divider" />);
+      }
       allFields.push(<div key={`gl-${group}`} className="sf-group-label">{group}</div>);
     }
     for (const field of fields) {
@@ -165,6 +236,7 @@ export function SettingsForm({ schema, values, onChange }: SettingsFormProps) {
         />
       );
     }
+    groupIndex++;
   }
 
   return <div className="sf-form">{allFields}</div>;

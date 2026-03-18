@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSettings } from './SettingsContext';
 import { EditorIcon } from '@/app/_components/EditorIcon';
 import { IntegrationsContent } from '@/app/(admin)/settings/integrations/IntegrationsContent';
@@ -11,6 +11,7 @@ import { CheckinContent } from '@/app/(admin)/settings/checkin/CheckinContent';
 import { LanguagesContent } from '@/app/(admin)/settings/languages/LanguagesContent';
 import { EmailContent } from '@/app/(admin)/settings/email/EmailContent';
 import { useRole } from './RoleContext';
+import { useNavigationGuard } from './NavigationGuard';
 
 import { useOrganization } from '@clerk/nextjs';
 
@@ -59,15 +60,38 @@ export function SettingsPanel() {
   const { isOpen, close, activeTab, setActiveTab } = useSettings();
   const { organization } = useClerkOrganization();
   const { isAdmin } = useRole();
+  const { guardAction, isGuarded } = useNavigationGuard();
   const defaultTab = isAdmin ? 'organization' : 'general';
   const activeItem = activeTab ?? defaultTab;
   const [search, setSearch] = useState('');
   const [resetKey, setResetKey] = useState(0);
-  const [subTitle, setSubTitle] = useState<string | null>(null);
+  const [subTitle, setSubTitle] = useState<string | { label: string; onClick?: () => void }[] | null>(null);
   const [inviteTrigger, setInviteTrigger] = useState(0);
   const [addLanguageTrigger, setAddLanguageTrigger] = useState(0);
   const [headerExtra, setHeaderExtra] = useState<React.ReactNode>(null);
   const [headerAction, setHeaderAction] = useState<React.ReactNode>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const trailFreshRef = useRef(false);
+
+  // Wrap setSubTitle to skip trail transition on navigation
+  const setSubTitleWithFresh = useCallback((val: typeof subTitle) => {
+    trailFreshRef.current = true;
+    setSubTitle(val);
+  }, []);
+
+  // Remove data-fresh after paint so hover transitions work
+  useEffect(() => {
+    if (!trailFreshRef.current || !headerRef.current) return;
+    const trails = headerRef.current.querySelectorAll('.settings-main__header-trail');
+    trails.forEach(el => el.setAttribute('data-fresh', ''));
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        trails.forEach(el => el.removeAttribute('data-fresh'));
+        trailFreshRef.current = false;
+      });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [subTitle]);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -96,11 +120,11 @@ export function SettingsPanel() {
       className={`settings-panel ${isOpen ? 'settings-panel--open' : ''}`}
       aria-hidden={!isOpen}
     >
-      <div className="settings-panel__overlay" onClick={close} />
+      <div className="settings-panel__overlay" onClick={() => { if (isGuarded) { guardAction(close); } else { close(); } }} />
       <div className="settings-panel__content">
         {/* Close button — top right */}
         <button
-          onClick={close}
+          onClick={() => { if (isGuarded) { guardAction(close); } else { close(); } }}
           className="settings-panel__close"
           aria-label="Stäng inställningar"
         >
@@ -149,7 +173,10 @@ export function SettingsPanel() {
                   {group.items.map((item) => (
                     <button
                       key={item.id}
-                      onClick={() => { setActiveTab(item.id); setSubTitle(null); setInviteTrigger(0); setHeaderExtra(null); setHeaderAction(null); }}
+                      onClick={() => {
+                        const switchTab = () => { setActiveTab(item.id); setSubTitle(null); setInviteTrigger(0); setHeaderExtra(null); setHeaderAction(null); };
+                        if (isGuarded && item.id !== activeItem) { guardAction(switchTab); } else { switchTab(); }
+                      }}
                       className={`settings-nav__item ${activeItem === item.id ? 'settings-nav__item--active' : ''}`}
                     >
                       <EditorIcon name={item.icon} size={18} />
@@ -169,16 +196,52 @@ export function SettingsPanel() {
               const item = NAV_ITEMS.flatMap((g) => g.items).find((i) => i.id === activeItem);
               if (!item) return null;
               return (
-                <div className="settings-main__header">
+                <div className="settings-main__header" ref={headerRef}>
                   <button
                     className="settings-main__header-icon"
-                    onClick={() => { setActiveTab(activeItem); setResetKey((k) => k + 1); setSubTitle(null); setInviteTrigger(0); setHeaderExtra(null); setHeaderAction(null); }}
+                    onClick={() => {
+                      const goBack = () => { setActiveTab(activeItem); setResetKey((k) => k + 1); setSubTitle(null); setInviteTrigger(0); setHeaderExtra(null); setHeaderAction(null); };
+                      if (isGuarded) { guardAction(goBack); } else { goBack(); }
+                    }}
                     aria-label={`Tillbaka till ${item.label}`}
                   >
                     <EditorIcon name={item.icon} size={18} />
                   </button>
-                  <EditorIcon name="chevron_right" size={16} className="settings-main__header-chevron" />
-                  <h3 className="settings-main__header-title">{subTitle ?? item.label}</h3>
+                  {Array.isArray(subTitle) && subTitle.length > 1 ? (
+                    subTitle.map((seg, i) => {
+                      const isLast = i === subTitle.length - 1;
+                      if (isLast) {
+                        return (
+                          <span key={i} className="settings-main__header-seg">
+                            <EditorIcon name="chevron_right" size={16} className="settings-main__header-chevron" />
+                            <h3 className="settings-main__header-title">{seg.label}</h3>
+                          </span>
+                        );
+                      }
+                      return (
+                        <span key={i} className="settings-main__header-seg">
+                          <EditorIcon name="chevron_right" size={16} className="settings-main__header-chevron" />
+                          <span className="settings-main__header-trail">
+                            {seg.onClick ? (
+                              <button className="settings-main__header-crumb" onClick={() => { if (isGuarded) { guardAction(seg.onClick!); } else { seg.onClick!(); } }}>{seg.label}</button>
+                            ) : (
+                              <span className="settings-main__header-crumb">{seg.label}</span>
+                            )}
+                          </span>
+                        </span>
+                      );
+                    })
+                  ) : Array.isArray(subTitle) ? (
+                    <>
+                      <EditorIcon name="chevron_right" size={16} className="settings-main__header-chevron" />
+                      <h3 className="settings-main__header-title">{subTitle[0].label}</h3>
+                    </>
+                  ) : (
+                    <>
+                      <EditorIcon name="chevron_right" size={16} className="settings-main__header-chevron" />
+                      <h3 className="settings-main__header-title">{subTitle ?? item.label}</h3>
+                    </>
+                  )}
                   {headerExtra}
                   {activeItem === 'users' && (
                     headerAction ?? (
@@ -217,7 +280,7 @@ export function SettingsPanel() {
               ) : activeItem === 'languages' ? (
                 <LanguagesContent key={resetKey} onSubTitleChange={setSubTitle} triggerAdd={addLanguageTrigger} />
               ) : activeItem === 'email' ? (
-                <EmailContent key={resetKey} onSubTitleChange={setSubTitle} onHeaderExtraChange={setHeaderExtra} />
+                <EmailContent key={resetKey} onSubTitleChange={setSubTitleWithFresh} onHeaderExtraChange={setHeaderExtra} />
               ) : activeItem === 'checkin-checkout' ? (
                 <CheckinContent key={resetKey} onSubTitleChange={setSubTitle} onNavigate={(tab) => { setActiveTab(tab); setSubTitle(null); setResetKey((k) => k + 1); }} />
               ) : (

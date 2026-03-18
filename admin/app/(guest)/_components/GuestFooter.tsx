@@ -107,7 +107,6 @@ export default function GuestFooter({ config }: { config: TenantConfig }) {
   }, [token]);
 
   const ftr = { ...PAGE_FOOTER_DEFAULTS, ...getPageFooter(config, pageId) };
-  const iconOnly = ftr.activeMode === "icon-only";
 
   // Resolve color scheme CSS vars for footer
   const schemeCssVars = useMemo(() => {
@@ -148,7 +147,6 @@ export default function GuestFooter({ config }: { config: TenantConfig }) {
           const cls = [
             "footer-link flex flex-1 flex-col items-center justify-center gap-1 py-2",
             active ? "active" : "",
-            active && iconOnly ? "active--icon-only" : "",
           ].filter(Boolean).join(" ");
 
           return (
@@ -162,11 +160,9 @@ export default function GuestFooter({ config }: { config: TenantConfig }) {
               <div className="footer-icon">
                 <Icon />
               </div>
-              {ftr.showLabels && (
-                <span className="text-[11px] font-semibold leading-none">
-                  {item.label}
-                </span>
-              )}
+              <span className="text-[11px] font-semibold leading-none">
+                {item.label}
+              </span>
             </Link>
           );
         })}

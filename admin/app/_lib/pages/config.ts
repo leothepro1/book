@@ -35,6 +35,7 @@ import type {
 } from "@/app/(guest)/_lib/tenant/types";
 import { STAYS_CORE_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
 import type { SectionInstance } from "@/app/_lib/sections/types";
+import { bokningarSection } from "@/app/_lib/sections/definitions/bokningar";
 
 // ═══════════════════════════════════════════════════════════════
 // INTERNAL HELPERS
@@ -74,12 +75,47 @@ export function getPageSections(
 
   // V2 path: config.pages[pageId].sections
   const entry = getPageEntry(config, pageId);
-  if (entry) return entry.sections ?? [];
+  if (entry && entry.sections && entry.sections.length > 0) return entry.sections;
 
   // Legacy fallback: only "home" had sections in v1
   if (pageId === "home") return config.home?.sections ?? [];
 
-  return [];
+  // Auto-seed locked sections for pages that have no config entry yet.
+  // This is a pure read-time fallback — no DB write. The editor persists
+  // these on first visit via SectionsPanel auto-seeding.
+  return seedLockedSectionsForPage(pageId);
+}
+
+/**
+ * Locked section definitions by page ID.
+ *
+ * Static map — avoids depending on the async section registry bootstrap.
+ * When adding a new locked section, add it here too.
+ */
+const LOCKED_SECTION_MAP: Partial<Record<PageId, Array<{ createDefault: () => ReturnType<typeof bokningarSection.createDefault>; id: string }>>> = {
+  stays: [bokningarSection],
+};
+
+/**
+ * Generate default locked section instances for a page.
+ *
+ * Pure function — returns fresh instances from the static locked section map.
+ * Used as a read-time fallback when the page has no persisted sections in config.
+ * The editor writes these to config on first visit, so this only fires for
+ * tenants who haven't opened that page in the editor yet.
+ */
+function seedLockedSectionsForPage(pageId: PageId): SectionInstance[] {
+  const defs = LOCKED_SECTION_MAP[pageId];
+  if (!defs || defs.length === 0) return [];
+
+  return defs.map((def, i) => {
+    const base = def.createDefault();
+    return {
+      id: `seed_${def.id}_${pageId}`,
+      sortOrder: i,
+      ...base,
+    } as SectionInstance;
+  });
 }
 
 /**

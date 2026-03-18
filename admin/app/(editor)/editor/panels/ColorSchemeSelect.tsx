@@ -16,6 +16,7 @@ import { useState, useRef, useEffect } from "react";
 import { EditorIcon } from "@/app/_components/EditorIcon";
 import { schemeLabel } from "./SettingsPanel";
 import { useEditor } from "../EditorContext";
+import { useDropDirection } from "../hooks/useDropDirection";
 import type { ColorScheme } from "@/app/_lib/color-schemes";
 
 /** Mini scheme preview — shows background, "Aa" text, and button miniatures. */
@@ -54,6 +55,8 @@ export function ColorSchemeSelect({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dir = useDropDirection(triggerRef, open);
   const { navigateToSettings } = useEditor();
 
   // Close on outside click
@@ -80,8 +83,9 @@ export function ColorSchemeSelect({
       <span className="cs-select__label">Färgschema</span>
       <div className="sf-dropdown" ref={ref}>
         <button
+          ref={triggerRef}
           type="button"
-          className="sf-dropdown__trigger"
+          className="cs-select__trigger"
           onClick={() => setOpen(!open)}
         >
           {selected && <SchemeMiniPreview scheme={selected} size="trigger" />}
@@ -89,7 +93,7 @@ export function ColorSchemeSelect({
           <EditorIcon name="expand_more" size={16} className="sf-dropdown__chevron" />
         </button>
         {open && (
-          <div className="sf-dropdown__menu cs-dropdown">
+          <div className={`sf-dropdown__menu cs-dropdown${dir === "up" ? " sf-dropdown__menu--up" : ""}`}>
             <ul className="cs-dropdown__list">
               {schemes.map((scheme) => {
                 const isActive = scheme.id === value;

@@ -59,11 +59,13 @@ interface PublishBarInternalValue {
   redoStack: DraftPatch[];
   isUndoing: boolean;
   isPublishing: boolean;
+  isDiscarding: boolean;
   isLingeringAfterPublish: boolean;
   hasUnsavedChanges: boolean;
   handleUndo: () => Promise<void>;
   handleRedo: () => Promise<void>;
   handlePublish: () => Promise<void>;
+  handleDiscard: () => Promise<void>;
 }
 
 const PublishBarInternalContext = createContext<PublishBarInternalValue | null>(null);
@@ -86,6 +88,7 @@ export function PublishBarProvider({ children }: { children: ReactNode }) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
+  const [isDiscarding, setIsDiscarding] = useState(false);
   const [isLingeringAfterPublish, setIsLingeringAfterPublish] = useState(false);
 
   const configRef = useRef(config);
@@ -199,6 +202,21 @@ export function PublishBarProvider({ children }: { children: ReactNode }) {
     }
   }, [isPublishing]);
 
+  const handleDiscard = useCallback(async () => {
+    if (isDiscarding) return;
+    setIsDiscarding(true);
+    const startTime = Date.now();
+    await discardDraft();
+    const elapsed = Date.now() - startTime;
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, 1000 - elapsed)));
+    setUndoStack([]);
+    setRedoStack([]);
+    setHasUnsavedChanges(false);
+    setIsDiscarding(false);
+    // Refresh config from server (published state)
+    notifyDraftSaved();
+  }, [isDiscarding, notifyDraftSaved]);
+
   // Warn on window close with unsaved changes
   useEffect(() => {
     if (!hasUnsavedChanges) return;
@@ -242,11 +260,13 @@ export function PublishBarProvider({ children }: { children: ReactNode }) {
           redoStack,
           isUndoing,
           isPublishing,
+          isDiscarding,
           isLingeringAfterPublish,
           hasUnsavedChanges,
           handleUndo,
           handleRedo,
           handlePublish,
+          handleDiscard,
         }}
       >
         {children}

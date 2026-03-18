@@ -76,7 +76,7 @@ export default function BookingConfirmed(props: BookingConfirmedProps) {
           <span style={detailLabel}>Bokningsnr</span> {bookingRef}
         </Text>
       </Section>
-      <Link href={portalUrl} style={btnStyle}>
+      <Link href={portalUrl} style={btnStyle} data-branding="cta">
         Visa din portal
       </Link>
       <Text style={closing}>

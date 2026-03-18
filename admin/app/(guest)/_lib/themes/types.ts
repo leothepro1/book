@@ -237,7 +237,8 @@ export type SettingFieldType =
   | "markers"
   | "mapPicker"
   | "video"
-  | "imageList";
+  | "imageList"
+  | "layoutPicker";
 
 export type SettingField = {
   key: string;
@@ -267,6 +268,10 @@ export type SettingField = {
   visibleWhen?: { key: string; value: unknown };
   /** When false, this field is excluded from the translation system even if its type is translatable. */
   translatable?: boolean;
+  /** Layout picker options — image-based dropdown for visual layout selection. */
+  layoutOptions?: { value: string; label: string; image: string }[];
+  /** Help tooltip text — shown in a popover when the info icon is clicked. */
+  tooltip?: string;
 };
 
 // ─── Section Component Contract ──────────────────────────

@@ -51,7 +51,7 @@ export default function SupportReply(props: SupportReplyProps) {
       <Section style={messageBox}>
         <Text style={messageText}>{supportMessage}</Text>
       </Section>
-      <Link href={ticketUrl} style={btnStyle}>
+      <Link href={ticketUrl} style={btnStyle} data-branding="cta">
         Visa ärendet
       </Link>
     </EmailLayout>

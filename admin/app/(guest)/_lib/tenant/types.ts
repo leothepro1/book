@@ -41,6 +41,40 @@ export type MapMarkerConfig = {
   buttonOpenNewTab?: boolean;
 };
 
+// ─── Menu Configuration ──────────────────────────────────
+
+export type MenuItemConfig = {
+  id: string;
+  label: string;
+  url: string;
+};
+
+export type MenuConfig = {
+  id: string;
+  title: string;
+  handle: string;
+  items: MenuItemConfig[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+/**
+ * Default footer menu — seeded on first config load if no menus exist.
+ * Contains the same navigation links as the app footer tab bar.
+ */
+export const DEFAULT_FOOTER_MENU: MenuConfig = {
+  id: "menu_footer",
+  title: "Sidfotsmeny",
+  handle: "footer",
+  items: [
+    { id: "mi_home", label: "Hem", url: "/" },
+    { id: "mi_stays", label: "Bokningar", url: "/stays" },
+    { id: "mi_account", label: "Konto", url: "/account" },
+  ],
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+};
+
 export type MapConfig = {
   id: string;
   name: string;
@@ -91,8 +125,11 @@ export const HEADER_DEFAULTS: HeaderConfig = {
 // ─── Global Footer Configuration ────────────────────────────
 
 export type FooterActiveMode = "background" | "icon-only";
+export type FooterLayout = "app" | "classic";
 
 export type PageFooterConfig = {
+  /** Footer layout style — "app" (tab bar) or "classic" (traditional footer). */
+  footerLayout: FooterLayout;
   /** How the active tab is visually indicated. */
   activeMode: FooterActiveMode;
   /** Whether text labels are shown below icons. */
@@ -109,6 +146,7 @@ export type PageFooterConfig = {
 };
 
 export const PAGE_FOOTER_DEFAULTS: PageFooterConfig = {
+  footerLayout: "app",
   activeMode: "background",
   showLabels: true,
   showDivider: true,
@@ -247,6 +285,13 @@ export type TenantConfig = {
    * Referenced by map elements via map_id.
    */
   maps?: MapConfig[];
+
+  /**
+   * Navigation menus.
+   * Created/managed in the /menus admin page.
+   * Referenced by footer and other navigation components via menu handle.
+   */
+  menus?: MenuConfig[];
 
   /**
    * Tenant-level color scheme definitions.

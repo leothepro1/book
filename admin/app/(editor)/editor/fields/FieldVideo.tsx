@@ -86,13 +86,7 @@ export function FieldVideo({ field, value, onChange }: Props) {
             onClick={() => setLibraryOpen(true)}
             style={{ cursor: "pointer" }}
           >
-            <span className="material-symbols-rounded" style={{
-              fontSize: 40, color: "#999",
-              fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24",
-            }}>play_circle</span>
-            <span className="img-upload-empty-text">
-              Välj video att ladda upp,<br />eller dra och släpp här
-            </span>
+            <span className="img-upload-btn">Ladda upp video</span>
           </div>
         </div>
       )}

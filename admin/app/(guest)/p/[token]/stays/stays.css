@@ -109,14 +109,14 @@
   opacity: .7;
   color: var(--text);
   margin-bottom: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   font-family: var(--font-body);
 }
 
 .booking-card__date-value {
   color: var(--text);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 400;
   font-family: var(--font-body);
 }
@@ -125,4 +125,42 @@
   color: var(--text);
   opacity: 1;
   flex-shrink: 0;
+}
+
+/* ── Vertical card layout (image left, content right) ── */
+
+.booking-card--vertical {
+  display: flex;
+  flex-direction: row;
+  min-height: 170px;
+}
+
+.booking-card--vertical .booking-card__hero {
+  width: 30%;
+  height: auto;
+  min-height: 100%;
+  flex-shrink: 0;
+  background-size: cover;
+  background-position: center;
+}
+
+.booking-card--vertical .booking-card__badge {
+  position: static;
+  display: inline-block;
+  margin-top: 12px;
+  padding: 5px 9px;
+  box-shadow: none;
+}
+
+.booking-card--vertical .booking-card__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.booking-card--vertical .booking-card__unit {
+  margin-bottom: 0;
 }

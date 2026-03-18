@@ -22,11 +22,6 @@
   z-index: -1;
 }
 
-/* icon-only mode: keep color, remove background tint */
-.footer-link.active--icon-only::before {
-  display: none;
-}
-
 .footer-icon {
   color: currentColor;
   width: 23px;

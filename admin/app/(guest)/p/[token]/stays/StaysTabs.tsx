@@ -9,6 +9,7 @@ type Props = {
   previousBookings: NormalizedBooking[];
   lang: "sv" | "en";
   layout: "tabs" | "list";
+  cardLayout?: "horizontal" | "vertical";
   cardShadow?: boolean;
   tabCurrentLabel?: string;
   tabPreviousLabel?: string;
@@ -31,12 +32,15 @@ export default function StaysTabs({
   previousBookings,
   lang,
   layout,
+  cardLayout = "horizontal",
   cardShadow = true,
   tabCurrentLabel,
   tabPreviousLabel,
   cardImageUrl,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<"current" | "previous">("current");
+  const [activeTab, setActiveTab] = useState<"current" | "previous">(
+    currentBookings.length === 0 && previousBookings.length > 0 ? "previous" : "current",
+  );
 
   const currentLabel = tabCurrentLabel || (lang === "en" ? "Current" : "Aktuella");
   const previousLabel = tabPreviousLabel || (lang === "en" ? "Previous" : "Tidigare");
@@ -54,25 +58,37 @@ export default function StaysTabs({
 
 
   function renderCard(b: NormalizedBooking) {
+    const isVertical = cardLayout === "vertical";
     return (
-      <div key={b.externalId} className={`booking-card${cardShadow ? "" : " booking-card--no-shadow"}`}>
+      <div key={b.externalId} className={`booking-card${isVertical ? " booking-card--vertical" : ""}${cardShadow ? "" : " booking-card--no-shadow"}`}>
         <div
           className="booking-card__hero"
           style={{
-            backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.55) 100%), url("${heroImage}")`,
+            backgroundImage: isVertical
+              ? `url("${heroImage}")`
+              : `linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.55) 100%), url("${heroImage}")`,
           }}
         >
-          <div className="booking-card__badge">
-            {getBadgeText(b)}
-          </div>
+          {!isVertical && (
+            <div className="booking-card__badge">
+              {getBadgeText(b)}
+            </div>
+          )}
         </div>
 
         <div className="booking-card__content">
-          <div className="booking-card__unit">{b.unit}</div>
+          <div>
+            <div className="booking-card__unit">{b.unit}</div>
+            {isVertical && (
+              <div className="booking-card__badge">
+                {getBadgeText(b)}
+              </div>
+            )}
+          </div>
 
           <div className="booking-card__dates">
             <div className="booking-card__date">
-              <div className="booking-card__date-label">Check-in</div>
+              <div className="booking-card__date-label">Incheckning</div>
               <div className="booking-card__date-value">
                 {formatDateLong(new Date(b.arrival), lang)}
               </div>
@@ -91,7 +107,7 @@ export default function StaysTabs({
             </div>
 
             <div className="booking-card__date booking-card__date--right">
-              <div className="booking-card__date-label">Check-out</div>
+              <div className="booking-card__date-label">Utcheckning</div>
               <div className="booking-card__date-value">
                 {formatDateLong(new Date(b.departure), lang)}
               </div>

@@ -1,2 +1,2 @@
-export { PublishBar } from "./PublishBar";
-export { PublishBarProvider, usePublishBar } from "./PublishBarContext";
+export { PublishBar, PublishBarUI, type PublishBarProps } from "./PublishBar";
+export { PublishBarProvider, usePublishBar, usePublishBarInternal } from "./PublishBarContext";

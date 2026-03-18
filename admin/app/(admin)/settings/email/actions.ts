@@ -7,6 +7,7 @@ import { EMAIL_EVENT_REGISTRY, getEventDefinition } from "@/app/_lib/email";
 import { renderDefaultTemplate } from "@/app/_lib/email/templates";
 import { sendEmailEvent } from "@/app/_lib/email";
 import type { EmailEventType } from "@/app/_lib/email";
+import type { EmailBranding } from "@/app/_lib/email/branding";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -107,6 +108,29 @@ export async function getTenantEmailBranding(): Promise<TenantEmailBranding | nu
   };
 }
 
+// ── renderEmailPreviewWithBranding ──────────────────────────────
+
+export async function renderEmailPreviewWithBranding(
+  eventType: string,
+  branding: { logoUrl: string | null; logoWidth: number; accentColor: string },
+): Promise<string | null> {
+  if (!VALID_EVENT_TYPES.has(eventType as EmailEventType)) return null;
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return null;
+
+  const emailBranding: EmailBranding = {
+    logoUrl: branding.logoUrl,
+    logoWidth: branding.logoWidth,
+    accentColor: branding.accentColor,
+  };
+
+  return renderDefaultTemplate(
+    eventType as EmailEventType,
+    SAMPLE_VARIABLES,
+    emailBranding,
+  );
+}
+
 // ── getEmailTemplates ───────────────────────────────────────────
 
 export async function getEmailTemplates(): Promise<EmailTemplateRow[]> {
@@ -159,6 +183,12 @@ export async function getEmailTemplateDetail(
 
   const typedEvent = eventType as EmailEventType;
 
+  const emailBranding: EmailBranding = {
+    logoUrl: tenantData.tenant.emailLogoUrl,
+    logoWidth: tenantData.tenant.emailLogoWidth ?? 120,
+    accentColor: tenantData.tenant.emailAccentColor ?? "#1A56DB",
+  };
+
   const [override, defaultHtml] = await Promise.all([
     prisma.emailTemplate.findUnique({
       where: {
@@ -168,7 +198,7 @@ export async function getEmailTemplateDetail(
         },
       },
     }),
-    renderDefaultTemplate(typedEvent, SAMPLE_VARIABLES),
+    renderDefaultTemplate(typedEvent, SAMPLE_VARIABLES, emailBranding),
   ]);
 
   const def = getEventDefinition(typedEvent);

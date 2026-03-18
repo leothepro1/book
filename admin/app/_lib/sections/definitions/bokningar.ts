@@ -54,10 +54,19 @@ const defaultPreset: SectionPreset = {
 
   settingsSchema: [
     {
+      key: "cardImageUrl",
+      type: "image",
+      label: "Kortbild",
+      tooltip: "Bilden hämtas från PMS för boendetypen. Lägg till en reservbild som backup.",
+      default: "",
+      group: "Innehåll",
+    },
+    {
       key: "layout",
       type: "segmented",
-      label: "Layout",
+      label: "Visningsläge",
       default: "tabs",
+      group: "Layout",
       options: [
         { value: "tabs", label: "Flikar" },
         { value: "list", label: "Lista" },
@@ -68,13 +77,7 @@ const defaultPreset: SectionPreset = {
       type: "toggle",
       label: "Använd skugga",
       default: true,
-    },
-    {
-      key: "cardImageUrl",
-      type: "image",
-      label: "Kortbild",
-      description: "Bilden hämtas från PMS för boendetypen. Lägg till en reservbild som backup.",
-      default: "",
+      group: "Design",
     },
   ],
   settingDefaults: {
@@ -102,7 +105,7 @@ export const bokningarSection: SectionDefinition = {
   thumbnail: "",
   scope: "locked",
   lockedTo: "stays",
-  editableFields: ["heading", "description", "layout", "cardShadow", "cardImageUrl", "colorSchemeId", "paddingTop"],
+  editableFields: ["cardLayout", "heading", "description", "layout", "cardShadow", "cardImageUrl", "colorSchemeId", "paddingTop"],
 
   settingsSchema: [
     {
@@ -112,6 +115,7 @@ export const bokningarSection: SectionDefinition = {
       default: "Bokningar",
       required: true,
       hideLabel: false,
+      group: "Innehåll",
     },
     {
       key: "description",
@@ -119,11 +123,32 @@ export const bokningarSection: SectionDefinition = {
       label: "Text",
       default: "",
       hideLabel: false,
+      group: "Innehåll",
+    },
+    {
+      key: "cardLayout",
+      type: "layoutPicker",
+      label: "Layout",
+      default: "horizontal",
+      group: "Layout",
+      layoutOptions: [
+        {
+          value: "horizontal",
+          label: "Horisontell",
+          image: "https://res.cloudinary.com/dmgmoisae/image/upload/v1773842581/horisonzel_fvzrlj.png",
+        },
+        {
+          value: "vertical",
+          label: "Vertikal",
+          image: "https://res.cloudinary.com/dmgmoisae/image/upload/v1773842581/vertical_32_mmybtk.png",
+        },
+      ],
     },
   ],
   settingDefaults: {
     heading: "Bokningar",
     description: "",
+    cardLayout: "horizontal",
     paddingTop: 19,
     paddingRight: 17,
     paddingBottom: 124,

@@ -13,7 +13,7 @@ const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME!;
 const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!;
 const ALLOWED_UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif", "image/svg+xml", "application/pdf", "video/mp4", "video/webm", "video/quicktime"];
 
-function uploadDirect(file: File | Blob, folder: string, resourceType: "image" | "video" = "image"): Promise<{ url: string; publicId: string; width: number; height: number; bytes: number; format: string; resourceType: string }> {
+function uploadDirect(file: File | Blob, folder: string, resourceType: "image" | "video" | "raw" = "image"): Promise<{ url: string; publicId: string; width: number; height: number; bytes: number; format: string; resourceType: string }> {
   return new Promise((resolve, reject) => {
     const fd = new FormData();
     fd.append("file", file);
@@ -108,8 +108,8 @@ export type MediaLibraryModalProps = {
   /** Subfolder within tenant (e.g. "sections", "cards"). Default: "media" */
   uploadFolder?: string;
   title?: string;
-  /** Filter selectable items by media type. "image" = images only, "video" = videos only, undefined = all. */
-  accept?: "image" | "video";
+  /** Filter selectable items by media type. "image" = images only, "video" = videos only, "document" = PDFs only, undefined = all. */
+  accept?: "image" | "video" | "document";
   /** "modal" (default) renders as portal overlay. "inline" renders directly without portal/overlay. */
   mode?: "modal" | "inline";
   /** Ref to trigger file upload externally (for inline mode header button) */
@@ -305,8 +305,9 @@ export function MediaLibraryModal({
       for (const file of fileArray) {
         const id = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const isVideo = file.type.startsWith("video/");
+        const isPdf = file.type === "application/pdf";
 
-        // Create local preview for images and videos
+        // Create local preview for images and videos (PDFs have no preview)
         let previewUrl: string | null = null;
         if (file.type.startsWith("image/") || isVideo) {
           previewUrl = URL.createObjectURL(file);
@@ -324,18 +325,20 @@ export function MediaLibraryModal({
 
         setPendingUploads((prev) => [pending, ...prev]);
 
-        // Upload (use video endpoint for video files)
-        uploadDirect(file, folder, isVideo ? "video" : "image")
+        // Upload: video → video endpoint, PDF → raw endpoint, else → image
+        const uploadType = isVideo ? "video" : isPdf ? "raw" : "image";
+        uploadDirect(file, folder, uploadType)
           .then((result) => {
             setPendingUploads((prev) =>
               prev.map((p) => (p.id === id ? { ...p, status: "done" as const, result } : p))
             );
 
             // Index in DB, then refresh — pending item stays until real item appears in list
+            const hintResourceType = isVideo ? "video" : isPdf ? "raw" : undefined;
             fetch("/api/media/index", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ url: result.url, publicId: result.publicId, folder: uploadFolder, ...(isVideo && { resourceType: "video" }) }),
+              body: JSON.stringify({ url: result.url, publicId: result.publicId, folder: uploadFolder, ...(hintResourceType && { resourceType: hintResourceType }) }),
             })
               .catch((err) => console.warn("[MediaLibrary] Index failed:", err))
               .finally(() => actions.refresh());
@@ -398,6 +401,7 @@ export function MediaLibraryModal({
     ? state.items.filter((i) => {
         if (accept === "video") return i.mimeType.startsWith("video/") || i.resourceType === "video";
         if (accept === "image") return i.mimeType.startsWith("image/");
+        if (accept === "document") return i.mimeType === "application/pdf" || i.format === "pdf" || i.url.includes(".pdf");
         return true;
       })
     : state.items;
@@ -555,7 +559,7 @@ export function MediaLibraryModal({
           <input
             ref={fileInputRef}
             type="file"
-            accept={accept === "image" ? "image/jpeg,image/png,image/webp,image/avif,image/gif,image/svg+xml" : accept === "video" ? "video/mp4,video/webm,video/quicktime" : ALLOWED_UPLOAD_TYPES.join(",")}
+            accept={accept === "image" ? "image/jpeg,image/png,image/webp,image/avif,image/gif,image/svg+xml" : accept === "video" ? "video/mp4,video/webm,video/quicktime" : accept === "document" ? "application/pdf" : ALLOWED_UPLOAD_TYPES.join(",")}
             multiple
             onChange={handleFileInput}
             style={{ display: "none" }}

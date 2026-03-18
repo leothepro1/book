@@ -139,6 +139,13 @@ export function ColorPickerPopup({ value, onChange, onClose, anchorRef }: ColorP
     return () => document.removeEventListener("mousedown", handleClick);
   }, [onClose, anchorRef]);
 
+  // Close on any scroll
+  useEffect(() => {
+    const handleScroll = () => onClose();
+    document.addEventListener("scroll", handleScroll, true);
+    return () => document.removeEventListener("scroll", handleScroll, true);
+  }, [onClose]);
+
   // Draw SV canvas
   useEffect(() => {
     const ctx = svCanvasRef.current?.getContext("2d");

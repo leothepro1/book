@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { EditorIcon } from "@/app/_components/EditorIcon";
 import { useSettings } from "@/app/(admin)/_components/SettingsContext";
 import { MediaLibraryModal } from "@/app/(admin)/_components/MediaLibrary";
@@ -16,8 +16,21 @@ import {
   getAdminEmail,
   getTenantSenderInfo,
   getTenantEmailBranding,
+  renderEmailPreviewWithBranding,
 } from "./actions";
 import type { EmailTemplateRow, EmailTemplateDetail, TenantSenderInfo, TenantEmailBranding } from "./actions";
+import {
+  EmailBrandingProvider,
+  useEmailBranding,
+  EmailPreviewFrame,
+  EmailPublishBar,
+  type BrandingSnapshot,
+} from "@/app/(admin)/_components/EmailPreview";
+import { ColorPickerPopup } from "@/app/(admin)/_components/ColorPicker";
+import dynamic from "next/dynamic";
+const HtmlEditor = dynamic(() => import("./_components/HtmlEditor"), { ssr: false });
+import { PublishBarUI } from "@/app/(admin)/_components/PublishBar";
+import { createPortal } from "react-dom";
 import "./email.css";
 
 // ── ButtonSpinner ───────────────────────────────────────────────
@@ -49,19 +62,21 @@ function ButtonSpinner({ visible }: { visible: boolean }) {
   );
 }
 
-// ── Props ───────────────────────────────────────────────────────
-
-type EmailContentProps = {
-  onSubTitleChange?: (title: string | null) => void;
-  onHeaderExtraChange?: (node: React.ReactNode) => void;
-};
-
-// ── Main component ──────────────────────────────────────────────
-
-type EmailView = "main" | "guest-notifications" | "template-preview" | "customize-templates";
+// ── Constants ───────────────────────────────────────────────────
 
 const DEFAULT_LOGO_WIDTH = 120;
 const VALID_HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+
+/** Normalize shorthand/8-char hex to standard 6-char (#F00 → #FF0000, #FF0000FF → #FF0000). */
+function normalizeHex(hex: string): string {
+  if (/^#[0-9a-fA-F]{3}$/.test(hex)) {
+    return `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`;
+  }
+  if (/^#[0-9a-fA-F]{8}$/.test(hex)) {
+    return hex.slice(0, 7);
+  }
+  return hex;
+}
 
 const GUEST_NOTIFICATION_CATEGORIES = [
   {
@@ -88,6 +103,300 @@ const GUEST_NOTIFICATION_CATEGORIES = [
 
 const ALL_TEMPLATE_IDS = GUEST_NOTIFICATION_CATEGORIES.flatMap((c) => c.items);
 
+// ── EmailCustomizeView — uses EmailBrandingContext ──────────────
+
+type EmailCustomizeViewProps = {
+  cardStyle: React.CSSProperties;
+  currentTemplate: { id: string; title: string } | undefined;
+  customizePreviewIdx: number;
+  customizePreviewHtml: string;
+  libraryOpen: boolean;
+  setLibraryOpen: (v: boolean) => void;
+  setCustomizePreviewIdx: (v: number) => void;
+  setCustomizePreviewHtml: (v: string) => void;
+  handleMediaSelect: (asset: MediaLibraryResult) => void;
+  mediaSelectCallbackRef: React.MutableRefObject<((url: string) => void) | null>;
+};
+
+function EmailCustomizeView({
+  cardStyle,
+  currentTemplate,
+  customizePreviewIdx,
+  customizePreviewHtml,
+  libraryOpen,
+  setLibraryOpen,
+  setCustomizePreviewIdx,
+  setCustomizePreviewHtml,
+  handleMediaSelect,
+  mediaSelectCallbackRef,
+}: EmailCustomizeViewProps) {
+  const { branding, pushUndo, updateBranding } = useEmailBranding();
+
+  // Hex input derives from branding.accentColor but allows free-text editing.
+  // When branding changes externally (undo/redo), we reset the input.
+  const [hexInput, setHexInput] = useState(branding.accentColor);
+  const [hexSyncKey, setHexSyncKey] = useState(branding.accentColor);
+  if (branding.accentColor !== hexSyncKey) {
+    setHexSyncKey(branding.accentColor);
+    setHexInput(branding.accentColor);
+  }
+
+  // Color picker popup state
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const swatchRef = useRef<HTMLDivElement>(null);
+
+  // ── Interaction-batched undo ──────────────────────────────────
+  // Push undo on the FIRST actual value change per interaction, not on
+  // focus/pointerdown (which would create phantom entries if the user
+  // focuses then blurs without changing anything). Reset on blur/pointerup.
+  const undoPushedRef = useRef(false);
+
+  /** Push undo exactly once per interaction. Call inside onChange. */
+  const pushUndoOnce = useCallback(() => {
+    if (!undoPushedRef.current) {
+      pushUndo();
+      undoPushedRef.current = true;
+    }
+  }, [pushUndo]);
+
+  /** Mark end of a continuous interaction. */
+  const commitInteraction = useCallback(() => {
+    undoPushedRef.current = false;
+  }, []);
+
+  // Register media select callback so parent MediaLibrary can update branding
+  useEffect(() => {
+    mediaSelectCallbackRef.current = (url: string) => {
+      pushUndo();
+      updateBranding("logoUrl", url);
+    };
+    return () => { mediaSelectCallbackRef.current = null; };
+  }, [pushUndo, updateBranding, mediaSelectCallbackRef]);
+
+
+  // Carousel navigation with current branding
+  async function navigateCarousel(direction: -1 | 1) {
+    const newIdx = customizePreviewIdx + direction;
+    if (newIdx < 0 || newIdx >= ALL_TEMPLATE_IDS.length) return;
+    setCustomizePreviewIdx(newIdx);
+    const id = ALL_TEMPLATE_IDS[newIdx].id;
+    const html = await renderEmailPreviewWithBranding(id, branding);
+    if (html) setCustomizePreviewHtml(html);
+  }
+
+  return (
+    <div className="email-root">
+      {/* Container 1: Logotyp */}
+      <div style={cardStyle}>
+        <h4 className="email-customize__title">Logotyp</h4>
+        {branding.logoUrl ? (
+          <div className="img-upload">
+            <div className="img-upload-result">
+              <div className="img-upload-result-thumb">
+                <img src={branding.logoUrl} alt="" className="img-upload-result-img" />
+              </div>
+              <div className="img-upload-result-meta">
+                <span className="img-upload-result-filename">
+                  {branding.logoUrl.split("/").pop() || "logotyp"}
+                </span>
+                <button
+                  type="button"
+                  className="design-logo-btn design-logo-btn-edit"
+                  onClick={() => setLibraryOpen(true)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z" /></svg>
+                  <span>Ändra</span>
+                </button>
+              </div>
+              <button
+                type="button"
+                className="img-upload-trash-btn"
+                onClick={() => { pushUndo(); updateBranding("logoUrl", null); }}
+                aria-label="Ta bort logotyp"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path fillRule="evenodd" d="m6.83 0-.35.15-1.33 1.33-.15.35V3H0v1h2v11.5l.5.5h11l.5-.5V4h2V3h-5V1.83l-.15-.35L9.52.15 9.17 0H6.83ZM10 3v-.96L8.96 1H7.04L6 2.04V3h4ZM5 4H3v11h10V4H5Zm2 3v5H6V7h1Zm3 .5V7H9v5h1V7.5Z" fill="currentColor"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="img-upload">
+            <div
+              className="img-upload-empty"
+              onClick={() => setLibraryOpen(true)}
+              style={{ cursor: "pointer" }}
+            >
+              <span className="img-upload-btn">Ladda upp logotyp</span>
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginTop: 16 }}>
+          <label className="email-customize__label">Logotypstorlek</label>
+          <div className="sf-range-row">
+            <div
+              className="sf-range__track"
+              ref={(el) => {
+                if (!el) return;
+                const onDown = (e: PointerEvent) => {
+                  e.preventDefault();
+                  el.setPointerCapture(e.pointerId);
+                  pushUndoOnce();
+                  const rect = el.getBoundingClientRect();
+                  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                  updateBranding("logoWidth", Math.round(24 + ratio * (400 - 24)));
+                };
+                const onMove = (e: PointerEvent) => {
+                  if (!el.hasPointerCapture(e.pointerId)) return;
+                  const rect = el.getBoundingClientRect();
+                  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                  updateBranding("logoWidth", Math.round(24 + ratio * (400 - 24)));
+                };
+                const onUp = () => { commitInteraction(); };
+                el.onpointerdown = onDown;
+                el.onpointermove = onMove;
+                el.onpointerup = onUp;
+              }}
+            >
+              <div className="sf-range__fill" style={{ width: `${((branding.logoWidth - 24) / (400 - 24)) * 100}%` }} />
+              <div className="sf-range__thumb" style={{ left: `${((branding.logoWidth - 24) / (400 - 24)) * 100}%` }} />
+            </div>
+            <div className="sf-range-input-wrap">
+              <input
+                type="number"
+                className="sf-range-input"
+                value={branding.logoWidth}
+                min={24}
+                max={400}
+                step={1}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (!isNaN(v)) {
+                    pushUndoOnce();
+                    updateBranding("logoWidth", Math.min(400, Math.max(24, v)));
+                  }
+                }}
+                onBlur={commitInteraction}
+              />
+              <span className="sf-range-unit">px</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Container 2: Färger */}
+      <div style={cardStyle}>
+        <h4 className="email-customize__title">Färger</h4>
+        <label className="email-customize__label">Accentfärg</label>
+        <div className="sf-color-row">
+          <div
+            ref={swatchRef}
+            className="sf-color-swatch"
+            style={{ background: VALID_HEX.test(branding.accentColor) ? branding.accentColor : "#1A56DB" }}
+            onClick={() => setPickerOpen(!pickerOpen)}
+          />
+          <input
+            type="text"
+            className="sf-input sf-input--color-hex"
+            value={hexInput}
+            onChange={(e) => {
+              setHexInput(e.target.value);
+              if (VALID_HEX.test(e.target.value)) {
+                pushUndoOnce();
+                const normalized = normalizeHex(e.target.value);
+                updateBranding("accentColor", normalized);
+                setHexInput(normalized);
+              }
+            }}
+            onBlur={() => {
+              commitInteraction();
+              if (!VALID_HEX.test(hexInput)) setHexInput(branding.accentColor);
+            }}
+            maxLength={9}
+          />
+        </div>
+        {pickerOpen && createPortal(
+          <ColorPickerPopup
+            value={VALID_HEX.test(branding.accentColor) ? branding.accentColor : "#1A56DB"}
+            onChange={(hex) => {
+              pushUndoOnce();
+              updateBranding("accentColor", hex);
+              setHexInput(hex.toUpperCase());
+            }}
+            onClose={() => {
+              setPickerOpen(false);
+              commitInteraction();
+            }}
+            anchorRef={swatchRef}
+          />,
+          document.body,
+        )}
+      </div>
+
+      {/* Container 3: Preview carousel */}
+      <div style={cardStyle}>
+        <div className="email-customize__preview-header">
+          <span className="email-customize__preview-name">{currentTemplate?.title ?? ""}</span>
+          <div className="email-customize__preview-nav">
+            <div className="files-pagination__nav">
+              <button
+                className="files-pagination__btn"
+                disabled={customizePreviewIdx === 0}
+                onClick={() => navigateCarousel(-1)}
+                aria-label="Föregående mall"
+              >
+                <EditorIcon name="chevron_left" size={20} />
+              </button>
+              <button
+                className="files-pagination__btn"
+                disabled={customizePreviewIdx >= ALL_TEMPLATE_IDS.length - 1}
+                onClick={() => navigateCarousel(1)}
+                aria-label="Nästa mall"
+              >
+                <EditorIcon name="chevron_right" size={20} />
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="email-preview-card">
+          <div className="email-preview-card__body">
+            <EmailPreviewFrame
+              html={customizePreviewHtml}
+              branding={branding}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Publish bar — fixed toast (positioned by publish-bar.css) */}
+      <EmailPublishBar />
+
+      <MediaLibraryModal
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        onConfirm={handleMediaSelect}
+        currentValue={branding.logoUrl || undefined}
+        uploadFolder="email"
+        accept="image"
+        title="Välj logotyp"
+      />
+    </div>
+  );
+}
+
+// ── Props ───────────────────────────────────────────────────────
+
+type BreadcrumbSegment = { label: string; onClick?: () => void };
+type EmailContentProps = {
+  onSubTitleChange?: (title: string | BreadcrumbSegment[] | null) => void;
+  onHeaderExtraChange?: (node: React.ReactNode) => void;
+};
+
+// ── Main component ──────────────────────────────────────────────
+
+type EmailView = "main" | "guest-notifications" | "template-preview" | "template-editor" | "customize-templates";
+
 export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailContentProps) {
   const { subPath, setSubPath } = useSettings();
   const [templates, setTemplates] = useState<EmailTemplateRow[]>([]);
@@ -97,9 +406,27 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
 
   // Derive view from subPath
   const view: EmailView = subPath === "customize" ? "customize-templates"
+    : subPath?.endsWith("/edit") ? "template-editor"
     : subPath?.startsWith("guest/") ? "template-preview"
     : subPath === "guest" ? "guest-notifications"
     : "main";
+
+  // ── Breadcrumb helpers ──────────────────────────────────────────
+  const goToGuest = useCallback(() => {
+    setSubPath("guest");
+    onSubTitleChange?.([{ label: "Gästaviseringar" }]);
+  }, [setSubPath, onSubTitleChange]);
+
+  const goToTemplatePreview = useCallback(async (item: { id: string; title: string }) => {
+    setSubPath(`guest/${item.id}`);
+    onSubTitleChange?.([
+      { label: "Gästaviseringar", onClick: goToGuest },
+      { label: item.title },
+    ]);
+    // Reload preview data when navigating back from editor
+    const detail = await getEmailTemplateDetail(item.id);
+    if (detail) setPreviewing(detail);
+  }, [setSubPath, onSubTitleChange, goToGuest]);
 
   // Editor form state
   const [subject, setSubject] = useState("");
@@ -125,19 +452,18 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
   const [showTestToast, setShowTestToast] = useState(false);
+  const [testToastEmail, setTestToastEmail] = useState("");
+
+  // Editor branding (read-only, for preview iframe)
+  const [editorBranding, setEditorBranding] = useState<BrandingSnapshot | null>(null);
+  const [showEditorPreview, setShowEditorPreview] = useState(false);
+  const [editorLinger, setEditorLinger] = useState(false);
 
   // Customize-templates state
-  const [branding, setBranding] = useState<TenantEmailBranding | null>(null);
-  const [brandingLogoUrl, setBrandingLogoUrl] = useState<string | null>(null);
-  const [brandingLogoWidth, setBrandingLogoWidth] = useState(DEFAULT_LOGO_WIDTH);
-  const [brandingAccentColor, setBrandingAccentColor] = useState("#1A56DB");
-  const [hexInput, setHexInput] = useState("#1A56DB");
+  const [initialBranding, setInitialBranding] = useState<BrandingSnapshot | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [customizePreviewIdx, setCustomizePreviewIdx] = useState(0);
-  const [customizeDetails, setCustomizeDetails] = useState<Map<string, EmailTemplateDetail>>(new Map());
   const [customizePreviewHtml, setCustomizePreviewHtml] = useState("");
-  const [isSavingBranding, setIsSavingBranding] = useState(false);
-  const [showBrandingSavedToast, setShowBrandingSavedToast] = useState(false);
 
   // Sender info
   const [senderInfo, setSenderInfo] = useState<TenantSenderInfo | null>(null);
@@ -173,14 +499,20 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
     restoredRef.current = true;
 
     if (subPath === "guest") {
-      onSubTitleChange?.("Gästaviseringar");
+      onSubTitleChange?.([{ label: "Gästaviseringar" }]);
     } else if (subPath === "customize") {
       openCustomize();
+    } else if (subPath.endsWith("/edit")) {
+      const eventType = subPath.split("/")[1];
+      openEditor(eventType);
     } else if (subPath.startsWith("guest/")) {
       const eventType = subPath.split("/")[1];
       const cat = GUEST_NOTIFICATION_CATEGORIES.flatMap((c) => c.items).find((i) => i.id === eventType);
       if (cat) {
-        onSubTitleChange?.(cat.title);
+        onSubTitleChange?.([
+          { label: "Gästaviseringar", onClick: goToGuest },
+          { label: cat.title },
+        ]);
         getEmailTemplateDetail(eventType).then((detail) => {
           if (detail) setPreviewing(detail);
         });
@@ -193,7 +525,6 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 5000); return () => clearTimeout(t); }, [toast]);
   useEffect(() => { if (!showSentToast) return; const t = setTimeout(() => setShowSentToast(false), 4000); return () => clearTimeout(t); }, [showSentToast]);
   useEffect(() => { if (!showTestToast) return; const t = setTimeout(() => setShowTestToast(false), 4000); return () => clearTimeout(t); }, [showTestToast]);
-  useEffect(() => { if (!showBrandingSavedToast) return; const t = setTimeout(() => setShowBrandingSavedToast(false), 4000); return () => clearTimeout(t); }, [showBrandingSavedToast]);
 
   // ── Sender handler ──────────────────────────────────────────────
 
@@ -257,7 +588,17 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
 
   // Set header buttons when in template-preview view
   useEffect(() => {
-    if (view === "template-preview" && previewing) {
+    if (view === "template-editor" && editing) {
+      onHeaderExtraChange?.(
+        <button
+          className="settings-btn--muted"
+          style={{ marginLeft: "auto", fontSize: 13, padding: "5px 12px" }}
+          onClick={() => setShowEditorPreview(true)}
+        >
+          Förhandsgranska
+        </button>
+      );
+    } else if (view === "template-preview" && previewing) {
       onHeaderExtraChange?.(
         <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
           <button
@@ -294,7 +635,7 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
       onHeaderExtraChange?.(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, previewing]);
+  }, [view, previewing, editing]);
 
   async function handleSendTestFromPreview() {
     if (!previewing) return;
@@ -311,80 +652,58 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
 
   async function openCustomize() {
     setSubPath("customize");
-    onSubTitleChange?.("Anpassa e-postmallar");
+    onSubTitleChange?.([
+      { label: "Gästaviseringar", onClick: goToGuest },
+      { label: "Anpassa e-postmallar" },
+    ]);
 
     // Load branding
     const b = await getTenantEmailBranding();
-    if (b) {
-      setBranding(b);
-      setBrandingLogoUrl(b.logoUrl);
-      setBrandingLogoWidth(b.logoWidth ?? DEFAULT_LOGO_WIDTH);
-      setBrandingAccentColor(b.accentColor ?? "#1A56DB");
-      setHexInput(b.accentColor ?? "#1A56DB");
-    }
+    const snapshot: BrandingSnapshot = {
+      logoUrl: b?.logoUrl ?? null,
+      logoWidth: b?.logoWidth ?? DEFAULT_LOGO_WIDTH,
+      accentColor: b?.accentColor ?? "#1A56DB",
+    };
+    setInitialBranding(snapshot);
 
-    // Load first template detail for preview
+    // Load first template HTML with branding applied
     const firstId = ALL_TEMPLATE_IDS[0]?.id;
     if (firstId) {
       setCustomizePreviewIdx(0);
-      const detail = await getEmailTemplateDetail(firstId);
-      if (detail) {
-        setCustomizeDetails((m) => new Map(m).set(firstId, detail));
-        setCustomizePreviewHtml(detail.override.html ?? detail.defaults.html);
-      }
-    }
-  }
-
-  async function navigateCustomizePreview(direction: -1 | 1) {
-    const newIdx = customizePreviewIdx + direction;
-    if (newIdx < 0 || newIdx >= ALL_TEMPLATE_IDS.length) return;
-    setCustomizePreviewIdx(newIdx);
-    const id = ALL_TEMPLATE_IDS[newIdx].id;
-
-    // Use cached detail or fetch
-    let detail = customizeDetails.get(id);
-    if (!detail) {
-      detail = await getEmailTemplateDetail(id) ?? undefined;
-      if (detail) {
-        setCustomizeDetails((m) => new Map(m).set(id, detail!));
-      }
-    }
-    if (detail) {
-      setCustomizePreviewHtml(detail.override.html ?? detail.defaults.html);
+      const html = await renderEmailPreviewWithBranding(firstId, snapshot);
+      if (html) setCustomizePreviewHtml(html);
     }
   }
 
   const handleMediaSelect = useCallback((asset: MediaLibraryResult) => {
-    setBrandingLogoUrl(asset.url);
     setLibraryOpen(false);
+    // The actual branding update happens in EmailCustomizeView via context
+    mediaSelectCallbackRef.current?.(asset.url);
   }, []);
 
-  async function saveBranding() {
-    setIsSavingBranding(true);
-    try {
-      const body: Record<string, unknown> = {};
-      body.logoUrl = brandingLogoUrl;
-      body.logoWidth = brandingLogoWidth;
-      body.accentColor = brandingAccentColor;
-      await fetch("/api/email-branding", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      setShowBrandingSavedToast(true);
-    } catch {
-      // silent
-    }
-    setIsSavingBranding(false);
-  }
+  const mediaSelectCallbackRef = useRef<((url: string) => void) | null>(null);
 
   // ── Template editor handlers ────────────────────────────────────
 
   async function openEditor(eventType: string) {
-    const detail = await getEmailTemplateDetail(eventType);
+    const [detail, b] = await Promise.all([
+      getEmailTemplateDetail(eventType),
+      getTenantEmailBranding(),
+    ]);
     if (!detail) return;
     setEditing(detail);
-    onSubTitleChange?.(detail.label);
+    setSubPath(`guest/${eventType}/edit`);
+    const branding: BrandingSnapshot = {
+      logoUrl: b?.logoUrl ?? null,
+      logoWidth: b?.logoWidth ?? 120,
+      accentColor: b?.accentColor ?? "#1A56DB",
+    };
+    setEditorBranding(branding);
+    onSubTitleChange?.([
+      { label: "Gästaviseringar", onClick: goToGuest },
+      { label: detail.label, onClick: () => goToTemplatePreview({ id: detail.eventType, title: detail.label }) },
+      { label: `Redigera ${detail.label}` },
+    ]);
     const s = detail.override.subject ?? "";
     const p = detail.override.previewText ?? "";
     const h = detail.override.html ?? "";
@@ -395,11 +714,14 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
   }
 
   function closeEditor() {
+    const prevEditing = editing;
     setEditing(null);
-    if (view === "guest-notifications") {
-      onSubTitleChange?.("Gästaviseringar");
+    if (prevEditing) {
+      // Navigate back to template preview
+      goToTemplatePreview({ id: prevEditing.eventType, title: prevEditing.label });
     } else {
-      onSubTitleChange?.(null);
+      setSubPath("guest");
+      onSubTitleChange?.([{ label: "Gästaviseringar" }]);
     }
     setToast(null);
     getEmailTemplates().then(setTemplates);
@@ -445,7 +767,8 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
     setIsSaving(false);
     if (result.ok) {
       setOriginalSubject(subject); setOriginalPreviewText(previewText); setOriginalHtml(html);
-      setToast({ type: "success", message: "Mallen har sparats" });
+      setEditorLinger(true);
+      setTimeout(() => setEditorLinger(false), 1500);
     } else {
       setToast({ type: "error", message: result.error ?? "Kunde inte spara" });
     }
@@ -493,222 +816,24 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
 
   // ── Customize templates view ─────────────────────────────────
 
-  if (view === "customize-templates") {
+  if (view === "customize-templates" && initialBranding) {
     const currentTemplate = ALL_TEMPLATE_IDS[customizePreviewIdx];
-    const currentDetail = currentTemplate ? customizeDetails.get(currentTemplate.id) : null;
-
-    // Resolve preview HTML with branding overrides applied
-    const rawPreviewHtml = customizePreviewHtml;
-    const resolvedCustomizeHtml = rawPreviewHtml
-      .replace(/background-color:\s*#f6f6f6/gi, "background-color:#fff")
-      .replace(/padding:\s*40px\s+0/gi, "padding:0")
-      .replace(/padding:\s*40px\s+32px/gi, "padding:16px")
-      .replace(/max-width:\s*600px/gi, "max-width:100%")
-      .replace(/border-radius:\s*8px/gi, "border-radius:0")
-      .replace(/margin:\s*0\s+auto/gi, "margin:0");
 
     return (
-      <div className="email-root">
-        {/* Container 1: Logotyp */}
-        <div style={cardStyle}>
-          <h4 className="email-customize__title">Logotyp</h4>
-          {brandingLogoUrl ? (
-            <div className="img-upload">
-              <div className="img-upload-result">
-                <div className="img-upload-result-thumb">
-                  <img src={brandingLogoUrl} alt="" className="img-upload-result-img" />
-                </div>
-                <div className="img-upload-result-meta">
-                  <span className="img-upload-result-filename">
-                    {brandingLogoUrl.split("/").pop() || "logotyp"}
-                  </span>
-                  <button
-                    type="button"
-                    className="design-logo-btn design-logo-btn-edit"
-                    onClick={() => setLibraryOpen(true)}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z" /></svg>
-                    <span>Ändra</span>
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="img-upload-trash-btn"
-                  onClick={() => setBrandingLogoUrl(null)}
-                  aria-label="Ta bort logotyp"
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path fillRule="evenodd" d="m6.83 0-.35.15-1.33 1.33-.15.35V3H0v1h2v11.5l.5.5h11l.5-.5V4h2V3h-5V1.83l-.15-.35L9.52.15 9.17 0H6.83ZM10 3v-.96L8.96 1H7.04L6 2.04V3h4ZM5 4H3v11h10V4H5Zm2 3v5H6V7h1Zm3 .5V7H9v5h1V7.5Z" fill="currentColor"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="img-upload">
-              <div
-                className="img-upload-empty"
-                onClick={() => setLibraryOpen(true)}
-                style={{ cursor: "pointer" }}
-              >
-                <svg className="img-upload-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path fillRule="evenodd" d="M3.5 0 3 .5v23l.5.5h17l.5-.5v-16l-.15-.35-7-7L13.5 0h-10ZM4 23V1h9v6.5l.5.5H20v15H4ZM19.3 7 14 1.7V7h5.3Z" fill="currentColor" />
-                </svg>
-                <span className="img-upload-empty-text">
-                  Välj fil att ladda upp,<br />eller dra och släpp här
-                </span>
-              </div>
-            </div>
-          )}
-
-          <div style={{ marginTop: 16 }}>
-            <label className="email-customize__label">Logotypstorlek</label>
-            <div className="sf-range-row">
-              <div
-                className="sf-range__track"
-                ref={(el) => {
-                  if (!el) return;
-                  const onDown = (e: PointerEvent) => {
-                    e.preventDefault();
-                    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-                    const rect = el.getBoundingClientRect();
-                    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                    const v = Math.round(24 + ratio * (400 - 24));
-                    setBrandingLogoWidth(v);
-                  };
-                  const onMove = (e: PointerEvent) => {
-                    if (!el.hasPointerCapture(e.pointerId)) return;
-                    const rect = el.getBoundingClientRect();
-                    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                    const v = Math.round(24 + ratio * (400 - 24));
-                    setBrandingLogoWidth(v);
-                  };
-                  el.onpointerdown = onDown;
-                  el.onpointermove = onMove;
-                  el.onpointerup = () => {};
-                }}
-              >
-                <div className="sf-range__fill" style={{ width: `${((brandingLogoWidth - 24) / (400 - 24)) * 100}%` }} />
-                <div className="sf-range__thumb" style={{ left: `${((brandingLogoWidth - 24) / (400 - 24)) * 100}%` }} />
-              </div>
-              <div className="sf-range-input-wrap">
-                <input
-                  type="number"
-                  className="sf-range-input"
-                  value={brandingLogoWidth}
-                  min={24}
-                  max={400}
-                  step={1}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    if (!isNaN(v)) setBrandingLogoWidth(Math.min(400, Math.max(24, v)));
-                  }}
-                />
-                <span className="sf-range-unit">px</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Container 2: Färger */}
-        <div style={cardStyle}>
-          <h4 className="email-customize__title">Färger</h4>
-          <label className="email-customize__label">Accentfärg</label>
-          <div className="sf-color-row">
-            <input
-              type="color"
-              className="sf-color-swatch"
-              value={VALID_HEX.test(brandingAccentColor) ? brandingAccentColor : "#1A56DB"}
-              onChange={(e) => { setBrandingAccentColor(e.target.value); setHexInput(e.target.value); }}
-            />
-            <input
-              type="text"
-              className="sf-input sf-input--color-hex"
-              value={hexInput}
-              onChange={(e) => {
-                setHexInput(e.target.value);
-                if (VALID_HEX.test(e.target.value)) {
-                  setBrandingAccentColor(e.target.value);
-                }
-              }}
-              onBlur={() => { if (!VALID_HEX.test(hexInput)) setHexInput(brandingAccentColor); }}
-              maxLength={9}
-            />
-          </div>
-        </div>
-
-        {/* Container 3: Preview carousel */}
-        <div style={cardStyle}>
-          <div className="email-customize__preview-header">
-            <span className="email-customize__preview-name">{currentTemplate?.title ?? ""}</span>
-            <div className="email-customize__preview-nav">
-              <div className="files-pagination__nav">
-                <button
-                  className="files-pagination__btn"
-                  disabled={customizePreviewIdx === 0}
-                  onClick={() => navigateCustomizePreview(-1)}
-                  aria-label="Föregående mall"
-                >
-                  <EditorIcon name="chevron_left" size={20} />
-                </button>
-                <button
-                  className="files-pagination__btn"
-                  disabled={customizePreviewIdx >= ALL_TEMPLATE_IDS.length - 1}
-                  onClick={() => navigateCustomizePreview(1)}
-                  aria-label="Nästa mall"
-                >
-                  <EditorIcon name="chevron_right" size={20} />
-                </button>
-              </div>
-            </div>
-          </div>
-          <div className="email-preview-card">
-            <div className="email-preview-card__body">
-              <iframe
-                srcDoc={resolvedCustomizeHtml}
-                title="E-postförhandsgranskning"
-                sandbox="allow-same-origin"
-                className="email-preview-card__iframe"
-                onLoad={(e) => {
-                  const iframe = e.currentTarget;
-                  const doc = iframe.contentDocument;
-                  if (doc) {
-                    iframe.style.height = doc.documentElement.scrollHeight + "px";
-                  }
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Save button */}
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button
-            className="settings-btn--connect"
-            disabled={isSavingBranding}
-            onClick={saveBranding}
-          >
-            <ButtonSpinner visible={isSavingBranding} />
-            Spara ändringar
-          </button>
-        </div>
-
-        {/* Branding saved toast */}
-        <div className={`email-sender__toast ${showBrandingSavedToast ? "email-sender__toast--visible" : "email-sender__toast--hidden"}`}>
-          <div className="email-sender__toast-inner">
-            Ändringarna har sparats.
-          </div>
-        </div>
-
-        <MediaLibraryModal
-          open={libraryOpen}
-          onClose={() => setLibraryOpen(false)}
-          onConfirm={handleMediaSelect}
-          currentValue={brandingLogoUrl || undefined}
-          uploadFolder="email"
-          accept="image"
-          title="Välj logotyp"
+      <EmailBrandingProvider initialBranding={initialBranding}>
+        <EmailCustomizeView
+          cardStyle={cardStyle}
+          currentTemplate={currentTemplate}
+          customizePreviewIdx={customizePreviewIdx}
+          customizePreviewHtml={customizePreviewHtml}
+          libraryOpen={libraryOpen}
+          setLibraryOpen={setLibraryOpen}
+          setCustomizePreviewIdx={setCustomizePreviewIdx}
+          setCustomizePreviewHtml={setCustomizePreviewHtml}
+          handleMediaSelect={handleMediaSelect}
+          mediaSelectCallbackRef={mediaSelectCallbackRef}
         />
-      </div>
+      </EmailBrandingProvider>
     );
   }
 
@@ -833,7 +958,7 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
 
   // ── Guest notifications view ─────────────────────────────────
 
-  if (view === "guest-notifications" && !editing) {
+  if (view === "guest-notifications") {
     return (
       <div className="email-root">
         <div style={cardStyle}>
@@ -850,8 +975,7 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
                         const detail = await getEmailTemplateDetail(item.id);
                         if (detail) {
                           setPreviewing(detail);
-                          setSubPath(`guest/${item.id}`);
-                          onSubTitleChange?.(item.title);
+                          goToTemplatePreview(item);
                         }
                       }}
                     >
@@ -873,7 +997,7 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
 
   // ── List view ─────────────────────────────────────────────────
 
-  if (!editing && view === "main") {
+  if (view === "main") {
     return (
       <div className="email-root">
         {/* ── Container 1: Avsändaradress ── */}
@@ -949,7 +1073,7 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
           <div className="email-nav">
             <button
               className="email-nav__item"
-            onClick={() => { setSubPath("guest"); onSubTitleChange?.("Gästaviseringar"); }}
+            onClick={goToGuest}
           >
             <EditorIcon name="person" size={20} style={{ color: "var(--admin-text-secondary)", flexShrink: 0 }} />
             <div className="email-nav__text">
@@ -984,123 +1108,238 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
   }
 
   // ── Editor view ───────────────────────────────────────────────
+  const isEmailVerified = !!senderInfo?.emailFrom;
 
-  if (!editing) return null;
-  const variables = editing.variables;
+  if (view !== "template-editor" || !editing) return null;
+
+  const resolvedEditorSubject = editing.resolved.subject
+    .replace(/\{\{(\w+)\}\}/g, (_, key) => {
+      const vars: Record<string, string> = { hotelName: "Grand Hotel Stockholm", guestName: "Anna Lindgren" };
+      return vars[key] ?? `{{${key}}}`;
+    });
 
   return (
-    <div>
-      <button
-        onClick={closeEditor}
-        style={{
-          display: "inline-flex", alignItems: "center", gap: 4,
-          border: "none", background: "none", cursor: "pointer",
-          fontSize: 13, color: "var(--admin-text-secondary)", padding: 0, marginBottom: 16,
-        }}
-      >
-        <EditorIcon name="arrow_back" size={16} />
-        Alla mallar
-      </button>
-
-      <div className="email-editor">
-        <div className="email-editor__fields">
-          {/* Subject */}
-          <div className="email-field">
-            <label className="email-field__label">Ämnesrad</label>
-            <input ref={subjectRef} type="text" className="email-field__input" value={subject}
-              onChange={(e) => setSubject(e.target.value)} placeholder={editing.defaults.subject} />
-            <span className="email-field__hint">Lämna tomt för att använda standardtexten.</span>
-            <div className="email-vars">
-              {variables.map((v) => (
-                <button key={v} className="email-vars__chip" type="button"
-                  onClick={() => insertVariable(v, subjectRef, subject, setSubject)}>{`{{${v}}}`}</button>
-              ))}
-            </div>
+    <div className="email-root">
+      {/* Verification banner */}
+      {!isEmailVerified && (
+        <div style={{
+          padding: 16,
+          borderRadius: "0.75rem",
+          background: "#fff",
+          boxShadow: "rgba(0, 0, 0, 0.08) 0px 0.5rem 0.625rem -0.3125rem, rgba(0, 0, 0, 0.03) 0px 0.3125rem 0.3125rem -0.15625rem, rgba(0, 0, 0, 0.02) 0px 0.1875rem 0.1875rem -0.09375rem, rgba(0, 0, 0, 0.02) 0px 0.125rem 0.125rem -0.0625rem, rgba(0, 0, 0, 0.03) 0px 0.0625rem 0.0625rem -0.03125rem, rgba(0, 0, 0, 0.04) 0px 0.03125rem 0.03125rem 0px, rgba(0, 0, 0, 0.06) 0px 0px 0px 0.0625rem",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}>
+          <div style={{
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            background: "#FFB800",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}>
+            <EditorIcon name="info" size={17} style={{ color: "#303030" }} />
           </div>
-
-          {/* Preview text */}
-          <div className="email-field">
-            <label className="email-field__label">Förhandsgranskningstext</label>
-            <input ref={previewTextRef} type="text" className="email-field__input" value={previewText}
-              onChange={(e) => setPreviewText(e.target.value)} placeholder={editing.defaults.previewText} />
-            <span className="email-field__hint">Visas som en kortfattad text under ämnesraden i inkorgen.</span>
-            <div className="email-vars">
-              {variables.map((v) => (
-                <button key={v} className="email-vars__chip" type="button"
-                  onClick={() => insertVariable(v, previewTextRef, previewText, setPreviewText)}>{`{{${v}}}`}</button>
-              ))}
-            </div>
-          </div>
-
-          {/* HTML body */}
-          <div className="email-field">
-            <label className="email-field__label">E-postinnehåll (HTML)</label>
-            <textarea ref={htmlRef} className="email-field__textarea" value={html}
-              onChange={(e) => handleHtmlChange(e.target.value)} placeholder="(Använder standardmall)" />
-            <span className="email-field__hint">Ange giltig HTML. Lämna tomt för att använda standardmallen.</span>
-            <div className="email-vars">
-              {variables.map((v) => (
-                <button key={v} className="email-vars__chip" type="button"
-                  onClick={() => insertVariable(v, htmlRef, html, setHtml)}>{`{{${v}}}`}</button>
-              ))}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="email-actions">
-            <button className="settings-btn--connect" disabled={isSaving || !hasChanges} onClick={handleSave}>
-              <ButtonSpinner visible={isSaving} /> Spara ändringar
+          <p style={{ fontSize: 13, color: "var(--admin-text)", margin: 0, lineHeight: 1.4 }}>
+            Innan du kan redigera aviseringar måste du{" "}
+            <button
+              style={{ display: "inline", fontSize: 13, textDecoration: "underline", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", color: "var(--admin-text)", fontWeight: 500 }}
+              onClick={() => { setSubPath(""); onSubTitleChange?.(null); }}
+            >
+              granska och verifiera
             </button>
-            <button className="settings-btn--test" disabled={isSending} onClick={handleSendTest}>
-              <ButtonSpinner visible={isSending} /> Skicka testmail
-            </button>
-            <div className="email-actions__spacer" />
-            {editing.hasOverride && (
-              <button className="settings-btn--outline" disabled={isResetting}
-                onClick={() => setShowResetConfirm(true)} style={{ fontSize: 13 }}>
-                Återställ standardmall
-              </button>
-            )}
-          </div>
-
-          {toast && (
-            <div className={`email-toast ${toast.type === "success" ? "email-toast--success" : "email-toast--error"}`}>
-              {toast.message}
-            </div>
-          )}
+            {" "}din avsändar e-postadress.
+          </p>
         </div>
+      )}
 
-        {/* Preview */}
-        <div className="email-editor__preview">
-          <div className="email-preview__label">Förhandsgranskning</div>
-          <iframe className="email-preview__frame" srcDoc={previewHtml}
-            title="E-postförhandsgranskning" sandbox="allow-same-origin" />
+      {/* Container 1: Merge Tags */}
+      <div style={{ ...cardStyle, display: "flex", flexDirection: "column" }}>
+        <div>
+          <h4 className="email-customize__title">Merge Tags</h4>
+          <p className="admin-desc" style={{ marginBottom: 16 }}>
+            Du kan använda Merge Tags för att anpassa dina mallar.{" "}
+            <a href="#" className="admin-desc-link" style={{ display: "inline", fontSize: 13, textDecoration: "underline" }}>
+              Mer information om Merge Tags
+            </a>
+          </p>
+        </div>
+        <div style={{ marginTop: "auto", background: "#fafafa", marginLeft: -16, marginRight: -16, marginBottom: -16, padding: "8px 16px 16px", borderRadius: "0 0 0.75rem 0.75rem" }}>
+          <p className="admin-desc" style={{ margin: 0 }}>
+            Du kan anpassa utseende och känsla för alla e-postaviseringar från sidan{" "}
+            <button
+              className="admin-desc-link"
+              style={{ display: "inline", fontSize: 13, textDecoration: "underline", background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit" }}
+              onClick={() => openCustomize()}
+            >
+              Anpassa e-postmallar
+            </button>
+            .
+          </p>
         </div>
       </div>
 
-      {/* Reset confirmation */}
-      {showResetConfirm && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => setShowResetConfirm(false)}>
-          <div style={{ position: "absolute", inset: 0, background: "var(--admin-overlay)", animation: "settings-modal-fade-in 0.15s ease" }} />
-          <div style={{ position: "relative", zIndex: 1, background: "var(--admin-surface)", borderRadius: 16, width: 400,
-            animation: "settings-modal-scale-in 0.2s cubic-bezier(0.32, 0.72, 0, 1)" }}
-            onClick={(e) => e.stopPropagation()}>
-            <div style={{ padding: 20 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Återställ till standard?</h3>
-              <p style={{ fontSize: 14, color: "var(--admin-text-secondary)", lineHeight: 1.5 }}>
-                Dina anpassningar för denna mall kommer att tas bort.
-              </p>
+      {/* Container 2: E-postämne + HTML-redigerare */}
+      <div style={cardStyle}>
+        <div style={{ marginBottom: 20 }}>
+          <label className="admin-label">E-postämne</label>
+          <input
+            type="text"
+            className="email-sender__input"
+            value={subject || editing.defaults.subject}
+            onChange={(e) => setSubject(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <label className="admin-label" style={{ marginBottom: 0 }}>E-postmeddelande (HTML)</label>
+            {isEmailVerified && (
+              <button
+                className="settings-btn--muted"
+                style={{ fontSize: 13, padding: "4px 10px" }}
+                onClick={async () => {
+                  const raw = html || editing.defaults.html;
+                  try {
+                    const prettier = await import("prettier/standalone");
+                    const htmlPlugin = await import("prettier/plugins/html");
+                    const formatted = await prettier.format(raw, {
+                      parser: "html",
+                      plugins: [htmlPlugin],
+                      printWidth: 120,
+                      tabWidth: 2,
+                    });
+                    handleHtmlChange(formatted);
+                  } catch {
+                    // Silently fail — code stays as-is
+                  }
+                }}
+              >
+                Formatera
+              </button>
+            )}
+          </div>
+          {isEmailVerified ? (
+            <div style={{ marginTop: 7 }}>
+              <HtmlEditor
+                value={html || editing.defaults.html}
+                onChange={handleHtmlChange}
+                height="500px"
+              />
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "12px 20px 20px", borderTop: "1px solid var(--admin-border)" }}>
-              <button className="settings-btn--outline" style={{ border: "none" }} onClick={() => setShowResetConfirm(false)}>Avbryt</button>
-              <button className="settings-btn--danger-solid" disabled={isResetting} onClick={handleReset}>
-                <ButtonSpinner visible={isResetting} /> Återställ
+          ) : (
+            <div style={{ marginTop: 7, position: "relative", overflow: "hidden", height: 200, pointerEvents: "none" }}>
+              <HtmlEditor
+                value={html || editing.defaults.html}
+                onChange={() => {}}
+                height="200px"
+                readOnly
+              />
+              <div style={{
+                position: "absolute",
+                inset: 0,
+                background: "linear-gradient(to bottom, rgba(255,255,255,0.1) 0%, rgba(255,255,255,1) 100%)",
+                pointerEvents: "none",
+              }} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Publish bar */}
+      <PublishBarUI
+        hasUnsavedChanges={hasChanges}
+        isPublishing={isSaving}
+        isDiscarding={false}
+        isLingeringAfterPublish={editorLinger}
+        onPublish={handleSave}
+        onDiscard={() => {
+          setSubject(originalSubject);
+          setPreviewText(originalPreviewText);
+          setHtml(originalHtml);
+          setPreviewHtml(originalHtml.trim() || editing.defaults.html);
+        }}
+      />
+
+      {/* Preview modal */}
+      {showEditorPreview && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setShowEditorPreview(false)}
+        >
+          <div style={{ position: "absolute", inset: 0, background: "var(--admin-overlay)", animation: "settings-modal-fade-in 0.15s ease" }} />
+          <div
+            style={{
+              position: "relative", zIndex: 1, background: "var(--admin-surface)",
+              borderRadius: 16, width: 600, maxHeight: "85vh", display: "flex", flexDirection: "column",
+              animation: "settings-modal-scale-in 0.2s cubic-bezier(0.32, 0.72, 0, 1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ padding: "20px 20px 16px", borderBottom: `1px solid var(--admin-border)` }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600 }}>Förhandsgranska</h3>
+            </div>
+
+            {/* Body */}
+            <div style={{ flex: 1, overflow: "auto" }}>
+              <div className="email-preview-card" style={{ border: "none", borderRadius: 0 }}>
+                <div className="email-preview-card__subject">
+                  <span className="email-preview-card__subject-label">Ämne:</span> {resolvedEditorSubject}
+                </div>
+                <div className="email-preview-card__body">
+                  {editorBranding && (
+                    <EmailPreviewFrame
+                      html={previewHtml}
+                      branding={editorBranding}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "12px 20px 20px", borderTop: `1px solid var(--admin-border)` }}>
+              <button
+                className="settings-btn--outline"
+                style={{ fontSize: 13 }}
+                onClick={() => setShowEditorPreview(false)}
+              >
+                Stäng
+              </button>
+              <button
+                className="settings-btn--connect"
+                style={{ fontSize: 13, padding: "5px 16px", minWidth: 100 }}
+                disabled={isSendingTest}
+                onClick={async () => {
+                  if (!editing) return;
+                  setIsSendingTest(true);
+                  const result = await sendTestEmail(editing.eventType);
+                  setIsSendingTest(false);
+                  if (result.ok) {
+                    setShowEditorPreview(false);
+                    setTestToastEmail(result.to ?? "");
+                    setShowTestToast(true);
+                  }
+                }}
+              >
+                <ButtonSpinner visible={isSendingTest} />
+                {!isSendingTest && "Skicka test"}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Test toast */}
+      <div className={`email-sender__toast ${showTestToast ? "email-sender__toast--visible" : "email-sender__toast--hidden"}`}>
+        <div className="email-sender__toast-inner">
+          Testmeddelande skickat till {testToastEmail}
+        </div>
+      </div>
     </div>
   );
 }

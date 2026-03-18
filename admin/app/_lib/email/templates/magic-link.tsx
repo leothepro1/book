@@ -44,7 +44,7 @@ export default function MagicLink(props: MagicLinkProps) {
         Klicka på knappen nedan för att logga in på din gästportal
         på {hotelName}.
       </Text>
-      <Link href={magicLink} style={btnStyle}>
+      <Link href={magicLink} style={btnStyle} data-branding="cta">
         Logga in
       </Link>
       <Text style={securityNote}>

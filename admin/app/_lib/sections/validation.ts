@@ -411,12 +411,16 @@ export function validateSectionInstance(
   classify(validateSettings(preset.settingsSchema, preset.settingDefaults, instance.presetSettings, "presetSettings"));
 
   // 6. Block count
+  // Locked sections are platform-owned — block count violations are warnings,
+  // not errors. Extra blocks may exist from editor experimentation but must
+  // never prevent a locked section from rendering.
   const blockCount = instance.blocks.length;
+  const isLocked = instance.locked === true;
   if (blockCount < preset.minBlocks) {
     warnings.push({ path: "blocks", message: `Preset requires ≥${preset.minBlocks} blocks, has ${blockCount}`, severity: "warning" });
   }
   if (preset.maxBlocks !== -1 && blockCount > preset.maxBlocks) {
-    errors.push({ path: "blocks", message: `Preset allows ≤${preset.maxBlocks} blocks, has ${blockCount}`, severity: "error" });
+    (isLocked ? warnings : errors).push({ path: "blocks", message: `Preset allows ≤${preset.maxBlocks} blocks, has ${blockCount}`, severity: isLocked ? "warning" : "error" });
   }
 
   // 7. Validate each block
@@ -427,10 +431,10 @@ export function validateSectionInstance(
     const blockType = blockTypeMap.get(block.type);
 
     if (!blockType) {
-      errors.push({
+      (isLocked ? warnings : errors).push({
         path: `blocks[${i}].type`,
         message: `Block type "${block.type}" not in preset "${preset.key}". Available: ${preset.blockTypes.map(bt => bt.type).join(", ")}`,
-        severity: "error",
+        severity: isLocked ? "warning" : "error",
       });
       continue;
     }

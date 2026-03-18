@@ -77,15 +77,36 @@ export function EmailLayout({ hotelName, children, branding }: EmailLayoutProps)
       <Body style={outer}>
         <Container style={card} className="email-card">
           <Section style={brandZone}>
-            {branding?.logoUrl ? (
+            {branding?.logoUrl && (
               <Img
+                data-branding="logo"
                 src={branding.logoUrl}
                 alt={hotelName}
-                style={{ width: `${branding.logoWidth ?? 120}px`, height: "auto" }}
+                style={{
+                  width: `${branding.logoWidth ?? 120}px`,
+                  height: "auto",
+                }}
               />
-            ) : (
-              <Text style={brandText}>{hotelName}</Text>
             )}
+            {!branding?.logoUrl && (
+              <Img
+                data-branding="logo"
+                src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+                alt=""
+                width={1}
+                height={1}
+                style={{ display: "none" }}
+              />
+            )}
+            <Text
+              data-branding="brand-text"
+              style={{
+                ...brandText,
+                display: branding?.logoUrl ? "none" : "",
+              }}
+            >
+              {hotelName}
+            </Text>
           </Section>
           <Section>{children}</Section>
           <Text style={footerStyle}>

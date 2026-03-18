@@ -19,6 +19,7 @@
  */
 
 import type { TenantConfig, PageConfig } from "@/app/(guest)/_lib/tenant/types";
+import { DEFAULT_FOOTER_MENU } from "@/app/(guest)/_lib/tenant/types";
 import type { PageId } from "./types";
 import { getPageDefinition } from "./registry";
 
@@ -61,6 +62,11 @@ export function migrateToV2Pages(config: TenantConfig): TenantConfig {
 
   // Step 2: Promote per-page header/footer to global (for existing v2 tenants)
   result = migratePerPageHeaderFooterToGlobal(result);
+
+  // Step 3: Seed default footer menu if no menus exist
+  if (!result.menus || result.menus.length === 0) {
+    result = { ...result, menus: [DEFAULT_FOOTER_MENU] };
+  }
 
   return result;
 }

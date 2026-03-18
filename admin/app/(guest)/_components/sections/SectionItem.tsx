@@ -28,6 +28,7 @@ import { GenericSectionRenderer } from "./GenericSectionRenderer";
 import { TabsUnderlineRenderer, TabsPillRenderer } from "./renderers/TabsRenderer";
 import { AccordionDefaultRenderer, AccordionCardRenderer } from "./renderers/AccordionRenderer";
 import { SliderButtonRowRenderer, SliderCardRenderer } from "./renderers/SliderRenderer";
+import { BokningarDefaultRenderer } from "./renderers/BokningarRenderer";
 
 const RENDERER_MAP: Record<string, React.ComponentType<SectionRendererProps>> = {
   "tabs/underline": TabsUnderlineRenderer,
@@ -36,6 +37,7 @@ const RENDERER_MAP: Record<string, React.ComponentType<SectionRendererProps>> = 
   "accordion/card": AccordionCardRenderer,
   "slider/button-row": SliderButtonRowRenderer,
   "slider/card": SliderCardRenderer,
+  "bokningar/default": BokningarDefaultRenderer,
 };
 
 /**

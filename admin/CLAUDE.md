@@ -366,6 +366,14 @@ This applies to scalability, robustness, race safety, error handling, UX
 polish, code structure, and architectural decisions. No shortcuts, no
 "good enough for now", no tech debt disguised as pragmatism.
 
+This is not aspirational — it is the baseline. This platform is architecturally
+equivalent to Shopify in its domain: Resend email integration, a visual editor
+with draft/publish state, a theme library, multi-tenant infrastructure with
+subdomain routing, and a section builder. The quality, architecture, and
+attention to edge cases must match that level from the start. There is never
+a valid reason to cut corners, skip edge cases, or ship something that would
+not pass enterprise review. Every feature ships complete or not at all.
+
 ---
 
 ## Translation system

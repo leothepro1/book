@@ -74,7 +74,8 @@ import type {
 } from "@/app/_lib/sections/types";
 import type { HeaderConfig } from "@/app/(guest)/_lib/tenant/types";
 import { HEADER_DEFAULTS, PAGE_FOOTER_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
-import type { PageFooterConfig, FooterActiveMode } from "@/app/(guest)/_lib/tenant/types";
+import type { PageFooterConfig } from "@/app/(guest)/_lib/tenant/types";
+import { useDropDirection } from "../hooks/useDropDirection";
 import {
   getPageSections,
   getPageHeader,
@@ -1098,10 +1099,69 @@ function HeaderDetailPanel({
 // FOOTER DETAIL PANEL
 // ═══════════════════════════════════════════════════════════════
 
-const ACTIVE_MODE_OPTIONS: { key: FooterActiveMode; label: string }[] = [
-  { key: "background", label: "Bakgrund och ikon" },
-  { key: "icon-only", label: "Endast ikon" },
+
+const FOOTER_LAYOUT_OPTIONS: { value: string; label: string; image: string }[] = [
+  {
+    value: "app",
+    label: "App",
+    image: "https://res.cloudinary.com/dmgmoisae/image/upload/v1773845274/app_nnnchh.png",
+  },
+  {
+    value: "classic",
+    label: "Footer",
+    image: "https://res.cloudinary.com/dmgmoisae/image/upload/v1773845447/footer_g2dofm.png",
+  },
 ];
+
+function FooterLayoutPicker({ value, onChange }: { value: string; onChange: (v: "app" | "classic") => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dir = useDropDirection(triggerRef, open);
+  const selected = FOOTER_LAYOUT_OPTIONS.find((o) => o.value === value) ?? FOOTER_LAYOUT_OPTIONS[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const handle = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [open]);
+
+  return (
+    <div>
+      <span className="sf-label" style={{ display: "block", marginBottom: 6 }}>Layout</span>
+      <div className="sf-dropdown" ref={ref}>
+        <button
+          ref={triggerRef}
+          type="button"
+          className="sf-layout-picker__trigger"
+          onClick={() => setOpen(!open)}
+        >
+          <img src={selected.image} alt={selected.label} className="sf-layout-picker__thumb" />
+          <span className="sf-dropdown__text">{selected.label}</span>
+          <EditorIcon name="expand_more" size={16} className="sf-dropdown__chevron" />
+        </button>
+        {open && (
+          <ul className={`sf-dropdown__menu${dir === "up" ? " sf-dropdown__menu--up" : ""}`}>
+            {FOOTER_LAYOUT_OPTIONS.map((opt) => (
+              <li
+                key={opt.value}
+                className={`sf-layout-picker__item${opt.value === value ? " sf-layout-picker__item--active" : ""}`}
+                onClick={() => { onChange(opt.value as "app" | "classic"); setOpen(false); }}
+              >
+                <img src={opt.image} alt={opt.label} className="sf-layout-picker__thumb" />
+                <span style={{ flex: 1 }}>{opt.label}</span>
+                <span className={`material-symbols-rounded sf-dropdown__check${opt.value === value ? " sf-dropdown__check--visible" : ""}`}>check</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function FooterDetailPanel({
   config,
@@ -1127,18 +1187,6 @@ function FooterDetailPanel({
     [pushUndo, saveDraft, footer, config, pageId],
   );
 
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!dropdownOpen) return;
-    const handle = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setDropdownOpen(false);
-    };
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
-  }, [dropdownOpen]);
-
   const handleFooterSpacing = useCallback(
     (keyOrPatch: string | Record<string, unknown>, value?: unknown) => {
       if (typeof keyOrPatch === "string") {
@@ -1149,8 +1197,6 @@ function FooterDetailPanel({
     },
     [save],
   );
-
-  const activeLabel = ACTIVE_MODE_OPTIONS.find(o => o.key === footer.activeMode)?.label ?? "Bakgrund och ikon";
 
   return (
     <div className="dp">
@@ -1164,54 +1210,11 @@ function FooterDetailPanel({
       <div className="dp-divider" />
 
       <div className="dp-body">
-        {/* Active mode dropdown */}
-        <div className="cs-select">
-          <span className="cs-select__label">Aktivt läge</span>
-          <div className="sf-dropdown" ref={dropdownRef}>
-            <button
-              type="button"
-              className="sf-dropdown__trigger"
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-            >
-              <span className="sf-dropdown__text">{activeLabel}</span>
-              <EditorIcon name="expand_more" size={16} className="sf-dropdown__chevron" />
-            </button>
-            {dropdownOpen && (
-              <ul className="sf-dropdown__menu">
-                {ACTIVE_MODE_OPTIONS.map(({ key, label }) => (
-                  <li
-                    key={key}
-                    className={`sf-dropdown__item${footer.activeMode === key ? " sf-dropdown__item--active" : ""}`}
-                    onClick={() => { save({ activeMode: key }); setDropdownOpen(false); }}
-                  >
-                    <span style={{ flex: 1 }}>{label}</span>
-                    <span className={`material-symbols-rounded sf-dropdown__check${footer.activeMode === key ? " sf-dropdown__check--visible" : ""}`}>
-                      check
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
+        {/* Layout picker */}
+        <FooterLayoutPicker value={footer.footerLayout ?? "app"} onChange={(v) => save({ footerLayout: v })} />
 
-        {/* Show labels toggle */}
-        <div>
-          <div className="sf-toggle-row">
-            <span>Visa text</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={footer.showLabels}
-              className={`sf-toggle${footer.showLabels ? " sf-toggle--on" : ""}`}
-              onClick={() => save({ showLabels: !footer.showLabels })}
-            >
-              <span className="sf-toggle__icon sf-toggle__icon--check material-symbols-rounded">check</span>
-              <span className="sf-toggle__icon sf-toggle__icon--remove material-symbols-rounded">remove</span>
-              <span className="sf-toggle__thumb" />
-            </button>
-          </div>
-        </div>
+        <div className="sf-group-divider" />
+
 
         {/* Show divider toggle */}
         <div>
