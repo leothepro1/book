@@ -5,7 +5,7 @@ import { EditorIcon } from "@/app/_components/EditorIcon";
 import { LinkPicker } from "@/app/_components/LinkPicker";
 import { PreviewProvider, usePreview } from "../_components/GuestPreview";
 import { PublishBarProvider, PublishBar, usePublishBar } from "../_components/PublishBar";
-import { useDraftUpdate } from "../_hooks/useDraftUpdate";
+import { updateMenusLive } from "../_lib/tenant/updateMenusLive";
 import {
   DndContext,
   PointerSensor,
@@ -57,8 +57,7 @@ export default function MenusClient({ initialConfig }: Props) {
 type MenuView = "list" | "edit" | "create";
 
 function MenusContent() {
-  const { config } = usePreview();
-  const draftUpdate = useDraftUpdate();
+  const { config, updateConfig } = usePreview();
   const { pushUndo } = usePublishBar();
 
   const menus: MenuConfig[] = config?.menus ?? [];
@@ -66,13 +65,25 @@ function MenusContent() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // ── Save helpers ──
+  // Menus are content, not design — save to both draft AND live immediately.
 
   const saveMenus = useCallback(
     async (updated: MenuConfig[]) => {
       if (config) pushUndo({ menus: config.menus ?? [] });
-      await draftUpdate({ menus: updated } as Partial<TenantConfig>);
+
+      // Optimistic update for instant preview
+      updateConfig({ menus: updated } as Partial<TenantConfig>);
+
+      // Persist to both draft + live settings
+      const result = await updateMenusLive(updated);
+
+      if (!result.success) {
+        // Rollback optimistic update on failure
+        if (config) updateConfig({ menus: config.menus ?? [] } as Partial<TenantConfig>);
+        console.warn("[MenusContent] Save failed:", result.error);
+      }
     },
-    [config, draftUpdate, pushUndo],
+    [config, updateConfig, pushUndo],
   );
 
   // ── Navigation ──
@@ -412,26 +423,39 @@ function MenuEditor({
 
   const itemIds = useMemo(() => items.map((i) => i.id), [items]);
 
-  // Save the full menu to draft on every change
+  // Save the full menu to draft on every change.
+  // A menu only exists if it has at least 1 item.
+  // Removing all items deletes the menu. Creating with 0 items is a no-op.
   const persistMenu = useCallback(
     async (patch: { title?: string; items?: MenuItemConfig[] }) => {
       const now = new Date().toISOString();
+      const newItems = patch.items ?? items;
+      const existing = menus.find((m) => m.id === menuId);
+
+      // No items → remove menu if it exists, otherwise no-op
+      if (newItems.length === 0) {
+        if (existing) {
+          await saveMenus(menus.filter((m) => m.id !== menuId));
+          goBack();
+        }
+        return;
+      }
+
       const updatedMenu: MenuConfig = {
         id: menuId,
         title: patch.title ?? title,
         handle: (patch.title ?? title).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
-        items: patch.items ?? items,
+        items: newItems,
         createdAt,
         updatedAt: now,
       };
-      const existing = menus.find((m) => m.id === menuId);
       if (existing) {
         await saveMenus(menus.map((m) => (m.id === menuId ? updatedMenu : m)));
       } else {
         await saveMenus([...menus, updatedMenu]);
       }
     },
-    [menuId, title, items, menus, saveMenus, createdAt],
+    [menuId, title, items, menus, saveMenus, createdAt, goBack],
   );
 
   const handleTitleChange = (newTitle: string) => {
@@ -563,15 +587,15 @@ function MenuEditor({
                 </DndContext>
               )}
 
-              <div style={{ padding: "12px 16px 16px" }}>
-                <button
-                  type="button"
-                  className="settings-btn--muted"
-                  style={{ fontSize: 13, padding: "5px 12px" }}
-                  onClick={addItem}
-                >
-                  Lägg till menyobjekt
-                </button>
+              <div className="mi-card-list">
+                <div className="mi-card mi-card--add" onClick={addItem}>
+                  <div className="mi-card__row">
+                    <div className="mi-card__handle mi-card__handle--add">
+                      <EditorIcon name="add_circle" size={20} />
+                    </div>
+                    <span className="mi-card__label mi-card__label--add">Lägg till menyobjekt</span>
+                  </div>
+                </div>
               </div>
             </div>
 

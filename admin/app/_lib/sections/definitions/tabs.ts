@@ -36,7 +36,7 @@ const contentSlot: SlotDefinition = {
   key: "content",
   name: "Innehåll",
   description: "Flikens textinnehåll — rubrik och brödtext.",
-  allowedElements: ["heading", "text", "richtext", "image", "video", "gallery", "button", "divider", "icon", "collapsible", "map"],
+  allowedElements: ["heading", "text", "richtext", "image", "video", "gallery", "button", "menu", "divider", "icon", "collapsible", "map"],
   minElements: 1,
   maxElements: 8,
   defaultElements: [

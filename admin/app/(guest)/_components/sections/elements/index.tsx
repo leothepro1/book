@@ -17,6 +17,8 @@ import { CollapsibleElement } from "./CollapsibleElement";
 import { MapElement } from "./MapElement";
 import { VideoElement } from "./VideoElement";
 import { GalleryElement } from "./GalleryElement";
+import { MenuElement } from "./MenuElement";
+import { LogoElement } from "./LogoElement";
 import { ElementLinkWrapper } from "./ElementLinkWrapper";
 
 const ELEMENT_RENDERERS: Record<string, React.ComponentType<{ resolved: ResolvedElement }>> = {
@@ -31,6 +33,8 @@ const ELEMENT_RENDERERS: Record<string, React.ComponentType<{ resolved: Resolved
   map: MapElement,
   video: VideoElement,
   gallery: GalleryElement,
+  menu: MenuElement,
+  logo: LogoElement,
 };
 
 export function ElementRenderer({ resolved }: { resolved: ResolvedElement }) {

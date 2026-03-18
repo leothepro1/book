@@ -44,7 +44,7 @@ export type RailTab = "sections" | "settings";
  */
 export type DetailTarget = {
   /** Scope discriminator. undefined = body section (backward-compatible). */
-  scope?: "header" | "footer";
+  scope?: "header" | "footer" | "footer-classic-block" | "footer-classic-element";
   sectionId: string;
   blockId?: string;
   elementId?: string;

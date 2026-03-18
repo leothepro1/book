@@ -472,6 +472,8 @@ const ELEMENT_CATEGORY_MAP: Record<string, { primary: string; extra?: string[] }
   gallery:     { primary: "media" },
   map:         { primary: "media", extra: ["interaktion"] },
   button:      { primary: "interaktion" },
+  menu:        { primary: "interaktion" },
+  logo:        { primary: "media" },
   icon:        { primary: "interaktion" },
   divider:     { primary: "layout" },
 };
@@ -672,6 +674,8 @@ function ElementTypeIcon({ elementType }: { elementType: string }) {
     richtext: "wysiwyg",
     collapsible: "close_fullscreen",
     map: "map",
+    menu: "link",
+    logo: "image",
     video: "youtube_activity",
     gallery: "gallery_thumbnail",
   };

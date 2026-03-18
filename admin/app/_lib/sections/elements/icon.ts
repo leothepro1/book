@@ -55,7 +55,7 @@ export const iconElement: ElementDefinition = {
       key: "color",
       type: "color",
       label: "Färg (valfri)",
-      description: "Lämna tomt för att ärva färgschemat",
+      description: "Lämna tomt för att ärva färgpaletten",
       default: "",
     },
     {

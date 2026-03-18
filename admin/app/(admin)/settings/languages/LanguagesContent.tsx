@@ -188,7 +188,7 @@ function LocaleRow({
         {/* Language name */}
         <span style={{ width: 240, flexShrink: 0, display: "flex", alignItems: "center", minWidth: 0, paddingLeft: 12 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--admin-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ fontSize: 14, fontWeight: 450, color: "var(--admin-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {info?.name ?? locale.locale}
             </div>
             {locale.primary && (

@@ -135,6 +135,11 @@ export function validateSettingValue(field: SettingField, value: unknown): Valid
       return { valid: true };
     }
 
+    case "layoutPicker":
+    case "menuPicker": {
+      return { valid: true };
+    }
+
     default: {
       // Exhaustive check — if a new SettingFieldType is added but not handled here,
       // TypeScript will flag this at compile time (value of `field.type` won't be `never`)

@@ -55,14 +55,7 @@ const DEFAULT_CATEGORIES: LinkPickerCategory[] = [
     items: [
       { label: "Hem", url: "/", icon: "home" },
       { label: "Bokningar", url: "/stays", icon: "calendar_today" },
-      { label: "Konto", url: "/account", icon: "person" },
-    ],
-  },
-  {
-    label: "Kontakt",
-    items: [
-      { label: "E-post", url: "mailto:", icon: "mail" },
-      { label: "Telefon", url: "tel:", icon: "phone" },
+      { label: "Konto", url: "/account", icon: "face" },
     ],
   },
   {
@@ -71,6 +64,13 @@ const DEFAULT_CATEGORIES: LinkPickerCategory[] = [
       { label: "Dokument", url: ACTION_DOCUMENT, icon: "document_scanner" },
       { label: "Kartor", url: ACTION_MAP, icon: "map" },
       { label: "Text", url: ACTION_TEXT, icon: "text_fields" },
+    ],
+  },
+  {
+    label: "Kontakt",
+    items: [
+      { label: "E-post", url: "mailto:", icon: "mail" },
+      { label: "Telefon", url: "tel:", icon: "phone" },
     ],
   },
   {
@@ -170,7 +170,6 @@ export function LinkPicker({
 
     setCoords({ top, left });
     setSearch("");
-    setTimeout(() => searchRef.current?.focus(), 50);
   }, [open, anchorRef]);
 
   // Close on outside click (suppressed when sub-modal is open)
@@ -267,8 +266,8 @@ export function LinkPicker({
       title="Välj PDF"
     />
 
-    {/* Element detail modal */}
-    {elementMode !== null && !docPickerOpen && (
+    {/* Element detail modal — portaled to body to escape overflow clipping */}
+    {elementMode !== null && !docPickerOpen && typeof document !== "undefined" && createPortal(
       <div
         style={{ position: "fixed", inset: 0, zIndex: 9001, display: "flex", alignItems: "center", justifyContent: "center" }}
         onClick={closeElement}
@@ -283,8 +282,11 @@ export function LinkPicker({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid var(--admin-border)" }}>
-            <h3 style={{ fontSize: 16, fontWeight: 600 }}>{elementTitle}</h3>
+          <div className="lp-modal__header">
+            <h3 className="lp-modal__title">{elementTitle}</h3>
+            <button type="button" className="lp-modal__close" onClick={closeElement} aria-label="Stäng">
+              <span className="material-symbols-rounded" style={{ fontSize: 20, fontVariationSettings: "'wght' 300" }}>close</span>
+            </button>
           </div>
 
           {/* Body */}
@@ -322,7 +324,7 @@ export function LinkPicker({
                   <label style={{ display: "block", fontSize: 14, fontWeight: 400, color: "var(--admin-text)", marginBottom: 5 }}>Namn</label>
                   <input
                     type="text"
-                    className="menus-items__input"
+                    className="lp-modal-input"
                     value={docData.fileName}
                     onChange={(e) => setDocData({ ...docData, fileName: e.target.value })}
                     placeholder="Dokumentets namn"
@@ -333,7 +335,7 @@ export function LinkPicker({
                     Beskrivning <span style={{ color: "var(--admin-text-tertiary)" }}>(valfritt)</span>
                   </label>
                   <textarea
-                    className="menus-items__input"
+                    className="lp-modal-input"
                     style={{ height: "auto", minHeight: 72, padding: "8px 10px", resize: "vertical" }}
                     value={docData.fileDescription}
                     onChange={(e) => setDocData({ ...docData, fileDescription: e.target.value })}
@@ -351,7 +353,7 @@ export function LinkPicker({
                   <label style={{ display: "block", fontSize: 14, fontWeight: 400, color: "var(--admin-text)", marginBottom: 5 }}>Namn</label>
                   <input
                     type="text"
-                    className="menus-items__input"
+                    className="lp-modal-input"
                     value={textData.title}
                     onChange={(e) => setTextData({ ...textData, title: e.target.value })}
                     placeholder="Rubrik"
@@ -361,7 +363,7 @@ export function LinkPicker({
                 <div>
                   <label style={{ display: "block", fontSize: 14, fontWeight: 400, color: "var(--admin-text)", marginBottom: 5 }}>Textinnehåll</label>
                   <textarea
-                    className="menus-items__input"
+                    className="lp-modal-input"
                     style={{ height: "auto", minHeight: 120, padding: "8px 10px", resize: "vertical" }}
                     value={textData.content}
                     onChange={(e) => setTextData({ ...textData, content: e.target.value })}
@@ -404,14 +406,13 @@ export function LinkPicker({
           </div>
 
           {/* Footer */}
-          <div style={{ padding: "12px 20px 20px", borderTop: "1px solid var(--admin-border)", display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <button className="settings-btn--outline" style={{ fontSize: 13 }} onClick={closeElement}>
+          <div className="lp-modal__footer">
+            <button className="lp-modal__btn lp-modal__btn--cancel" onClick={closeElement}>
               Avbryt
             </button>
             {elementMode !== "map" && (
               <button
-                className="settings-btn--connect"
-                style={{ fontSize: 13, padding: "5px 16px" }}
+                className="lp-modal__btn lp-modal__btn--save"
                 disabled={!canSaveElement}
                 onClick={handleElementSave}
               >
@@ -420,7 +421,8 @@ export function LinkPicker({
             )}
           </div>
         </div>
-      </div>
+      </div>,
+      document.body,
     )}
 
     {open && elementMode === null && !docPickerOpen && createPortal(

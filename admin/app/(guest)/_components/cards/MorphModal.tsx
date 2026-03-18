@@ -49,9 +49,9 @@ export function MorphModal({
   }, []);
 
   const handleClose = useCallback(() => {
-    if (cardRef.current) setCardRect(cardRef.current.getBoundingClientRect());
-    if (modalRef.current) setModalRect(modalRef.current.getBoundingClientRect());
-    setPhase("pre-close");
+    setPhase("closed");
+    setCardRect(null);
+    setModalRect(null);
   }, []);
 
   useLayoutEffect(() => {

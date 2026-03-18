@@ -39,7 +39,7 @@ import { usePublishBar } from "@/app/(admin)/_components/PublishBar";
 import { useDraftUpdate } from "@/app/(admin)/_hooks/useDraftUpdate";
 import type { SectionInstance, ElementInstance, BlockInstance } from "@/app/_lib/sections/types";
 import { createSectionId, createBlockId } from "@/app/_lib/sections/types";
-import { ensureSectionsRegistered, getElementDefinition, getSectionDefinition, getAllSectionDefinitions } from "@/app/_lib/sections/registry";
+import { ensureSectionsRegistered, getElementDefinition, getSectionDefinition, getAllSectionDefinitions, getAllElementDefinitions } from "@/app/_lib/sections/registry";
 import { Tooltip } from "@/app/_components/Tooltip";
 import { EditorIcon } from "@/app/_components/EditorIcon";
 import { useEditor } from "../EditorContext";
@@ -63,7 +63,8 @@ import {
   hasMultipleBlockTypes,
   getPresetForSection,
 } from "@/app/_lib/sections/mutations";
-import { getPageLayout, getPageDefinition, getPageSections, getPageUndoSnapshot, buildSectionsPatch } from "@/app/_lib/pages";
+import { getPageLayout, getPageDefinition, getPageSections, getPageUndoSnapshot, buildSectionsPatch, getPageFooter, buildFooterPatch } from "@/app/_lib/pages";
+import { PAGE_FOOTER_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
 
 // ─── Drag Scope Types ───────────────────────────────────────
 // Each drag level is scoped to its own DndContext.
@@ -897,21 +898,16 @@ function SectionListPane() {
       )}
 
       {/* ── Footer section (if layout supports it) ── */}
-      {layout.footer && (
-        <>
-          <div className="sp-template-label">Sidfot</div>
-          <div className="sp-list sp-list--header">
-            <div
-              className="sp-row sp-row--header"
-              onClick={() => openDetail({ scope: "footer", sectionId: "__footer" })}
-            >
-              <div className="sp-row__handle">
-                <EditorIcon name="dock_to_bottom" size={16} />
-              </div>
-              <span className="sp-row__name">Sidfot</span>
-            </div>
-          </div>
-        </>
+      {layout.footer && config && (
+        <FooterSectionTree
+          config={config}
+          currentPageId={currentPageId}
+          collapsedIds={collapsedIds}
+          toggleCollapse={toggleCollapse}
+          openDetail={openDetail}
+          pushUndo={pushUndo}
+          saveDraft={saveDraft}
+        />
       )}
 
       {/* ── Section picker modal ── */}
@@ -1503,6 +1499,334 @@ const SectionRow = React.memo(function SectionRow({
   );
 });
 
+// ─── Footer Section Tree (shared by app + classic layouts) ──
+
+function FooterSectionTree({
+  config,
+  currentPageId,
+  collapsedIds,
+  toggleCollapse,
+  openDetail,
+  pushUndo,
+  saveDraft,
+}: {
+  config: import("@/app/(guest)/_lib/tenant/types").TenantConfig;
+  currentPageId: import("@/app/_lib/pages/types").PageId;
+  collapsedIds: Set<string>;
+  toggleCollapse: (id: string) => void;
+  openDetail: (target: import("../EditorContext").DetailTarget) => void;
+  pushUndo: (snapshot: Record<string, unknown>) => void;
+  saveDraft: (changes: any) => any;
+}) {
+  const ftr = { ...PAGE_FOOTER_DEFAULTS, ...getPageFooter(config, currentPageId) };
+  const isApp = ftr.footerLayout === "app";
+  const footerOpen = !collapsedIds.has("__footer");
+  const footerActive = ftr.isActive !== false;
+
+  // Seed classicGroups on first render if missing
+  const seededRef = useRef(false);
+  const groups = ftr.classicGroups ?? buildDefaultClassicGroups();
+
+  const saveFooter = useCallback((patch: Record<string, unknown>) => {
+    pushUndo(getPageUndoSnapshot(config, currentPageId));
+    saveDraft(buildFooterPatch(config, currentPageId, { ...ftr, ...patch }));
+  }, [pushUndo, saveDraft, config, currentPageId, ftr]);
+
+  useEffect(() => {
+    if (!ftr.classicGroups && !seededRef.current) {
+      seededRef.current = true;
+      saveFooter({ classicGroups: groups });
+    }
+  }, [ftr.classicGroups, groups, saveFooter]);
+
+  const footerBlockOpen = !collapsedIds.has("__footer_block");
+  const menuEl = groups.top[0];
+
+  return (
+    <>
+      <div className="sp-template-label">Sidfot</div>
+      <div className="sp-list sp-list--header">
+        <TreeRow
+          icon="dock_to_bottom"
+          name="Sidfot"
+          isActive={footerActive}
+          indent={0}
+          noDragHandle
+          collapsed={!footerOpen}
+          onToggleCollapse={() => toggleCollapse("__footer")}
+          onToggleVisibility={() => saveFooter({ isActive: !footerActive })}
+          onClick={() => openDetail({ scope: "footer", sectionId: "__footer" })}
+        />
+
+        {footerOpen && isApp && (
+          <>
+            <TreeRow
+              icon="folder"
+              name="Grupp"
+              isActive={true}
+              indent={1}
+              noDragHandle
+              collapsed={!footerBlockOpen}
+              onToggleCollapse={() => toggleCollapse("__footer_block")}
+              onToggleVisibility={() => {}}
+              onClick={() => openDetail({ scope: "footer-classic-block", sectionId: "__footer", blockId: "top" })}
+            />
+            {footerBlockOpen && menuEl && (
+              <TreeRow
+                icon={ELEMENT_ICON_NAMES[menuEl.type] ?? "widgets"}
+                name={getElementName(menuEl.type)}
+                isActive={menuEl.isActive !== false}
+                indent={2}
+                noDragHandle
+                onToggleVisibility={() => {
+                  const updated = groups.top.map((el) =>
+                    el.id === menuEl.id ? { ...el, isActive: !(el.isActive !== false) } : el,
+                  );
+                  saveFooter({ classicGroups: { ...groups, top: updated } });
+                }}
+                onClick={() => openDetail({ scope: "footer-classic-element", sectionId: "__footer", blockId: "top", elementId: menuEl.id })}
+              />
+            )}
+          </>
+        )}
+
+        {footerOpen && !isApp && (
+          <FooterClassicTree
+            ftr={ftr}
+            groups={groups}
+            saveFooter={saveFooter}
+            collapsedIds={collapsedIds}
+            toggleCollapse={toggleCollapse}
+            openDetail={openDetail}
+          />
+        )}
+      </div>
+    </>
+  );
+}
+
+// ─── Footer Classic Tree ─────────────────────────────────────
+
+function createElementId(): string {
+  return `elm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createElementInstance(type: ElementType, settings: Record<string, unknown> = {}, sortOrder = 0): ElementInstance {
+  const def = getElementDefinition(type);
+  return {
+    id: createElementId(),
+    type,
+    settings: { ...(def?.settingDefaults ?? {}), ...settings },
+    action: { type: "none" as const },
+    sortOrder,
+    isActive: true,
+  };
+}
+
+function buildDefaultClassicGroups(): {
+  top: ElementInstance[];
+  bottom: ElementInstance[];
+} {
+  return {
+    top: [
+      createElementInstance("menu" as ElementType, {}, 0),
+    ],
+    bottom: [
+      createElementInstance("divider" as ElementType, {}, 0),
+      createElementInstance("logo" as ElementType, {}, 1),
+    ],
+  };
+}
+
+function FooterClassicTree({
+  ftr,
+  groups,
+  saveFooter,
+  collapsedIds,
+  toggleCollapse,
+  openDetail,
+}: {
+  ftr: import("@/app/(guest)/_lib/tenant/types").PageFooterConfig;
+  groups: { top: ElementInstance[]; bottom: ElementInstance[] };
+  saveFooter: (patch: Record<string, unknown>) => void;
+  collapsedIds: Set<string>;
+  toggleCollapse: (id: string) => void;
+  openDetail: (target: import("../EditorContext").DetailTarget) => void;
+}) {
+  const [pickerGroup, setPickerGroup] = useState<"top" | "bottom" | null>(null);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const topElements = [...groups.top].sort((a, b) => a.sortOrder - b.sortOrder);
+  const bottomElements = [...groups.bottom].sort((a, b) => a.sortOrder - b.sortOrder);
+  const topIds = topElements.map((el) => el.id);
+  const bottomIds = bottomElements.map((el) => el.id);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  const handleDragEnd = (groupKey: "top" | "bottom", event: DragEndEvent) => {
+    setActiveDragId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const elements = groupKey === "top" ? topElements : bottomElements;
+    const oldIdx = elements.findIndex((el) => el.id === active.id);
+    const newIdx = elements.findIndex((el) => el.id === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
+    const reordered = arrayMove(elements, oldIdx, newIdx).map((el, i) => ({ ...el, sortOrder: i }));
+    saveFooter({ classicGroups: { ...groups, [groupKey]: reordered } });
+  };
+
+  const topOpen = !collapsedIds.has("__footer_classic_top");
+  const bottomOpen = !collapsedIds.has("__footer_classic_bottom");
+
+  const toggleElementVisibility = (groupKey: "top" | "bottom", elementId: string) => {
+    const current = groups[groupKey];
+    const updated = current.map((el) =>
+      el.id === elementId ? { ...el, isActive: el.isActive === false ? true : false } : el,
+    );
+    saveFooter({ classicGroups: { ...groups, [groupKey]: updated } });
+  };
+
+  const deleteElement = (groupKey: "top" | "bottom", elementId: string) => {
+    const updated = groups[groupKey].filter((el) => el.id !== elementId);
+    saveFooter({ classicGroups: { ...groups, [groupKey]: updated } });
+  };
+
+  const addElement = (groupKey: "top" | "bottom", elementType: string) => {
+    const current = groups[groupKey];
+    const maxSort = current.reduce((max, el) => Math.max(max, el.sortOrder), -1);
+    const newEl = createElementInstance(elementType as ElementType, {}, maxSort + 1);
+    saveFooter({ classicGroups: { ...groups, [groupKey]: [...current, newEl] } });
+    setPickerGroup(null);
+    // Open the new element's panel
+    openDetail({ scope: "footer-classic-element", sectionId: "__footer", blockId: groupKey, elementId: newEl.id });
+  };
+
+  // Build picker data — use the same buildElementPickerData as regular sections
+  const allElementTypes = getAllElementDefinitions().map((d) => d.type);
+  const footerSlotDef: SlotDefinition = {
+    key: "__footer_slot",
+    name: "Element",
+    description: "",
+    allowedElements: allElementTypes,
+    minElements: 0,
+    maxElements: -1,
+    defaultElements: [],
+  };
+  const { items: pickerItems, categories: pickerCategories } = buildElementPickerData(footerSlotDef);
+
+  return (
+    <>
+      {/* Top group */}
+      <TreeRow
+        icon="folder"
+        name="Grupp"
+        isActive={true}
+        indent={1}
+        noDragHandle
+        collapsed={!topOpen}
+        onToggleCollapse={() => toggleCollapse("__footer_classic_top")}
+        onToggleVisibility={() => {}}
+        onClick={() => openDetail({ scope: "footer-classic-block", sectionId: "__footer", blockId: "top" })}
+      />
+      {topOpen && (
+        <>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={(e) => setActiveDragId(e.active.id as string)}
+            onDragEnd={(e) => handleDragEnd("top", e)}
+            onDragCancel={() => setActiveDragId(null)}
+          >
+            <SortableContext items={topIds} strategy={verticalListSortingStrategy}>
+              {topElements.map((el) => (
+                <SortableTreeRow
+                  key={el.id}
+                  id={el.id}
+                  icon={ELEMENT_ICON_NAMES[el.type] ?? "widgets"}
+                  name={getElementName(el.type)}
+                  preview={getElementPreview(el)}
+                  isActive={el.isActive !== false}
+                  indent={2}
+                  onToggleVisibility={() => toggleElementVisibility("top", el.id)}
+                  onDelete={() => deleteElement("top", el.id)}
+                  onClick={() => openDetail({ scope: "footer-classic-element", sectionId: "__footer", blockId: "top", elementId: el.id })}
+                />
+              ))}
+            </SortableContext>
+            <DragOverlay dropAnimation={null}>
+              {activeDragId && topElements.find((el) => el.id === activeDragId) ? (() => {
+                const el = topElements.find((e) => e.id === activeDragId)!;
+                return <TreeRow icon={ELEMENT_ICON_NAMES[el.type] ?? "widgets"} name={getElementName(el.type)} isActive={true} indent={2} isOverlay noDragHandle />;
+              })() : null}
+            </DragOverlay>
+          </DndContext>
+          <AddButton label="Lägg till element" indent={2} onClick={() => setPickerGroup("top")} />
+        </>
+      )}
+
+      {/* Bottom group */}
+      <TreeRow
+        icon="folder"
+        name="Grupp"
+        isActive={true}
+        indent={1}
+        noDragHandle
+        collapsed={!bottomOpen}
+        onToggleCollapse={() => toggleCollapse("__footer_classic_bottom")}
+        onToggleVisibility={() => {}}
+        onClick={() => openDetail({ scope: "footer-classic-block", sectionId: "__footer", blockId: "bottom" })}
+      />
+      {bottomOpen && (
+        <>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={(e) => setActiveDragId(e.active.id as string)}
+            onDragEnd={(e) => handleDragEnd("bottom", e)}
+            onDragCancel={() => setActiveDragId(null)}
+          >
+            <SortableContext items={bottomIds} strategy={verticalListSortingStrategy}>
+              {bottomElements.map((el) => (
+                <SortableTreeRow
+                  key={el.id}
+                  id={el.id}
+                  icon={ELEMENT_ICON_NAMES[el.type] ?? "widgets"}
+                  name={getElementName(el.type)}
+                  isActive={el.isActive !== false}
+                  indent={2}
+                  onToggleVisibility={() => toggleElementVisibility("bottom", el.id)}
+                  onDelete={() => deleteElement("bottom", el.id)}
+                  onClick={() => openDetail({ scope: "footer-classic-element", sectionId: "__footer", blockId: "bottom", elementId: el.id })}
+                />
+              ))}
+            </SortableContext>
+            <DragOverlay dropAnimation={null}>
+              {activeDragId && bottomElements.find((el) => el.id === activeDragId) ? (() => {
+                const el = bottomElements.find((e) => e.id === activeDragId)!;
+                return <TreeRow icon={ELEMENT_ICON_NAMES[el.type] ?? "widgets"} name={getElementName(el.type)} isActive={true} indent={2} isOverlay noDragHandle />;
+              })() : null}
+            </DragOverlay>
+          </DndContext>
+          <AddButton label="Lägg till element" indent={2} onClick={() => setPickerGroup("bottom")} />
+        </>
+      )}
+
+      {/* Element picker modal */}
+      {pickerGroup && (
+        <PickerModal
+          title="Lägg till element"
+          items={pickerItems}
+          categories={pickerCategories}
+          onSelect={(id) => addElement(pickerGroup, id)}
+          onClose={() => setPickerGroup(null)}
+        />
+      )}
+    </>
+  );
+}
+
 // ─── Shared helpers ──────────────────────────────────────────
 
 function getElementName(type: string): string {
@@ -1552,6 +1876,8 @@ const ELEMENT_ICON_NAMES: Record<string, string> = {
   richtext: "wysiwyg",
   collapsible: "close_fullscreen",
   map: "map",
+  menu: "link",
+  logo: "image",
   video: "youtube_activity",
   gallery: "gallery_thumbnail",
 };
@@ -1674,7 +2000,7 @@ const AddButton = React.memo(function AddButton({ label, indent, onClick, disabl
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
     >
-      <EditorIcon name="add" size={14} />
+      <EditorIcon name="add_circle" size={14} />
       <span>{label}</span>
     </button>
   );

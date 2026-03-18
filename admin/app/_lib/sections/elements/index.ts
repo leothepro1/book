@@ -15,3 +15,5 @@ import "./collapsible";
 import "./map";
 import "./video";
 import "./gallery";
+import "./menu";
+import "./logo";

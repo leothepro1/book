@@ -105,14 +105,31 @@ registerResourceType({
   },
 });
 
-// Future resource types can be added here:
-//
-// registerResourceType({
-//   id: "menus",
-//   label: "Menyer",
-//   icon: "menu",
-//   namespace: "TENANT",
-//   resourceIdSegment: "menu",
-//   fields: [{ key: "title", type: "text", label: "Menynamn" }],
-//   extract: (config) => { ... },
-// });
+// Menus — menu title + item labels
+registerResourceType({
+  id: "menus",
+  label: "Menyer",
+  icon: "menu_book",
+  namespace: "TENANT",
+  resourceIdSegment: "menu",
+  fields: [{ key: "title", type: "text" as const, label: "Menynamn" }],
+  extract: (config) => {
+    const menus = (config as Record<string, unknown>).menus as Array<Record<string, unknown>> | undefined;
+    if (!menus || !Array.isArray(menus)) return [];
+
+    return menus.map((menu) => ({
+      id: menu.id as string,
+      name: (menu.title as string) ?? "Meny",
+      data: menu,
+      childType: "item",
+      childFields: [
+        { key: "label", type: "text" as const, label: "Namn" },
+      ],
+      children: ((menu.items as Array<Record<string, unknown>>) ?? []).map((item) => ({
+        id: item.id as string,
+        name: (item.label as string) ?? "Menyobjekt",
+        data: item,
+      })),
+    }));
+  },
+});

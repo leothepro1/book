@@ -1,56 +1,108 @@
 "use client";
 
 /**
- * Link Field — Destination picker for click behavior
+ * Link Field — LinkPicker-powered destination selector
  * ═══════════════════════════════════════════════════════════════
  *
- * Standalone settings field that configures what happens when the
- * user clicks on an element (heading, button, image, etc.).
- *
- * The text/content is NOT affected — only the click destination.
- * Supports 6 destination types: URL, Document, Email, Phone,
- * Contact (modal), and Text (modal).
+ * Uses the global LinkPicker component (same as /menus).
+ * Input field that opens LinkPicker popup on focus.
+ * Stores result as RichTextLinkData for backward compatibility
+ * with ElementLinkWrapper rendering.
  *
  * VALUE FORMAT (stored in element settings):
  *   null                         — no link
  *   { type, target, payload }    — RichTextLinkData
- *
- * CSS prefix: rt-link-* (reuses link modal styles)
  */
 
-import React, { useCallback, useState } from "react";
-import { createPortal } from "react-dom";
+import React, { useCallback, useState, useRef, useMemo } from "react";
 import type { SettingField } from "@/app/(guest)/_lib/themes/types";
 import { FieldWrapper } from "./FieldRenderer";
-import { RichTextLinkModal } from "./RichTextLinkModal";
-import type {
-  RichTextLinkData,
-  RichTextLinkType,
-} from "./richTextLinkTypes";
+import { LinkPicker } from "@/app/_components/LinkPicker";
+import { usePreview } from "@/app/(admin)/_components/GuestPreview";
+import { getMapThumbnail } from "@/app/(admin)/maps/maps-constants";
+import type { RichTextLinkData } from "./richTextLinkTypes";
+import { DEFAULT_TARGET } from "./richTextLinkTypes";
 
 // ═══════════════════════════════════════════════════════════════
-// LABEL MAP
+// URL → RichTextLinkData conversion
 // ═══════════════════════════════════════════════════════════════
 
-const TYPE_LABELS: Record<RichTextLinkType, string> = {
-  url: "Länk",
-  document: "Dokument",
-  email: "E-post",
-  phone: "Telefonnummer",
-  contact: "Kontaktuppgifter",
-  text: "Text",
-};
+function urlToLinkData(url: string): RichTextLinkData {
+  if (url.startsWith("mailto:")) {
+    const mailtoUrl = url.replace("mailto:", "");
+    const [email] = mailtoUrl.split("?");
+    return {
+      type: "email",
+      target: DEFAULT_TARGET.email,
+      payload: { email: decodeURIComponent(email), subject: "" },
+    };
+  }
+  if (url.startsWith("tel:")) {
+    return {
+      type: "phone",
+      target: DEFAULT_TARGET.phone,
+      payload: { phone: url.replace("tel:", "") },
+    };
+  }
+  if (url.includes(".pdf") || url.includes("cloudinary.com")) {
+    const filename = url.split("/").pop()?.split("?")[0] ?? "";
+    if (filename.endsWith(".pdf")) {
+      return {
+        type: "document",
+        target: DEFAULT_TARGET.document,
+        payload: { fileUrl: url, fileName: filename, filePublicId: "", fileDescription: "" },
+      };
+    }
+  }
+  // #map:, #text:, internal paths, external URLs — all stored as url type
+  const isExternal = url.startsWith("http");
+  return {
+    type: "url",
+    target: DEFAULT_TARGET.url,
+    payload: { href: url, openInNewTab: isExternal },
+  };
+}
 
-function summarizeLink(data: RichTextLinkData): string {
+// ═══════════════════════════════════════════════════════════════
+// RichTextLinkData → display (formatted or raw URL)
+// ═══════════════════════════════════════════════════════════════
+
+type LinkDisplay = { prefix: string; name: string } | null;
+
+function getLinkDisplay(data: RichTextLinkData, maps: { id: string; name: string }[]): LinkDisplay {
+  switch (data.type) {
+    case "url": {
+      const href = (data.payload as { href: string }).href;
+      if (href.startsWith("#map:")) {
+        const mapId = href.slice(5);
+        const map = maps.find((m) => m.id === mapId);
+        return { prefix: "Karta:", name: map?.name ?? mapId };
+      }
+      if (href.startsWith("#text:")) {
+        const content = decodeURIComponent(href.slice(6));
+        return { prefix: "Text —", name: content.length > 40 ? content.slice(0, 40) + "…" : content };
+      }
+      return null;
+    }
+    case "document": {
+      const fileName = (data.payload as { fileName: string }).fileName;
+      return { prefix: "Dokument:", name: fileName || "dokument" };
+    }
+    default:
+      return null;
+  }
+}
+
+function linkDataToRawUrl(data: RichTextLinkData): string {
   switch (data.type) {
     case "url":
       return (data.payload as { href: string }).href;
-    case "document":
-      return (data.payload as { fileName: string }).fileName || "Dokument";
     case "email":
       return (data.payload as { email: string }).email;
     case "phone":
       return (data.payload as { phone: string }).phone;
+    case "document":
+      return (data.payload as { fileName: string }).fileName || "Dokument";
     case "contact":
       return (data.payload as { contactName: string }).contactName || "Kontakt";
     case "text": {
@@ -71,97 +123,100 @@ type Props = {
 };
 
 export function FieldLink({ field, value, onChange }: Props) {
-  const [showModal, setShowModal] = useState(false);
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const [portalTarget, setPortalTarget] = React.useState<Element | null>(null);
+  const { config } = usePreview();
   const linkData = value as RichTextLinkData | null;
+  const anchorRef = useRef<HTMLElement>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [inputValue, setInputValue] = useState("");
 
-  // Resolve portal target on mount AND on showModal (in case DOM wasn't ready at mount)
-  React.useEffect(() => {
-    if (containerRef.current) {
-      const dp = containerRef.current.closest(".dp");
-      if (dp) setPortalTarget(dp);
-    }
-  }, [showModal]);
+  // Maps for LinkPicker
+  const maps = useMemo(
+    () => (config?.maps ?? []).map((m) => ({ id: m.id, name: m.name, thumbnail: getMapThumbnail(m.style) })),
+    [config?.maps],
+  );
 
-  const handleConfirm = useCallback(
-    (data: RichTextLinkData) => {
+  // Formatted display for special links (map, text, document)
+  const display = linkData ? getLinkDisplay(linkData, maps) : null;
+  const rawUrl = linkData ? linkDataToRawUrl(linkData) : "";
+
+  const handleSelect = useCallback(
+    (url: string, _label: string) => {
+      const data = urlToLinkData(url);
       onChange(field.key, data);
-      setShowModal(false);
+      setPickerOpen(false);
+      setInputValue("");
     },
-    [field.key, onChange]
+    [field.key, onChange],
   );
 
   const handleRemove = useCallback(() => {
     onChange(field.key, null);
-    setShowModal(false);
+    setInputValue("");
   }, [field.key, onChange]);
 
-  const modalElement = showModal ? (
-    <RichTextLinkModal
-      initialData={linkData}
-      isEditing={linkData !== null}
-      onConfirm={handleConfirm}
-      onRemove={linkData ? handleRemove : undefined}
-      onClose={() => setShowModal(false)}
-    />
-  ) : null;
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value);
+  }, []);
+
+  const handleFocus = useCallback(() => {
+    setPickerOpen(true);
+  }, []);
 
   return (
     <FieldWrapper field={field}>
-      <div ref={containerRef}>
+      <div style={{ position: "relative" }}>
         {linkData ? (
           <div className="fl-current">
-            <div className="fl-current__info">
-              <span className="fl-current__type">{TYPE_LABELS[linkData.type]}</span>
-              <span className="fl-current__summary">{summarizeLink(linkData)}</span>
-            </div>
-            <div className="fl-current__actions">
-              <button
-                type="button"
-                className="fl-current__btn"
-                onClick={() => setShowModal(true)}
+            {display ? (
+              <div
+                ref={anchorRef as React.RefObject<HTMLDivElement>}
+                className="fl-current__display"
+                onClick={handleFocus}
+                tabIndex={0}
+                onFocus={handleFocus}
               >
-                Ändra
-              </button>
-              <button
-                type="button"
-                className="fl-current__btn fl-current__btn--remove"
-                onClick={() => onChange(field.key, null)}
-              >
-                Ta bort
-              </button>
-            </div>
+                <span className="fl-current__prefix">{display.prefix}</span>
+                {" "}
+                <span className="fl-current__name">{display.name}</span>
+              </div>
+            ) : (
+              <input
+                ref={anchorRef as React.RefObject<HTMLInputElement>}
+                type="text"
+                className="fl-current__input"
+                value={rawUrl}
+                readOnly
+                onFocus={handleFocus}
+              />
+            )}
+            <button
+              type="button"
+              className="fl-current__btn fl-current__btn--remove"
+              onClick={handleRemove}
+              aria-label="Ta bort länk"
+            >
+              <span className="material-symbols-rounded" style={{ fontSize: 16 }}>close</span>
+            </button>
           </div>
         ) : (
-          <button
-            type="button"
-            className="fl-add-btn"
-            onClick={() => setShowModal(true)}
-          >
-            <LinkPlusIcon />
-            <span>Lägg till länk</span>
-          </button>
+          <input
+            ref={anchorRef as React.RefObject<HTMLInputElement>}
+            type="text"
+            className="fl-link-input"
+            placeholder="Sök eller klistra in länk…"
+            value={inputValue}
+            onChange={handleInputChange}
+            onFocus={handleFocus}
+          />
         )}
+        <LinkPicker
+          open={pickerOpen}
+          anchorRef={anchorRef}
+          maps={maps}
+          onSelect={handleSelect}
+          onClose={() => setPickerOpen(false)}
+        />
       </div>
-      {modalElement && portalTarget
-        ? createPortal(modalElement, portalTarget)
-        : modalElement}
     </FieldWrapper>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════
-// ICONS
-// ═══════════════════════════════════════════════════════════════
-
-function LinkPlusIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        d="M15.842 4.175a3.746 3.746 0 0 0-5.298 0l-2.116 2.117a3.75 3.75 0 0 0 .01 5.313l.338.336a.75.75 0 1 0 1.057-1.064l-.339-.337a2.25 2.25 0 0 1-.005-3.187l2.116-2.117a2.246 2.246 0 1 1 3.173 3.18l-1.052 1.047a.75.75 0 0 0 1.058 1.064l1.052-1.047a3.746 3.746 0 0 0 .006-5.305Zm-11.664 11.67a3.75 3.75 0 0 0 5.304 0l2.121-2.121a3.75 3.75 0 0 0 0-5.303l-.362-.362a.75.75 0 0 0-1.06 1.06l.362.362a2.25 2.25 0 0 1 0 3.182l-2.122 2.122a2.25 2.25 0 1 1-3.182-3.182l1.07-1.07a.75.75 0 1 0-1.062-1.06l-1.069 1.069a3.75 3.75 0 0 0 0 5.303Z"
-      />
-    </svg>
   );
 }

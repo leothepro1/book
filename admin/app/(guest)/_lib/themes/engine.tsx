@@ -34,6 +34,8 @@ import { CategorySection } from "../../_components/cards/CategorySection";
 import { LooseCardItem } from "../../_components/cards/LooseCardItem";
 import { SectionItem } from "../../_components/sections";
 import { MapsProvider } from "../../_components/sections/elements/MapsContext";
+import { MenusProvider } from "../../_components/sections/elements/MenusContext";
+import { SpecialLinkProvider } from "../../_components/SpecialLinkProvider";
 
 export type ThemeRendererProps = {
   /** Which page template to render (e.g. "home", "shop", "account"). */
@@ -197,6 +199,8 @@ export async function ThemeRenderer({
 
   return (
     <MapsProvider maps={config.maps ?? []}>
+    <MenusProvider menus={config.menus ?? []}>
+    <SpecialLinkProvider maps={config.maps ?? []}>
     <div
       style={{ padding: `${pagePadding}px ${pagePadding}px 124px ${pagePadding}px` }}
       data-theme-id={renderContext.themeId}
@@ -249,6 +253,8 @@ export async function ThemeRenderer({
       {/* Section group: footer */}
       {footerSlots.map(renderSlot)}
     </div>
+    </SpecialLinkProvider>
+    </MenusProvider>
     </MapsProvider>
   );
 }

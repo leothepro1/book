@@ -185,9 +185,9 @@ export function SettingsPanel() {
       const isDefault = scheme.id === defaultSchemeId;
       const isUndeletable = undeletableSchemeIds.has(scheme.id);
       const deleteReason = isDefault
-        ? "Standardschemat kan inte tas bort"
+        ? "Standardpaletten kan inte tas bort"
         : referencedSchemeIds.has(scheme.id)
-          ? "Schemat används av en eller flera sektioner"
+          ? "Paletten används av en eller flera sektioner"
           : null;
 
       return (
@@ -950,9 +950,9 @@ function ColorSchemesAccordion({
       </button>
       {open && (
         <div className="dp-accordion__content">
-          <span className="cs-section-label">Scheman</span>
+          <span className="cs-section-label">Paletter</span>
           <p className="cs-description">
-            Färgscheman kan tillämpas på sektioner i hela din gästportal
+            Färgpaletter kan tillämpas på sektioner i hela din gästportal
           </p>
           <div className="cs-grid">
             {schemes.map((scheme) => (
@@ -1161,8 +1161,8 @@ function SchemeEditor({
             </h3>
             <p className="sp-modal__desc">
               {isUndeletable && deleteReason
-                ? `${deleteReason}. Schemat kan inte tas bort.`
-                : "Schemat och alla dess färginställningar tas bort permanent."}
+                ? `${deleteReason}. Paletten kan inte tas bort.`
+                : "Paletten och alla dess färginställningar tas bort permanent."}
             </p>
             <div className="sp-modal__actions">
               <button

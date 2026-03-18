@@ -49,8 +49,18 @@ export async function getTenantConfig(
     config = migrateToV2Pages(mergeConfig(defaults, stored, tenant.id));
   }
 
+  // Load published locales for language switcher
+  const publishedLocaleRows = await prisma.tenantLocale.findMany({
+    where: { tenantId: tenant.id, published: true },
+    select: { locale: true, primary: true },
+    orderBy: { createdAt: "asc" },
+  });
+  config._publishedLocales = publishedLocaleRows.map((r) => r.locale);
+
   // Apply translations if a non-primary locale is requested
   const tenantPrimaryLocale = await getTenantPrimaryLocale(tenant.id);
+  config._primaryLocale = tenantPrimaryLocale;
+  config._currentLocale = locale ?? tenantPrimaryLocale;
 
   if (locale && locale !== tenantPrimaryLocale) {
     // Verify locale is published for this tenant

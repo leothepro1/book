@@ -102,6 +102,18 @@ export type MapConfig = {
 export type HeaderConfig = {
   /** Logo horizontal alignment within the header bar. */
   logoPosition: "left" | "center";
+  /** Menu horizontal position within the header bar. */
+  menuPosition?: "left" | "right";
+  /** Selected menu ID — rendered as navigation links in the header. */
+  headerMenuId?: string;
+  /** Whether the language switcher is shown in the header. */
+  showLanguageSwitcher?: boolean;
+  /** Whether language flags are shown next to language labels. */
+  showFlags?: boolean;
+  /** Language switcher horizontal position. */
+  languageSwitcherPosition?: "left" | "right";
+  /** Menu item font style. */
+  menuFont?: "body" | "heading" | "accent";
   /** Whether to show a bottom border dividing header from content. */
   showDivider: boolean;
   /** Color scheme applied to the header area. */
@@ -128,6 +140,8 @@ export type FooterActiveMode = "background" | "icon-only";
 export type FooterLayout = "app" | "classic";
 
 export type PageFooterConfig = {
+  /** Whether the footer is visible on the guest portal. */
+  isActive?: boolean;
   /** Footer layout style — "app" (tab bar) or "classic" (traditional footer). */
   footerLayout: FooterLayout;
   /** How the active tab is visually indicated. */
@@ -138,6 +152,11 @@ export type PageFooterConfig = {
   showDivider: boolean;
   /** Color scheme applied to the footer area. */
   colorSchemeId?: ColorSchemeId;
+  /** Classic layout element groups. Top: menus + buttons. Bottom: divider + content. */
+  classicGroups?: {
+    top: import("@/app/_lib/sections/types").ElementInstance[];
+    bottom: import("@/app/_lib/sections/types").ElementInstance[];
+  };
   /** Footer container spacing (px). */
   paddingTop: number;
   paddingRight: number;
@@ -309,6 +328,19 @@ export type TenantConfig = {
    * Must always point to a valid scheme in colorSchemes[].
    */
   defaultColorSchemeId?: string;
+
+  /**
+   * Runtime-only: published locale codes for this tenant.
+   * Populated by getTenantConfig(), not stored in JSON settings.
+   * Used by the language switcher in the guest portal header.
+   */
+  _publishedLocales?: string[];
+
+  /** Runtime-only: the active locale for the current request. */
+  _currentLocale?: string;
+
+  /** Runtime-only: the tenant's primary locale. */
+  _primaryLocale?: string;
 };
 
 export type SupportLinks = {

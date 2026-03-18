@@ -45,6 +45,7 @@ import { FieldMapPicker } from "./FieldMapPicker";
 import { FieldVideo } from "./FieldVideo";
 import { FieldImageList } from "./FieldImageList";
 import { FieldLayoutPicker } from "./FieldLayoutPicker";
+import { FieldMenuPicker } from "./FieldMenuPicker";
 
 // ─── Field Dispatcher ───────────────────────────────────────
 
@@ -79,6 +80,7 @@ const FIELD_MAP: Record<string, React.ComponentType<FieldRendererProps>> = {
   video: FieldVideo,
   imageList: FieldImageList,
   layoutPicker: FieldLayoutPicker,
+  menuPicker: FieldMenuPicker,
 };
 
 export function FieldRenderer({ field, value, onChange, allValues }: FieldRendererProps) {

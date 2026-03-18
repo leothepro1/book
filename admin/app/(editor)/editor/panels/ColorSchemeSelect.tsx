@@ -1,10 +1,13 @@
 "use client";
 
 /**
- * Color Scheme Select — Universal Dropdown
- * ─────────────────────────────────────────
- * Instance-level dropdown for selecting a color scheme.
+ * Color Scheme Select — Popup Picker
+ * ───────────────────────────────────
+ * Instance-level popup for selecting a color scheme.
  * Used by sections, header, and footer detail panels.
+ *
+ * Opens as a fixed popup (same pattern as layout picker / menu picker).
+ * Positioned relative to trigger — above or below based on viewport space.
  *
  * Features:
  *   - Full scheme preview swatch (background + Aa + buttons)
@@ -12,11 +15,11 @@
  *   - Footer with link to settings panel color accordion
  */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { EditorIcon } from "@/app/_components/EditorIcon";
 import { schemeLabel } from "./SettingsPanel";
 import { useEditor } from "../EditorContext";
-import { useDropDirection } from "../hooks/useDropDirection";
 import type { ColorScheme } from "@/app/_lib/color-schemes";
 
 /** Mini scheme preview — shows background, "Aa" text, and button miniatures. */
@@ -54,23 +57,50 @@ export function ColorSchemeSelect({
   onChange: (schemeId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const dir = useDropDirection(triggerRef, open);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [popupPos, setPopupPos] = useState<{ top?: number; bottom?: number }>({});
   const { navigateToSettings } = useEditor();
+
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const popupHeight = 320;
+
+    if (spaceBelow >= popupHeight + 16) {
+      setPopupPos({ top: rect.top });
+    } else {
+      setPopupPos({ bottom: window.innerHeight - rect.bottom });
+    }
+  }, []);
 
   // Close on outside click
   useEffect(() => {
     if (!open) return;
+    updatePosition();
     const handle = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (popupRef.current && !popupRef.current.contains(e.target as Node) &&
+          triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
+  }, [open, updatePosition]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handle = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", handle);
+    return () => document.removeEventListener("keydown", handle);
   }, [open]);
 
   const selected = schemes.find((s) => s.id === value) ?? schemes[0];
-  const selectedLabel = selected ? schemeLabel(selected) : "Inget schema";
+  const selectedLabel = selected ? schemeLabel(selected) : "Ingen palett";
 
   const handleEditLink = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -80,38 +110,43 @@ export function ColorSchemeSelect({
 
   return (
     <div className="cs-select">
-      <span className="cs-select__label">Färgschema</span>
-      <div className="sf-dropdown" ref={ref}>
-        <button
-          ref={triggerRef}
-          type="button"
-          className="cs-select__trigger"
-          onClick={() => setOpen(!open)}
+      <span className="cs-select__label">Färgpalett</span>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="cs-select__trigger"
+        onClick={() => setOpen(!open)}
+      >
+        {selected && <SchemeMiniPreview scheme={selected} size="trigger" />}
+        <span className="sf-dropdown__text">{selectedLabel}</span>
+        <EditorIcon name="expand_more" size={16} className="sf-dropdown__chevron" />
+      </button>
+
+      {open && typeof document !== "undefined" && createPortal(
+        <div
+          ref={popupRef}
+          className="cs-popup"
+          style={popupPos}
         >
-          {selected && <SchemeMiniPreview scheme={selected} size="trigger" />}
-          <span className="sf-dropdown__text">{selectedLabel}</span>
-          <EditorIcon name="expand_more" size={16} className="sf-dropdown__chevron" />
-        </button>
-        {open && (
-          <div className={`sf-dropdown__menu cs-dropdown${dir === "up" ? " sf-dropdown__menu--up" : ""}`}>
-            <ul className="cs-dropdown__list">
-              {schemes.map((scheme) => {
-                const isActive = scheme.id === value;
-                return (
-                  <li
-                    key={scheme.id}
-                    className={`sf-dropdown__item cs-dropdown__item${isActive ? " sf-dropdown__item--active" : ""}`}
+          <ul className="cs-popup__list">
+            {schemes.map((scheme) => {
+              const isActive = scheme.id === value;
+              return (
+                <li key={scheme.id}>
+                  <button
+                    type="button"
+                    className={`cs-popup__item${isActive ? " cs-popup__item--active" : ""}`}
                     onClick={() => {
                       onChange(scheme.id);
                       setOpen(false);
                     }}
                   >
                     <SchemeMiniPreview scheme={scheme} />
-                    <span className="cs-dropdown__content">
-                      <span className="cs-dropdown__name">{schemeLabel(scheme)}</span>
+                    <span className="cs-popup__content">
+                      <span className="cs-popup__name">{schemeLabel(scheme)}</span>
                       {isActive && (
                         <span
-                          className="cs-dropdown__edit"
+                          className="cs-popup__edit"
                           onClick={handleEditLink}
                         >
                           Redigera
@@ -123,26 +158,27 @@ export function ColorSchemeSelect({
                     >
                       check
                     </span>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="cs-dropdown__footer">
-              <span className="cs-dropdown__footer-text">
-                Gå till dina{" "}
-                <button type="button" className="cs-dropdown__link" onClick={handleEditLink}>
-                  temainställningar
-                </button>
-                {" "}för färg för att{" "}
-                <button type="button" className="cs-dropdown__link" onClick={handleEditLink}>
-                  redigera
-                </button>
-                {" "}alla temats färger.
-              </span>
-            </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="cs-popup__footer">
+            <span className="cs-popup__footer-text">
+              Gå till dina{" "}
+              <button type="button" className="cs-popup__link" onClick={handleEditLink}>
+                temainställningar
+              </button>
+              {" "}för att{" "}
+              <button type="button" className="cs-popup__link" onClick={handleEditLink}>
+                redigera
+              </button>
+              {" "}alla temats färger.
+            </span>
           </div>
-        )}
-      </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

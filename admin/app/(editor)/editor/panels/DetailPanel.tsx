@@ -49,6 +49,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useEditor, type DetailTarget } from "../EditorContext";
 import { usePreview } from "@/app/(admin)/_components/GuestPreview";
 import { usePublishBar } from "@/app/(admin)/_components/PublishBar";
@@ -56,6 +57,9 @@ import { useDraftUpdate } from "@/app/(admin)/_hooks/useDraftUpdate";
 import { SettingsForm } from "../fields";
 import type { FieldOnChange } from "../fields/FieldRenderer";
 import { FieldSpacing } from "../fields/FieldSpacing";
+import { SegmentedControl } from "../fields/FieldSegmented";
+import { FieldMenuPicker } from "../fields/FieldMenuPicker";
+import { FieldSelect } from "../fields/FieldSelect";
 import { FieldSchedule } from "../fields/FieldSchedule";
 import { ColorSchemeSelect } from "./ColorSchemeSelect";
 import {
@@ -75,7 +79,6 @@ import type {
 import type { HeaderConfig } from "@/app/(guest)/_lib/tenant/types";
 import { HEADER_DEFAULTS, PAGE_FOOTER_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
 import type { PageFooterConfig } from "@/app/(guest)/_lib/tenant/types";
-import { useDropDirection } from "../hooks/useDropDirection";
 import {
   getPageSections,
   getPageHeader,
@@ -308,6 +311,33 @@ export function DetailPanel() {
         saveDraft={saveDraft}
         pageId={currentPageId}
         goBack={goBack}
+      />
+    );
+  }
+
+  if (detailTarget?.scope === "footer-classic-block") {
+    return (
+      <FooterClassicBlockPanel
+        config={config}
+        pushUndo={pushUndo}
+        saveDraft={saveDraft}
+        pageId={currentPageId}
+        goBack={goBack}
+        groupKey={detailTarget.blockId as "top" | "bottom"}
+      />
+    );
+  }
+
+  if (detailTarget?.scope === "footer-classic-element") {
+    return (
+      <FooterClassicElementPanel
+        config={config}
+        pushUndo={pushUndo}
+        saveDraft={saveDraft}
+        pageId={currentPageId}
+        goBack={goBack}
+        groupKey={detailTarget.blockId as "top" | "bottom"}
+        elementId={detailTarget.elementId!}
       />
     );
   }
@@ -1032,31 +1062,117 @@ function HeaderDetailPanel({
       <div className="dp-divider" />
 
       <div className="dp-body">
-        {/* Logo position */}
-        <div className="dp-field">
-          <span className="dp-accordion__label" style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: "block" }}>Logotypens position</span>
-          <div className="dp-segmented">
+        {/* Logo */}
+        <span className="sf-group-label">Logotyp</span>
+        <div>
+          <span className="sf-label" style={{ display: "block", marginBottom: 6 }}>Position</span>
+          <SegmentedControl
+            options={[
+              { value: "left", label: "Vänster" },
+              { value: "center", label: "Centrerad" },
+            ]}
+            value={header.logoPosition}
+            onChange={(v) => save({ logoPosition: v as "left" | "center" })}
+          />
+        </div>
+
+        <div className="sf-group-divider" />
+
+        {/* Menu */}
+        <span className="sf-group-label">Meny</span>
+        <div>
+          <span className="sf-label" style={{ display: "block", marginBottom: 6 }}>Position</span>
+          <SegmentedControl
+            options={[
+              { value: "left", label: "Vänster" },
+              { value: "right", label: "Höger" },
+            ]}
+            value={header.menuPosition ?? "right"}
+            onChange={(v) => save({ menuPosition: v as "left" | "right" })}
+          />
+        </div>
+        <FieldMenuPicker
+          field={{ key: "headerMenuId", type: "menuPicker", label: "Meny" }}
+          value={header.headerMenuId ?? ""}
+          onChange={(_key, value) => save({ headerMenuId: (value as string) || "" })}
+        />
+        <FieldSelect
+          field={{
+            key: "menuFont",
+            type: "select",
+            label: "Teckensnitt",
+            default: "body",
+            options: [
+              { value: "body", label: "Brödtext" },
+              { value: "heading", label: "Rubrik" },
+              { value: "accent", label: "Accent" },
+            ],
+          }}
+          value={header.menuFont ?? "body"}
+          onChange={(_key, value) => save({ menuFont: value as "body" | "heading" | "accent" })}
+        />
+
+        <div className="sf-group-divider" />
+
+        {/* Localization */}
+        <span className="sf-group-label">Lokalisering</span>
+        <div>
+          <div className="sf-toggle-row">
+            <div>
+              <span>Språkväljare</span>
+              <a
+                href="/home#settings/languages"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="sf-toggle-desc-link"
+              >
+                Hantera språk
+              </a>
+            </div>
             <button
               type="button"
-              className={`dp-segmented__btn${header.logoPosition === "left" ? " dp-segmented__btn--active" : ""}`}
-              onClick={() => save({ logoPosition: "left" })}
+              role="switch"
+              aria-checked={header.showLanguageSwitcher ?? false}
+              className={`sf-toggle${header.showLanguageSwitcher ? " sf-toggle--on" : ""}`}
+              onClick={() => save({ showLanguageSwitcher: !header.showLanguageSwitcher })}
             >
-              <EditorIcon name="format_align_left" size={16} />
-              <span>Vänster</span>
-            </button>
-            <button
-              type="button"
-              className={`dp-segmented__btn${header.logoPosition === "center" ? " dp-segmented__btn--active" : ""}`}
-              onClick={() => save({ logoPosition: "center" })}
-            >
-              <EditorIcon name="format_align_center" size={16} />
-              <span>Centrerad</span>
+              <span className="sf-toggle__icon sf-toggle__icon--check material-symbols-rounded">check</span>
+              <span className="sf-toggle__icon sf-toggle__icon--remove material-symbols-rounded">remove</span>
+              <span className="sf-toggle__thumb" />
             </button>
           </div>
         </div>
+        <div className="sf-toggle-row">
+          <span>Visa flaggor</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={header.showFlags ?? false}
+            className={`sf-toggle${header.showFlags ? " sf-toggle--on" : ""}`}
+            onClick={() => save({ showFlags: !header.showFlags })}
+          >
+            <span className="sf-toggle__icon sf-toggle__icon--check material-symbols-rounded">check</span>
+            <span className="sf-toggle__icon sf-toggle__icon--remove material-symbols-rounded">remove</span>
+            <span className="sf-toggle__thumb" />
+          </button>
+        </div>
+        <div>
+          <span className="sf-label" style={{ display: "block", marginBottom: 6 }}>Position</span>
+          <SegmentedControl
+            options={[
+              { value: "left", label: "Vänster" },
+              { value: "right", label: "Höger" },
+            ]}
+            value={header.languageSwitcherPosition ?? "right"}
+            onChange={(v) => save({ languageSwitcherPosition: v as "left" | "right" })}
+          />
+        </div>
 
-        {/* Show divider toggle */}
-        <div className="dp-field">
+        <div className="sf-group-divider" />
+
+        {/* Appearance */}
+        <span className="sf-group-label">Utseende</span>
+        <div>
           <div className="sf-toggle-row">
             <span>Avskiljande linje</span>
             <button
@@ -1100,63 +1216,237 @@ function HeaderDetailPanel({
 // ═══════════════════════════════════════════════════════════════
 
 
-const FOOTER_LAYOUT_OPTIONS: { value: string; label: string; image: string }[] = [
+const FOOTER_LAYOUT_OPTIONS: { value: string; label: string; description: string; image: string }[] = [
   {
     value: "app",
     label: "App",
-    image: "https://res.cloudinary.com/dmgmoisae/image/upload/v1773845274/app_nnnchh.png",
+    description: "Fast fält med ikoner och etiketter.",
+    image: "https://res.cloudinary.com/dmgmoisae/image/upload/v1773863720/Namnl%C3%B6st-2_qcs1hl.png",
   },
   {
     value: "classic",
-    label: "Footer",
-    image: "https://res.cloudinary.com/dmgmoisae/image/upload/v1773845447/footer_g2dofm.png",
+    label: "Klassisk",
+    description: "Sidfot med menyer, logotyp och länkar.",
+    image: "https://res.cloudinary.com/dmgmoisae/image/upload/v1773863716/footer_ydduaz.png",
   },
 ];
 
 function FooterLayoutPicker({ value, onChange }: { value: string; onChange: (v: "app" | "classic") => void }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const dir = useDropDirection(triggerRef, open);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [popupTop, setPopupTop] = useState(0);
   const selected = FOOTER_LAYOUT_OPTIONS.find((o) => o.value === value) ?? FOOTER_LAYOUT_OPTIONS[0];
 
   useEffect(() => {
     if (!open) return;
+    if (triggerRef.current) {
+      setPopupTop(triggerRef.current.getBoundingClientRect().top);
+    }
     const handle = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (popupRef.current && !popupRef.current.contains(e.target as Node) &&
+          triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const handle = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", handle);
+    return () => document.removeEventListener("keydown", handle);
+  }, [open]);
+
   return (
     <div>
       <span className="sf-label" style={{ display: "block", marginBottom: 6 }}>Layout</span>
-      <div className="sf-dropdown" ref={ref}>
-        <button
-          ref={triggerRef}
-          type="button"
-          className="sf-layout-picker__trigger"
-          onClick={() => setOpen(!open)}
+      <button
+        ref={triggerRef}
+        type="button"
+        className="sf-layout-picker__trigger"
+        onClick={() => setOpen(!open)}
+      >
+        <img src={selected.image} alt={selected.label} className="sf-layout-picker__thumb" />
+        <span className="sf-dropdown__text">{selected.label}</span>
+        <EditorIcon name="expand_more" size={16} className="sf-dropdown__chevron" />
+      </button>
+
+      {open && typeof document !== "undefined" && createPortal(
+        <div
+          className="layout-picker-popup"
+          ref={popupRef}
+          style={{ top: popupTop }}
         >
-          <img src={selected.image} alt={selected.label} className="sf-layout-picker__thumb" />
-          <span className="sf-dropdown__text">{selected.label}</span>
-          <EditorIcon name="expand_more" size={16} className="sf-dropdown__chevron" />
-        </button>
-        {open && (
-          <ul className={`sf-dropdown__menu${dir === "up" ? " sf-dropdown__menu--up" : ""}`}>
+          <div className="layout-picker-popup__list">
             {FOOTER_LAYOUT_OPTIONS.map((opt) => (
-              <li
+              <button
                 key={opt.value}
-                className={`sf-layout-picker__item${opt.value === value ? " sf-layout-picker__item--active" : ""}`}
+                type="button"
+                className={`layout-picker-popup__item${opt.value === value ? " layout-picker-popup__item--active" : ""}`}
                 onClick={() => { onChange(opt.value as "app" | "classic"); setOpen(false); }}
               >
-                <img src={opt.image} alt={opt.label} className="sf-layout-picker__thumb" />
-                <span style={{ flex: 1 }}>{opt.label}</span>
+                <img src={opt.image} alt={opt.label} className="layout-picker-popup__thumb" />
+                <span className="layout-picker-popup__text">
+                  <span className="layout-picker-popup__label">{opt.label}</span>
+                  <span className="layout-picker-popup__desc">{opt.description}</span>
+                </span>
                 <span className={`material-symbols-rounded sf-dropdown__check${opt.value === value ? " sf-dropdown__check--visible" : ""}`}>check</span>
-              </li>
+              </button>
             ))}
-          </ul>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+// ─── Footer Classic Block Panel ──────────────────────────────
+
+function FooterClassicBlockPanel({
+  config,
+  pushUndo,
+  saveDraft,
+  goBack,
+  pageId,
+  groupKey,
+}: {
+  config: any;
+  pushUndo: (snapshot: Record<string, unknown>) => void;
+  saveDraft: (changes: any) => any;
+  goBack: () => void;
+  pageId: import("@/app/_lib/pages/types").PageId;
+  groupKey: "top" | "bottom";
+}) {
+  const footer: PageFooterConfig = { ...PAGE_FOOTER_DEFAULTS, ...getPageFooter(config, pageId) };
+  const groups = footer.classicGroups;
+  const elements = [...(groups?.[groupKey] ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
+
+  const handleElementChange = useCallback(
+    (elementId: string, keyOrPatch: string | Record<string, unknown>, value?: unknown) => {
+      if (!groups) return;
+      const patch = typeof keyOrPatch === "string" ? { [keyOrPatch]: value } : keyOrPatch;
+      const updatedElements = groups[groupKey].map((el) =>
+        el.id === elementId ? { ...el, settings: { ...el.settings, ...patch } } : el,
+      );
+      pushUndo(getPageUndoSnapshot(config, pageId));
+      saveDraft(buildFooterPatch(config, pageId, {
+        ...footer,
+        classicGroups: { ...groups, [groupKey]: updatedElements },
+      }));
+    },
+    [groups, groupKey, pushUndo, saveDraft, config, pageId, footer],
+  );
+
+  return (
+    <div className="dp">
+      <div className="dp-header">
+        <button type="button" className="dp-header__back" onClick={goBack} aria-label="Tillbaka">
+          <BackIcon />
+        </button>
+        <span className="dp-header__title">Grupp</span>
+      </div>
+
+      <div className="dp-divider" />
+
+      <div className="dp-body">
+        {elements.length > 0 && (
+          <div className="dp-elements">
+            {elements.map((element) => (
+              <ElementFormGroup
+                key={element.id}
+                element={element}
+                onElementChange={handleElementChange}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Footer Classic Element Panel ────────────────────────────
+
+function FooterClassicElementPanel({
+  config,
+  pushUndo,
+  saveDraft,
+  goBack,
+  pageId,
+  groupKey,
+  elementId,
+}: {
+  config: any;
+  pushUndo: (snapshot: Record<string, unknown>) => void;
+  saveDraft: (changes: any) => any;
+  goBack: () => void;
+  pageId: import("@/app/_lib/pages/types").PageId;
+  groupKey: "top" | "bottom";
+  elementId: string;
+}) {
+  const footer: PageFooterConfig = { ...PAGE_FOOTER_DEFAULTS, ...getPageFooter(config, pageId) };
+  const groups = footer.classicGroups;
+  const elements = groups?.[groupKey] ?? [];
+  const element = elements.find((el) => el.id === elementId);
+
+  const def = element ? getElementDefinition(element.type) : null;
+  const schema = def?.settingsSchema ?? [];
+  const values = { ...(def?.settingDefaults ?? {}), ...(element?.settings ?? {}) };
+  const name = def?.name ?? element?.type ?? "Element";
+
+  const handleChange = useCallback(
+    (keyOrPatch: string | Record<string, unknown>, value?: unknown) => {
+      if (!groups || !element) return;
+      const patch = typeof keyOrPatch === "string" ? { [keyOrPatch]: value } : keyOrPatch;
+      const updatedElements = elements.map((el) =>
+        el.id === elementId ? { ...el, settings: { ...el.settings, ...patch } } : el,
+      );
+      pushUndo(getPageUndoSnapshot(config, pageId));
+      saveDraft(buildFooterPatch(config, pageId, {
+        ...footer,
+        classicGroups: { ...groups, [groupKey]: updatedElements },
+      }));
+    },
+    [groups, element, elements, elementId, pushUndo, saveDraft, config, pageId, footer, groupKey],
+  );
+
+  if (!element || !def) {
+    return (
+      <div className="dp">
+        <div className="dp-header">
+          <button type="button" className="dp-header__back" onClick={goBack} aria-label="Tillbaka">
+            <BackIcon />
+          </button>
+          <span className="dp-header__title">Element hittades inte</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="dp">
+      <div className="dp-header">
+        <button type="button" className="dp-header__back" onClick={goBack} aria-label="Tillbaka">
+          <BackIcon />
+        </button>
+        <span className="dp-header__title">{name}</span>
+      </div>
+
+      <div className="dp-divider" />
+
+      <div className="dp-body">
+        {schema.length > 0 && (
+          <SettingsForm
+            schema={schema}
+            values={values}
+            onChange={handleChange}
+          />
         )}
       </div>
     </div>
@@ -1215,7 +1505,6 @@ function FooterDetailPanel({
 
         <div className="sf-group-divider" />
 
-
         {/* Show divider toggle */}
         <div>
           <div className="sf-toggle-row">
@@ -1233,6 +1522,8 @@ function FooterDetailPanel({
             </button>
           </div>
         </div>
+
+        <div className="sf-group-divider" />
 
         {/* Color scheme */}
         {schemes.length > 0 && (

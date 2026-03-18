@@ -118,7 +118,9 @@ export type ElementType =
   | "collapsible"
   | "map"
   | "video"
-  | "gallery";
+  | "gallery"
+  | "menu"
+  | "logo";
 
 /**
  * A named settings bundle for an element type.

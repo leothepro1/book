@@ -192,6 +192,28 @@
 .mi-card__handle:hover { color: #999; }
 .mi-card__handle:active { cursor: grabbing; }
 
+.mi-card--add {
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.mi-card--add:hover {
+  background: var(--admin-surface-hover);
+}
+
+.mi-card__handle--add {
+  color: var(--admin-accent);
+  cursor: pointer;
+}
+
+.mi-card__handle--add:hover {
+  color: var(--admin-accent);
+}
+
+.mi-card__label--add {
+  color: var(--admin-text-secondary);
+}
+
 .mi-card__label {
   flex: 1;
   font-size: 14px;

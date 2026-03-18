@@ -7,7 +7,7 @@
  * TOOLBAR:
  *   [B] [I] [🔗]
  *   Bold and Italic toggle formatting on selected text.
- *   Link opens the multi-type destination modal.
+ *   Link opens the global LinkPicker (same as /menus and FieldLink).
  *
  * KEY DESIGN:
  *   The link button does NOT insert <a> tags into the content.
@@ -22,7 +22,7 @@
  * KEYBOARD SHORTCUTS:
  *   ⌘B / Ctrl+B → Bold
  *   ⌘I / Ctrl+I → Italic
- *   ⌘K / Ctrl+K → Link modal
+ *   ⌘K / Ctrl+K → LinkPicker
  *
  * CSS prefix: rt-* (rich text)
  */
@@ -30,14 +30,39 @@
 import React, {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
 import type { SettingField } from "@/app/(guest)/_lib/themes/types";
 import { FieldWrapper } from "./FieldRenderer";
-import { RichTextLinkModal } from "./RichTextLinkModal";
+import { LinkPicker } from "@/app/_components/LinkPicker";
+import { usePreview } from "@/app/(admin)/_components/GuestPreview";
+import { getMapThumbnail } from "@/app/(admin)/maps/maps-constants";
 import type { RichTextLinkData } from "./richTextLinkTypes";
+import { DEFAULT_TARGET } from "./richTextLinkTypes";
+
+// ═══════════════════════════════════════════════════════════════
+// URL ↔ RichTextLinkData (shared with FieldLink)
+// ═══════════════════════════════════════════════════════════════
+
+function urlToLinkData(url: string): RichTextLinkData {
+  if (url.startsWith("mailto:")) {
+    const [email] = url.replace("mailto:", "").split("?");
+    return { type: "email", target: DEFAULT_TARGET.email, payload: { email: decodeURIComponent(email), subject: "" } };
+  }
+  if (url.startsWith("tel:")) {
+    return { type: "phone", target: DEFAULT_TARGET.phone, payload: { phone: url.replace("tel:", "") } };
+  }
+  if (url.includes(".pdf") && (url.includes("cloudinary.com") || url.includes(".pdf"))) {
+    const filename = url.split("/").pop()?.split("?")[0] ?? "";
+    if (filename.endsWith(".pdf")) {
+      return { type: "document", target: DEFAULT_TARGET.document, payload: { fileUrl: url, fileName: filename, filePublicId: "", fileDescription: "" } };
+    }
+  }
+  const isExternal = url.startsWith("http");
+  return { type: "url", target: DEFAULT_TARGET.url, payload: { href: url, openInNewTab: isExternal } };
+}
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -60,25 +85,21 @@ type FormatState = {
 // ═══════════════════════════════════════════════════════════════
 
 export function FieldRichText({ field, value, onChange, allValues }: Props) {
+  const { config } = usePreview();
   const editorRef = useRef<HTMLDivElement>(null);
+  const linkAnchorRef = useRef<HTMLButtonElement>(null);
   const lastEmittedRef = useRef<string>("");
-  const [format, setFormat] = useState<FormatState>({
-    bold: false,
-    italic: false,
-  });
-  const [showLinkModal, setShowLinkModal] = useState(false);
-  const [portalTarget, setPortalTarget] = useState<Element | null>(null);
+  const [format, setFormat] = useState<FormatState>({ bold: false, italic: false });
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   // Current link data from sibling "link" key
   const linkData = (allValues?.link ?? null) as RichTextLinkData | null;
 
-  // ── Mount: resolve portal target (.dp ancestor) ──
-
-  useEffect(() => {
-    if (editorRef.current) {
-      setPortalTarget(editorRef.current.closest(".dp"));
-    }
-  }, []);
+  // Maps for LinkPicker
+  const maps = useMemo(
+    () => (config?.maps ?? []).map((m) => ({ id: m.id, name: m.name, thumbnail: getMapThumbnail(m.style) })),
+    [config?.maps],
+  );
 
   // ── Sync external value → DOM ──
 
@@ -99,13 +120,11 @@ export function FieldRichText({ field, value, onChange, allValues }: Props) {
       const sel = document.getSelection();
       if (!sel || !editorRef.current) return;
       if (!editorRef.current.contains(sel.anchorNode)) return;
-
       setFormat({
         bold: document.queryCommandState("bold"),
         italic: document.queryCommandState("italic"),
       });
     };
-
     document.addEventListener("selectionchange", update);
     return () => document.removeEventListener("selectionchange", update);
   }, []);
@@ -149,59 +168,35 @@ export function FieldRichText({ field, value, onChange, allValues }: Props) {
     emitChange();
   }, [emitChange]);
 
-  // ── Link: open modal ──
+  // ── Link: open LinkPicker ──
 
-  const openLinkModal = useCallback(() => {
-    setShowLinkModal(true);
+  const openLinkPicker = useCallback(() => {
+    setPickerOpen(true);
   }, []);
 
-  // ── Link: confirm (writes to sibling "link" key) ──
+  // ── Link: select from LinkPicker ──
 
-  const handleLinkConfirm = useCallback(
-    (data: RichTextLinkData) => {
-      onChange("link", data);
-      setShowLinkModal(false);
+  const handleLinkSelect = useCallback(
+    (url: string, _label: string) => {
+      onChange("link", urlToLinkData(url));
+      setPickerOpen(false);
     },
     [onChange]
   );
-
-  // ── Link: remove ──
-
-  const handleLinkRemove = useCallback(() => {
-    onChange("link", null);
-    setShowLinkModal(false);
-  }, [onChange]);
 
   // ── Keyboard shortcuts ──
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key === "b") {
-        e.preventDefault();
-        toggleBold();
-      } else if (mod && e.key === "i") {
-        e.preventDefault();
-        toggleItalic();
-      } else if (mod && e.key === "k") {
-        e.preventDefault();
-        openLinkModal();
-      }
+      if (mod && e.key === "b") { e.preventDefault(); toggleBold(); }
+      else if (mod && e.key === "i") { e.preventDefault(); toggleItalic(); }
+      else if (mod && e.key === "k") { e.preventDefault(); openLinkPicker(); }
     },
-    [toggleBold, toggleItalic, openLinkModal]
+    [toggleBold, toggleItalic, openLinkPicker]
   );
 
   // ── Render ──
-
-  const linkModalElement = showLinkModal ? (
-    <RichTextLinkModal
-      initialData={linkData}
-      isEditing={linkData !== null}
-      onConfirm={handleLinkConfirm}
-      onRemove={linkData ? handleLinkRemove : undefined}
-      onClose={() => setShowLinkModal(false)}
-    />
-  ) : null;
 
   return (
     <FieldWrapper field={field}>
@@ -229,24 +224,33 @@ export function FieldRichText({ field, value, onChange, allValues }: Props) {
             <ItalicIcon />
           </button>
           <button
+            ref={linkAnchorRef}
             type="button"
             className={`rt-toolbar__btn${linkData ? " rt-toolbar__btn--active" : ""}`}
             onMouseDown={preventFocusLoss}
-            onClick={openLinkModal}
-            aria-label="Infoga länk (⌘K)"
+            onClick={() => {
+              if (linkData) {
+                // If link exists, remove it
+                onChange("link", null);
+              } else {
+                openLinkPicker();
+              }
+            }}
+            aria-label="Länk (⌘K)"
             aria-pressed={!!linkData}
           >
             <LinkIcon />
           </button>
         </div>
 
-        {/* ── Editable area ── */}
+        {/* ── Editor ── */}
         <div
           ref={editorRef}
           className="rt-editor"
           contentEditable
           suppressContentEditableWarning
           onInput={emitChange}
+          onBlur={emitChange}
           onPaste={handlePaste}
           onKeyDown={handleKeyDown}
           role="textbox"
@@ -256,10 +260,14 @@ export function FieldRichText({ field, value, onChange, allValues }: Props) {
         />
       </div>
 
-      {/* ── Link modal (portaled to .dp for correct positioning) ── */}
-      {linkModalElement && portalTarget
-        ? createPortal(linkModalElement, portalTarget)
-        : linkModalElement}
+      {/* ── LinkPicker (same as /menus and FieldLink) ── */}
+      <LinkPicker
+        open={pickerOpen}
+        anchorRef={linkAnchorRef}
+        maps={maps}
+        onSelect={handleLinkSelect}
+        onClose={() => setPickerOpen(false)}
+      />
     </FieldWrapper>
   );
 }
@@ -270,55 +278,39 @@ function preventFocusLoss(e: React.MouseEvent) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// HTML SANITIZATION
+// HTML SANITIZER
 // ═══════════════════════════════════════════════════════════════
 
-/**
- * Allowlist of safe inline tags. Everything else is stripped
- * but its text content is preserved. NO <a> tags — links are
- * stored as a separate setting, not in the HTML.
- */
-const SAFE_TAGS = new Set(["b", "strong", "i", "em", "br"]);
+const ALLOWED_TAGS = new Set(["b", "strong", "i", "em", "br"]);
 
-/**
- * Sanitize contentEditable output.
- *
- * - Strips all tags except SAFE_TAGS (no <a>)
- * - Normalizes empty content to empty string
- *
- * Uses DOMParser for safe parsing (no script execution).
- */
-function sanitizeHtml(raw: string): string {
-  if (!raw) return "";
-
-  // Normalize browser-specific empty states
-  const trimmed = raw
-    .replace(/^(<br\s*\/?>|\s|<div><br\s*\/?><\/div>)+$/i, "")
-    .trim();
-  if (!trimmed) return "";
-
-  const doc = new DOMParser().parseFromString(trimmed, "text/html");
-  return serializeNode(doc.body);
+function sanitizeHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return sanitizeNode(doc.body);
 }
 
-function serializeNode(node: Node): string {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return node.textContent ?? "";
+function sanitizeNode(node: Node): string {
+  let result = "";
+
+  for (const child of Array.from(node.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      result += child.textContent ?? "";
+    } else if (child.nodeType === Node.ELEMENT_NODE) {
+      const el = child as Element;
+      const tag = el.tagName.toLowerCase();
+
+      if (tag === "br") {
+        result += "<br>";
+      } else if (ALLOWED_TAGS.has(tag)) {
+        const inner = sanitizeNode(el);
+        result += inner ? `<${tag}>${inner}</${tag}>` : "";
+      } else {
+        // Unwrap: keep children, discard tag
+        result += sanitizeNode(el);
+      }
+    }
   }
-  if (node.nodeType !== Node.ELEMENT_NODE) return "";
 
-  const el = node as Element;
-  const tag = el.tagName.toLowerCase();
-  const inner = Array.from(el.childNodes).map(serializeNode).join("");
-
-  // Container/wrapper tags (incl <a>): unwrap, keep children
-  if (!SAFE_TAGS.has(tag)) return inner;
-
-  // Self-closing
-  if (tag === "br") return "<br>";
-
-  // b, strong, i, em — no attributes needed
-  return `<${tag}>${inner}</${tag}>`;
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -327,19 +319,16 @@ function serializeNode(node: Node): string {
 
 function BoldIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        d="M7 3c-.83 0-1.5.67-1.5 1.5v10.46c0 .85.69 1.54 1.54 1.54h4.46a4 4 0 0 0 2.32-7.26 4 4 0 0 0-3.32-6.24h-3.5Zm3.5 5.5a1.5 1.5 0 0 0 0-3h-2.5v3h2.5Zm-2.5 2.5v3h3.5a1.5 1.5 0 0 0 0-3h-3.5Z"
-      />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M15.6 10.79c.97-.67 1.65-1.77 1.65-2.79 0-2.26-1.75-4-4-4H7v14h7.04c2.09 0 3.71-1.7 3.71-3.79 0-1.52-.86-2.82-2.15-3.42zM10 6.5h3c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-3v-3zm3.5 9H10v-3h3.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5z"/>
     </svg>
   );
 }
 
 function ItalicIcon() {
   return (
-    <svg width="16" height="16" viewBox="1 1 18 18" fill="currentColor" aria-hidden="true">
-      <path d="M7.5 4.25c0-.41.34-.75.75-.75h6a.75.75 0 0 1 0 1.5h-2.34l-2.28 10h2.12a.75.75 0 0 1 0 1.5h-6a.75.75 0 0 1 0-1.5h2.34l2.28-10h-2.12a.75.75 0 0 1-.75-.75Z" />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4z"/>
     </svg>
   );
 }

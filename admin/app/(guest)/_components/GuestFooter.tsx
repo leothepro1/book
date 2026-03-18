@@ -1,124 +1,130 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
-import type { TenantConfig } from "../_lib/tenant/types";
+import type { TenantConfig, MenuConfig, MenuItemConfig } from "../_lib/tenant/types";
 import { PAGE_FOOTER_DEFAULTS } from "../_lib/tenant/types";
 import type { ColorScheme } from "@/app/_lib/color-schemes/types";
+import type { ElementInstance } from "@/app/_lib/sections/types";
 import { resolvePageIdFromPathname, getPageLayout, getPageFooter } from "@/app/_lib/pages";
 import "./guest-footer.css";
 
+// ─── Icon mapping — same icons as LinkPicker ─────────────────
+
+/** Map a menu item URL to a Material Symbol name, mirroring LinkPicker exactly */
+function resolveIcon(url: string): string {
+  // Pages (same as LinkPicker > Sidor)
+  if (url === "/") return "home";
+  if (url === "/stays") return "calendar_today";
+  if (url === "/account") return "face";
+
+  // Element links (same as LinkPicker > Element)
+  if (url.startsWith("#map:")) return "map";
+  if (url.startsWith("#text:")) return "text_fields";
+  if (url.includes(".pdf") || url.startsWith("#doc:")) return "document_scanner";
+
+  // Contact (same as LinkPicker > Kontakt)
+  if (url.startsWith("mailto:")) return "mail";
+  if (url.startsWith("tel:")) return "phone";
+
+  // Social media (same as LinkPicker > Sociala medier)
+  if (url.includes("instagram.com")) return "photo_camera";
+  if (url.includes("facebook.com")) return "group";
+  if (url.includes("x.com") || url.includes("twitter.com")) return "tag";
+  if (url.includes("linkedin.com")) return "work";
+
+  // External URL fallback
+  if (url.startsWith("http")) return "open_in_new";
+
+  return "link";
+}
+
+// ─── URL helpers ─────────────────────────────────────────────
+
+function isInternalPath(url: string): boolean {
+  return url.startsWith("/") && !url.startsWith("#");
+}
+
+function isSpecialLink(url: string): boolean {
+  return url.startsWith("#map:") || url.startsWith("#text:");
+}
+
+function resolveMenuItemHref(url: string, base: string): string {
+  if (isSpecialLink(url)) return url;
+  if (!isInternalPath(url)) return url;
+  if (url === "/") return base;
+  return `${base}${url}`;
+}
+
+function isMenuItemActive(url: string, pathname: string, base: string): boolean {
+  if (!isInternalPath(url)) return false;
+  const fullHref = resolveMenuItemHref(url, base);
+  if (url === "/") return pathname === fullHref || pathname === fullHref + "/home";
+  return pathname.startsWith(fullHref);
+}
+
+// ─── Legacy active check (backward compat, no menu selected) ─
+
 type FooterKey = "home" | "stays" | "account";
 
-function isActive(key: FooterKey, pathname: string) {
-  // Preview mode routes
+function isLegacyActive(key: FooterKey, pathname: string) {
   if (pathname.startsWith("/preview")) {
     if (key === "home") return pathname === "/preview/home" || pathname === "/preview";
     if (key === "stays") return pathname.startsWith("/preview/stays");
     if (key === "account") return pathname.startsWith("/preview/account");
   }
-  
-  // Normal portal routes
   if (key === "home") return /\/p\/[^/]+$/.test(pathname);
   if (key === "stays") return /\/p\/[^/]+\/stays(\/|$)/.test(pathname);
   if (key === "account") return /\/p\/[^/]+\/account(\/|$)/.test(pathname);
   return false;
 }
 
-const HomeInactive = () => (
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M2 22h20" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M2.95 22 3 9.97c0-.61.29-1.19.77-1.57l7-5.45a2.01 2.01 0 0 1 2.46 0l7 5.44c.49.38.77.96.77 1.58V22" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinejoin="round"/>
-    <path d="M13 17h-2c-.83 0-1.5.67-1.5 1.5V22h5v-3.5c0-.83-.67-1.5-1.5-1.5Zm-3.5-3.25h-2c-.55 0-1-.45-1-1v-1.5c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v1.5c0 .55-.45 1-1 1Zm7 0h-2c-.55 0-1-.45-1-1v-1.5c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v1.5c0 .55-.45 1-1 1Z" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinejoin="round"/>
-    <path d="m19 7-.03-3h-4.4" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
-);
+// ─── Legacy default items ────────────────────────────────────
 
-const HomeActive = () => (
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M22 21.249h-1V9.979c0-.62-.28-1.2-.77-1.58L19 7.439l-.02-2.45c0-.55-.45-.99-1-.99h-3.41l-1.34-1.04c-.72-.57-1.74-.57-2.46 0l-7 5.44c-.49.38-.77.96-.77 1.57l-.05 11.28H2c-.41 0-.75.34-.75.75s.34.75.75.75h20c.41 0 .75-.34.75-.75s-.34-.75-.75-.75m-15.5-8.5v-1.5c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v1.5c0 .55-.45 1-1 1h-2c-.55 0-1-.45-1-1m8 8.5h-5v-2.75c0-.83.67-1.5 1.5-1.5h2c.83 0 1.5.67 1.5 1.5zm3-8.5c0 .55-.45 1-1 1h-2c-.55 0-1-.45-1-1v-1.5c0-.55.45-1 1-1h2c.55 0 1 .45 1 1z" fill="currentColor"/>
-  </svg>
-);
+const LEGACY_ITEMS: { key: FooterKey; label: string; url: string; icon: string }[] = [
+  { key: "home", label: "Home", url: "/", icon: "home" },
+  { key: "stays", label: "Stays", url: "/stays", icon: "calendar_today" },
+  { key: "account", label: "Account", url: "/account", icon: "face" },
+];
 
-const StaysInactive = () => (
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M8 2v3m8-3v3m-9 8h8m-8 4h5m4-13.5c3.33.18 5 1.45 5 6.15v6.18c0 4.12-1 6.18-6 6.18H9c-5 0-6-2.06-6-6.18V9.65c0-4.7 1.67-5.96 5-6.15z" stroke="currentColor" strokeWidth="1.5" strokeMiterlimit="10" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
-);
-
-const StaysActive = () => (
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M8.75 2.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75v2.33c-2.37.26-3.75 1.52-3.75 5.57v6.18C3.5 21.06 4.56 23 9.5 23h5c4.94 0 6-1.94 6-6.18V10.65c0-4.05-1.38-5.31-3.75-5.57V2.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75V5h-6.5zM9 17.25h5c.41 0 .75-.34.75-.75s-.34-.75-.75-.75H9c-.41 0-.75.34-.75.75s.34.75.75.75m-2-4h8c.41 0 .75-.34.75-.75s-.34-.75-.75-.75H7c-.41 0-.75.34-.75.75s.34.75.75.75" fill="currentColor"/>
-  </svg>
-);
-
-const AccountInactive = () => (
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10m0 2c-5.33 0-10 2.69-10 6v2h20v-2c0-3.31-4.67-6-10-6" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-  </svg>
-);
-
-const AccountActive = () => (
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 12c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5m0 2c-3.87 0-10 1.94-10 6v2h20v-2c0-4.06-6.13-6-10-6" fill="currentColor"/>
-  </svg>
-);
+// ─── Component ───────────────────────────────────────────────
 
 export default function GuestFooter({ config }: { config: TenantConfig }) {
   const pathname = usePathname();
   const params = useParams<{ token?: string; slug?: string }>();
 
-  // Page layout contract — hide footer if page doesn't support it
   const pageId = useMemo(() => resolvePageIdFromPathname(pathname), [pathname]);
   const pageLayout = useMemo(() => getPageLayout(pageId), [pageId]);
-  if (!pageLayout.footer) return null;
 
-  // KRITISK FIX: Använd preview mode base OM vi är i /preview/
   const isPreviewMode = pathname.startsWith("/preview");
   const token = isPreviewMode ? "preview" : (params?.token ?? "");
-
-  const items = useMemo(() => {
-    const base = token === "preview" ? "/preview" : token ? `/p/${token}` : "/p";
-    const homeHref = token === "preview" ? "/preview/home" : base;
-    return [
-      {
-        key: "home" as const,
-        label: "Home",
-        href: token === "preview" ? "/preview/home" : `${base}`,
-        IconInactive: HomeInactive,
-        IconActive: HomeActive,
-      },
-      {
-        key: "stays" as const,
-        label: "Stays",
-        href: `${base}/stays`,
-        IconInactive: StaysInactive,
-        IconActive: StaysActive,
-      },
-      {
-        key: "account" as const,
-        label: "Account",
-        href: `${base}/account`,
-        IconInactive: AccountInactive,
-        IconActive: AccountActive,
-      },
-    ];
-  }, [token]);
+  const base = token === "preview" ? "/preview" : token ? `/p/${token}` : "/p";
 
   const ftr = { ...PAGE_FOOTER_DEFAULTS, ...getPageFooter(config, pageId) };
 
-  // Resolve color scheme CSS vars for footer
+  // Resolve menu from the menu element in classicGroups (single source of truth)
+  const selectedMenu: MenuConfig | undefined = useMemo(() => {
+    const groups = ftr.classicGroups;
+    if (!groups || !config.menus) return undefined;
+    const menuEl = groups.top.find((el) => el.type === "menu" && el.isActive !== false);
+    if (!menuEl) return undefined;
+    const menuId = typeof menuEl.settings.menu_id === "string" ? menuEl.settings.menu_id : "";
+    if (!menuId) return undefined;
+    return config.menus.find((m) => m.id === menuId);
+  }, [ftr.classicGroups, config.menus]);
+
+  // Color scheme CSS vars
   const schemeCssVars = useMemo(() => {
     if (!ftr.colorSchemeId || !config.colorSchemes) return undefined;
     const scheme = (config.colorSchemes as ColorScheme[]).find((s) => s.id === ftr.colorSchemeId);
     if (!scheme) return undefined;
-    const t = scheme.tokens;
+    const t = scheme.tokens ?? {} as Record<string, string>;
     return {
-      "--footer-bg": t.background,
-      "--footer-text": t.text,
-      "--footer-active": t.solidButtonBackground,
-      "--footer-divider": t.outlineButton,
+      "--footer-bg": t.background ?? "#ffffff",
+      "--footer-text": t.text ?? "#000000",
+      "--footer-active": t.solidButtonBackground ?? t.text ?? "#000000",
+      "--footer-divider": t.outlineButton ?? t.text ?? "#000000",
     } as React.CSSProperties;
   }, [ftr.colorSchemeId, config.colorSchemes]);
 
@@ -134,15 +140,68 @@ export default function GuestFooter({ config }: { config: TenantConfig }) {
       : { borderTop: "none" }),
   };
 
+  // ── Early returns (after all hooks) ──
+  if (!pageLayout.footer) return null;
+  if (ftr.isActive === false) return null;
+
+  // ── App layout with selected menu ──
+  if (ftr.footerLayout === "app" && selectedMenu) {
+    const count = selectedMenu.items.length;
+    const scrollable = count > 3;
+
+    return (
+      <nav className="fixed bottom-0 left-0 right-0 z-40" style={navStyle}>
+        <div
+          className={scrollable ? "footer-items footer-items--scroll" : "footer-items"}
+          style={!scrollable ? { display: "flex" } : undefined}
+        >
+          {selectedMenu.items.map((item) => (
+            <AppFooterItem
+              key={item.id}
+              item={item}
+              pathname={pathname}
+              base={base}
+              count={count}
+            />
+          ))}
+        </div>
+      </nav>
+    );
+  }
+
+  // ── Classic (footer) layout ──
+  if (ftr.footerLayout === "classic") {
+    const groups = ftr.classicGroups;
+    const topElements = (groups?.top ?? []).filter((el) => el.isActive !== false).sort((a, b) => a.sortOrder - b.sortOrder);
+    const bottomElements = (groups?.bottom ?? []).filter((el) => el.isActive !== false).sort((a, b) => a.sortOrder - b.sortOrder);
+
+    return (
+      <footer className="classic-footer" style={navStyle}>
+        {topElements.length > 0 && (
+          <div className="classic-footer__group">
+            {topElements.map((el) => (
+              <ClassicFooterElement key={el.id} element={el} config={config} />
+            ))}
+          </div>
+        )}
+        {bottomElements.length > 0 && (
+          <div className="classic-footer__group">
+            {bottomElements.map((el) => (
+              <ClassicFooterElement key={el.id} element={el} config={config} />
+            ))}
+          </div>
+        )}
+      </footer>
+    );
+  }
+
+  // ── App layout with legacy hardcoded tabs (no menu selected) ──
   return (
-    <nav
-      className="fixed bottom-0 left-0 right-0 z-40"
-      style={navStyle}
-    >
+    <nav className="fixed bottom-0 left-0 right-0 z-40" style={navStyle}>
       <div className="flex items-center justify-around">
-        {items.map((item) => {
-          const active = isActive(item.key, pathname);
-          const Icon = active ? item.IconActive : item.IconInactive;
+        {LEGACY_ITEMS.map((item) => {
+          const active = isLegacyActive(item.key, pathname);
+          const href = resolveMenuItemHref(item.url, base);
 
           const cls = [
             "footer-link flex flex-1 flex-col items-center justify-center gap-1 py-2",
@@ -152,13 +211,19 @@ export default function GuestFooter({ config }: { config: TenantConfig }) {
           return (
             <Link
               key={item.key}
-              href={item.href}
+              href={href}
               className={cls}
               style={{ color: active ? undefined : "var(--footer-text, rgba(0,0,0,0.549))" }}
               aria-current={active ? "page" : undefined}
             >
               <div className="footer-icon">
-                <Icon />
+                <span
+                  className="material-symbols-rounded"
+                  style={{ fontSize: 23, fontVariationSettings: active ? "'wght' 400, 'FILL' 1" : "'wght' 300" }}
+                  aria-hidden="true"
+                >
+                  {item.icon}
+                </span>
               </div>
               <span className="text-[11px] font-semibold leading-none">
                 {item.label}
@@ -168,5 +233,167 @@ export default function GuestFooter({ config }: { config: TenantConfig }) {
         })}
       </div>
     </nav>
+  );
+}
+
+// ─── App Footer Item (menu-driven) ──────────────────────────
+
+function AppFooterItem({
+  item,
+  pathname,
+  base,
+  count,
+}: {
+  item: MenuItemConfig;
+  pathname: string;
+  base: string;
+  count: number;
+}) {
+  const href = resolveMenuItemHref(item.url, base);
+  const active = isMenuItemActive(item.url, pathname, base);
+  const iconName = resolveIcon(item.url);
+  const isExternal = item.url.startsWith("http");
+  const isSpecial = isSpecialLink(item.url);
+
+  // 1–3 items: equal share. 4+: fixed ~29.4% width (3.4 per row)
+  const widthStyle: React.CSSProperties = count <= 3
+    ? { flex: 1 }
+    : { flex: "0 0 calc(100% / 3.4)", minWidth: 0 };
+
+  const cls = [
+    "footer-link flex flex-col items-center justify-center gap-1 py-2",
+    active ? "active" : "",
+  ].filter(Boolean).join(" ");
+
+  const icon = (
+    <div className="footer-icon">
+      <span
+        className="material-symbols-rounded"
+        style={{ fontSize: 23, fontVariationSettings: active ? "'wght' 400, 'FILL' 1" : "'wght' 300" }}
+        aria-hidden="true"
+      >
+        {iconName}
+      </span>
+    </div>
+  );
+
+  const label = (
+    <span className="text-[11px] font-semibold leading-none">{item.label}</span>
+  );
+
+  // Special links (#map:, #text:) and external — render as <a>
+  if (isSpecial || isExternal || item.url.startsWith("mailto:") || item.url.startsWith("tel:")) {
+    return (
+      <a
+        href={href}
+        className={cls}
+        style={{ ...widthStyle, color: "var(--footer-text, rgba(0,0,0,0.549))" }}
+      >
+        {icon}
+        {label}
+      </a>
+    );
+  }
+
+  // Internal page links — Next.js Link
+  return (
+    <Link
+      href={href}
+      className={cls}
+      style={{ ...widthStyle, color: active ? undefined : "var(--footer-text, rgba(0,0,0,0.549))" }}
+      aria-current={active ? "page" : undefined}
+    >
+      {icon}
+      {label}
+    </Link>
+  );
+}
+
+// ─── Classic Footer Element Renderer ─────────────────────────
+
+function ClassicFooterElement({
+  element,
+  config,
+}: {
+  element: ElementInstance;
+  config: TenantConfig;
+}) {
+  if (element.type === "menu") {
+    const menuId = typeof element.settings.menu_id === "string" ? element.settings.menu_id : "";
+    const menu = menuId ? config.menus?.find((m) => m.id === menuId) : undefined;
+    if (!menu) return null;
+    return <MenuAccordion menu={menu} />;
+  }
+
+  if (element.type === "divider") {
+    return <hr className="classic-footer__divider" />;
+  }
+
+  if (element.type === "logo") {
+    const logoUrl = config.theme?.header?.logoUrl;
+    const width = (element.settings.width as number) ?? 120;
+    const alignment = (element.settings.alignment as string) || "center";
+    const alignMap: Record<string, string> = { left: "start", center: "center", right: "end" };
+    if (!logoUrl) return null;
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={logoUrl}
+        alt="Logo"
+        style={{ width, height: "auto", display: "block", placeSelf: alignMap[alignment] ?? "center" }}
+      />
+    );
+  }
+
+  if (element.type === "button") {
+    const label = (element.settings.content as string) || "";
+    const url = (element.settings.url as string) || "#";
+    return (
+      <a href={url} className="classic-footer__button">
+        {label}
+      </a>
+    );
+  }
+
+  return null;
+}
+
+// ─── Menu Accordion ──────────────────────────────────────────
+
+function MenuAccordion({ menu }: { menu: MenuConfig }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="classic-footer__accordion">
+      <button
+        type="button"
+        className="classic-footer__accordion-trigger"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
+        <span className="classic-footer__accordion-title">{menu.title}</span>
+        <span
+          className="material-symbols-rounded classic-footer__accordion-chevron"
+          style={{ transform: open ? "rotate(180deg)" : undefined }}
+          aria-hidden="true"
+        >
+          expand_more
+        </span>
+      </button>
+
+      <div
+        className={`classic-footer__accordion-body${open ? " classic-footer__accordion-body--open" : ""}`}
+      >
+        <ul className="classic-footer__link-list">
+          {menu.items.map((item) => (
+            <li key={item.id}>
+              <a href={item.url} className="classic-footer__link">
+                {item.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }
