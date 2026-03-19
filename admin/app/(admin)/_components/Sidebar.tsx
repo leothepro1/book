@@ -47,9 +47,10 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-screen bg-[#F1F0EE] transition-all duration-300 ease-in-out z-30 flex flex-col ${
+      className={`fixed left-0 top-0 h-screen transition-all duration-300 ease-in-out z-30 flex flex-col ${
         isCollapsed ? 'w-16' : 'w-[270px]'
       }`}
+      style={{ background: '#f7f7f7', borderRight: '1px solid var(--admin-border)' }}
     >
       {/* Profile row */}
       <SidebarUserRow isCollapsed={isCollapsed} />
@@ -64,10 +65,10 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               onClick={(e) => guardedClick(e, item.href)}
-              className={`flex items-center gap-3 p-2 rounded-lg ${
+              className={`flex items-center gap-3 p-[10px] rounded-lg ${
                 active
-                  ? 'bg-[#FAFAFA] text-[#2c2c2b]'
-                  : 'text-[#5d5c5b] hover:bg-[#E6E5E3] hover:text-[#323232]'
+                  ? 'bg-[#ebebeb] text-[#171717]'
+                  : 'text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040]'
               }`}
             >
               <span
@@ -95,7 +96,7 @@ export function Sidebar() {
           <Link
             href={CONTENT_ITEMS[0].href}
             onClick={(e) => guardedClick(e, CONTENT_ITEMS[0].href)}
-            className="flex items-center gap-3 p-2 rounded-lg text-[#5d5c5b] hover:bg-[#E6E5E3] hover:text-[#323232]"
+            className="flex items-center gap-3 p-[10px] rounded-lg text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040]"
           >
             <span
               className="material-symbols-rounded flex-shrink-0"
@@ -132,8 +133,8 @@ export function Sidebar() {
                     onClick={(e) => guardedClick(e, sub.href)}
                     className={`relative block py-[6px] rounded-lg text-[14px] font-[500] ${
                       subActive
-                        ? 'bg-[#FAFAFA] text-[#2c2c2b]'
-                        : 'text-[#5d5c5b] hover:bg-[#E6E5E3] hover:text-[#323232]'
+                        ? 'bg-[#ebebeb] text-[#171717]'
+                        : 'text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040]'
                     }`}
                     style={{ paddingLeft: 36 }}
                   >
@@ -168,10 +169,10 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               onClick={(e) => guardedClick(e, item.href)}
-              className={`flex items-center gap-3 p-2 rounded-lg ${
+              className={`flex items-center gap-3 p-[10px] rounded-lg ${
                 active
-                  ? 'bg-[#FAFAFA] text-[#2c2c2b]'
-                  : 'text-[#5d5c5b] hover:bg-[#E6E5E3] hover:text-[#323232]'
+                  ? 'bg-[#ebebeb] text-[#171717]'
+                  : 'text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040]'
               }`}
             >
               <span
@@ -198,7 +199,7 @@ export function Sidebar() {
         {isAdmin && (
           <button
             onClick={() => openSettings()}
-            className="w-full flex items-center gap-3 p-2 rounded-lg text-[#5d5c5b] hover:bg-[#E6E5E3] hover:text-[#323232]"
+            className="w-full flex items-center gap-3 p-[10px] rounded-lg text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040] cursor-pointer"
           >
             <span
               className="material-symbols-rounded flex-shrink-0"
@@ -222,13 +223,13 @@ export function Sidebar() {
       <div className="p-3 flex-shrink-0 border-t border-[#E6E5E3]">
         <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
           {!isCollapsed && (
-            <button className="p-2 text-[#5d5c5b] hover:bg-[#E6E5E3] hover:text-[#323232] rounded-lg">
+            <button className="p-2 text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040] rounded-lg">
               <span className="material-symbols-rounded" style={{ fontSize: 20 }}>help</span>
             </button>
           )}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-2 text-[#5d5c5b] hover:bg-[#E6E5E3] hover:text-[#323232] rounded-lg"
+            className="p-2 text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040] rounded-lg"
             aria-label={isCollapsed ? 'Expandera sidebar' : 'Kollapsa sidebar'}
           >
             {isCollapsed ? (

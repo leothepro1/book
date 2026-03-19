@@ -27,7 +27,7 @@ export function SidebarUserRow({ isCollapsed }: { isCollapsed: boolean }) {
   const imageUrl = user.imageUrl;
 
   return (
-    <div className="flex items-center justify-between px-3 pt-4 pb-2 flex-shrink-0">
+    <div className="flex items-center justify-between flex-shrink-0" style={{ padding: "18px 18px 15px 18px", borderBottom: "1px solid #ebebeb" }}>
       <div className="flex items-center gap-2 min-w-0">
         {imageUrl ? (
           <img
