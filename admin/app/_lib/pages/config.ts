@@ -75,7 +75,7 @@ export function getPageSections(
 
   // V2 path: config.pages[pageId].sections
   const entry = getPageEntry(config, pageId);
-  if (entry && entry.sections && entry.sections.length > 0) return entry.sections;
+  if (entry && Array.isArray(entry.sections)) return entry.sections;
 
   // Legacy fallback: only "home" had sections in v1
   if (pageId === "home") return config.home?.sections ?? [];
@@ -370,6 +370,92 @@ export function buildEnabledPatch(
     pages: {
       ...config.pages,
       [pageId]: { ...current, enabled },
+    },
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHECK-IN CARDS
+// ═══════════════════════════════════════════════════════════════
+
+import type { CheckinCardConfig, CheckinCardDefinition } from "@/app/_lib/checkin-cards/types";
+import {
+  getDefaultCheckinCardConfig,
+  resolveActiveCards,
+} from "@/app/_lib/checkin-cards/registry";
+
+/**
+ * Read the check-in card config for the tenant.
+ * Returns stored config or platform defaults.
+ */
+export function getCheckinCardConfig(
+  config: TenantConfig | null | undefined,
+): CheckinCardConfig {
+  const entry = getPageEntry(config, "check-in");
+  if (entry?.checkinCards) return entry.checkinCards;
+  return getDefaultCheckinCardConfig();
+}
+
+/**
+ * Resolve which check-in cards are active and in what order.
+ * Combines tenant config with platform definitions.
+ */
+export function getActiveCheckinCards(
+  config: TenantConfig | null | undefined,
+): CheckinCardDefinition[] {
+  return resolveActiveCards(getCheckinCardConfig(config));
+}
+
+/**
+ * Build a save patch for check-in card configuration.
+ */
+export function buildCheckinCardsPatch(
+  config: TenantConfig,
+  cards: CheckinCardConfig,
+): Partial<TenantConfig> {
+  const current = getPageConfig(config, "check-in");
+  return {
+    pages: {
+      ...config.pages,
+      "check-in": { ...current, checkinCards: cards },
+    },
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PAGE SETTINGS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Read page-level settings for a given page.
+ * Merges stored values over platform defaults from PageDefinition.
+ */
+export function getPageSettings(
+  config: TenantConfig | null | undefined,
+  pageId: PageId,
+): Record<string, unknown> {
+  const def = getPageDefinition(pageId);
+  const defaults = def.pageSettings?.defaults ?? {};
+  const entry = getPageEntry(config, pageId);
+  const stored = entry?.pageSettings ?? {};
+  return { ...defaults, ...stored };
+}
+
+/**
+ * Build a save patch that writes page-level settings.
+ * Merges patch into existing stored settings.
+ */
+export function buildPageSettingsPatch(
+  config: TenantConfig,
+  pageId: PageId,
+  patch: Record<string, unknown>,
+): Partial<TenantConfig> {
+  const current = getPageConfig(config, pageId);
+  const existing = current.pageSettings ?? {};
+  return {
+    pages: {
+      ...config.pages,
+      [pageId]: { ...current, pageSettings: { ...existing, ...patch } },
     },
   };
 }

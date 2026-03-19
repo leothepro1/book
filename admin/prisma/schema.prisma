@@ -246,6 +246,7 @@ model Booking {
   // Digital signature
   signatureCapturedAt DateTime?
   signatureDataUrl    String?   @db.Text
+  checkinData         Json?
 
   // Portal access — stable URL-safe token for guest portal links.
   // Generated once on booking creation, never changes.

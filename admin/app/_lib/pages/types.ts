@@ -36,6 +36,22 @@ export type PageId =
   | "support";
 
 // ═══════════════════════════════════════════════════════════════
+// EDITOR MODE
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * How the editor behaves for this page.
+ *
+ * Separate from BodyMode (which controls portal rendering).
+ * These are different responsibilities and must never be mixed.
+ *
+ *   "full"     — full section builder with DnD and picker
+ *   "locked"   — fixed content, no builder, no picker
+ *   "settings" — no section panel at all, settings panel takes over
+ */
+export type EditorMode = "full" | "locked" | "settings";
+
+// ═══════════════════════════════════════════════════════════════
 // BODY MODE
 // ═══════════════════════════════════════════════════════════════
 
@@ -87,8 +103,10 @@ export type PageDefinition = {
   label: string;
   /** Material Symbols icon name for the editor page switcher. */
   icon: string;
-  /** Layout contract — controls rendering and editor UI. */
+  /** Layout contract — controls portal rendering (NOT editor behavior). */
   layout: PageLayout;
+  /** Editor behavior mode — controls how the editor panel behaves for this page. */
+  editorMode: EditorMode;
   /** Available layout variants for this page. First is the default. */
   availableLayouts: readonly LayoutVariant[];
   /** Default layout ID (must match an entry in availableLayouts). */
@@ -104,6 +122,23 @@ export type PageDefinition = {
   requiresFeatureFlag?: string;
   /** Sub-steps for flow pages (e.g. check-in). Shown as a submenu in the editor page switcher. */
   steps?: readonly PageStep[];
+  /**
+   * Declarative page-level settings for editorMode === "settings".
+   * Same pattern as editableFields on SectionDefinition — SettingsPanel
+   * reads this and renders the defined fields generically.
+   */
+  pageSettings?: PageSettingsDefinition;
+};
+
+/**
+ * Declarative settings schema for a page.
+ * Reuses SettingField — the universal field type across the platform.
+ */
+export type PageSettingsDefinition = {
+  /** Setting fields to render in the editor SettingsPanel. */
+  fields: import("@/app/(guest)/_lib/themes/types").SettingField[];
+  /** Default values for each field key. */
+  defaults: Record<string, unknown>;
 };
 
 /**

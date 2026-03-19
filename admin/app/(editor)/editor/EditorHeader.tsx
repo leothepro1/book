@@ -77,11 +77,13 @@ function PageSwitcher() {
   const [open, setOpen] = useState(false);
   const [submenuPageId, setSubmenuPageId] = useState<PageId | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-  const { currentPageId, setCurrentPageId } = useEditor();
+  const { currentPageId, setCurrentPageId, setActiveStepId, activeStepId } = useEditor();
 
   const pages = useMemo(() => getEditorPages(), []);
   const currentDef = getPageDefinition(currentPageId);
-  const currentLabel = currentDef.label;
+  const activeStep = activeStepId ? currentDef.steps?.find((s) => s.id === activeStepId) : null;
+  const currentLabel = activeStep?.label ?? currentDef.label;
+  const currentIcon = activeStep?.icon ?? currentDef.icon;
 
   const submenuDef = submenuPageId ? getPageDefinition(submenuPageId) : null;
 
@@ -108,6 +110,15 @@ function PageSwitcher() {
     setSubmenuPageId(null);
   };
 
+  const handleStepClick = (stepId: string) => {
+    setActiveStepId(stepId);
+    const iframe = document.querySelector<HTMLIFrameElement>(".admin-preview iframe, .preview-widget iframe");
+    if (iframe?.contentWindow) {
+      iframe.contentWindow.postMessage({ type: "checkin-step", stepId }, window.location.origin);
+    }
+    handleClose();
+  };
+
   return (
     <div className="sf-dropdown editor-header__page-switcher" ref={ref}>
       <button
@@ -115,50 +126,50 @@ function PageSwitcher() {
         className="editor-header__page-trigger"
         onClick={() => { setOpen(!open); setSubmenuPageId(null); }}
       >
-        <EditorIcon name={currentDef.icon} size={18} className="editor-header__page-icon" />
+        <EditorIcon name={currentIcon} size={18} className="editor-header__page-icon" />
         <span>{currentLabel}</span>
         <EditorIcon name="keyboard_arrow_down" size={20} className="editor-header__page-chevron" />
       </button>
       {open && (
         <ul className="sf-dropdown__menu editor-header__page-menu">
-          {submenuDef && submenuDef.steps ? (
+          {/* If current page has steps, show them as a group at the top */}
+          {currentDef.steps && currentDef.steps.length > 0 && (
             <>
-              <li
-                className="sf-dropdown__item sf-dropdown__item--back"
-                onClick={() => setSubmenuPageId(null)}
-              >
-                <EditorIcon name="chevron_left" size={18} />
-                <span style={{ flex: 1, fontWeight: 500 }}>{submenuDef.label}</span>
+              <li className="sf-dropdown__item sf-dropdown__item--group-label">
+                {currentDef.label}
               </li>
-              <li className="sf-dropdown__divider" />
-              {submenuDef.steps.map((step) => (
+              {currentDef.steps.map((step) => (
                 <li
                   key={step.id}
                   className="sf-dropdown__item"
-                  onClick={() => handleClose()}
+                  onClick={() => handleStepClick(step.id)}
                 >
                   <EditorIcon name={step.icon} size={18} className="editor-header__page-icon" />
                   <span style={{ flex: 1 }}>{step.label}</span>
                 </li>
               ))}
+              <li className="sf-dropdown__divider" />
             </>
+          )}
+          {currentDef.editorMode === "settings" ? (
+            <li
+              className="sf-dropdown__item"
+              onClick={() => handleSelect("home" as PageId)}
+            >
+              <EditorIcon name="storefront" size={18} className="editor-header__page-icon" />
+              <span style={{ flex: 1 }}>Portalens tema</span>
+            </li>
           ) : (
-            pages.map((page) => {
-              const hasSteps = page.steps && page.steps.length > 0;
-              return (
-                <li
-                  key={page.id}
-                  className={`sf-dropdown__item${page.id === currentPageId ? " sf-dropdown__item--active" : ""}`}
-                  onClick={() => hasSteps ? setSubmenuPageId(page.id) : handleSelect(page.id)}
-                >
-                  <EditorIcon name={page.icon} size={18} className="editor-header__page-icon" />
-                  <span style={{ flex: 1 }}>{page.label}</span>
-                  {hasSteps && (
-                    <EditorIcon name="chevron_right" size={18} className="editor-header__page-icon" />
-                  )}
-                </li>
-              );
-            })
+            pages.map((page) => (
+              <li
+                key={page.id}
+                className={`sf-dropdown__item${page.id === currentPageId ? " sf-dropdown__item--active" : ""}`}
+                onClick={() => handleSelect(page.id)}
+              >
+                <EditorIcon name={page.icon} size={18} className="editor-header__page-icon" />
+                <span style={{ flex: 1 }}>{page.label}</span>
+              </li>
+            ))
           )}
         </ul>
       )}

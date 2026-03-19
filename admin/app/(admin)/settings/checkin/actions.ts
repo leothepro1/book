@@ -4,6 +4,9 @@ import { headers } from "next/headers";
 import { prisma } from "@/app/_lib/db/prisma";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
+import { getTenantConfig } from "@/app/(guest)/_lib/tenant";
+import { getCheckinCardConfig } from "@/app/_lib/pages/config";
+import type { CheckinCardConfig } from "@/app/_lib/checkin-cards/types";
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -223,6 +226,18 @@ export async function toggleEarlyCheckin(
     console.error("[toggleEarlyCheckin] Error:", error);
     return { ok: false, error: "Kunde inte uppdatera — försök igen" };
   }
+}
+
+// ── updateEarlyCheckinDays ──────────────────────────────────
+
+// ── getCheckinCardsConfig ────────────────────────────────────
+
+export async function getCheckinCardsConfig(): Promise<CheckinCardConfig | null> {
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return null;
+
+  const config = await getTenantConfig(tenantData.tenant.id, { preferDraft: true });
+  return getCheckinCardConfig(config);
 }
 
 // ── updateEarlyCheckinDays ──────────────────────────────────

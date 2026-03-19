@@ -1,11 +1,33 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { EditorIcon } from "@/app/_components/EditorIcon";
-import { getCheckinSettings, getCheckInPrerequisiteStatus, toggleCheckin, toggleEarlyCheckin, updateEarlyCheckinDays } from "./actions";
+import { getCheckinSettings, getCheckInPrerequisiteStatus, toggleCheckin, toggleEarlyCheckin, updateEarlyCheckinDays, getCheckinCardsConfig } from "./actions";
 import type { CheckInPrerequisiteStatus } from "./actions";
 import { useSettings } from "@/app/(admin)/_components/SettingsContext";
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragStartEvent,
+  DragOverlay,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import "@/app/_lib/checkin-cards/definitions";
+import "@/app/(admin)/menus/menus.css";
+import { PublishBarUI } from "@/app/(admin)/_components/PublishBar";
+import "@/app/(admin)/files/files.css";
+import { getAllCheckinCardDefinitions } from "@/app/_lib/checkin-cards/registry";
+import type { CheckinCardDefinition, CheckinCardId } from "@/app/_lib/checkin-cards/types";
 
 function ButtonSpinner({ visible }: { visible: boolean }) {
   const [mounted, setMounted] = useState(false);
@@ -227,11 +249,13 @@ function CopyUrlInput({ value }: { value: string }) {
 
 type CheckinContentProps = {
   onSubTitleChange?: (title: string | null) => void;
+  onHeaderExtraChange?: (node: React.ReactNode) => void;
   onNavigate?: (tab: string) => void;
 };
 
-export function CheckinContent({ onSubTitleChange, onNavigate }: CheckinContentProps) {
+export function CheckinContent({ onSubTitleChange, onHeaderExtraChange, onNavigate }: CheckinContentProps) {
   const { close: closeSettings } = useSettings();
+  const [subView, setSubView] = useState<"main" | "cards">("main");
   const [enabled, setEnabled] = useState(false);
   const [earlyCheckinEnabled, setEarlyCheckinEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -272,6 +296,19 @@ export function CheckinContent({ onSubTitleChange, onNavigate }: CheckinContentP
         <div className="skel skel--text" style={{ width: "100%", height: 12, marginBottom: 20 }} />
         <div className="skel" style={{ width: "100%", height: 64, borderRadius: 10 }} />
       </div>
+    );
+  }
+
+  if (subView === "cards") {
+    return (
+      <CheckinCardsEditor
+        onBack={() => {
+          setSubView("main");
+          onSubTitleChange?.(null);
+          onHeaderExtraChange?.(null);
+        }}
+        onHeaderExtraChange={onHeaderExtraChange}
+      />
     );
   }
 
@@ -413,22 +450,54 @@ export function CheckinContent({ onSubTitleChange, onNavigate }: CheckinContentP
             borderRadius: 10,
             overflow: "hidden",
           }}>
-            {/* Inställningar */}
+            {/* Gästformulär */}
             <div style={{
               display: "flex", alignItems: "center", gap: 14,
               padding: "16px 14px",
             }}>
-              <EditorIcon name="design_services" size={20} style={{ color: "var(--admin-text-secondary)", flexShrink: 0 }} />
+              <EditorIcon name="checklist" size={20} style={{ color: "var(--admin-text-secondary)", flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 500, color: "var(--admin-text)", lineHeight: "1em", marginBottom: 4 }}>
-                  Inställningar
+                  Gästformulär
                 </div>
                 <div style={{ fontSize: 12, color: "var(--admin-text-secondary)", lineHeight: 1.4 }}>
-                  Konfigurera layout, ordning och innehåll för in- och utcheckning.
+                  Välj vilken information som samlas in från gästen och i vilken ordning.
                 </div>
               </div>
               <button
-                className="settings-btn--connect"
+                className="settings-btn--muted"
+                style={{ fontSize: 13, padding: "5px 12px" }}
+                onClick={() => {
+                  setSubView("cards");
+                  onSubTitleChange?.([
+                    { label: "In- och utcheckning", onClick: () => { setSubView("main"); onSubTitleChange?.(null); } },
+                    { label: "Gästformulär" },
+                  ] as any);
+                }}
+              >
+                Anpassa
+              </button>
+            </div>
+
+            {/* Divider */}
+            <div style={{ height: 1, background: "var(--admin-border)", margin: "0 14px" }} />
+
+            {/* Design */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 14,
+              padding: "16px 14px",
+            }}>
+              <EditorIcon name="palette" size={20} style={{ color: "var(--admin-text-secondary)", flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 500, color: "var(--admin-text)", lineHeight: "1em", marginBottom: 4 }}>
+                  Design
+                </div>
+                <div style={{ fontSize: 12, color: "var(--admin-text-secondary)", lineHeight: 1.4 }}>
+                  Anpassa färger, layout och utseende för incheckningsflödet.
+                </div>
+              </div>
+              <button
+                className="settings-btn--muted"
                 style={{ fontSize: 13, padding: "5px 12px" }}
                 onClick={() => {
                   closeSettings();
@@ -457,7 +526,7 @@ export function CheckinContent({ onSubTitleChange, onNavigate }: CheckinContentP
                   </div>
                 </div>
                 <button
-                  className="settings-btn--connect"
+                  className="settings-btn--muted"
                   style={{ fontSize: 13, padding: "5px 12px" }}
                   onClick={() => onNavigate?.("domains")}
                 >
@@ -993,6 +1062,621 @@ function EarlyCheckinModal({
           >
             <ButtonSpinner visible={activating} />
             Aktivera
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ── Checkin Cards Editor ──────────────────────────────────────
+// Identical pattern to MenuEditor's "Menyobjekt" container —
+// same mi-card, same DND, same layout.
+
+type CardItem = {
+  id: CheckinCardId;
+  label: string;
+  icon: string;
+  optional: boolean;
+};
+
+function CheckinCardItemCard({
+  item,
+  dragHandleProps,
+  onToggleOptional,
+  onDelete,
+  isOverlay,
+}: {
+  item: CardItem;
+  dragHandleProps?: Record<string, unknown>;
+  onToggleOptional?: () => void;
+  onDelete?: () => void;
+  isOverlay?: boolean;
+}) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [showMenu, setShowMenu] = useState(false);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!showMenu) return;
+    const handle = (e: MouseEvent) => {
+      if (btnRef.current?.contains(e.target as Node) || menuRef.current?.contains(e.target as Node)) return;
+      setShowMenu(false);
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [showMenu]);
+
+  return (
+    <div className="mi-card">
+      <div className="mi-card__row">
+        <div className="mi-card__handle" {...(dragHandleProps ?? {})}>
+          <EditorIcon name="drag_indicator" size={20} />
+        </div>
+        <span className="material-symbols-rounded" style={{ fontSize: 20, color: "var(--admin-text-secondary)", marginRight: 10, flexShrink: 0 }}>
+          {item.icon}
+        </span>
+        <span className="mi-card__label">{item.label}</span>
+        <div className="mi-card__actions" style={{ opacity: 1 }}>
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 500,
+              color: "#7c7c7c",
+              padding: "3px 8px",
+              borderRadius: 6,
+              whiteSpace: "nowrap",
+              background: "#ebebeb",
+            }}
+          >
+            {item.optional ? "Valfri" : "Obligatorisk"}
+          </span>
+          {!isOverlay && (
+            <div style={{ position: "relative" }}>
+              <button
+                ref={btnRef}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+                style={{
+                  border: "none", background: "none", cursor: "pointer",
+                  color: "var(--admin-text-secondary)", display: "flex", alignItems: "center",
+                  padding: 4, borderRadius: 6,
+                }}
+              >
+                <EditorIcon name="more_horiz" size={20} />
+              </button>
+
+              {showMenu && createPortal(
+                <div
+                  ref={menuRef}
+                  className="sf-dropdown__menu"
+                  style={{
+                    position: "fixed",
+                    top: btnRef.current ? btnRef.current.getBoundingClientRect().bottom + 4 : 0,
+                    left: btnRef.current ? btnRef.current.getBoundingClientRect().right - 180 : 0,
+                    width: 180,
+                    zIndex: 300,
+                  }}
+                >
+                  <div
+                    className="sf-dropdown__item"
+                    onClick={() => { setShowMenu(false); onToggleOptional?.(); }}
+                  >
+                    <span style={{ flex: 1 }}>
+                      {item.optional ? "Markera som obligatorisk" : "Markera som valfri"}
+                    </span>
+                  </div>
+                  <div
+                    className="sf-dropdown__item"
+                    style={{ color: "#C62828" }}
+                    onClick={() => { setShowMenu(false); onDelete?.(); }}
+                  >
+                    <span style={{ flex: 1 }}>Ta bort</span>
+                  </div>
+                </div>,
+                document.body,
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SortableCheckinCardItem(props: {
+  item: CardItem;
+  onToggleOptional: () => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.item.id });
+  const style: React.CSSProperties = isDragging
+    ? { opacity: 0, transition }
+    : { transform: CSS.Transform.toString(transform), transition };
+  return (
+    <div ref={setNodeRef} style={style}>
+      <CheckinCardItemCard
+        item={props.item}
+        dragHandleProps={{ ...attributes, ...listeners }}
+        onToggleOptional={props.onToggleOptional}
+        onDelete={props.onDelete}
+      />
+    </div>
+  );
+}
+
+// ── Preview Iframe with Skeleton ──────────────────────────────
+
+function PreviewIframe() {
+  const [loaded, setLoaded] = useState(false);
+
+  return (
+    <div style={{ flex: 1, overflow: "hidden", borderRadius: "0 0 16px 16px", position: "relative" }}>
+      {/* Skeleton — visible until iframe loads */}
+      {!loaded && (
+        <div style={{ padding: "24px 18px", background: "#fff" }}>
+          {/* Title skeleton */}
+          <div className="skel skel--text" style={{ width: 140, height: 22, marginBottom: 10 }} />
+          {/* Subtitle skeleton */}
+          <div className="skel skel--text" style={{ width: 280, height: 14, marginBottom: 32 }} />
+          {/* Card 1 */}
+          <div className="skel skel--text" style={{ width: 100, height: 14, marginBottom: 10 }} />
+          <div className="skel" style={{ width: "100%", height: 44, borderRadius: 8, marginBottom: 28 }} />
+          {/* Card 2 */}
+          <div className="skel skel--text" style={{ width: 120, height: 14, marginBottom: 10 }} />
+          <div className="skel" style={{ width: "100%", height: 44, borderRadius: 8, marginBottom: 28 }} />
+          {/* Card 3 */}
+          <div className="skel skel--text" style={{ width: 90, height: 14, marginBottom: 10 }} />
+          <div className="skel" style={{ width: "100%", height: 44, borderRadius: 8, marginBottom: 28 }} />
+          {/* Card 4 */}
+          <div className="skel skel--text" style={{ width: 150, height: 14, marginBottom: 10 }} />
+          <div className="skel" style={{ width: "100%", height: 44, borderRadius: 8 }} />
+        </div>
+      )}
+      <iframe
+        src="/devtest"
+        style={{
+          width: "100%",
+          height: 520,
+          border: "none",
+          display: loaded ? "block" : "none",
+        }}
+        title="Förhandsgranska gästformulär"
+        onLoad={() => setLoaded(true)}
+      />
+    </div>
+  );
+}
+
+function CheckinCardsEditor({ onBack, onHeaderExtraChange }: { onBack: () => void; onHeaderExtraChange?: (node: React.ReactNode) => void }) {
+  const [showPreview, setShowPreview] = useState(false);
+
+  // Set "Förhandsgranska" button in header
+  useEffect(() => {
+    onHeaderExtraChange?.(
+      <button
+        className="settings-btn--muted"
+        style={{ marginLeft: "auto", fontSize: 13, padding: "5px 12px" }}
+        onClick={() => setShowPreview(true)}
+      >
+        Förhandsgranska
+      </button>
+    );
+    return () => onHeaderExtraChange?.(null);
+  }, [onHeaderExtraChange]);
+  const allDefs = useMemo(() => {
+    const defs = getAllCheckinCardDefinitions();
+    return [...defs].sort((a, b) => a.defaultSortOrder - b.defaultSortOrder);
+  }, []);
+
+  const [cards, setCards] = useState<CardItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savedSnapshot, setSavedSnapshot] = useState<string>("[]");
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [isDiscarding, setIsDiscarding] = useState(false);
+  const [isLingeringAfterPublish, setIsLingeringAfterPublish] = useState(false);
+  const lingerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear linger timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (lingerTimeoutRef.current) clearTimeout(lingerTimeoutRef.current);
+    };
+  }, []);
+
+  // Load saved config from server on mount
+  useEffect(() => {
+    getCheckinCardsConfig().then((savedConfig) => {
+      if (savedConfig && savedConfig.cardOrder.length > 0) {
+        // Reconstruct CardItem[] from saved config + definitions
+        const defMap = new Map(allDefs.map((d) => [d.id, d]));
+        const loaded: CardItem[] = savedConfig.cardOrder
+          .map((id) => {
+            const def = defMap.get(id);
+            if (!def) return null;
+            return {
+              id: def.id,
+              label: def.label,
+              icon: def.icon,
+              optional: savedConfig.cardOptional?.[id] ?? def.optional,
+            };
+          })
+          .filter((c): c is CardItem => c !== null);
+        setCards(loaded);
+        setSavedSnapshot(JSON.stringify(loaded));
+      } else {
+        // No saved config — use defaults (only non-optional cards)
+        const defaults = allDefs
+          .filter((d) => !d.optional || d.defaultEnabled)
+          .map((d) => ({
+            id: d.id,
+            label: d.label,
+            icon: d.icon,
+            optional: d.optional,
+          }));
+        setCards(defaults);
+        setSavedSnapshot(JSON.stringify(defaults));
+      }
+      setLoading(false);
+    }).catch((err) => {
+      console.error("[CheckinCards] Failed to load config:", err);
+      setLoading(false);
+    });
+  }, [allDefs]);
+
+  const hasUnsavedChanges = JSON.stringify(cards) !== savedSnapshot;
+
+  // Build CheckinCardConfig from current UI state
+  const buildCardConfig = useCallback((): import("@/app/_lib/checkin-cards/types").CheckinCardConfig => {
+    const cardOptional: Record<string, boolean> = {};
+    for (const c of cards) cardOptional[c.id] = c.optional;
+
+    return {
+      cardOrder: cards.map((c) => c.id),
+      cardOptional,
+    };
+  }, [cards]);
+
+  const handlePublish = useCallback(async () => {
+    setIsPublishing(true);
+    try {
+      const { updateDraft } = await import("@/app/(admin)/_lib/tenant/updateDraft");
+      const { publishDraft } = await import("@/app/(admin)/_lib/tenant/publishDraft");
+
+      // Save checkinCards config into the check-in page entry
+      // deepmerge merges nested objects, so we only need to provide the changed field.
+      // Cast required because DraftPatch expects full PageConfig shape, but deepmerge
+      // handles partial pages correctly at runtime.
+      const cardConfig = buildCardConfig();
+      const patch = {
+        pages: {
+          "check-in": {
+            checkinCards: cardConfig,
+          },
+        },
+      } as import("@/app/(admin)/_lib/tenant/updateDraft").DraftPatch;
+
+      const result = await updateDraft(patch);
+      if (!result.success) throw new Error(result.error);
+
+      await publishDraft();
+
+      setSavedSnapshot(JSON.stringify(cards));
+      setIsLingeringAfterPublish(true);
+      lingerTimeoutRef.current = setTimeout(() => setIsLingeringAfterPublish(false), 2000);
+    } catch (err) {
+      console.error("[CheckinCards] Publish failed:", err);
+    } finally {
+      setIsPublishing(false);
+    }
+  }, [buildCardConfig, cards]);
+
+  const handleDiscard = useCallback(() => {
+    setIsDiscarding(true);
+    try {
+      const snapshot: CardItem[] = JSON.parse(savedSnapshot);
+      setCards(snapshot);
+    } finally {
+      setIsDiscarding(false);
+    }
+  }, [savedSnapshot]);
+
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  // Cards not currently in the list (available to add)
+  const availableCards = useMemo(() => {
+    const activeIds = new Set(cards.map((c) => c.id));
+    return allDefs.filter((d) => !activeIds.has(d.id));
+  }, [cards, allDefs]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+
+  const cardIds = useMemo(() => cards.map((c) => c.id), [cards]);
+
+  const handleDragStart = useCallback((e: DragStartEvent) => {
+    setActiveDragId(e.active.id as string);
+  }, []);
+
+  const handleDragEnd = useCallback((e: DragEndEvent) => {
+    setActiveDragId(null);
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setCards((prev) => {
+      const oldIdx = prev.findIndex((c) => c.id === active.id);
+      const newIdx = prev.findIndex((c) => c.id === over.id);
+      if (oldIdx === -1 || newIdx === -1) return prev;
+      return arrayMove(prev, oldIdx, newIdx);
+    });
+  }, []);
+
+  const toggleOptional = useCallback((id: string) => {
+    setCards((prev) => prev.map((c) =>
+      c.id === id ? { ...c, optional: !c.optional } : c,
+    ));
+  }, []);
+
+  const deleteCard = useCallback((id: string) => {
+    setCards((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+
+  const dragItem = activeDragId ? cards.find((c) => c.id === activeDragId) : null;
+
+  const cardStyle: React.CSSProperties = {
+    background: "#fff",
+    borderRadius: "0.75rem",
+    padding: 0,
+    boxShadow: "0 .3125rem .3125rem -.15625rem #00000008, 0 .1875rem .1875rem -.09375rem #00000005, 0 .125rem .125rem -.0625rem #00000005, 0 .0625rem .0625rem -.03125rem #00000008, 0 .03125rem .03125rem #0000000a, 0 0 0 .0625rem #0000000f",
+  };
+
+  if (loading) {
+    return (
+      <div>
+        <p className="admin-desc" style={{ marginBottom: 16 }}>Välj vilken information som samlas in från gästen och i vilken ordning.</p>
+        <div className="skel" style={{ width: "100%", height: 200, borderRadius: 12 }} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="admin-desc" style={{ marginBottom: 16 }}>
+        Välj vilken information som samlas in från gästen och i vilken ordning. Dra för att ändra ordning.
+      </p>
+
+      <div style={cardStyle}>
+        <div style={{ padding: "16px 16px 12px" }}>
+          <label className="admin-label" style={{ marginBottom: 0 }}>Formulärfält</label>
+        </div>
+
+        {cards.length > 0 && (
+          <DndContext
+            sensors={sensors}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
+              <div className="mi-card-list">
+                {cards.map((card) => (
+                  <SortableCheckinCardItem
+                    key={card.id}
+                    item={card}
+                    onToggleOptional={() => toggleOptional(card.id)}
+                    onDelete={() => deleteCard(card.id)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+            {typeof document !== "undefined" && createPortal(
+              <DragOverlay>
+                {dragItem && <CheckinCardItemCard item={dragItem} isOverlay />}
+              </DragOverlay>,
+              document.body,
+            )}
+          </DndContext>
+        )}
+
+        <div className="mi-card-list">
+          <div
+            className={`mi-card mi-card--add${availableCards.length === 0 ? " mi-card--add-disabled" : ""}`}
+            onClick={() => { if (availableCards.length > 0) setShowAddModal(true); }}
+            style={availableCards.length === 0 ? { opacity: 0.45, cursor: "not-allowed" } : undefined}
+          >
+            <div className="mi-card__row">
+              <div className="mi-card__handle mi-card__handle--add">
+                <EditorIcon name="add_circle" size={20} />
+              </div>
+              <span className="mi-card__label mi-card__label--add">Lägg till formulärfält</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {showAddModal && (
+        <AddCheckinCardModal
+          available={availableCards}
+          onAdd={(ids) => {
+            const newCards: CardItem[] = ids.map((id) => {
+              const def = allDefs.find((d) => d.id === id)!;
+              return { id: def.id, label: def.label, icon: def.icon, optional: def.optional };
+            });
+            setCards((prev) => [...prev, ...newCards]);
+            setShowAddModal(false);
+          }}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
+
+      {/* Preview modal */}
+      {showPreview && createPortal(
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setShowPreview(false)}
+        >
+          <div style={{ position: "absolute", inset: 0, background: "var(--admin-overlay)", animation: "settings-modal-fade-in 0.15s ease" }} />
+          <div
+            style={{
+              position: "relative", zIndex: 1, background: "var(--admin-surface)",
+              borderRadius: 16, width: 440, maxHeight: "85vh", display: "flex", flexDirection: "column",
+              animation: "settings-modal-scale-in 0.2s cubic-bezier(0.32, 0.72, 0, 1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 20px 16px", borderBottom: "1px solid var(--admin-border)", background: "#f7f7f7", borderRadius: "16px 16px 0 0" }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Förhandsgranska</h3>
+              <button
+                onClick={() => setShowPreview(false)}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  border: "none", background: "transparent",
+                  cursor: "pointer", color: "var(--admin-text-secondary)",
+                }}
+                aria-label="Stäng"
+              >
+                <EditorIcon name="close" size={20} />
+              </button>
+            </div>
+
+            {/* Body — iframe to /devtest with skeleton */}
+            <PreviewIframe />
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      <PublishBarUI
+        hasUnsavedChanges={hasUnsavedChanges}
+        isPublishing={isPublishing}
+        isDiscarding={isDiscarding}
+        isLingeringAfterPublish={isLingeringAfterPublish}
+        onPublish={handlePublish}
+        onDiscard={handleDiscard}
+      />
+    </div>
+  );
+}
+
+// ── Add Checkin Card Modal ────────────────────────────────────
+
+function AddCheckinCardModal({
+  available,
+  onAdd,
+  onClose,
+}: {
+  available: readonly CheckinCardDefinition[];
+  onAdd: (ids: CheckinCardId[]) => void;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<CheckinCardId>>(new Set());
+
+  function toggle(id: CheckinCardId) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  return createPortal(
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 200,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+      onClick={onClose}
+    >
+      <div style={{
+        position: "absolute", inset: 0,
+        background: "var(--admin-overlay)",
+        animation: "settings-modal-fade-in 0.15s ease",
+      }} />
+      <div
+        style={{
+          position: "relative", zIndex: 1,
+          background: "var(--admin-surface)",
+          borderRadius: 16, width: 420,
+          maxHeight: "85vh", display: "flex", flexDirection: "column",
+          animation: "settings-modal-scale-in 0.2s cubic-bezier(0.32, 0.72, 0, 1)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          background: "#f7f7f7", borderBottom: "1px solid #E6E5E3",
+          padding: "20px 20px 12px 20px", borderRadius: "16px 16px 0 0",
+        }}>
+          <h3 style={{ fontSize: 17, fontWeight: 600, margin: 0 }}>Lägg till formulärfält</h3>
+          <button
+            onClick={onClose}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "none", background: "transparent",
+              cursor: "pointer", color: "var(--admin-text-secondary)",
+            }}
+            aria-label="Stäng"
+          >
+            <EditorIcon name="close" size={20} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "8px 0", flex: 1, overflowY: "auto" }}>
+          {available.map((def) => {
+            const isChecked = selected.has(def.id);
+            return (
+              <div
+                key={def.id}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "12px 20px", cursor: "pointer",
+                  transition: "background 0.1s ease",
+                }}
+                onClick={() => toggle(def.id)}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--admin-surface-hover)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
+              >
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={isChecked}
+                  className={`files-header-check${isChecked ? " files-header-check--active" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); toggle(def.id); }}
+                >
+                  <EditorIcon name="check" size={14} className="files-header-check__icon" />
+                </button>
+                <span className="material-symbols-rounded" style={{ fontSize: 20, color: "var(--admin-text-secondary)", flexShrink: 0 }}>
+                  {def.icon}
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 400, color: "var(--admin-text)", flex: 1 }}>
+                  {def.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          display: "flex", justifyContent: "flex-end", gap: 8,
+          padding: "12px 20px 20px",
+          borderTop: "1px solid #E6E5E3",
+        }}>
+          <button className="settings-btn--outline" style={{ fontSize: 13 }} onClick={onClose}>
+            Avbryt
+          </button>
+          <button
+            className="settings-btn--connect"
+            style={{ fontSize: 13 }}
+            disabled={selected.size === 0}
+            onClick={() => onAdd([...selected])}
+          >
+            Lägg till
           </button>
         </div>
       </div>

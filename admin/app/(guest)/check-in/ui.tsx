@@ -1,18 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppLoader from "../_components/AppLoader";
-import SuccessLoader from "../_components/SuccessLoader";
-import SignatureStep from "./SignatureStep";
+import TasksStep from "./TasksStep";
 import SuccessView from "./SuccessView";
 import type { CheckInLookupPayload, CheckInLookupResponse, CheckInCommitResponse } from "./actions";
+import type { CheckinCardDefinition, CheckinCardData } from "@/app/_lib/checkin-cards/types";
+import type { CardDesignConfig } from "@/app/_lib/access-pass/card-design";
 
-type Step = "form" | "confirm" | "signature" | "success";
+type Step = "form" | "confirm" | "tasks" | "success";
 
 type Props = {
   onLookup: (payload: CheckInLookupPayload) => Promise<CheckInLookupResponse>;
-  onCommit: (payload: { bookingId: string; signatureDataUrl: string; token?: string; next?: string }) => Promise<CheckInCommitResponse>;
+  onCommit: (payload: {
+    bookingId: string;
+    cardData: CheckinCardData;
+    token?: string;
+    next?: string;
+  }) => Promise<CheckInCommitResponse>;
+  activeCards: CheckinCardDefinition[];
+  checkInTime?: string;
+  cardDesign: CardDesignConfig;
+  tenantName: string;
+  checkinStyles?: Record<string, string>;
 };
 
 function ChevronLeftIcon() {
@@ -38,59 +49,16 @@ function ArrowRightIcon() {
   );
 }
 
-const monthNamesSv = [
-  "januari",
-  "februari",
-  "mars",
-  "april",
-  "maj",
-  "juni",
-  "juli",
-  "augusti",
-  "september",
-  "oktober",
-  "november",
-  "december",
-];
-
-const monthNamesShort = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "Maj",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Okt",
-  "Nov",
-  "Dec",
-];
-
+const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
 const dayNamesShort = ["Sön", "Mån", "Tis", "Ons", "Tor", "Fre", "Lör"];
-
-function formatSvFromISO(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${d.getDate()} ${monthNamesSv[d.getMonth()]} ${d.getFullYear()}`;
-}
 
 function formatCompactDate(iso: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  const dayName = dayNamesShort[d.getDay()];
-  const day = d.getDate();
-  const month = monthNamesShort[d.getMonth()];
-  const year = d.getFullYear();
-  return `${dayName}, ${day} ${month} ${year}`;
+  return `${dayNamesShort[d.getDay()]}, ${d.getDate()} ${monthNamesShort[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-function isCheckInReady(arrivalISO: string, checkInTime: string = "14:00"): boolean {
-  return true;
-}
-
-export default function CheckInClient({ onLookup, onCommit }: Props) {
+export default function CheckInClient({ onLookup, onCommit, activeCards, checkInTime, cardDesign, tenantName, checkinStyles }: Props) {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -104,20 +72,46 @@ export default function CheckInClient({ onLookup, onCommit }: Props) {
   const [bookingId, setBookingId] = useState("");
   const [lastName, setLastName] = useState("");
 
-  const [found, setFound] = useState<CheckInLookupResponse extends { ok: true } ? any : any>(null);
+  const [found, setFound] = useState<any>(null);
   const [nextHref, setNextHref] = useState<string>(token ? `/p/${token}` : (next || "/"));
+
+  // Listen for editor postMessage to navigate to a specific step
+  const STEP_MAP: Record<string, Step> = {
+    "find-booking": "form",
+    "confirm": "confirm",
+    "tasks": "tasks",
+    "wallet-card": "success",
+  };
+
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      if (e.data?.type === "checkin-step" && typeof e.data.stepId === "string") {
+        const mapped = STEP_MAP[e.data.stepId];
+        if (mapped) setStep(mapped);
+      }
+      // Live CSS variable updates from editor
+      if (e.data?.type === "checkin-css-update" && e.data.vars && rootRef.current) {
+        for (const [varName, value] of Object.entries(e.data.vars)) {
+          rootRef.current.style.setProperty(varName, value as string);
+        }
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
 
   const titleText = useMemo(() => {
     if (step === "form") return "Hitta din bokning";
     if (step === "confirm") return "Bekräfta din bokning";
-    if (step === "signature") return "Signera incheckning";
     return "Klart";
   }, [step]);
 
   const mutedText = useMemo(() => {
     if (step === "form") return "Ange bokningsnummer och efternamn för att fortsätta.";
     if (step === "confirm") return "Kontrollera att uppgifterna stämmer innan du fortsätter.";
-    if (step === "signature") return "Rita din namnteckning för att slutföra incheckningen.";
     return "Du skickas vidare...";
   }, [step]);
 
@@ -152,12 +146,12 @@ export default function CheckInClient({ onLookup, onCommit }: Props) {
     }
   }
 
-  function goToSignature() {
+  function goToTasks() {
     setError(null);
-    setStep("signature");
+    setStep("tasks");
   }
 
-  async function doCommit(signatureDataUrl: string) {
+  async function doCommit(cardData: CheckinCardData) {
     if (busy) return;
     setBusy(true);
     setError(null);
@@ -165,7 +159,7 @@ export default function CheckInClient({ onLookup, onCommit }: Props) {
     try {
       const res = await onCommit({
         bookingId: found?.id,
-        signatureDataUrl,
+        cardData,
         token: token || undefined,
         next: next || undefined,
       });
@@ -184,9 +178,12 @@ export default function CheckInClient({ onLookup, onCommit }: Props) {
     }
   }
 
-
   function onBack() {
-    if (step === "signature") {
+    if (step === "success") {
+      router.push(nextHref);
+      return;
+    }
+    if (step === "tasks") {
       setError(null);
       setStep("confirm");
       return;
@@ -264,53 +261,41 @@ export default function CheckInClient({ onLookup, onCommit }: Props) {
     </>
   );
 
-  const checkInReady = found ? isCheckInReady(found.arrivalISO) : true;
-
-  const ConfirmCard = (
-    <div className="booking-card">
-      <div
-        className="booking-card__hero"
-        style={{
-          backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.55) 100%), url("${found?.heroImageUrl || ""}")`,
-        }}
-      >
-        <div className={`booking-card__badge ${checkInReady ? "booking-card__badge--ready" : "booking-card__badge--pending"}`}>
-          {checkInReady ? "Redo för incheckning" : "Incheckning från 14:00"}
-        </div>
-      </div>
-
-      <div className="booking-card__content">
-        <div className="booking-card__unit">
-          {found?.unit || "Boende"}
-        </div>
-
-        <div className="booking-card__dates">
-          <div className="booking-card__date">
-            <div className="booking-card__date-label">Check-in</div>
-            <div className="booking-card__date-value">
-              {formatCompactDate(found?.arrivalISO || "")}
-            </div>
-          </div>
-
-          <ArrowRightIcon />
-
-          <div className="booking-card__date booking-card__date--right">
-            <div className="booking-card__date-label">Check-out</div>
-            <div className="booking-card__date-value">
-              {formatCompactDate(found?.departureISO || "")}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-
   const ConfirmStep = (
     <>
       {Header}
 
-      {ConfirmCard}
+      <div className="booking-card">
+        <div
+          className="booking-card__hero"
+          style={{
+            backgroundImage: found?.heroImageUrl
+              ? `linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.55) 100%), url("${found.heroImageUrl}")`
+              : undefined,
+            background: found?.heroImageUrl ? undefined : "linear-gradient(180deg, #e0e0e0 0%, #bdbdbd 100%)",
+          }}
+        >
+          <div className="booking-card__badge booking-card__badge--ready">
+            Redo för incheckning
+          </div>
+        </div>
+
+        <div className="booking-card__content">
+          <div className="booking-card__unit">{found?.unit || "Boende"}</div>
+
+          <div className="booking-card__dates">
+            <div className="booking-card__date">
+              <div className="booking-card__date-label">Check-in</div>
+              <div className="booking-card__date-value">{formatCompactDate(found?.arrivalISO || "")}</div>
+            </div>
+            <ArrowRightIcon />
+            <div className="booking-card__date booking-card__date--right">
+              <div className="booking-card__date-label">Check-out</div>
+              <div className="booking-card__date-value">{formatCompactDate(found?.departureISO || "")}</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {error && <div className="sektion73-alert" style={{ marginTop: 12 }}>{error}</div>}
 
@@ -319,7 +304,7 @@ export default function CheckInClient({ onLookup, onCommit }: Props) {
           type="button"
           className="sektion73-btn sektion73-btn--primary"
           disabled={busy}
-          onClick={goToSignature}
+          onClick={goToTasks}
           aria-busy={busy ? "true" : "false"}
         >
           {busy ? <AppLoader size={24} ariaLabel="Loading" /> : "Fortsätt"}
@@ -328,12 +313,10 @@ export default function CheckInClient({ onLookup, onCommit }: Props) {
     </>
   );
 
-  const SuccessStep = <SuccessView nextHref={nextHref} booking={found ? { unit: found.unit, arrivalISO: found.arrivalISO, departureISO: found.departureISO, heroImageUrl: found.heroImageUrl } : undefined} />;
-
-  const termsUrl = found?.termsUrl || "https://apelviken.se/vistelsevillkor";
+  const termsUrl = found?.termsUrl || "";
 
   return (
-    <div className="sektion73-modal">
+    <div ref={rootRef} className="sektion73-modal" style={checkinStyles as React.CSSProperties}>
       <header className="sektion73-modal__header" data-step={step}>
         <button type="button" className="sektion73-backbtn" onClick={onBack} aria-label="Back">
           <ChevronLeftIcon />
@@ -344,15 +327,27 @@ export default function CheckInClient({ onLookup, onCommit }: Props) {
       <div className="sektion73-modal__body">
         {step === "form" && FormStep}
         {step === "confirm" && ConfirmStep}
-        {step === "signature" && (
-          <SignatureStep
+        {step === "tasks" && (
+          <TasksStep
+            activeCards={activeCards}
             termsUrl={termsUrl}
+            checkInTime={checkInTime}
             onSubmit={doCommit}
             busy={busy}
             error={error}
           />
         )}
-        {step === "success" && SuccessStep}
+        {step === "success" && (
+          <SuccessView
+            nextHref={nextHref}
+            cardDesign={cardDesign}
+            tenantName={tenantName}
+            booking={found ? {
+              arrivalISO: found.arrivalISO,
+              departureISO: found.departureISO,
+            } : undefined}
+          />
+        )}
       </div>
     </div>
   );

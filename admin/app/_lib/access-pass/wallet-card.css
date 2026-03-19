@@ -30,8 +30,8 @@
 }
 
 .wallet-card__logo-img {
-  max-width: 48px;
-  max-height: 32px;
+  max-width: 72px;
+  max-height: 42px;
   object-fit: contain;
 }
 

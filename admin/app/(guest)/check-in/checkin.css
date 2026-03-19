@@ -23,7 +23,7 @@
   gap: 10px;
 }
 .sektion73-divider__line {
-    background: #D7DADE;
+    background: var(--border-color, #D7DADE);
     flex: auto;
     height: 1px;
 }
@@ -123,11 +123,12 @@
 
 .sektion73-float .sektion73-input {
     padding: 23px var(--sek-float-pad-x) 5px var(--sek-float-pad-x);
-    border: 1px solid #D7DADE;
+    border: 1px solid var(--border-color, #D7DADE);
     border-radius: 8px;
     width: 100%;
     font-size: 16px;
     font-weight: 400;
+    background: var(--field-bg, #fff);
 }
 
 /* Placeholder ska vara “tom” så label får vara placeholder */
@@ -159,7 +160,7 @@
   opacity: 1;
 }
 .sektion73-input:hover {
-    border-color: #D7DADE;
+    border-color: var(--border-color, #D7DADE);
 }
 
 .sektion73-input:focus{
@@ -193,10 +194,10 @@
     cursor: pointer;
     -webkit-user-select: none;
     user-select: none;
-    font-size: 16px;
+    font-size: 15px;
     font-family: var(--font-button, var(--font-heading, ui-sans-serif));
     border-radius: var(--button-radius, 999px);
-    padding: 10px 20px;
+    padding: 11px 20px;
     transition: transform .12s, opacity .12s;
     width: 100%;
 }
@@ -222,7 +223,7 @@ display:none;
 
 .sektion73-datebtn {
     text-align: left;
-    border: 1px solid #D7DADE;
+    border: 1px solid var(--border-color, #D7DADE);
     cursor: pointer;
     width: 100%;
     font-size: 15px;
@@ -511,7 +512,7 @@ display:none;
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: #FBFAF9;
+  background: var(--background, #fff);
   color: var(--text);
   display: flex;
   flex-direction: column;
@@ -519,8 +520,8 @@ display:none;
 
 .sektion73-modal__header {
     z-index: 2;
-    border-bottom: 1px solid #e6e6e6;
-    background: transparent;
+    border-bottom: 1px solid var(--border-color, #e6e6e6);
+    background: var(--background, transparent);
     align-items: center;
     gap: 10px;
     padding: 14px;
@@ -546,15 +547,15 @@ display:none;
 
 .sektion73-modal__title {
   font-size: 15px;
-  font-weight: 900;
+  font-weight: 600;
   font-family: var(--font-heading, ui-sans-serif);
-  letter-spacing: -0.15px;
+  letter-spacing: 0;
 }
 
 .sektion73-modal__body {
     flex: 1;
-    overflow: hidden;
-    padding: 0px 18px;
+    padding: 0 18px;
+    overflow: auto;
 }
 
 .sektion73-steps {
@@ -1019,7 +1020,7 @@ display:none;
   width: 22px;
   height: 22px;
   flex-shrink: 0;
-  border: 2px solid #D7DADE;
+  border: 2px solid var(--border-color, #D7DADE);
   border-radius: 6px;
   display: grid;
   place-items: center;
@@ -1051,7 +1052,7 @@ display:none;
   bottom: -1px;
   left: 0;
   height: 2px;
-  background: var(--button-bg);
+  background: var(--accent, var(--button-bg));
   transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 3;
 }
@@ -1065,7 +1066,7 @@ display:none;
   width: 50%;
 }
 
-.sektion73-modal__header[data-step="signature"]::after {
+.sektion73-modal__header[data-step="tasks"]::after {
   width: 75%;
 }
 

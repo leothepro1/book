@@ -34,7 +34,9 @@ export type ParentToPreviewMessage =
   | { type: "theme-update"; theme: ThemeConfig }
   | { type: "content-refresh" }
   | { type: "scroll-to-target"; target: PreviewScrollTarget }
-  | { type: "inspector-mode"; active: boolean; sections: InspectorSectionMeta[] };
+  | { type: "inspector-mode"; active: boolean; sections: InspectorSectionMeta[] }
+  | { type: "checkin-step"; stepId: string }
+  | { type: "wallet-card-update"; design: import("@/app/_lib/access-pass/card-design").CardDesignConfig };
 
 export type PreviewToParentMessage =
   | { type: "preview-ready" }
@@ -47,6 +49,8 @@ const VALID_TYPES = [
   "theme-update", "content-refresh", "preview-ready",
   "scroll-to-target", "inspector-mode",
   "inspector-hover", "inspector-click",
+  "checkin-step",
+  "wallet-card-update",
 ];
 
 /** Origin check — same origin for preview iframe */

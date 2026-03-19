@@ -108,8 +108,9 @@ const EVENT_LABELS: Record<string, string> = {
 
 type UIState = "loading" | "not-connected" | "form" | "connected" | "connected-detail";
 
+type BreadcrumbSegment = { label: string; onClick?: () => void };
 type IntegrationsContentProps = {
-  onSubTitleChange?: (title: string | null) => void;
+  onSubTitleChange?: (title: string | BreadcrumbSegment[] | null) => void;
 };
 
 export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentProps) {
@@ -142,6 +143,14 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
   const [activeType, setActiveType] = useState<"pms" | "lock">("pms");
 
   const isConnected = (uiState === "connected" || uiState === "connected-detail") && !isEditing;
+
+  // Helper: set breadcrumb with clickable parent
+  function setBreadcrumb(name: string) {
+    onSubTitleChange?.([
+      { label: "Integrationer", onClick: () => { setUiState("connected"); setSelectedProvider(null); setIsEditing(false); onSubTitleChange?.(null); } },
+      { label: name },
+    ]);
+  }
 
   /** Returns "pms" or "lock" — reads from explicit activeType state,
    *  never inferred from selectedProvider. Set on every navigation. */
@@ -189,7 +198,7 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
     setFormValues(defaults);
     setShowPickerModal(false);
     setUiState("form");
-    onSubTitleChange?.(info?.name ?? provider);
+    setBreadcrumb(info?.name ?? provider);
   }
 
   // ── Not connected — landing ─────────────────────────────
@@ -235,7 +244,7 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
             setSelectedProvider(integration.provider);
             setActiveType("pms");
             setUiState("connected-detail");
-            onSubTitleChange?.(providerInfo.name);
+            setBreadcrumb(providerInfo.name);
           }}
           className="admin-option-card"
           style={{ padding: "0.5rem", border: "1px solid #F0EFED", borderRadius: 12 }}
@@ -986,7 +995,7 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
                 });
                 setUiState("connected-detail");
                 const info = PROVIDER_DISPLAY[lockIntegration.provider];
-                onSubTitleChange?.(info?.name ?? lockIntegration.provider);
+                setBreadcrumb(info?.name ?? lockIntegration.provider);
               }}
               className="admin-option-card"
               style={{ padding: "0.5rem", border: "1px solid #F0EFED", borderRadius: 12 }}

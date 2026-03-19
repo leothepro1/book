@@ -29,8 +29,12 @@ import {
 import type { ColorScheme, ColorSchemeTokens } from "@/app/_lib/color-schemes";
 import { FONT_CATALOG, batchFontsUrl } from "@/app/_lib/fonts/catalog";
 import { FieldSpacing } from "../fields/FieldSpacing";
+import { FieldRenderer } from "../fields/FieldRenderer";
 import { ColorTokenField } from "./ColorTokenField";
 import { useEditor } from "../EditorContext";
+import { getPageDefinition } from "@/app/_lib/pages/registry";
+import { getPageSettings, buildPageSettingsPatch, getPageUndoSnapshot } from "@/app/_lib/pages/config";
+import type { SettingField } from "@/app/(guest)/_lib/themes/types";
 
 // ─── Font helpers ─────────────────────────────────────────────
 
@@ -90,7 +94,28 @@ export function SettingsPanel() {
   const { config } = usePreview();
   const { pushUndo } = usePublishBar();
   const saveDraft = useDraftUpdate();
-  const { settingsAccordion } = useEditor();
+  const { settingsAccordion, currentPageId, activeStepId } = useEditor();
+
+  // Page-aware: check if current page uses settings mode
+  const pageDef = getPageDefinition(currentPageId);
+  const isSettingsMode = pageDef.editorMode === "settings" && !!pageDef.pageSettings?.fields.length;
+
+  // Wallet-card step gets its own settings view
+  if (activeStepId === "wallet-card") {
+    return <WalletCardSettingsView />;
+  }
+
+  if (isSettingsMode) {
+    return (
+      <PageSettingsView
+        config={config}
+        pageId={currentPageId}
+        pageDef={pageDef}
+        pushUndo={pushUndo}
+        saveDraft={saveDraft}
+      />
+    );
+  }
 
   const schemes: ColorScheme[] = config?.colorSchemes ?? [];
   const defaultSchemeId = config?.defaultColorSchemeId ?? null;
@@ -222,6 +247,421 @@ export function SettingsPanel() {
           onAdd={handleAddScheme}
           autoOpen={settingsAccordion === "colors"}
         />
+      </div>
+    </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PAGE SETTINGS VIEW (editorMode === "settings")
+// ═══════════════════════════════════════════════════════════════
+
+function PageSettingsView({
+  config,
+  pageId,
+  pageDef,
+  pushUndo,
+  saveDraft,
+}: {
+  config: import("@/app/(guest)/_lib/tenant/types").TenantConfig | null;
+  pageId: import("@/app/_lib/pages/types").PageId;
+  pageDef: import("@/app/_lib/pages/types").PageDefinition;
+  pushUndo: (snapshot: Record<string, unknown>) => void;
+  saveDraft: (changes: any) => any;
+}) {
+  const values = config ? getPageSettings(config, pageId) : (pageDef.pageSettings?.defaults ?? {});
+
+  const [fontPickerTarget, setFontPickerTarget] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [portalTarget, setPortalTarget] = useState<Element | null>(null);
+
+  useEffect(() => {
+    if (panelRef.current) setPortalTarget(panelRef.current.closest(".editor-panel"));
+  }, []);
+
+  // Map pageSettings keys → CSS variable names
+  const SETTINGS_TO_CSS: Record<string, string> = {
+    backgroundColor: "--background",
+    textColor: "--text",
+    buttonColor: "--button-bg",
+    accentColor: "--accent",
+    borderColor: "--border-color",
+  };
+
+  // Font keys need resolution via FONT_OPTIONS
+  const FONT_SETTINGS_TO_CSS: Record<string, string> = {
+    headingFont: "--font-heading",
+    bodyFont: "--font-body",
+    buttonFont: "--font-button",
+  };
+
+  // Post CSS variable updates to preview iframe for instant rendering
+  const postCssUpdate = useCallback((patch: Record<string, unknown>) => {
+    const iframe = document.querySelector<HTMLIFrameElement>(".editor-canvas iframe");
+    if (!iframe?.contentWindow) return;
+
+    const cssUpdates: Record<string, string> = {};
+    for (const [key, val] of Object.entries(patch)) {
+      const cssVar = SETTINGS_TO_CSS[key];
+      if (cssVar && typeof val === "string") {
+        cssUpdates[cssVar] = val;
+      }
+      const fontVar = FONT_SETTINGS_TO_CSS[key];
+      if (fontVar && typeof val === "string") {
+        const fontOpt = FONT_OPTIONS.find((f) => f.key === val);
+        cssUpdates[fontVar] = fontOpt?.family ?? "ui-sans-serif";
+      }
+      // fieldStyle → --field-bg
+      if (key === "fieldStyle" && typeof val === "string") {
+        cssUpdates["--field-bg"] = val === "transparent" ? "transparent" : "#fff";
+      }
+    }
+
+    if (Object.keys(cssUpdates).length > 0) {
+      iframe.contentWindow.postMessage(
+        { type: "checkin-css-update", vars: cssUpdates },
+        window.location.origin,
+      );
+    }
+  }, []);
+
+  const handleChange = useCallback(
+    (keyOrPatch: string | Record<string, unknown>, value?: unknown) => {
+      if (!config) return;
+      const patch: Record<string, unknown> = typeof keyOrPatch === "string"
+        ? { [keyOrPatch]: value }
+        : keyOrPatch;
+      pushUndo(getPageUndoSnapshot(config, pageId));
+      saveDraft(buildPageSettingsPatch(config, pageId, patch));
+      postCssUpdate(patch);
+    },
+    [config, pageId, pushUndo, saveDraft, postCssUpdate],
+  );
+
+  // Group fields by field.group for rendering with sf-group-label
+  const groupedFields = useMemo(() => {
+    const result: { group: string; fields: SettingField[] }[] = [];
+    const map = new Map<string, SettingField[]>();
+    for (const field of pageDef.pageSettings!.fields) {
+      const group = field.group || "";
+      if (!map.has(group)) {
+        map.set(group, []);
+        result.push({ group, fields: map.get(group)! });
+      }
+      map.get(group)!.push(field);
+    }
+    return result;
+  }, [pageDef.pageSettings]);
+
+  // Font picker overlay — reuses InPanelFontPicker
+  const fontPickerField = fontPickerTarget
+    ? pageDef.pageSettings?.fields.find((f) => f.key === fontPickerTarget)
+    : null;
+  const fontPickerCurrentValue = fontPickerTarget ? (values[fontPickerTarget] as string) ?? "inter" : "inter";
+
+  const fontPickerElement = fontPickerField ? (
+    <InPanelFontPicker
+      title={`Välj typsnitt för ${fontPickerField.label.toLowerCase()}`}
+      currentFont={fontPickerCurrentValue}
+      onSelect={(fontKey) => {
+        handleChange(fontPickerTarget!, fontKey);
+        setFontPickerTarget(null);
+      }}
+      onClose={() => setFontPickerTarget(null)}
+    />
+  ) : null;
+
+  return (
+    <div ref={panelRef}>
+      <div className="editor-panel__header">
+        <span className="editor-panel__title">Inställningar</span>
+      </div>
+      <div className="editor-panel__body">
+        <div className="sf-form">
+          {groupedFields.map(({ group, fields: groupFields }, i) => (
+            <div key={group} style={{ ...(i > 0 ? { borderTop: "1px solid var(--admin-border)", paddingTop: 18 } : {}), display: "flex", flexDirection: "column", gap: 12 }}>
+              {group && <div className="sf-group-label">{group}</div>}
+              {groupFields.map((field) => {
+                if (field.visibleWhen && values[field.visibleWhen.key] !== field.visibleWhen.value) return null;
+                if (field.hidden) return null;
+
+                // Color fields → ColorTokenField (swatch + popup picker)
+                if (field.type === "color") {
+                  return (
+                    <ColorTokenField
+                      key={field.key}
+                      label={field.label}
+                      value={(values[field.key] as string) ?? (field.default as string) ?? "#000000"}
+                      onChange={(hex) => handleChange(field.key, hex)}
+                    />
+                  );
+                }
+
+                // Font fields → sp-font-selector (same UI as TypographyAccordion)
+                if ((field.type as string) === "fontPicker") {
+                  const fontKey = (values[field.key] as string) ?? (field.default as string) ?? "inter";
+                  const fontOption = FONT_OPTIONS.find((f) => f.key === fontKey);
+                  return (
+                    <div key={field.key} className="sp-typo-field">
+                      <span className="cs-section-label">{field.label}</span>
+                      <button type="button" className="sp-font-selector" onClick={() => setFontPickerTarget(field.key)}>
+                        <span className="sp-font-selector__name" style={{ fontFamily: fontOption?.family ?? "sans-serif" }}>
+                          {fontOption?.label ?? fontKey}
+                        </span>
+                        <span className="sp-font-selector__chevron"><EditorIcon name="chevron_right" size={18} /></span>
+                      </button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <FieldRenderer
+                    key={field.key}
+                    field={field}
+                    value={values[field.key] ?? field.default}
+                    onChange={handleChange}
+                    allValues={values}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      {fontPickerElement && portalTarget
+        ? createPortal(fontPickerElement, portalTarget)
+        : fontPickerElement}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WALLET CARD SETTINGS VIEW
+// ═══════════════════════════════════════════════════════════════
+
+
+type WalletState = {
+  bgMode: "fill" | "gradient" | "image";
+  bgColor: string;
+  gradDirection: "up" | "down";
+  bgImageUrl: string;
+  overlayOpacity: number;
+  logoUrl: string;
+  dateColor: string;
+};
+
+function WalletCardSettingsFields({ state, set }: { state: WalletState; set: (patch: Partial<WalletState>) => void }) {
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [logoLibraryOpen, setLogoLibraryOpen] = useState(false);
+
+  return (
+    <div className="sf-form">
+      {/* ── Bakgrund ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="sf-group-label">Bakgrund</div>
+        <div>
+          <span className="cs-section-label" style={{ marginBottom: 7, display: "block" }}>Bild</span>
+          {state.bgImageUrl ? (
+            <div className="img-upload">
+              <div className="img-upload-result">
+                <div className="img-upload-result-thumb">
+                  <img src={state.bgImageUrl} alt="" className="img-upload-result-img" />
+                </div>
+                <div className="img-upload-result-meta">
+                  <span className="img-upload-result-filename">
+                    {state.bgImageUrl.split("/").pop()?.split("?")[0] || "bild"}
+                  </span>
+                  <button type="button" className="img-upload-replace-btn" onClick={() => setLibraryOpen(true)}>
+                    Ändra
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="img-upload-trash-btn"
+                  onClick={() => set({ bgImageUrl: "" })}
+                  aria-label="Ta bort bild"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path fillRule="evenodd" d="m6.83 0-.35.15-1.33 1.33-.15.35V3H0v1h2v11.5l.5.5h11l.5-.5V4h2V3h-5V1.83l-.15-.35L9.52.15 9.17 0H6.83ZM10 3v-.96L8.96 1H7.04L6 2.04V3h4ZM5 4H3v11h10V4H5Zm2 3v5H6V7h1Zm3 .5V7H9v5h1V7.5Z" fill="currentColor"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="img-upload">
+              <div className="img-upload-empty" onClick={() => setLibraryOpen(true)} style={{ cursor: "pointer" }}>
+                <span className="img-upload-btn">Välj bild</span>
+              </div>
+            </div>
+          )}
+        </div>
+        <ColorTokenField
+          label="Bakgrundsfärg"
+          value={state.bgColor}
+          onChange={(hex) => set({ bgColor: hex })}
+        />
+      </div>
+
+      {/* ── Logotyp & text ── */}
+      <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 18, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="sf-group-label">Logotyp & text</div>
+        <div>
+          <span className="cs-section-label" style={{ marginBottom: 7, display: "block" }}>Logotyp</span>
+          {state.logoUrl ? (
+            <div className="img-upload">
+              <div className="img-upload-result">
+                <div className="img-upload-result-thumb">
+                  <img src={state.logoUrl} alt="" className="img-upload-result-img" />
+                </div>
+                <div className="img-upload-result-meta">
+                  <span className="img-upload-result-filename">
+                    {state.logoUrl.split("/").pop()?.split("?")[0] || "logotyp"}
+                  </span>
+                  <button type="button" className="img-upload-replace-btn" onClick={() => setLogoLibraryOpen(true)}>
+                    Ändra
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="img-upload-trash-btn"
+                  onClick={() => set({ logoUrl: "" })}
+                  aria-label="Ta bort logotyp"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path fillRule="evenodd" d="m6.83 0-.35.15-1.33 1.33-.15.35V3H0v1h2v11.5l.5.5h11l.5-.5V4h2V3h-5V1.83l-.15-.35L9.52.15 9.17 0H6.83ZM10 3v-.96L8.96 1H7.04L6 2.04V3h4ZM5 4H3v11h10V4H5Zm2 3v5H6V7h1Zm3 .5V7H9v5h1V7.5Z" fill="currentColor"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="img-upload">
+              <div className="img-upload-empty" onClick={() => setLogoLibraryOpen(true)} style={{ cursor: "pointer" }}>
+                <span className="img-upload-btn">Välj logotyp</span>
+              </div>
+            </div>
+          )}
+        </div>
+        <ColorTokenField
+          label="Datumfärg"
+          value={state.dateColor}
+          onChange={(hex) => set({ dateColor: hex })}
+        />
+      </div>
+
+      <MediaLibraryModal
+        open={logoLibraryOpen}
+        onClose={() => setLogoLibraryOpen(false)}
+        onConfirm={(asset) => { set({ logoUrl: asset.url }); setLogoLibraryOpen(false); }}
+        currentValue={state.logoUrl}
+        uploadFolder="hospitality/wallet-card"
+        accept="image"
+      />
+
+      <MediaLibraryModal
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        onConfirm={(asset) => { set({ bgImageUrl: asset.url }); setLibraryOpen(false); }}
+        currentValue={state.bgImageUrl}
+        uploadFolder="hospitality/wallet-card"
+        accept="image"
+      />
+    </div>
+  );
+}
+
+function WalletCardSettingsView() {
+  const { config } = usePreview();
+  const { pushUndo } = usePublishBar();
+  const saveDraft = useDraftUpdate();
+  const { currentPageId } = useEditor();
+
+  // Read wallet card state from pageSettings (draft-aware via PreviewContext)
+  const pageSettings = config ? getPageSettings(config, currentPageId) : {};
+  const [migrated, setMigrated] = useState(false);
+
+  // One-time migration: if pageSettings has no wallet fields, seed from WalletCardDesign API
+  useEffect(() => {
+    if (migrated || !config || pageSettings.walletBgColor !== undefined) {
+      setMigrated(true);
+      return;
+    }
+    fetch("/api/wallet-card-design")
+      .then((r) => r.json())
+      .then((data) => {
+        const patch: Record<string, unknown> = {
+          walletBgColor: data.backgroundColor ?? "#1a1a2e",
+          walletBgImageUrl: data.backgroundImageUrl ?? "",
+          walletOverlayOpacity: data.overlayOpacity ?? 0.3,
+          walletLogoUrl: data.logoUrl ?? "",
+          walletDateColor: data.dateTextColor ?? "#ffffff",
+        };
+        saveDraft(buildPageSettingsPatch(config, currentPageId, patch));
+        setMigrated(true);
+      })
+      .catch(() => setMigrated(true));
+  }, [config, migrated, pageSettings.walletBgColor, currentPageId, saveDraft]);
+
+  const state: WalletState = {
+    bgMode: "fill",
+    bgColor: (pageSettings.walletBgColor as string) ?? "#1a1a2e",
+    gradDirection: "down",
+    bgImageUrl: (pageSettings.walletBgImageUrl as string) ?? "",
+    overlayOpacity: (pageSettings.walletOverlayOpacity as number) ?? 0.3,
+    logoUrl: (pageSettings.walletLogoUrl as string) ?? "",
+    dateColor: (pageSettings.walletDateColor as string) ?? "#ffffff",
+  };
+
+  // Convert state → CardDesignConfig for live preview
+  const toDesignConfig = useCallback((s: WalletState): import("@/app/_lib/access-pass/card-design").CardDesignConfig => {
+    let background: import("@/app/_lib/access-pass/card-design").CardBackground;
+    if (s.bgImageUrl) {
+      background = { mode: "IMAGE", imageUrl: s.bgImageUrl, overlayOpacity: s.overlayOpacity };
+    } else {
+      background = { mode: "SOLID", color: s.bgColor };
+    }
+    return { background, logoUrl: s.logoUrl || null, dateTextColor: s.dateColor };
+  }, []);
+
+  // Post design to preview iframe for instant update
+  const postToPreview = useCallback((s: WalletState) => {
+    const iframe = document.querySelector<HTMLIFrameElement>(".editor-canvas iframe");
+    if (iframe?.contentWindow) {
+      iframe.contentWindow.postMessage(
+        { type: "wallet-card-update", design: toDesignConfig(s) },
+        window.location.origin,
+      );
+    }
+  }, [toDesignConfig]);
+
+  // Save to draft + push undo + post to preview
+  const set = useCallback((patch: Partial<WalletState>) => {
+    if (!config) return;
+    const next = { ...state, ...patch };
+
+    // Push undo snapshot before mutation
+    pushUndo(getPageUndoSnapshot(config, currentPageId));
+
+    // Save wallet fields to pageSettings
+    const settingsPatch: Record<string, unknown> = {
+      walletBgColor: next.bgColor,
+      walletBgImageUrl: next.bgImageUrl,
+      walletOverlayOpacity: next.overlayOpacity,
+      walletLogoUrl: next.logoUrl,
+      walletDateColor: next.dateColor,
+    };
+    saveDraft(buildPageSettingsPatch(config, currentPageId, settingsPatch));
+
+    // Instant preview update via postMessage
+    postToPreview(next);
+  }, [config, state, currentPageId, pushUndo, saveDraft, postToPreview]);
+
+  return (
+    <>
+      <div className="editor-panel__header">
+        <span className="editor-panel__title">Wallet-card</span>
+      </div>
+      <div className="editor-panel__body">
+        <WalletCardSettingsFields state={state} set={set} />
       </div>
     </>
   );

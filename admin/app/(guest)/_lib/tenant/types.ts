@@ -240,6 +240,10 @@ export type PageConfig = {
   sections: SectionInstance[];
   /** Stays-specific core config (heading, tabs, card image). */
   coreComponent?: StaysCoreConfig;
+  /** Check-in card configuration (check-in page only). */
+  checkinCards?: import("@/app/_lib/checkin-cards/types").CheckinCardConfig;
+  /** Page-level settings (editorMode === "settings" pages). */
+  pageSettings?: Record<string, unknown>;
 };
 
 export type TenantConfig = {

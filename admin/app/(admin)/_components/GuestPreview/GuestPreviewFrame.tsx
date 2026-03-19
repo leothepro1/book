@@ -69,8 +69,8 @@ function GuestPreviewFrame({
     return () => ro.disconnect();
   }, []);
 
-  const previewSlug = ROUTE_TO_SLUG[route] || "home";
-  const iframeSrc = `/preview/${previewSlug}?draft=1`;
+  const previewSlug = ROUTE_TO_SLUG[route];
+  const iframeSrc = previewSlug ? `/preview/${previewSlug}?draft=1` : route;
 
   // Reset loading state when src changes
   const prevSrcRef = useRef(iframeSrc);

@@ -4,7 +4,7 @@ import StaysPage from "../../../(guest)/p/[token]/stays/page";
 import AccountPage from "../../../(guest)/p/[token]/account/page";
 import HelpCenterPage from "../../../(guest)/p/[token]/help-center/page";
 import SupportPage from "../../../(guest)/p/[token]/support/page";
-import CheckInPage from "../../../(guest)/p/[token]/check-in/page";
+import CheckInPage from "../../../(guest)/check-in/page";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +30,7 @@ export default async function PreviewPage(props: {
     case "support":
       return <SupportPage />;
     case "check-in":
-      return <CheckInPage params={previewParams} />;
+      return <CheckInPage />;
     default:
       return notFound();
   }

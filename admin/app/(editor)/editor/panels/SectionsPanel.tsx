@@ -138,8 +138,9 @@ function SectionListPane() {
   const saveDraft = useDraftUpdate();
   const { openDetail, inspectorHoveredSectionId, currentPageId } = useEditor();
 
-  // Resolve page layout contract from current page
+  // Resolve page layout contract and editor mode from current page
   const layout = useMemo(() => getPageLayout(currentPageId), [currentPageId]);
+  const editorMode = useMemo(() => getPageDefinition(currentPageId).editorMode, [currentPageId]);
 
   const sections: SectionInstance[] = useMemo(
     () => getPageSections(config, currentPageId),
@@ -748,9 +749,9 @@ function SectionListPane() {
       )}
 
       {/* ── Body template ── */}
-      {layout.body === "sections" ? (
+      {editorMode === "full" ? (
         <div className="sp-template-label">Mall</div>
-      ) : (
+      ) : editorMode === "locked" ? (
         <>
           <div className="sp-template-label">Sidinnehåll</div>
           <div className="sp-fixed-body">
@@ -758,10 +759,14 @@ function SectionListPane() {
             <span>Denna sida har fast innehåll som styrs av plattformen.</span>
           </div>
         </>
+      ) : (
+        <div className="sp-fixed-body">
+          <span>Anpassning med block är inte tillgängligt för den här sidan.</span>
+        </div>
       )}
 
-      {/* ── Section list (if layout uses sections) ── */}
-      {layout.body === "sections" && (
+      {/* ── Section list (if editor mode is full) ── */}
+      {editorMode === "full" && (
       <div className={`sp-list${isDraggingSection ? " sp-dropzone--active" : ""}`}>
         <DndContext
           id="sections-dnd"

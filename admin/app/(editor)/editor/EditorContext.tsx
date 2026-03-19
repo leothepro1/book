@@ -25,6 +25,7 @@ import {
   type ReactNode,
 } from "react";
 import type { PageId } from "@/app/_lib/pages/types";
+import { getPageDefinition } from "@/app/_lib/pages/registry";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -93,6 +94,10 @@ export type EditorContextValue = {
   /** Section ID currently hovered via inspector (for sp-row highlight sync). null = none. */
   inspectorHoveredSectionId: string | null;
   setInspectorHoveredSectionId: (id: string | null) => void;
+
+  /** Active step within a multi-step page (e.g. check-in flow). null = default/main. */
+  activeStepId: string | null;
+  setActiveStepId: (stepId: string | null) => void;
 };
 
 // ─── Context ────────────────────────────────────────────────
@@ -109,6 +114,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const [currentPageId, setCurrentPageIdRaw] = useState<PageId>("home");
   const [inspectorActive, setInspectorActive] = useState(false);
   const [inspectorHoveredSectionId, setInspectorHoveredSectionId] = useState<string | null>(null);
+  const [activeStepId, setActiveStepId] = useState<string | null>(null);
 
   const selectSection = useCallback((id: string | null) => {
     setSelectedSectionId(id);
@@ -149,11 +155,13 @@ export function EditorProvider({ children }: { children: ReactNode }) {
    */
   const handleSetCurrentPageId = useCallback((pageId: PageId) => {
     setCurrentPageIdRaw(pageId);
-    setActiveRail("sections");
+    const def = getPageDefinition(pageId);
+    setActiveRail(def.editorMode === "settings" ? "settings" : "sections");
     setSelectedSectionId(null);
     setDetailTarget(null);
     setSettingsAccordion(null);
     setInspectorHoveredSectionId(null);
+    setActiveStepId(null);
   }, []);
 
   const navigateToSettings = useCallback((accordion?: string) => {
@@ -182,6 +190,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
         setInspectorActive,
         inspectorHoveredSectionId,
         setInspectorHoveredSectionId,
+        activeStepId,
+        setActiveStepId,
       }}
     >
       {children}

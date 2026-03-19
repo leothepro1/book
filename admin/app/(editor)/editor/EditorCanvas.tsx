@@ -19,13 +19,18 @@ export function EditorCanvas() {
     detailTarget,
     inspectorActive,
     currentPageId,
+    activeStepId,
     setInspectorHoveredSectionId,
     openDetail,
   } = useEditor();
 
   const previewRoute = useMemo(
-    () => getPreviewRoute(currentPageId) as PreviewRoute,
-    [currentPageId],
+    () => {
+      // Wallet-card step gets its own preview route
+      if (activeStepId === "wallet-card") return "/devtest-wallet" as PreviewRoute;
+      return getPreviewRoute(currentPageId) as PreviewRoute;
+    },
+    [currentPageId, activeStepId],
   );
 
   const handleInspectorHover = useCallback(

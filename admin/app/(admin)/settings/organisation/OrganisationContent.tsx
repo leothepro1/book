@@ -75,8 +75,9 @@ type EntityForm = {
   addressCity: string;
 };
 
+type BreadcrumbSegment = { label: string; onClick?: () => void };
 type OrganisationContentProps = {
-  onSubTitleChange?: (title: string | null) => void;
+  onSubTitleChange?: (title: string | BreadcrumbSegment[] | null) => void;
 };
 
 export function OrganisationContent({ onSubTitleChange }: OrganisationContentProps) {
@@ -102,6 +103,12 @@ export function OrganisationContent({ onSubTitleChange }: OrganisationContentPro
   const [showEditOrgModal, setShowEditOrgModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+
+  function goToOverview() {
+    setView("overview");
+    setEditingEntityId(null);
+    onSubTitleChange?.(null);
+  }
 
   useEffect(() => {
     loadData();
@@ -225,7 +232,10 @@ export function OrganisationContent({ onSubTitleChange }: OrganisationContentPro
               className="settings-btn--select-pms"
               onClick={() => {
                 setView("add-entity");
-                onSubTitleChange?.("Lägg till juridisk person");
+                onSubTitleChange?.([
+                  { label: "Organisation", onClick: goToOverview },
+                  { label: "Lägg till juridisk person" },
+                ]);
               }}
             >
               Lägg till företagsenhet
@@ -251,7 +261,10 @@ export function OrganisationContent({ onSubTitleChange }: OrganisationContentPro
                 onMouseLeave={(e) => { e.currentTarget.style.background = "#e7f3fb"; e.currentTarget.style.color = "#2783de"; }}
                 onClick={() => {
                   setView("add-entity");
-                  onSubTitleChange?.("Lägg till juridisk person");
+                  onSubTitleChange?.([
+                  { label: "Organisation", onClick: goToOverview },
+                  { label: "Lägg till juridisk person" },
+                ]);
                 }}
               >
                 Lägg till
@@ -301,7 +314,10 @@ export function OrganisationContent({ onSubTitleChange }: OrganisationContentPro
                       setEntityForm(formData);
                       setOriginalForm(formData);
                       setView("edit-entity");
-                      onSubTitleChange?.("Redigera företagsenhet");
+                      onSubTitleChange?.([
+                  { label: "Organisation", onClick: goToOverview },
+                  { label: "Redigera företagsenhet" },
+                ]);
                     }}
                     style={{
                       display: "flex", alignItems: "center",
@@ -398,7 +414,10 @@ export function OrganisationContent({ onSubTitleChange }: OrganisationContentPro
                           setEntityForm(formData);
                           setOriginalForm(formData);
                           setView("edit-entity");
-                          onSubTitleChange?.("Redigera företagsenhet");
+                          onSubTitleChange?.([
+                  { label: "Organisation", onClick: goToOverview },
+                  { label: "Redigera företagsenhet" },
+                ]);
                         }
                         setMenuEntityId(null);
                       }}

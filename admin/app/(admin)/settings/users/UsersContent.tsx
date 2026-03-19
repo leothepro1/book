@@ -7,8 +7,9 @@ import { getOrganisationUsers, inviteUsers, changeUserRole, removeUser, resendIn
 import type { OrgUser, InviteEmailResult } from "./actions";
 import "./users.css";
 
+type BreadcrumbSegment = { label: string; onClick?: () => void };
 type UsersContentProps = {
-  onSubTitleChange?: (title: string | null) => void;
+  onSubTitleChange?: (title: string | BreadcrumbSegment[] | null) => void;
   triggerInvite?: number;
   onHeaderExtraChange?: (node: React.ReactNode) => void;
   onHeaderActionChange?: (node: React.ReactNode) => void;
@@ -221,6 +222,14 @@ export function UsersContent({ onSubTitleChange, triggerInvite, onHeaderExtraCha
   const [isSending, setIsSending] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState<"org:admin" | "org:member" | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+
+  function goToList() {
+    setView("list");
+    setSelectedUser(null);
+    onSubTitleChange?.(null);
+    onHeaderExtraChange?.(null);
+    onHeaderActionChange?.(null);
+  }
   const [showChangeRoleModal, setShowChangeRoleModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -247,7 +256,10 @@ export function UsersContent({ onSubTitleChange, triggerInvite, onHeaderExtraCha
       setInviteInput("");
       setInviteError(null);
       setInviteResults(null);
-      onSubTitleChange?.("Lägg till användare");
+      onSubTitleChange?.([
+        { label: "Användare", onClick: goToList },
+        { label: "Lägg till användare" },
+      ]);
       onHeaderExtraChange?.(null);
       onHeaderActionChange?.(<></>);
     }
@@ -280,7 +292,10 @@ export function UsersContent({ onSubTitleChange, triggerInvite, onHeaderExtraCha
     setShowActionsMenu(false);
     setShowChangeRoleModal(false);
     setShowDeleteConfirm(false);
-    onSubTitleChange?.(displayName(user));
+    onSubTitleChange?.([
+      { label: "Användare", onClick: goToList },
+      { label: displayName(user) },
+    ]);
     onHeaderExtraChange?.(
       <span className={`users-status ${s.className}`} style={{ marginLeft: 8 }}>
         {s.label}

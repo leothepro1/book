@@ -12,13 +12,14 @@ export async function GET(request: NextRequest) {
 
   const tenant = await prisma.tenant.findUnique({
     where: { clerkOrgId: orgId },
-    select: { id: true, draftUpdatedAt: true },
+    select: { id: true, draftUpdatedAt: true, settingsVersion: true },
   });
 
   if (!tenant) return new Response("Tenant not found", { status: 404 });
 
   const encoder = new TextEncoder();
   let lastUpdatedAt = tenant.draftUpdatedAt?.toISOString() ?? null;
+  let lastVersion = tenant.settingsVersion;
   let lastHeartbeat = Date.now();
 
   const stream = new ReadableStream({
@@ -30,13 +31,15 @@ export async function GET(request: NextRequest) {
         try {
           const current = await prisma.tenant.findUnique({
             where: { id: tenant.id },
-            select: { draftUpdatedAt: true, draftUpdatedBy: true },
+            select: { draftUpdatedAt: true, draftUpdatedBy: true, settingsVersion: true },
           });
           if (!current) { clearInterval(intervalId); controller.close(); return; }
 
           const currentAt = current.draftUpdatedAt?.toISOString() ?? null;
-          if (currentAt !== lastUpdatedAt) {
+          const versionChanged = current.settingsVersion !== lastVersion;
+          if (currentAt !== lastUpdatedAt || versionChanged) {
             lastUpdatedAt = currentAt;
+            lastVersion = current.settingsVersion;
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "draft_updated", tenantId: tenant.id, updatedAt: currentAt, updatedBy: current.draftUpdatedBy })}\n\n`));
           }
 

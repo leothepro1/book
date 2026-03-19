@@ -1,0 +1,720 @@
+/* ═══════════════════════════════════════════════════════════════
+   Check-In Cards — Platform-owned styling
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Card Container ─────────────────────────────────────────── */
+
+.checkin-card {
+  background: none;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+  transition: border-color 0.15s ease;
+}
+
+.checkin-card + .checkin-card {
+  margin-top: 25px;
+}
+
+/* ── Card Label Row ─────────────────────────────────────────── */
+
+.checkin-card__label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0;
+}
+
+.checkin-card__label {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text, #121212);
+  line-height: 1;
+  font-family: var(--font-body, ui-sans-serif);
+}
+
+.checkin-card__optional {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text, #121212);
+  opacity: 0.4;
+  line-height: 1;
+  font-family: var(--font-body, ui-sans-serif);
+}
+
+/* ── Card Body ──────────────────────────────────────────────── */
+
+.checkin-card__body {
+  padding: 0;
+  margin-top: 8px;
+  position: relative;
+}
+
+/* ── Card Input ─────────────────────────────────────────────── */
+
+.checkin-card__input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border-color, #D7DADE);
+  border-radius: 8px;
+  font-size: 16px;
+  font-family: var(--font-body, ui-sans-serif);
+  font-weight: 400;
+  color: var(--text, #121212);
+  background: var(--field-bg, #fff);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+
+.checkin-card__input:focus {
+  border-color: var(--button-bg, #121212);
+  outline: 1px solid var(--button-bg, #121212);
+}
+
+.checkin-card__input::placeholder {
+  color: #B0B0B0;
+  font-weight: 400;
+}
+
+.checkin-card__input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Stepper (guest count) ──────────────────────────────────── */
+
+.checkin-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0;
+  border: none;
+  border-radius: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.checkin-stepper__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: var(--button-bg, #121212);
+  color: var(--button-fg, #fff);
+  border-radius: 500px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.checkin-stepper__btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.checkin-stepper__value {
+  min-width: 48px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 500;
+  font-family: var(--font-body, ui-sans-serif);
+  color: var(--text, #121212);
+  line-height: 44px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Options (purpose of stay) ──────────────────────────────── */
+
+.checkin-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.checkin-option {
+  padding: 10px 16px;
+  border: 1px solid var(--border-color, #D7DADE);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text, #121212);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+  user-select: none;
+}
+
+.checkin-option:hover:not(:disabled) {
+  border-color: #B0B0B0;
+}
+
+.checkin-option--active {
+  border-color: var(--button-bg, #121212);
+  background: var(--button-bg, #121212);
+  color: var(--button-fg, #fff);
+}
+
+.checkin-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Tasks Step Layout ──────────────────────────────────────── */
+
+.tasks-step__cards {
+  padding-bottom: 186px;
+}
+
+/* ── Card Error Slide ────────────────────────────────────────── */
+
+.checkin-card__error-slide {
+  overflow: hidden;
+  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              margin-top 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.checkin-card__error-slide--visible {
+  max-height: 60px;
+  opacity: 1;
+  margin-top: 8px;
+}
+
+.checkin-card__error-slide--hidden {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+}
+
+.checkin-card__error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-family: var(--font-body, ui-sans-serif);
+  font-weight: 400;
+  color: #DA2F35;
+  padding: 0 2px;
+}
+
+.checkin-card__error-icon {
+  font-size: 16px !important;
+  flex-shrink: 0;
+  color: #DA2F35;
+}
+
+/* ── Card Input Error State ─────────────────────────────────── */
+
+.checkin-card__input--error {
+  border-color: #DA2F35;
+  background: #FEE8EB;
+}
+
+.checkin-card__input--error:focus {
+  border-color: #DA2F35;
+  outline: 1px solid #DA2F35;
+}
+
+.phone-input--error {
+  border-color: #DA2F35;
+  background: #FEE8EB;
+}
+
+.phone-input--error:focus-within {
+  border-color: #DA2F35;
+  outline: 1px solid #DA2F35;
+}
+
+.eta-trigger--error {
+  border-color: #DA2F35;
+  background: #FEE8EB;
+}
+
+/* ── Phone Input ─────────────────────────────────────────────── */
+
+.phone-input {
+  display: flex;
+  height: 44px;
+  border: 1px solid var(--border-color, #D7DADE);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--field-bg, #fff);
+  transition: border-color 0.15s ease;
+}
+
+.phone-input:focus-within {
+  border-color: var(--button-bg, #121212);
+  outline: 1px solid var(--button-bg, #121212);
+}
+
+.phone-input__trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 14px;
+  border: none;
+  border-right: 1px solid var(--border-color, #D7DADE);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s ease;
+}
+
+.phone-input__trigger:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.phone-input__trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.phone-input__code {
+  font-size: 14px;
+  font-weight: 500;
+  font-family: var(--font-body, ui-sans-serif);
+  color: var(--text, #121212);
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+}
+
+.phone-input__chevron {
+  font-size: 20px !important;
+  color: #000;
+  opacity: 0.5;
+  margin: 0 -4px;
+}
+
+.phone-input__prefix {
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+  font-family: var(--font-body, ui-sans-serif);
+  font-weight: 400;
+  color: var(--text, #121212);
+  padding-left: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  flex-shrink: 0;
+}
+
+.phone-input__number {
+  flex: 1;
+  height: 44px;
+  line-height: 44px;
+  padding: 0 14px 0 6px;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  font-family: var(--font-body, ui-sans-serif);
+  font-weight: 400;
+  color: var(--text, #121212);
+  outline: none;
+  min-width: 0;
+}
+
+.phone-input__number::placeholder {
+  color: #B0B0B0;
+  font-weight: 400;
+}
+
+.phone-input__number:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Country Dropdown ───────────────────────────────────────── */
+
+.phone-dropdown {
+  z-index: 9999;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border-color, #D7DADE);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow: hidden;
+  animation: phone-dropdown-in 0.15s ease;
+}
+
+@keyframes phone-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.phone-dropdown--up {
+  animation: phone-dropdown-up-in 0.15s ease;
+}
+
+@keyframes phone-dropdown-up-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.phone-dropdown__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #E6E5E3;
+  flex-shrink: 0;
+}
+
+.phone-dropdown__search-icon {
+  font-size: 20px !important;
+  color: var(--text, #121212);
+  opacity: 0.35;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.phone-dropdown__search-input {
+  flex: 1;
+  border: none;
+  background: none;
+  font-size: 15px;
+  font-family: var(--font-body, ui-sans-serif);
+  font-weight: 400;
+  line-height: 1em;
+  color: var(--text, #121212);
+  outline: none;
+}
+
+.phone-dropdown__search-input::placeholder {
+  color: #B0B0B0;
+}
+
+.phone-dropdown__list {
+  overflow-y: auto;
+  flex: 1;
+  overscroll-behavior: contain;
+}
+
+.phone-dropdown__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  font-family: var(--font-body, ui-sans-serif);
+  font-weight: 400;
+  font-size: 16px;
+  color: var(--text, #121212);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s ease;
+}
+
+.phone-dropdown__item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.phone-dropdown__item--active {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.phone-dropdown__name {
+  flex: 1;
+  font-weight: 400;
+  font-family: var(--font-body, ui-sans-serif);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phone-dropdown__dial {
+  font-size: 14px;
+  font-weight: 400;
+  font-family: var(--font-body, ui-sans-serif);
+  color: var(--text, #121212);
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.phone-dropdown__empty {
+  padding: 20px 14px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text, #121212);
+  opacity: 0.4;
+}
+
+/* ── Tasks Step Layout ──────────────────────────────────────── */
+
+.tasks-step__terms {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 14px;
+}
+
+.tasks-step__checkbox {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 2px solid var(--border-color, #D7DADE);
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.tasks-step__checkbox--checked {
+  background: var(--button-bg, #8b3dff);
+  border-color: var(--button-bg, #8b3dff);
+}
+
+.tasks-step__terms-text {
+  font-size: 14px;
+  line-height: 1.5em;
+  font-weight: 400;
+  font-family: var(--font-body);
+  color: var(--text, #121212);
+}
+
+.tasks-step__terms-link {
+  color: var(--accent, var(--text, #121212));
+  text-decoration: underline;
+  font-size: 14px;
+  line-height: 1.5em;
+  font-weight: 400;
+  font-family: var(--font-body);
+}
+
+/* ── ETA Trigger Button ─────────────────────────────────────── */
+
+.eta-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border-color, #D7DADE);
+  border-radius: 8px;
+  background: var(--field-bg, #fff);
+  font-size: 16px;
+  font-family: var(--font-body, ui-sans-serif);
+  font-weight: 400;
+  color: #B0B0B0;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.eta-trigger:hover:not(:disabled) {
+  border-color: #999;
+}
+
+.eta-trigger--set {
+  color: var(--text, #121212);
+}
+
+.eta-trigger__icon {
+  font-size: 20px;
+  opacity: 0.45;
+}
+
+.eta-trigger__text {
+  flex: 1;
+  text-align: left;
+}
+
+.eta-trigger__chevron {
+  font-size: 20px !important;
+  color: #000;
+  opacity: 0.5;
+  margin-right: -4px;
+}
+
+.eta-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── ETA Bottom Sheet ───────────────────────────────────────── */
+
+.eta-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.eta-overlay--open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.eta-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  background: var(--surface, #fff);
+  border-radius: 16px 16px 0 0;
+  transform: translateY(100%);
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.eta-panel--open {
+  transform: translateY(0);
+}
+
+.eta-panel__handle {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 6px;
+  flex-shrink: 0;
+}
+
+.eta-panel__handle-bar {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--text, #121212);
+  opacity: 0.15;
+}
+
+.eta-panel__body {
+  display: flex;
+  align-items: stretch;
+  padding: 0 20px 0;
+  flex: 1;
+}
+
+.eta-panel__colon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--text, #121212);
+  opacity: 0.35;
+  padding: 20px 4px 0;
+  flex-shrink: 0;
+}
+
+/* ── Scroll Wheel ───────────────────────────────────────────── */
+
+.eta-wheel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.eta-wheel__label {
+  font-size: 15px;
+  font-weight: 500;
+  font-family: var(--font-body, ui-sans-serif);
+  color: var(--text, #121212);
+  opacity: 1;
+  text-align: center;
+  padding-bottom: 0;
+}
+
+.eta-wheel__viewport {
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+}
+
+.eta-wheel__viewport:active {
+  cursor: grabbing;
+}
+
+.eta-wheel__highlight {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  border-radius: 10px;
+  background: var(--button-bg, #121212);
+  opacity: 0.08;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.eta-wheel__mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.eta-wheel__mask--top {
+  top: 0;
+  background: linear-gradient(to bottom, var(--surface, #fff) 0%, transparent 100%);
+}
+
+.eta-wheel__mask--bottom {
+  bottom: 0;
+  background: linear-gradient(to top, var(--surface, #fff) 0%, transparent 100%);
+}
+
+.eta-wheel__item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-family: var(--font-body, ui-sans-serif);
+  color: var(--text, #121212);
+  cursor: pointer;
+  user-select: none;
+  will-change: transform, opacity;
+  pointer-events: auto;
+}
+
+/* ── Footer ─────────────────────────────────────────────────── */
+
+.eta-panel__footer {
+  display: flex;
+  padding: 7px 20px 24px;
+  flex-shrink: 0;
+}
+
+.eta-panel__btn {
+  flex: 1;
+  height: 44px;
+  border: none;
+  border-radius: 999px;
+  font-size: 16px;
+  font-family: var(--font-button, var(--font-heading, ui-sans-serif));
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+
+.eta-panel__btn--primary {
+  background: var(--button-bg, #121212);
+  color: var(--button-fg, #fff);
+}
+
+.eta-panel__btn--primary:hover {
+  opacity: 0.9;
+}
+
+.eta-panel__btn--primary:active {
+  transform: scale(0.98);
+}

@@ -282,7 +282,7 @@ export function SettingsPanel() {
               ) : activeItem === 'email' ? (
                 <EmailContent key={resetKey} onSubTitleChange={setSubTitleWithFresh} onHeaderExtraChange={setHeaderExtra} />
               ) : activeItem === 'checkin-checkout' ? (
-                <CheckinContent key={resetKey} onSubTitleChange={setSubTitle} onNavigate={(tab) => { setActiveTab(tab); setSubTitle(null); setResetKey((k) => k + 1); }} />
+                <CheckinContent key={resetKey} onSubTitleChange={setSubTitle} onHeaderExtraChange={setHeaderExtra} onNavigate={(tab) => { setActiveTab(tab); setSubTitle(null); setResetKey((k) => k + 1); }} />
               ) : (
                 <div key={resetKey} style={{ padding: 0 }}>
                   <p style={{ color: 'var(--admin-text-secondary)', fontSize: 13 }}>
