@@ -2,6 +2,7 @@ import "./login-otp.css";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "../_lib/tenant/resolveTenantFromHost";
+import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
 import { getTenantConfig } from "../_lib/tenant/getTenantConfig";
 import { getPageSettings } from "@/app/_lib/pages/config";
 import { FONT_CATALOG } from "@/app/_lib/fonts/catalog";
@@ -27,8 +28,18 @@ export default async function OtpLoginPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  // Same tenant resolution as check-in
-  const tenant = await resolveTenantFromHost();
+  // Resolve tenant: subdomain in production, DEV_ORG_ID in dev.
+  // In editor preview (bedfront.com/preview/login), Host is the admin domain —
+  // fall back to admin auth (Clerk orgId) so the preview iframe can render.
+  let tenant = await resolveTenantFromHost();
+  if (!tenant) {
+    try {
+      const { orgId } = await getAuth();
+      if (orgId) {
+        tenant = await prisma.tenant.findUnique({ where: { clerkOrgId: orgId } });
+      }
+    } catch { /* not authenticated — expected for real guest visits */ }
+  }
   if (!tenant) notFound();
 
   const params = await searchParams;
