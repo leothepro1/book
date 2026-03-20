@@ -52,6 +52,7 @@ import {
   getElementPresets,
   createSectionFromPicker,
   createElementFromPicker,
+  STANDALONE_PICKER_PREFIX,
 } from "./PickerModal";
 import type { SlotDefinition, ElementType } from "@/app/_lib/sections/types";
 import {
@@ -62,6 +63,10 @@ import {
   canAddElement,
   hasMultipleBlockTypes,
   getPresetForSection,
+  isStandaloneSection,
+  createStandaloneSection,
+  getStandaloneElement,
+  STANDALONE_DEFINITION_ID,
 } from "@/app/_lib/sections/mutations";
 import { getPageLayout, getPageDefinition, getPageSections, getPageUndoSnapshot, buildSectionsPatch, getPageFooter, buildFooterPatch } from "@/app/_lib/pages";
 import { PAGE_FOOTER_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
@@ -477,12 +482,21 @@ function SectionListPane() {
 
   const handlePickSection = useCallback(
     (definitionId: string, presetKey?: string) => {
-      const cfg = configRef.current;
-      const newSection = createSectionFromPicker(
-        definitionId,
-        presetKey,
-        cfg?.defaultColorSchemeId ?? undefined,
-      );
+      let newSection: SectionInstance | null;
+
+      // Standalone element: id is "element:{elementType}"
+      if (definitionId.startsWith(STANDALONE_PICKER_PREFIX)) {
+        const elementType = definitionId.slice(STANDALONE_PICKER_PREFIX.length) as ElementType;
+        newSection = createStandaloneSection(elementType, presetKey);
+      } else {
+        const cfg = configRef.current;
+        newSection = createSectionFromPicker(
+          definitionId,
+          presetKey,
+          cfg?.defaultColorSchemeId ?? undefined,
+        );
+      }
+
       if (!newSection) return;
 
       const cur = sectionsRef.current;
@@ -792,11 +806,122 @@ function SectionListPane() {
                 const blocks = (section.blocks ?? [])
                   .slice()
                   .sort((a, b) => a.sortOrder - b.sortOrder);
-                const hasChildren = blocks.length > 0;
+                const firstBlock = blocks[0];
 
-                // Is this section's block area the active drop zone?
-                const blockZoneActive =
-                  activeDrag?.level === "block" &&
+                // ── Standalone mode (first-class element — no tree children) ──
+                if (isStandaloneSection(section)) {
+                  return (
+                    <React.Fragment key={section.id}>
+                      {index === 0 && !isDraggingSection && (
+                        <SectionDivider onClick={() => handleOpenPicker(0)} />
+                      )}
+                      <SortableSectionRow
+                        section={section}
+                        onToggleVisibility={handleToggleVisibility}
+                        onDelete={handleRequestDelete}
+                        onClick={() => {
+                          const el = getStandaloneElement(section);
+                          if (el) {
+                            openDetail({
+                              sectionId: section.id,
+                              blockId: section.blocks[0]?.id,
+                              elementId: el.id,
+                            });
+                          } else {
+                            openDetail({ sectionId: section.id });
+                          }
+                        }}
+                        collapsed
+                        inspectorHighlight={inspectorHoveredSectionId === section.id}
+                      />
+                      {!isDraggingSection && (
+                        <SectionDivider onClick={() => handleOpenPicker(index + 1)} />
+                      )}
+                    </React.Fragment>
+                  );
+                }
+
+                // Hybrid tree: sections with maxBlocks > 1 show blocks as items
+                // (accordion items, tabs, slides). Others flatten to elements.
+                const preset = getPresetForSection(section);
+                const showBlocks = preset
+                  ? (preset.maxBlocks > 1 || (preset.maxBlocks === -1 && blocks.length > 1))
+                  : false;
+
+                if (showBlocks) {
+                  // ── Block-visible mode (accordion, tabs, slider) ──
+                  const hasChildren = blocks.length > 0;
+                  const blockZoneActive =
+                    activeDrag?.level === "block" &&
+                    activeDrag.sectionId === section.id;
+
+                  return (
+                    <React.Fragment key={section.id}>
+                      {index === 0 && !isDraggingSection && (
+                        <SectionDivider onClick={() => handleOpenPicker(0)} />
+                      )}
+                      <SortableSectionRow
+                        section={section}
+                        onToggleVisibility={handleToggleVisibility}
+                        onDelete={handleRequestDelete}
+                        onClick={() => openDetail({ sectionId: section.id })}
+                        collapsed={section.locked ? true : !sectionOpen}
+                        onToggleCollapse={section.locked ? undefined : () => toggleCollapse(section.id)}
+                        inspectorHighlight={inspectorHoveredSectionId === section.id}
+                      >
+                        {!section.locked && sectionOpen && (
+                          <>
+                            <AddButton
+                              label={`Lägg till ${getAddBlockLabel(section)}`}
+                              indent={1}
+                              onClick={() => handleAddBlock(section.id)}
+                              disabled={!canAddBlock(section)}
+                            />
+                            {hasChildren && (
+                              <BlockDropZone
+                                sectionId={section.id}
+                                blocks={blocks}
+                                section={section}
+                                isDropTarget={blockZoneActive}
+                                activeDrag={activeDrag}
+                                sensors={sensors}
+                                collapsedIds={collapsedIds}
+                                blockDragStartFactory={handleBlockDragStart}
+                                blockDragEndFactory={handleBlockDragEnd}
+                                onBlockDragCancel={handleBlockDragCancel}
+                                elementDragStartFactory={handleElementDragStart}
+                                elementDragEndFactory={handleElementDragEnd}
+                                onElementDragCancel={handleElementDragCancel}
+                                onToggleCollapse={toggleCollapse}
+                                onToggleBlockVisibility={handleToggleBlockVisibility}
+                                onToggleElementVisibility={handleToggleElementVisibility}
+                                onDeleteBlock={handleDeleteBlock}
+                                onDeleteElement={handleDeleteElement}
+                                getBlockName={getBlockName}
+                                getBlockIcon={getBlockIcon}
+                                openDetail={openDetail}
+                                onAddElement={handleOpenElementPicker}
+                              />
+                            )}
+                          </>
+                        )}
+                      </SortableSectionRow>
+                      {!isDraggingSection && (
+                        <SectionDivider onClick={() => handleOpenPicker(index + 1)} />
+                      )}
+                    </React.Fragment>
+                  );
+                }
+
+                // ── Flat mode (generic sections — blocks hidden, elements direct) ──
+                const allElements = blocks.flatMap((b) =>
+                  Object.values(b.slots)
+                    .flat()
+                    .sort((a, b) => a.sortOrder - b.sortOrder)
+                );
+                const hasElements = allElements.length > 0;
+                const elementZoneActive =
+                  activeDrag?.level === "element" &&
                   activeDrag.sectionId === section.id;
 
                 return (
@@ -813,41 +938,32 @@ function SectionListPane() {
                       onToggleCollapse={section.locked ? undefined : () => toggleCollapse(section.id)}
                       inspectorHighlight={inspectorHoveredSectionId === section.id}
                     >
-                      {/* Locked sections are flat — no children */}
                       {!section.locked && sectionOpen && (
                         <>
-                          {/* "Lägg till X" button at top of section */}
-                          <AddButton
-                            label={`Lägg till ${getAddBlockLabel(section)}`}
-                            indent={1}
-                            onClick={() => handleAddBlock(section.id)}
-                            disabled={!canAddBlock(section)}
-                          />
-                          {/* Block area with DnD */}
-                          {hasChildren && (
-                            <BlockDropZone
+                          {firstBlock && (
+                            <AddButton
+                              label="Lägg till element"
+                              indent={1}
+                              onClick={() => handleOpenElementPicker(section.id, firstBlock.id)}
+                              disabled={!canAddElement(section, firstBlock)}
+                            />
+                          )}
+                          {hasElements && firstBlock && (
+                            <ElementDropZone
                               sectionId={section.id}
-                              blocks={blocks}
-                              section={section}
-                              isDropTarget={blockZoneActive}
+                              blockId={firstBlock.id}
+                              elements={allElements}
+                              isDropTarget={elementZoneActive}
                               activeDrag={activeDrag}
                               sensors={sensors}
-                              collapsedIds={collapsedIds}
-                              blockDragStartFactory={handleBlockDragStart}
-                              blockDragEndFactory={handleBlockDragEnd}
-                              onBlockDragCancel={handleBlockDragCancel}
                               elementDragStartFactory={handleElementDragStart}
                               elementDragEndFactory={handleElementDragEnd}
                               onElementDragCancel={handleElementDragCancel}
-                              onToggleCollapse={toggleCollapse}
-                              onToggleBlockVisibility={handleToggleBlockVisibility}
                               onToggleElementVisibility={handleToggleElementVisibility}
-                              onDeleteBlock={handleDeleteBlock}
                               onDeleteElement={handleDeleteElement}
-                              getBlockName={getBlockName}
-                              getBlockIcon={getBlockIcon}
                               openDetail={openDetail}
-                              onAddElement={handleOpenElementPicker}
+                              locked={section.locked}
+                              indent={1}
                             />
                           )}
                         </>
@@ -880,7 +996,7 @@ function SectionListPane() {
           </DragOverlay>
         </DndContext>
 
-        {/* ── Add section button (always at bottom) ── */}
+        {/* ── Add section/element button (always at bottom) ── */}
         <button
           type="button"
           className="sp-add-row"
@@ -888,16 +1004,6 @@ function SectionListPane() {
         >
           <EditorIcon name="add_circle" size={16} />
           <span>Lägg till avsnitt</span>
-        </button>
-
-        {/* ── Add element button (test) ── */}
-        <button
-          type="button"
-          className="sp-add-row"
-          onClick={() => setElementPickerOpen(true)}
-        >
-          <EditorIcon name="add_circle" size={16} />
-          <span>Lägg till element</span>
         </button>
       </div>
       )}
@@ -918,12 +1024,16 @@ function SectionListPane() {
       {/* ── Section picker modal ── */}
       {pickerInsertIndex !== null && (
         <PickerModal
-          title="Lägg till sektion"
-          searchPlaceholder="Sök efter sektion..."
+          title="Lägg till"
+          searchPlaceholder="Sök..."
           items={pickerData.items}
           categories={pickerData.categories}
-          getPresets={getSectionPresets}
-          presetLabel="Sektions"
+          getPresets={(id) =>
+            id.startsWith(STANDALONE_PICKER_PREFIX)
+              ? getElementPresets(id.slice(STANDALONE_PICKER_PREFIX.length))
+              : getSectionPresets(id)
+          }
+          presetLabel=""
           onSelect={handlePickSection}
           onClose={() => setPickerInsertIndex(null)}
         />
@@ -1144,6 +1254,7 @@ const ElementDropZone = React.memo(function ElementDropZone({
   onDeleteElement,
   openDetail,
   locked,
+  indent = 2,
 }: {
   sectionId: string;
   blockId: string;
@@ -1158,6 +1269,8 @@ const ElementDropZone = React.memo(function ElementDropZone({
   onDeleteElement: (sectionId: string, blockId: string, elementId: string) => void;
   openDetail: (target: { sectionId: string; blockId?: string; elementId?: string }) => void;
   locked?: boolean;
+  /** Tree indent level for element rows. Default 2 (nested under block). */
+  indent?: number;
 }) {
   // Memoize curried handlers (sectionId + blockId stable for this instance)
   const onElementDragStart = useMemo(
@@ -1191,8 +1304,7 @@ const ElementDropZone = React.memo(function ElementDropZone({
               name={getElementName(el.type)}
               preview={getElementPreview(el)}
               isActive={el.isActive ?? true}
-              indent={2}
-              noDragHandle
+              indent={indent}
               onToggleVisibility={() =>
                 onToggleElementVisibility(sectionId, blockId, el.id)
               }
@@ -1220,9 +1332,8 @@ const ElementDropZone = React.memo(function ElementDropZone({
                   name={getElementName(el.type)}
                   preview={getElementPreview(el)}
                   isActive={el.isActive ?? true}
-                  indent={2}
+                  indent={indent}
                   isOverlay
-                  noDragHandle
                 />
               );
             })()
@@ -1418,7 +1529,15 @@ const SectionRow = React.memo(function SectionRow({
 
   // Resolve section icon from definition
   const sectionIcon = (() => {
-    if (section.definitionId === "__loose-element") return "widgets";
+    // Standalone + loose: show the inner element's icon
+    if (section.definitionId === STANDALONE_DEFINITION_ID || section.definitionId === "__loose-element") {
+      const firstEl = (section.blocks ?? [])[0]?.slots?.content?.[0];
+      if (firstEl) {
+        const elDef = getElementDefinition(firstEl.type);
+        return elDef?.icon || "widgets";
+      }
+      return "widgets";
+    }
     if (section.definitionId === "bokningar") return "confirmation_number";
     const def = getSectionDefinition(section.definitionId);
     const bt = def?.presets[0]?.blockTypes[0];
@@ -1427,7 +1546,8 @@ const SectionRow = React.memo(function SectionRow({
 
   // Resolve display name
   const sectionName = (() => {
-    if (section.definitionId === "__loose-element") {
+    // Standalone + loose: show the inner element's name
+    if (section.definitionId === STANDALONE_DEFINITION_ID || section.definitionId === "__loose-element") {
       const firstEl = (section.blocks ?? [])[0]?.slots?.content?.[0];
       return firstEl
         ? (getElementDefinition(firstEl.type)?.name ?? section.title ?? section.definitionId)

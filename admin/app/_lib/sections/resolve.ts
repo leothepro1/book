@@ -187,10 +187,10 @@ function resolveSection(
   section: SectionInstance,
   config: import("@/app/(guest)/_lib/tenant/types").TenantConfig
 ): SectionRendererProps | null {
-  // ── Loose elements (test mode) ──
+  // ── Standalone / loose elements ──
   // These bypass the full definition/preset pipeline.
   // Blocks/slots/elements are resolved directly.
-  if (section.definitionId === "__loose-element") {
+  if (section.definitionId === "__standalone" || section.definitionId === "__loose-element") {
     return resolveLooseElementSection(section, config);
   }
 

@@ -19,7 +19,8 @@ import type {
   SlotDefinition,
   SectionPreset,
 } from "./types";
-import { getSectionDefinition } from "./registry";
+import { createSectionId, createBlockId } from "./types";
+import { getSectionDefinition, getElementDefinition } from "./registry";
 import { createBlockFromPicker, createElementFromPicker } from "@/app/(editor)/editor/panels/PickerModal";
 
 // ═══════════════════════════════════════════════════════════════
@@ -193,4 +194,71 @@ export function insertElementIntoBlock(
 export function getAddBlockLabel(section: SectionInstance): string {
   const bt = getDefaultBlockType(section);
   return bt?.name?.toLowerCase() || "block";
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STANDALONE ELEMENTS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Standalone element definition ID.
+ *
+ * A standalone element is a SectionInstance that wraps a single element
+ * in an auto-generated block. The rendering pipeline handles it the same
+ * way as __loose-element but the editor presents it as a first-class
+ * tree item — no section/block wrapper visible to the user.
+ */
+export const STANDALONE_DEFINITION_ID = "__standalone";
+
+/**
+ * Check if a section is a standalone element wrapper.
+ */
+export function isStandaloneSection(section: SectionInstance): boolean {
+  return section.definitionId === STANDALONE_DEFINITION_ID;
+}
+
+/**
+ * Create a standalone section wrapping a single element.
+ * Returns a complete SectionInstance ready to insert into the page.
+ */
+export function createStandaloneSection(
+  elementType: ElementType,
+  presetKey?: string,
+): SectionInstance | null {
+  const el = createElementFromPicker(elementType, presetKey);
+  if (!el) return null;
+
+  const def = getElementDefinition(elementType);
+
+  return {
+    id: createSectionId(),
+    definitionId: STANDALONE_DEFINITION_ID,
+    definitionVersion: "1.0.0",
+    presetKey: "default",
+    presetVersion: "1.0.0",
+    sortOrder: 0,
+    isActive: true,
+    settings: {},
+    presetSettings: {},
+    blocks: [
+      {
+        id: createBlockId(),
+        type: "wrapper",
+        settings: {},
+        slots: { content: [el] },
+        sortOrder: 0,
+        isActive: true,
+      },
+    ],
+    title: def?.name ?? elementType,
+  };
+}
+
+/**
+ * Get the inner element from a standalone section.
+ * Returns null if the section is not standalone or has no element.
+ */
+export function getStandaloneElement(section: SectionInstance) {
+  if (!isStandaloneSection(section)) return null;
+  return section.blocks?.[0]?.slots?.content?.[0] ?? null;
 }

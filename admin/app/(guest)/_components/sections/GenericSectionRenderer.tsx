@@ -14,7 +14,7 @@ import { BlockRenderer } from "./BlockRenderer";
 
 export function GenericSectionRenderer(props: SectionRendererProps) {
   const { section, preset, settings, blocks } = props;
-  const isLoose = section.definitionId === "__loose-element";
+  const isLoose = section.definitionId === "__loose-element" || section.definitionId === "__standalone";
   const pt = isLoose ? 0 : ((settings.paddingTop as number) ?? 0);
   const pr = isLoose ? 0 : ((settings.paddingRight as number) ?? 0);
   const pb = isLoose ? 0 : ((settings.paddingBottom as number) ?? 0);

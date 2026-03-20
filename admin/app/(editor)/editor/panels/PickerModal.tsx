@@ -396,6 +396,12 @@ function CategoryAccordion({
 // DATA FACTORIES (unchanged)
 // ═══════════════════════════════════════════════════════════════
 
+/**
+ * Standalone element ID prefix in the picker.
+ * Items with this prefix create standalone sections instead of real sections.
+ */
+export const STANDALONE_PICKER_PREFIX = "element:";
+
 export function buildSectionPickerData(): {
   items: PickerItem[];
   categories: PickerCategory[];
@@ -405,7 +411,7 @@ export function buildSectionPickerData(): {
     (d) => d.scope !== "locked",
   );
 
-  const items: PickerItem[] = defs.map((def) => ({
+  const sectionItems: PickerItem[] = defs.map((def) => ({
     id: def.id,
     name: def.name,
     description: def.description,
@@ -414,15 +420,28 @@ export function buildSectionPickerData(): {
     icon: <SectionTypeIcon category={def.category} />,
   }));
 
+  // Standalone elements — first-class items in the picker.
+  // Each element type gets its own entry under the "Element" category.
+  const elementDefs = getAllElementDefinitions();
+  const standaloneItems: PickerItem[] = elementDefs.map((def) => ({
+    id: `${STANDALONE_PICKER_PREFIX}${def.type}`,
+    name: def.name,
+    description: def.description ?? "",
+    category: "element",
+    tags: [def.type],
+    icon: <EditorIcon name={def.icon || "widgets"} size={16} />,
+  }));
+
   const categories: PickerCategory[] = [
     { key: "hero", label: "Hero" },
     { key: "navigation", label: "Navigation" },
     { key: "content", label: "Innehåll" },
     { key: "media", label: "Media" },
     { key: "utility", label: "Verktyg" },
+    { key: "element", label: "Element" },
   ];
 
-  return { items, categories };
+  return { items: [...sectionItems, ...standaloneItems], categories };
 }
 
 export function getSectionPresets(definitionId: string): PresetOption[] {
