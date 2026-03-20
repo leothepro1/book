@@ -59,6 +59,12 @@ export async function GET(request: NextRequest) {
 
   const emailRateLimits = await cleanupEmailRateLimits();
 
+  const expiredOtpCodes = await prisma.guestOtpCode.deleteMany({
+    where: {
+      expiresAt: { lt: new Date() },
+    },
+  });
+
   return NextResponse.json({
     deleted: {
       webhookDedup: webhookDedup.count,
@@ -66,6 +72,7 @@ export async function GET(request: NextRequest) {
       syncJobs: syncJobs.count,
       bookingErrors: bookingErrors.count,
       emailRateLimits,
+      expiredOtpCodes: expiredOtpCodes.count,
     },
   });
 }

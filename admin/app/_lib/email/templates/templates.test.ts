@@ -9,7 +9,7 @@ const sampleVars: Record<string, string> = {
   checkOut: "2025-08-18",
   roomType: "Dubbelrum Deluxe",
   bookingRef: "BK-20250001",
-  portalUrl: "https://portal.grandhotel.se/p/abc123",
+  loginUrl: "https://portal.grandhotel.se/login",
   roomNumber: "412",
   magicLink: "https://portal.grandhotel.se/auth/magic/xyz",
   expiresIn: "24 timmar",

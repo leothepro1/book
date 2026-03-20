@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
-import { validateMagicLink } from "@/app/_lib/magic-link/validate";
-import { setGuestSession } from "@/app/_lib/magic-link/session";
+import { prisma } from "@/app/_lib/db/prisma";
+import { lookupMagicLinkTenant } from "@/app/_lib/magic-link/validate";
+import { portalSlugToUrl } from "@/app/_lib/tenant/portal-slug";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Magic link callback — validates token, creates session, redirects.
+ * Legacy magic link callback — redirect shim.
  *
- * This is a route handler (not a page) because it sets a cookie
- * then redirects — no UI rendering needed.
+ * Existing magic links in already-sent emails point to /auth/magic/{token}
+ * on bedfront.com. This route looks up which tenant the token belongs to
+ * and redirects to the tenant subdomain login page with the token as a
+ * query param: https://{portalSlug}.bedfront.com/login?ml={token}
+ *
+ * The /login page on the subdomain validates and consumes the token.
+ * This shim does NOT mark the token as used — only reads tenantId.
  */
 export async function GET(
   req: Request,
@@ -17,28 +23,25 @@ export async function GET(
   const { token } = await params;
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-  const result = await validateMagicLink(token);
+  // Look up tenant without consuming the token
+  const lookup = await lookupMagicLinkTenant(token);
 
-  if (!result.valid) {
-    const reasonMap = {
-      not_found: "invalid",
-      expired: "expired",
-      used: "used",
-    } as const;
-    return NextResponse.redirect(
-      `${baseUrl}/auth/error?reason=${reasonMap[result.reason]}`,
-    );
+  if (!lookup) {
+    // Token is invalid, expired, or already used — show error page
+    return NextResponse.redirect(`${baseUrl}/auth/error?reason=invalid`);
   }
 
-  // Set guest session cookie
-  await setGuestSession({
-    tenantId: result.tenantId,
-    email: result.email,
-    authenticatedAt: Date.now(),
+  // Find tenant's portal slug for subdomain redirect
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: lookup.tenantId },
+    select: { portalSlug: true },
   });
 
-  // Redirect to the guest portal root.
-  // The guest is now authenticated via session cookie — portal pages
-  // can use getGuestSession() to identify the guest and look up bookings.
-  return NextResponse.redirect(`${baseUrl}/`);
+  if (tenant?.portalSlug) {
+    const portalBase = portalSlugToUrl(tenant.portalSlug);
+    return NextResponse.redirect(`${portalBase}/login?ml=${token}`);
+  }
+
+  // Dev fallback: no portalSlug — redirect to same-origin /login
+  return NextResponse.redirect(`${baseUrl}/login?ml=${token}`);
 }

@@ -162,6 +162,7 @@ model Tenant {
   emailUnsubscribes  EmailUnsubscribe[]
   emailDomains       EmailDomain[]
   magicLinkTokens    MagicLinkToken[]
+  guestAccounts      GuestAccount[]
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -257,6 +258,10 @@ model Booking {
   confirmedEmailSentAt  DateTime?
   checkedInEmailSentAt  DateTime?
   checkedOutEmailSentAt DateTime?
+
+  // Guest account link — set during sync when guest email is valid
+  guestAccountId String?
+  guestAccount   GuestAccount? @relation(fields: [guestAccountId], references: [id], onDelete: SetNull)
 
   magicLinks   MagicLink[]
   accessPasses AccessPass[]
@@ -709,6 +714,7 @@ enum EmailEventType {
   CHECK_OUT_CONFIRMED
   MAGIC_LINK
   SUPPORT_REPLY
+  GUEST_OTP
 }
 
 enum TranslationNamespace {
@@ -895,4 +901,44 @@ model EmailRateLimit {
   sentAt    DateTime       @default(now())
 
   @@index([tenantId, email, eventType, sentAt])
+}
+
+// ============================================================================
+// GUEST ACCOUNTS (OTP-based guest authentication)
+// ============================================================================
+
+/// Per-tenant guest account. One account per email per tenant.
+/// Created lazily during booking sync when a valid guest email exists.
+/// Used for OTP-based guest portal authentication.
+model GuestAccount {
+  id        String   @id @default(cuid())
+  tenantId  String
+  email     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+  otpCodes GuestOtpCode[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([email])
+}
+
+/// OTP codes for guest authentication.
+/// Codes are stored hashed — never in cleartext.
+/// Single-use: usedAt is set on verification.
+model GuestOtpCode {
+  id             String   @id @default(cuid())
+  guestAccountId String
+  codeHash       String
+  expiresAt      DateTime
+  usedAt         DateTime?
+  failedAttempts Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
+
+  @@index([guestAccountId])
 }

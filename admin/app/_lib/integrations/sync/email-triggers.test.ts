@@ -179,17 +179,16 @@ describe("formatDate", () => {
   });
 });
 
-// ── portalUrl (tested via triggerBookingConfirmed variables) ─────
+// ── loginUrl (tested via triggerBookingConfirmed variables) ─────
 
-describe("portalUrl in email triggers", () => {
+describe("loginUrl in email triggers", () => {
   beforeEach(() => {
     mockSendEmailEvent.mockReset();
     mockSendEmailEvent.mockResolvedValue(undefined);
   });
 
-  it("returns correct URL when both portalToken and portalSlug exist", async () => {
+  it("returns login URL when portalSlug exists", async () => {
     const booking = makeBookingWithTenant({
-      portalToken: "tok_xyz789",
       tenant: {
         ...makeBookingWithTenant().tenant,
         portalSlug: "apelviken-dev-3vtczx",
@@ -203,27 +202,13 @@ describe("portalUrl in email triggers", () => {
       "BOOKING_CONFIRMED",
       expect.any(String),
       expect.objectContaining({
-        portalUrl: "https://apelviken-dev-3vtczx.bedfront.com/home/tok_xyz789",
+        loginUrl: "https://apelviken-dev-3vtczx.bedfront.com/login",
       }),
-    );
-  });
-
-  it("returns empty string when portalToken is null", async () => {
-    const booking = makeBookingWithTenant({ portalToken: null });
-
-    await triggerBookingConfirmed(booking as never);
-
-    expect(mockSendEmailEvent).toHaveBeenCalledWith(
-      expect.any(String),
-      "BOOKING_CONFIRMED",
-      expect.any(String),
-      expect.objectContaining({ portalUrl: "" }),
     );
   });
 
   it("returns empty string when portalSlug is null", async () => {
     const booking = makeBookingWithTenant({
-      portalToken: "tok_abc",
       tenant: {
         ...makeBookingWithTenant().tenant,
         portalSlug: null,
@@ -236,13 +221,12 @@ describe("portalUrl in email triggers", () => {
       expect.any(String),
       "BOOKING_CONFIRMED",
       expect.any(String),
-      expect.objectContaining({ portalUrl: "" }),
+      expect.objectContaining({ loginUrl: "" }),
     );
   });
 
-  it("format is https://{slug}.bedfront.com/home/{token}", async () => {
+  it("format is https://{slug}.bedfront.com/login", async () => {
     const booking = makeBookingWithTenant({
-      portalToken: "test123",
       tenant: {
         ...makeBookingWithTenant().tenant,
         portalSlug: "my-hotel-abc456",
@@ -256,7 +240,7 @@ describe("portalUrl in email triggers", () => {
       "BOOKING_CONFIRMED",
       expect.any(String),
       expect.objectContaining({
-        portalUrl: "https://my-hotel-abc456.bedfront.com/home/test123",
+        loginUrl: "https://my-hotel-abc456.bedfront.com/login",
       }),
     );
   });

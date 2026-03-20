@@ -22,6 +22,7 @@ const ROUTE_TO_SLUG: Readonly<Record<string, string>> = {
   "/p/[token]/stays": "stays",
   "/check-in": "check-in",
   "/check-out": "check-out",
+  "/login": "login",
   "/p/[token]/help-center": "help-center",
   "/p/[token]/support": "support",
 } as const;

@@ -6,6 +6,7 @@ export interface GuestSession {
   tenantId: string;
   email: string;
   authenticatedAt: number; // unix timestamp ms
+  guestAccountId?: string; // set by OTP auth, absent for legacy magic-link sessions
 }
 
 interface SessionData {

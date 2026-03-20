@@ -52,3 +52,25 @@ export async function validateMagicLink(
   // 5. Return valid result
   return { valid: true, tenantId: record.tenantId, email: record.email };
 }
+
+/**
+ * Look up the tenant for a magic link token without consuming it.
+ * Used by the legacy /auth/magic/[token] shim to find which tenant
+ * subdomain to redirect to. Does NOT mark the token as used.
+ *
+ * Returns tenantId or null if token is invalid/expired/used.
+ */
+export async function lookupMagicLinkTenant(
+  token: string,
+): Promise<{ tenantId: string; email: string } | null> {
+  const record = await prisma.magicLinkToken.findUnique({
+    where: { token },
+    select: { tenantId: true, email: true, usedAt: true, expiresAt: true },
+  });
+
+  if (!record) return null;
+  if (record.usedAt) return null;
+  if (record.expiresAt < new Date()) return null;
+
+  return { tenantId: record.tenantId, email: record.email };
+}

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/app/_lib/db/prisma";
 import { sendEmailEvent } from "@/app/_lib/email";
 import { generateToken, getExpiryDate, EXPIRY_HUMAN } from "./tokens";
+import { portalSlugToUrl } from "@/app/_lib/tenant/portal-slug";
 
 const emailSchema = z.string().email();
 
@@ -67,17 +68,25 @@ export async function requestMagicLink(
       data: { tenantId, email: normalizedEmail, token, expiresAt },
     });
 
-    // 6. Build magic link URL
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const magicLink = `${appUrl}/auth/magic/${token}`;
-
-    // 7. Fetch tenant name for the email
+    // 6. Fetch tenant for name + portalSlug
     const tenant = await prisma.tenant.findUniqueOrThrow({
       where: { id: tenantId },
-      select: { name: true },
+      select: { name: true, portalSlug: true },
     });
 
-    // 8. Send email
+    // 7. Build magic link URL — points to tenant subdomain login page
+    let magicLink: string;
+    if (tenant.portalSlug) {
+      const portalBase = portalSlugToUrl(tenant.portalSlug);
+      magicLink = `${portalBase}/login?ml=${token}`;
+    } else {
+      // Dev fallback: no portalSlug yet — use legacy URL
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      magicLink = `${appUrl}/login?ml=${token}`;
+      console.warn("[magic-link] Tenant has no portalSlug, using fallback URL");
+    }
+
+    // 8. Send email — tenant name fetched in step 6
     await sendEmailEvent(tenantId, "MAGIC_LINK", normalizedEmail, {
       guestName: "", // unknown at this point — template handles empty gracefully
       hotelName: tenant.name,

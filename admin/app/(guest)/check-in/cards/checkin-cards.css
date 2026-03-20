@@ -61,7 +61,7 @@
   font-size: 16px;
   font-family: var(--font-body, ui-sans-serif);
   font-weight: 400;
-  color: var(--text, #121212);
+  color: var(--field-text, #121212);
   background: var(--field-bg, #fff);
   outline: none;
   box-sizing: border-box;
@@ -121,7 +121,7 @@
   font-size: 18px;
   font-weight: 500;
   font-family: var(--font-body, ui-sans-serif);
-  color: var(--text, #121212);
+  color: var(--field-text, #121212);
   line-height: 44px;
   user-select: none;
   -webkit-user-select: none;
@@ -277,7 +277,7 @@
   font-size: 14px;
   font-weight: 500;
   font-family: var(--font-body, ui-sans-serif);
-  color: var(--text, #121212);
+  color: var(--field-text, #121212);
   white-space: nowrap;
   letter-spacing: 0.03em;
 }
@@ -295,7 +295,7 @@
   font-size: 16px;
   font-family: var(--font-body, ui-sans-serif);
   font-weight: 400;
-  color: var(--text, #121212);
+  color: var(--field-text, #121212);
   padding-left: 14px;
   white-space: nowrap;
   pointer-events: none;
@@ -314,7 +314,7 @@
   font-size: 16px;
   font-family: var(--font-body, ui-sans-serif);
   font-weight: 400;
-  color: var(--text, #121212);
+  color: var(--field-text, #121212);
   outline: none;
   min-width: 0;
 }
@@ -384,7 +384,7 @@
   font-family: var(--font-body, ui-sans-serif);
   font-weight: 400;
   line-height: 1em;
-  color: var(--text, #121212);
+  color: var(--field-text, #121212);
   outline: none;
 }
 
@@ -519,7 +519,7 @@
 }
 
 .eta-trigger--set {
-  color: var(--text, #121212);
+  color: var(--field-text, #121212);
 }
 
 .eta-trigger__icon {

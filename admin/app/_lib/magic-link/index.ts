@@ -8,5 +8,5 @@
 
 export { generateToken, getExpiryDate, EXPIRY_HUMAN } from "./tokens";
 export { requestMagicLink } from "./request";
-export { validateMagicLink, type MagicLinkValidationResult } from "./validate";
+export { validateMagicLink, lookupMagicLinkTenant, type MagicLinkValidationResult } from "./validate";
 export { getGuestSession, setGuestSession, clearGuestSession, type GuestSession } from "./session";

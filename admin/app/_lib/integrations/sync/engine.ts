@@ -32,8 +32,11 @@ import {
 } from "./email-triggers";
 import type { BookingStatus } from "@prisma/client";
 import { generatePortalToken } from "./portal-token";
+import { upsertGuestAccount } from "@/app/_lib/guest-auth/account";
 
 const MAX_BOOKING_ERROR_ATTEMPTS = 5;
+
+const VALID_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Run a sync job that has already been claimed (status = "running").
@@ -234,6 +237,22 @@ export async function upsertSyncedBooking(
   const now = new Date();
   const newStatus = toPrismaBookingStatus(booking.status);
 
+  // Upsert guest account if the booking has a valid email
+  let guestAccountId: string | null = null;
+  if (booking.guestEmail && VALID_EMAIL_RE.test(booking.guestEmail)) {
+    try {
+      const account = await upsertGuestAccount(booking.tenantId, booking.guestEmail);
+      guestAccountId = account.id;
+    } catch (error) {
+      console.warn(
+        `[sync] failed to upsert guest account for booking=${booking.externalId}, continuing without`,
+        error,
+      );
+    }
+  } else {
+    console.warn(`[sync] no valid email for booking=${booking.externalId}, skipping guest account`);
+  }
+
   const bookingData = {
     firstName: booking.firstName,
     lastName: booking.lastName,
@@ -247,6 +266,7 @@ export async function upsertSyncedBooking(
     checkedOutAt: booking.checkedOutAt,
     externalSource: provider,
     lastSyncedAt: now,
+    guestAccountId,
   };
 
   const existing = await prisma.booking.findUnique({

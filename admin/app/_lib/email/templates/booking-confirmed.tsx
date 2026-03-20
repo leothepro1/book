@@ -53,7 +53,7 @@ const closing: React.CSSProperties = {
 };
 
 export default function BookingConfirmed(props: BookingConfirmedProps) {
-  const { guestName, hotelName, checkIn, checkOut, roomType, bookingRef, portalUrl, branding } = props;
+  const { guestName, hotelName, checkIn, checkOut, roomType, bookingRef, loginUrl, branding } = props;
   const btnStyle = { ...ctaButton, ...(branding?.accentColor ? { backgroundColor: branding.accentColor } : {}) };
   return (
     <EmailLayout hotelName={hotelName} branding={branding}>
@@ -76,8 +76,8 @@ export default function BookingConfirmed(props: BookingConfirmedProps) {
           <span style={detailLabel}>Bokningsnr</span> {bookingRef}
         </Text>
       </Section>
-      <Link href={portalUrl} style={btnStyle} data-branding="cta">
-        Visa din portal
+      <Link href={loginUrl} style={btnStyle} data-branding="cta">
+        Logga in på din portal
       </Link>
       <Text style={closing}>
         Vi ser fram emot att välkomna dig.

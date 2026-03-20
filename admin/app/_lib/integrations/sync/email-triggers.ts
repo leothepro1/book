@@ -31,7 +31,7 @@ export async function triggerBookingConfirmed(
     checkOut: formatDate(booking.departure),
     roomType: booking.unit,
     bookingRef: booking.externalId ?? booking.id,
-    portalUrl: portalUrl(booking),
+    loginUrl: loginUrl(booking),
   });
 }
 
@@ -44,7 +44,7 @@ export async function triggerCheckInConfirmed(
     roomNumber: booking.unit,
     checkIn: formatDate(booking.arrival),
     checkOut: formatDate(booking.departure),
-    portalUrl: portalUrl(booking),
+    loginUrl: loginUrl(booking),
   });
 }
 
@@ -112,10 +112,8 @@ export function formatDate(date: Date | null | undefined): string {
   });
 }
 
-/** Build the stable guest portal URL on the tenant's subdomain. */
-function portalUrl(booking: BookingWithTenant): string {
-  if (!booking.portalToken) return "";
+/** Build the login URL on the tenant's subdomain. */
+function loginUrl(booking: BookingWithTenant): string {
   if (!booking.tenant.portalSlug) return "";
-  const base = portalSlugToUrl(booking.tenant.portalSlug);
-  return `${base}/home/${booking.portalToken}`;
+  return `${portalSlugToUrl(booking.tenant.portalSlug)}/login`;
 }

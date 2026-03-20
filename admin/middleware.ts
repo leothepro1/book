@@ -17,6 +17,12 @@ const isPublicRoute = createRouteMatcher([
   '/sign-up(.*)',
   '/auth/(.*)',
   '/unsubscribe(.*)',
+  '/api/guest-auth/(.*)',
+  '/login(.*)',
+  '/no-booking(.*)',
+  // Session-gated guest portal pages — public for Clerk (guests don't have Clerk accounts),
+  // but gated by guest_session cookie check below.
+  '/portal/(.*)',
 ]);
 
 // All valid locale codes as a Set for O(1) lookup
@@ -173,14 +179,46 @@ async function handleLocale(request: NextRequest): Promise<NextResponse | null> 
   return response;
 }
 
+// ── Session-gated guest routes ───────────────────────────────
+// These routes require a guest_session cookie (set by OTP auth).
+// This is a lightweight presence check — the page's server component
+// does full validation via resolveGuestContext() (decrypts + verifies).
+//
+// Preview routes (/preview/*, /devtest*) render /p/[token] components
+// with token="preview". They never use /home, /stays, /account —
+// session gating does not affect editor previews, email previews,
+// or check-in card previews.
+
+const SESSION_GATED_ROUTES = createRouteMatcher([
+  '/portal/(.*)',
+]);
+
+const GUEST_SESSION_COOKIE = 'guest_session';
+
+function handleGuestSessionGate(request: NextRequest): NextResponse | null {
+  if (!SESSION_GATED_ROUTES(request)) return null;
+
+  const hasSession = request.cookies.has(GUEST_SESSION_COOKIE);
+  if (hasSession) return null; // pass through — page validates fully
+
+  // No session → redirect to login
+  const loginUrl = new URL('/login', request.url);
+  return NextResponse.redirect(loginUrl);
+}
+
 // ── Middleware entry point ────────────────────────────────────
 
 // I dev: skippa Clerk helt — ingen handshake, ingen redirect
 const middleware = process.env.NODE_ENV === 'development'
   ? async (request: NextRequest) => {
+      const guestRedirect = handleGuestSessionGate(request);
+      if (guestRedirect) return guestRedirect;
       return await handleLocale(request);
     }
   : clerkMiddleware(async (auth, request) => {
+      const guestRedirect = handleGuestSessionGate(request);
+      if (guestRedirect) return guestRedirect;
+
       if (!isPublicRoute(request)) {
         await auth.protect();
       }
@@ -213,6 +251,9 @@ export const config = {
     '/p/(.*)',
     '/check-in(.*)',
     '/check-out(.*)',
+    '/login(.*)',
+    '/no-booking(.*)',
+    '/portal/(.*)',
     // Locale-prefixed guest routes: /{locale}/p/...
     '/:path((?:[a-z]{2})/p/.*)',
   ],

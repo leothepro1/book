@@ -106,7 +106,7 @@
 .sektion73-field{
   display:flex;
   flex-direction:column;
-  gap: 7px;
+  gap: 0;
   min-width: 0;
 }
 :root{
@@ -159,13 +159,39 @@
   color: #616161;
   opacity: 1;
 }
+.sektion73-static-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text, #121212);
+  font-family: var(--font-body, ui-sans-serif);
+  margin-bottom: 7px;
+}
+
+.sektion73-input {
+  height: 44px;
+  padding: 0 14px;
+  font-size: 16px;
+  font-weight: 400;
+  font-family: var(--font-body, ui-sans-serif);
+  line-height: 1em;
+  color: var(--field-text, #121212);
+  background: var(--field-bg, #fff);
+  border: 1px solid var(--border-color, #D7DADE);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .sektion73-input:hover {
     border-color: var(--border-color, #D7DADE);
 }
 
-.sektion73-input:focus{
-  border: 1px solid var(--button-bg);
-  outline: 1px solid var(--button-bg);
+.sektion73-input:focus {
+  border-color: var(--accent, var(--button-bg));
+  outline: none;
 }
 
 .sektion73-help {

@@ -46,7 +46,7 @@ const ctaButton: React.CSSProperties = {
 };
 
 export default function CheckInConfirmed(props: CheckInConfirmedProps) {
-  const { guestName, hotelName, roomNumber, checkIn, checkOut, portalUrl, branding } = props;
+  const { guestName, hotelName, roomNumber, checkIn, checkOut, loginUrl, branding } = props;
   const btnStyle = { ...ctaButton, ...(branding?.accentColor ? { backgroundColor: branding.accentColor } : {}) };
   return (
     <EmailLayout hotelName={hotelName} branding={branding}>
@@ -66,8 +66,8 @@ export default function CheckInConfirmed(props: CheckInConfirmedProps) {
           <span style={detailLabel}>Utcheckning</span> {checkOut}
         </Text>
       </Section>
-      <Link href={portalUrl} style={btnStyle} data-branding="cta">
-        Öppna din portal
+      <Link href={loginUrl} style={btnStyle} data-branding="cta">
+        Logga in på din portal
       </Link>
     </EmailLayout>
   );

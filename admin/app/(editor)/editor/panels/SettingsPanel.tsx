@@ -311,9 +311,18 @@ function PageSettingsView({
         const fontOpt = FONT_OPTIONS.find((f) => f.key === val);
         cssUpdates[fontVar] = fontOpt?.family ?? "ui-sans-serif";
       }
-      // fieldStyle → --field-bg
+      // fieldStyle → --field-bg + --field-text
       if (key === "fieldStyle" && typeof val === "string") {
         cssUpdates["--field-bg"] = val === "transparent" ? "transparent" : "#fff";
+        const textColor = (values.textColor as string) || "#121212";
+        cssUpdates["--field-text"] = val === "transparent" ? textColor : "#121212";
+      }
+      // textColor change should also update --field-text when fieldStyle is transparent
+      if (key === "textColor" && typeof val === "string") {
+        const style = (values.fieldStyle as string) || "white";
+        if (style === "transparent") {
+          cssUpdates["--field-text"] = val;
+        }
       }
     }
 
@@ -379,7 +388,7 @@ function PageSettingsView({
       <div className="editor-panel__body">
         <div className="sf-form">
           {groupedFields.map(({ group, fields: groupFields }, i) => (
-            <div key={group} style={{ ...(i > 0 ? { borderTop: "1px solid var(--admin-border)", paddingTop: 18 } : {}), display: "flex", flexDirection: "column", gap: 12 }}>
+            <div key={group} style={{ ...(i > 0 ? { borderTop: "1px solid var(--admin-border)", paddingTop: 18 } : {}), display: "flex", flexDirection: "column", gap: 18 }}>
               {group && <div className="sf-group-label">{group}</div>}
               {groupFields.map((field) => {
                 if (field.visibleWhen && values[field.visibleWhen.key] !== field.visibleWhen.value) return null;
@@ -457,7 +466,7 @@ function WalletCardSettingsFields({ state, set }: { state: WalletState; set: (pa
   return (
     <div className="sf-form">
       {/* ── Bakgrund ── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
         <div className="sf-group-label">Bakgrund</div>
         <div>
           <span className="cs-section-label" style={{ marginBottom: 7, display: "block" }}>Bild</span>
@@ -503,7 +512,7 @@ function WalletCardSettingsFields({ state, set }: { state: WalletState; set: (pa
       </div>
 
       {/* ── Logotyp & text ── */}
-      <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 18, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 18, display: "flex", flexDirection: "column", gap: 18 }}>
         <div className="sf-group-label">Logotyp & text</div>
         <div>
           <span className="cs-section-label" style={{ marginBottom: 7, display: "block" }}>Logotyp</span>

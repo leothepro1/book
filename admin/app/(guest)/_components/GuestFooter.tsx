@@ -53,7 +53,8 @@ function isSpecialLink(url: string): boolean {
 function resolveMenuItemHref(url: string, base: string): string {
   if (isSpecialLink(url)) return url;
   if (!isInternalPath(url)) return url;
-  if (url === "/") return base;
+  // Session portal: / → /portal/home (base path has no index page)
+  if (url === "/") return base === "/portal" ? "/portal/home" : base;
   return `${base}${url}`;
 }
 
@@ -98,8 +99,9 @@ export default function GuestFooter({ config }: { config: TenantConfig }) {
   const pageLayout = useMemo(() => getPageLayout(pageId), [pageId]);
 
   const isPreviewMode = pathname.startsWith("/preview");
+  const isSessionPortal = pathname.startsWith("/portal");
   const token = isPreviewMode ? "preview" : (params?.token ?? "");
-  const base = token === "preview" ? "/preview" : token ? `/p/${token}` : "/p";
+  const base = isSessionPortal ? "/portal" : token === "preview" ? "/preview" : token ? `/p/${token}` : "/p";
 
   const ftr = { ...PAGE_FOOTER_DEFAULTS, ...getPageFooter(config, pageId) };
 

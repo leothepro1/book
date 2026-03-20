@@ -23,7 +23,8 @@ export type EmailEventType =
   | "CHECK_IN_CONFIRMED"
   | "CHECK_OUT_CONFIRMED"
   | "MAGIC_LINK"
-  | "SUPPORT_REPLY";
+  | "SUPPORT_REPLY"
+  | "GUEST_OTP";
 
 export interface EmailEventDefinition {
   type: EmailEventType;
@@ -48,7 +49,7 @@ export const EMAIL_EVENT_REGISTRY: readonly EmailEventDefinition[] = [
       "checkOut",
       "roomType",
       "bookingRef",
-      "portalUrl",
+      "loginUrl",
     ],
     defaultSubject: "Din bokning på {{hotelName}} är bekräftad",
     defaultPreviewText:
@@ -77,7 +78,7 @@ export const EMAIL_EVENT_REGISTRY: readonly EmailEventDefinition[] = [
       "roomNumber",
       "checkIn",
       "checkOut",
-      "portalUrl",
+      "loginUrl",
     ],
     defaultSubject: "Incheckning bekräftad – välkommen till {{hotelName}}",
     defaultPreviewText: "Ditt rum är redo, {{guestName}}.",
@@ -105,6 +106,14 @@ export const EMAIL_EVENT_REGISTRY: readonly EmailEventDefinition[] = [
     variables: ["guestName", "hotelName", "supportMessage", "ticketUrl"],
     defaultSubject: "Svar från {{hotelName}}",
     defaultPreviewText: "Hotellet har svarat på ditt ärende.",
+  },
+  {
+    type: "GUEST_OTP",
+    label: "Inloggningskod",
+    description: "Skickas när en gäst begär en OTP-kod för att logga in på portalen.",
+    variables: ["guestName", "otpCode", "hotelName", "expiresInMinutes"],
+    defaultSubject: "Din inloggningskod — {{hotelName}}",
+    defaultPreviewText: "Din kod är giltig i {{expiresInMinutes}} minuter.",
   },
 ] as const;
 

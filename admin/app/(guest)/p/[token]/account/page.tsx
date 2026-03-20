@@ -21,7 +21,7 @@ export default async function Page(props: {
   const token = params?.token;
   const lang = (searchParams?.lang === "en" ? "en" : "sv") as Lang;
 
-  console.log("[ACCOUNT PAGE] Token received:", token);
+  // Real tokens are redirected by the parent layout before this page renders.
   // PREVIEW or TEST MODE: Use global mock booking
   if (token === "preview" || token === "test") {
     let tenant = null;

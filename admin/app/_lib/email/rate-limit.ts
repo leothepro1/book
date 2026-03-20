@@ -28,6 +28,7 @@ const RATE_LIMITS: Record<EmailEventType, RateLimitConfig> = {
   CHECK_IN_CONFIRMED:  { maxCount: 1,  windowMs: 24 * 60 * 60 * 1000 },
   CHECK_OUT_CONFIRMED: { maxCount: 1,  windowMs: 24 * 60 * 60 * 1000 },
   SUPPORT_REPLY:       { maxCount: 20, windowMs: 24 * 60 * 60 * 1000 },
+  GUEST_OTP:           { maxCount: 3,  windowMs: 15 * 60 * 1000 },
 };
 
 /**

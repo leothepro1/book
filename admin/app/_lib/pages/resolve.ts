@@ -19,6 +19,7 @@ const SEGMENT_TO_PAGE: Record<string, PageId> = {
   stays: "stays",
   account: "account",
   "check-in": "check-in",
+  login: "login",
   "help-center": "help-center",
   support: "support",
 };

@@ -32,6 +32,7 @@ export type PageId =
   | "stays"
   | "account"
   | "check-in"
+  | "login"
   | "help-center"
   | "support";
 

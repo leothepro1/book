@@ -48,6 +48,7 @@ export default async function Page() {
     "--font-body": fontStack((ps.bodyFont as string) || "inter"),
     "--font-button": fontStack((ps.buttonFont as string) || "inter"),
     "--field-bg": (ps.fieldStyle as string) === "transparent" ? "transparent" : "#fff",
+    "--field-text": (ps.fieldStyle as string) === "transparent" ? (ps.textColor as string) || "#121212" : "#121212",
   };
 
   // Preload wallet card images

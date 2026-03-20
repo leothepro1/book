@@ -2,6 +2,7 @@ import { markCheckedIn } from "./actions";
 
 export const dynamic = "force-dynamic";
 
+// Real tokens are redirected by the parent layout before this page renders.
 export default async function Page(props: { params: Promise<{ token?: string }> }) {
   const params = await props.params;
   const token = params?.token;

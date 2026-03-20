@@ -5,6 +5,7 @@ import AccountPage from "../../../(guest)/p/[token]/account/page";
 import HelpCenterPage from "../../../(guest)/p/[token]/help-center/page";
 import SupportPage from "../../../(guest)/p/[token]/support/page";
 import CheckInPage from "../../../(guest)/check-in/page";
+import LoginPage from "../../../(guest)/login/page";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ const PREVIEW_TOKEN = "preview";
 
 export default async function PreviewPage(props: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await props.params;
   const previewParams = Promise.resolve({ token: PREVIEW_TOKEN });
@@ -31,6 +33,8 @@ export default async function PreviewPage(props: {
       return <SupportPage />;
     case "check-in":
       return <CheckInPage />;
+    case "login":
+      return <LoginPage searchParams={props.searchParams} />;
     default:
       return notFound();
   }

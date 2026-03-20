@@ -14,7 +14,7 @@ export {
 
 export { resendClient } from "./client";
 
-export { sendEmailEvent } from "./send";
+export { sendEmailEvent, type EmailSendResult } from "./send";
 
 export type {
   EmailTemplateOverride,

@@ -213,35 +213,29 @@ export default function CheckInClient({ onLookup, onCommit, activeCards, checkIn
 
       <div className="sektion73-grid-2">
         <div className="sektion73-field">
-          <div className="sektion73-float">
-            <input
-              id="sek-bookingId"
-              className="sektion73-input"
-              value={bookingId}
-              onChange={(e) => setBookingId(e.target.value)}
-              placeholder=" "
-              autoComplete="off"
-            />
-            <label className="sektion73-float__label" htmlFor="sek-bookingId">
-              Bokningsnummer
-            </label>
-          </div>
+          <label className="sektion73-static-label" htmlFor="sek-bookingId">
+            Bokningsnummer
+          </label>
+          <input
+            id="sek-bookingId"
+            className="sektion73-input"
+            value={bookingId}
+            onChange={(e) => setBookingId(e.target.value)}
+            autoComplete="off"
+          />
         </div>
 
         <div className="sektion73-field">
-          <div className="sektion73-float">
-            <input
-              id="sek-lastName"
-              className="sektion73-input"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              placeholder=" "
-              autoComplete="family-name"
-            />
-            <label className="sektion73-float__label" htmlFor="sek-lastName">
-              Efternamn
-            </label>
-          </div>
+          <label className="sektion73-static-label" htmlFor="sek-lastName">
+            Efternamn
+          </label>
+          <input
+            id="sek-lastName"
+            className="sektion73-input"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            autoComplete="family-name"
+          />
         </div>
       </div>
 

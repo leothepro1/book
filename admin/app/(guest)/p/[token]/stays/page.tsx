@@ -32,6 +32,7 @@ export default async function Page(props: {
   const isPreview = token === "preview" || token === "test";
 
   // ── Preview / test mode ────────────────────────────────────
+  // Real tokens are redirected by the parent layout before this page renders.
   if (isPreview) {
     let tenant = null;
 

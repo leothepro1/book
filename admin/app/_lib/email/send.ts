@@ -24,6 +24,14 @@ import type { ResolvedEmailTemplate } from "./types";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
+// ── Result type ─────────────────────────────────────────────────
+
+export type EmailSendResult =
+  | { status: "sent" }
+  | { status: "rate_limited" }
+  | { status: "skipped_unsubscribed" }
+  | { status: "failed"; error: unknown };
+
 // ── getResolvedTemplate ─────────────────────────────────────────
 
 /**
@@ -93,6 +101,8 @@ async function getResolvedTemplate(
  *   5. Send via Resend with List-Unsubscribe headers
  *   6. Update log entry (SENT or FAILED)
  *   7. Record send for rate limiting
+ *
+ * Returns an EmailSendResult indicating what happened.
  */
 export async function sendEmailEvent(
   tenantId: string,
@@ -100,13 +110,13 @@ export async function sendEmailEvent(
   to: string,
   variables: Record<string, string>,
   options?: { testMode?: boolean },
-): Promise<void> {
+): Promise<EmailSendResult> {
   // 1. Check unsubscribe — must be first, before any template work
   const unsubscribed = await prisma.emailUnsubscribe.findUnique({
     where: { tenantId_email: { tenantId, email: to } },
     select: { id: true },
   });
-  if (unsubscribed) return;
+  if (unsubscribed) return { status: "skipped_unsubscribed" };
 
   // 2. Check rate limit — skip silently if exceeded
   const allowed = await checkEmailRateLimit(tenantId, to, eventType);
@@ -114,7 +124,7 @@ export async function sendEmailEvent(
     console.warn(
       `[email] Rate limit reached: ${eventType} to ${to} for tenant ${tenantId}`,
     );
-    return;
+    return { status: "rate_limited" };
   }
 
   // 3. Create send log entry
@@ -164,7 +174,7 @@ export async function sendEmailEvent(
       });
 
       await recordEmailSend(tenantId, to, eventType);
-      return;
+      return { status: "sent" };
     }
 
     const { data, error } = await resendClient.emails.send({
@@ -197,6 +207,8 @@ export async function sendEmailEvent(
 
     // 7. Record send for rate limiting
     await recordEmailSend(tenantId, to, eventType);
+
+    return { status: "sent" };
   } catch (err) {
     // Ensure log is updated even on unexpected errors
     if (err instanceof Error && !err.message.startsWith("[email] Resend")) {
@@ -205,6 +217,6 @@ export async function sendEmailEvent(
         data: { status: "FAILED", error: err.message },
       }).catch(() => {}); // don't mask the original error
     }
-    throw err;
+    return { status: "failed", error: err };
   }
 }

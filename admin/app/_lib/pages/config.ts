@@ -494,6 +494,7 @@ const PAGE_TO_PREVIEW_ROUTE: Record<PageId, string> = {
   stays: "/p/[token]/stays",
   account: "/p/[token]/account",
   "check-in": "/check-in",
+  login: "/login",
   "help-center": "/p/[token]/help-center",
   support: "/p/[token]/support",
 };
