@@ -1,0 +1,70 @@
+/* ═══════════════════════════════════════════════════════════════
+   Carousel (s-carousel)
+   Horizontal scrolling carousel with section heading.
+   ═══════════════════════════════════════════════════════════════ */
+
+.s-carousel {
+  width: 100%;
+}
+
+/* ── Section heading ── */
+
+.s-carousel__heading {
+  font-family: var(--font-heading, inherit);
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+/* ── Scroll track ── */
+
+.s-carousel__track {
+  display: flex;
+  gap: clamp(0.75rem, 2vw, 1rem);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.s-carousel__track::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Item ── */
+
+.s-carousel__item {
+  flex: 0 0 clamp(140px, 38vw, 220px);
+  scroll-snap-align: start;
+}
+
+/* ── Image wrapper — aspect ratio from section settings ── */
+
+.s-carousel__image {
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-md, 8px);
+  background: color-mix(in srgb, var(--text) 6%, var(--background));
+}
+
+.s-carousel__image [data-element-id],
+.s-carousel__image [data-element-id] a,
+.s-carousel__image [data-element-id] div {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+  min-height: 0 !important;
+}
+
+.s-carousel__image img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Label below image ── */
+
+.s-carousel__label {
+  margin-top: clamp(0.375rem, 1vw, 0.5rem);
+}

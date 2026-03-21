@@ -1,0 +1,72 @@
+/* ═══════════════════════════════════════════════════════════════
+   Collection Grid v2 (s-cgv2)
+   2-column grid with repeating 2-1-2 pattern.
+   ═══════════════════════════════════════════════════════════════ */
+
+.s-cgv2 {
+  width: 100%;
+}
+
+.s-cgv2__heading {
+  font-family: var(--font-heading, inherit);
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+/* ── Grid ── */
+
+.s-cgv2__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(0.5rem, 1.5vw, 0.75rem);
+}
+
+/* ── Grid item ── */
+
+.s-cgv2__item {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md, 8px);
+  background: color-mix(in srgb, var(--text) 6%, var(--background));
+}
+
+.s-cgv2__item--full {
+  grid-column: 1 / -1;
+}
+
+/* ── Image ── */
+
+.s-cgv2__image {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.s-cgv2__image [data-element-id],
+.s-cgv2__image [data-element-id] a,
+.s-cgv2__image [data-element-id] div {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+  min-height: 0 !important;
+}
+
+.s-cgv2__image img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Button — overlaid, bottom-left ── */
+
+.s-cgv2__label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  padding: var(--space-3, 12px);
+  --button-padding: 0.4rem 0.9rem;
+  --font-size-button: var(--font-sm, 13px);
+}

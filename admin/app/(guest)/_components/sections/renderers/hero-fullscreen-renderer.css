@@ -1,0 +1,65 @@
+/* ═══════════════════════════════════════════════════════════════
+   Hero Fullscreen (s-hero-fs)
+   Single full-bleed hero with overlaid content in lower portion.
+   ═══════════════════════════════════════════════════════════════ */
+
+.s-hero-fs {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-xl, 16px);
+}
+
+/* ── Background image layer ── */
+
+.s-hero-fs__bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.s-hero-fs__bg [data-element-id],
+.s-hero-fs__bg [data-element-id] a,
+.s-hero-fs__bg [data-element-id] div {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+  min-height: 0 !important;
+}
+
+.s-hero-fs__bg img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Content layer ── */
+
+.s-hero-fs__content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100%;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  gap: clamp(0.75rem, 2vw, 1.25rem);
+}
+
+.s-hero-fs__content > * {
+  max-width: 640px;
+}
+
+/* Compact button */
+.s-hero-fs__content {
+  --button-padding: 0.55rem 1.3rem;
+  --font-size-button: 0.875rem;
+}
+
+/* Full-width buttons must stretch */
+.s-hero-fs__content > [data-element-id] {
+  width: 100%;
+}

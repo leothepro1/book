@@ -334,7 +334,7 @@ const cardPreset: SectionPreset = {
 export const sliderSection: SectionDefinition = {
   id: "slider",
   version: "1.0.0",
-  name: "Slider",
+  name: "Snabblänkar",
   description: "Horisontell slider — perfekt för snabblänkar och navigation.",
   category: "navigation",
   tags: ["slider", "horizontal", "scroll", "knappar", "snabblänkar"],
@@ -368,7 +368,7 @@ export const sliderSection: SectionDefinition = {
     settings: {},
     presetSettings: {},
     blocks: [],
-    title: "Slider",
+    title: "Snabblänkar",
   }),
 };
 

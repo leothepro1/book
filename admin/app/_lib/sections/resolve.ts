@@ -126,6 +126,7 @@ function resolveSlot(
   const resolved: ResolvedElement[] = [];
 
   for (const el of sorted) {
+    if ((el.isActive ?? true) === false) continue;
     if (!isScheduleVisible(el)) continue;
     const r = resolveElement(el);
     if (r) resolved.push(r);
@@ -253,6 +254,7 @@ function resolveLooseElementSection(
       const sorted = [...elements].sort((a, b) => a.sortOrder - b.sortOrder);
       const resolvedElements: ResolvedElement[] = [];
       for (const el of sorted) {
+        if ((el.isActive ?? true) === false) continue;
         if (!isScheduleVisible(el)) continue;
         const r = resolveElement(el);
         if (r) resolvedElements.push(r);

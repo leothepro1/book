@@ -1,0 +1,39 @@
+/* ═══════════════════════════════════════════════════════════════
+   Text Blocks (s-tb)
+   Card container with centered text blocks, CSS dividers.
+   ═══════════════════════════════════════════════════════════════ */
+
+.s-tb {
+  width: 100%;
+}
+
+/* ── Card container ── */
+
+.s-tb__card {
+  background: var(--background);
+  border-radius: var(--radius-lg, 12px);
+  padding: var(--space-6, 24px);
+}
+
+/* ── Block ── */
+
+.s-tb__block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-3, 12px);
+}
+
+/* Divider between blocks — CSS border, not an element */
+.s-tb__block--divider {
+  border-top: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  margin-top: var(--space-6, 24px);
+  padding-top: var(--space-6, 24px);
+}
+
+/* ── Body text — reduced opacity ── */
+
+.s-tb__block p {
+  color: color-mix(in srgb, var(--text) 70%, transparent);
+}

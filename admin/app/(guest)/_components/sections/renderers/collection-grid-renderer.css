@@ -1,0 +1,75 @@
+/* ═══════════════════════════════════════════════════════════════
+   Collection Grid (s-cg)
+   2-column grid with image cards and overlaid labels.
+   ═══════════════════════════════════════════════════════════════ */
+
+.s-cg {
+  width: 100%;
+}
+
+/* ── Section heading ── */
+
+.s-cg__heading {
+  font-family: var(--font-heading, inherit);
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+/* ── Grid ── */
+
+.s-cg__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(0.5rem, 1.5vw, 0.75rem);
+}
+
+/* ── Grid item ── */
+
+.s-cg__item {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md, 8px);
+  background: color-mix(in srgb, var(--text) 6%, var(--background));
+}
+
+/* First item spans full width when odd count */
+.s-cg__item--full {
+  grid-column: 1 / -1;
+}
+
+/* ── Image — fills entire card ── */
+
+.s-cg__image {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.s-cg__image [data-element-id],
+.s-cg__image [data-element-id] a,
+.s-cg__image [data-element-id] div {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+  min-height: 0 !important;
+}
+
+.s-cg__image img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Button — overlaid, bottom-left ── */
+
+.s-cg__label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  padding: var(--space-3, 12px);
+  --button-padding: 0.4rem 0.9rem;
+  --font-size-button: var(--font-sm, 13px);
+}

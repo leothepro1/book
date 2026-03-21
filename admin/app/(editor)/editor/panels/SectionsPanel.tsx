@@ -48,11 +48,10 @@ import {
   PickerModal,
   buildSectionPickerData,
   buildElementPickerData,
-  getSectionPresets,
-  getElementPresets,
   createSectionFromPicker,
   createElementFromPicker,
   STANDALONE_PICKER_PREFIX,
+  SECTION_PICKER_TABS,
 } from "./PickerModal";
 import type { SlotDefinition, ElementType } from "@/app/_lib/sections/types";
 import {
@@ -453,13 +452,13 @@ function SectionListPane() {
   elementPickerTargetRef.current = elementPickerTarget;
 
   const handlePickElementForBlock = useCallback(
-    (elementType: string, presetKey?: string) => {
+    (elementType: string) => {
       const target = elementPickerTargetRef.current;
       if (!target) return;
       const { sectionId, blockId } = target;
 
       const updated = insertElementIntoBlock(
-        sectionsRef.current, sectionId, blockId, elementType as ElementType, presetKey
+        sectionsRef.current, sectionId, blockId, elementType as ElementType
       );
       if (!updated) return;
       saveSections(updated);
@@ -481,18 +480,18 @@ function SectionListPane() {
   pickerInsertIndexRef.current = pickerInsertIndex;
 
   const handlePickSection = useCallback(
-    (definitionId: string, presetKey?: string) => {
+    (definitionId: string) => {
       let newSection: SectionInstance | null;
 
       // Standalone element: id is "element:{elementType}"
       if (definitionId.startsWith(STANDALONE_PICKER_PREFIX)) {
         const elementType = definitionId.slice(STANDALONE_PICKER_PREFIX.length) as ElementType;
-        newSection = createStandaloneSection(elementType, presetKey);
+        newSection = createStandaloneSection(elementType);
       } else {
         const cfg = configRef.current;
         newSection = createSectionFromPicker(
           definitionId,
-          presetKey,
+          undefined,
           cfg?.defaultColorSchemeId ?? undefined,
         );
       }
@@ -534,8 +533,8 @@ function SectionListPane() {
   }, [registryReady, testSlotDef]);
 
   const handlePickElement = useCallback(
-    (elementType: string, presetKey?: string) => {
-      const el = createElementFromPicker(elementType as ElementType, presetKey);
+    (elementType: string) => {
+      const el = createElementFromPicker(elementType as ElementType);
       if (!el) return;
 
       const cur = sectionsRef.current;
@@ -754,7 +753,7 @@ function SectionListPane() {
               onClick={() => openDetail({ scope: "header", sectionId: "__header" })}
             >
               <div className="sp-row__handle">
-                <EditorIcon name="web_asset" size={16} />
+                <EditorIcon name="page_header" size={16} />
               </div>
               <span className="sp-row__name">Sidhuvud</span>
             </div>
@@ -1028,12 +1027,8 @@ function SectionListPane() {
           searchPlaceholder="Sök..."
           items={pickerData.items}
           categories={pickerData.categories}
-          getPresets={(id) =>
-            id.startsWith(STANDALONE_PICKER_PREFIX)
-              ? getElementPresets(id.slice(STANDALONE_PICKER_PREFIX.length))
-              : getSectionPresets(id)
-          }
-          presetLabel=""
+          tabs={SECTION_PICKER_TABS}
+          defaultTab="sections"
           onSelect={handlePickSection}
           onClose={() => setPickerInsertIndex(null)}
         />
@@ -1046,8 +1041,6 @@ function SectionListPane() {
           searchPlaceholder="Sök efter element..."
           items={elementPickerData.items}
           categories={elementPickerData.categories}
-          getPresets={getElementPresets}
-          presetLabel="Element"
           onSelect={handlePickElement}
           onClose={() => setElementPickerOpen(false)}
         />
@@ -1060,8 +1053,6 @@ function SectionListPane() {
           searchPlaceholder="Sök efter element..."
           items={blockElementPickerData.items}
           categories={blockElementPickerData.categories}
-          getPresets={getElementPresets}
-          presetLabel="Element"
           onSelect={handlePickElementForBlock}
           onClose={() => setElementPickerTarget(null)}
         />
@@ -1382,6 +1373,24 @@ function DeleteSectionModal({
   );
 }
 
+// ─── Section tree icon map ──────────────────────────────────
+
+const SECTION_TREE_ICONS: Record<string, string> = {
+  "hero-fullscreen": "page_menu_ios",
+  "hero-bottom-aligned": "page_menu_ios",
+  "product-hero": "page_menu_ios",
+  "product-hero-split": "page_menu_ios",
+  "fullscreen-slideshow": "page_menu_ios",
+  "slideshow-card": "page_menu_ios",
+  "carousel": "transition_slide",
+  "slider": "transition_slide",
+  "text-blocks": "article",
+  "accordion": "view_headline",
+  "collection-grid": "table_rows",
+  "collection-grid-v2": "table_rows",
+  "tabs": "tab",
+};
+
 // ─── Sortable Section Row ───────────────────────────────────
 
 function SortableSectionRow({
@@ -1539,6 +1548,9 @@ const SectionRow = React.memo(function SectionRow({
       return "widgets";
     }
     if (section.definitionId === "bokningar") return "confirmation_number";
+    // Per-section icon overrides
+    const treeIcon = SECTION_TREE_ICONS[section.definitionId];
+    if (treeIcon) return treeIcon;
     const def = getSectionDefinition(section.definitionId);
     const bt = def?.presets[0]?.blockTypes[0];
     return bt?.icon || "grid_view";
@@ -1672,7 +1684,7 @@ function FooterSectionTree({
       <div className="sp-template-label">Sidfot</div>
       <div className="sp-list sp-list--header">
         <TreeRow
-          icon="dock_to_bottom"
+          icon="page_footer"
           name="Sidfot"
           isActive={footerActive}
           indent={0}
@@ -1683,45 +1695,27 @@ function FooterSectionTree({
           onClick={() => openDetail({ scope: "footer", sectionId: "__footer" })}
         />
 
-        {footerOpen && isApp && (
-          <>
-            <TreeRow
-              icon="folder"
-              name="Grupp"
-              isActive={true}
-              indent={1}
-              noDragHandle
-              collapsed={!footerBlockOpen}
-              onToggleCollapse={() => toggleCollapse("__footer_block")}
-              onToggleVisibility={() => {}}
-              onClick={() => openDetail({ scope: "footer-classic-block", sectionId: "__footer", blockId: "top" })}
-            />
-            {footerBlockOpen && menuEl && (
-              <TreeRow
-                icon={ELEMENT_ICON_NAMES[menuEl.type] ?? "widgets"}
-                name={getElementName(menuEl.type)}
-                isActive={menuEl.isActive !== false}
-                indent={2}
-                noDragHandle
-                onToggleVisibility={() => {
-                  const updated = groups.top.map((el) =>
-                    el.id === menuEl.id ? { ...el, isActive: !(el.isActive !== false) } : el,
-                  );
-                  saveFooter({ classicGroups: { ...groups, top: updated } });
-                }}
-                onClick={() => openDetail({ scope: "footer-classic-element", sectionId: "__footer", blockId: "top", elementId: menuEl.id })}
-              />
-            )}
-          </>
+        {footerOpen && isApp && menuEl && (
+          <TreeRow
+            icon={ELEMENT_ICON_NAMES[menuEl.type] ?? "widgets"}
+            name={getElementName(menuEl.type)}
+            isActive={menuEl.isActive !== false}
+            indent={1}
+            noDragHandle
+            onToggleVisibility={() => {
+              const updated = groups.top.map((el) =>
+                el.id === menuEl.id ? { ...el, isActive: !(el.isActive !== false) } : el,
+              );
+              saveFooter({ classicGroups: { ...groups, top: updated } });
+            }}
+            onClick={() => openDetail({ scope: "footer-classic-element", sectionId: "__footer", blockId: "top", elementId: menuEl.id })}
+          />
         )}
 
         {footerOpen && !isApp && (
-          <FooterClassicTree
-            ftr={ftr}
+          <FooterElementTree
             groups={groups}
             saveFooter={saveFooter}
-            collapsedIds={collapsedIds}
-            toggleCollapse={toggleCollapse}
             openDetail={openDetail}
           />
         )}
@@ -1730,7 +1724,147 @@ function FooterSectionTree({
   );
 }
 
-// ─── Footer Classic Tree ─────────────────────────────────────
+// ─── Footer Element Tree (flat, no groups) ──────────────────
+
+function FooterElementTree({
+  groups,
+  saveFooter,
+  openDetail,
+}: {
+  groups: { top: ElementInstance[]; bottom: ElementInstance[] };
+  saveFooter: (patch: Record<string, unknown>) => void;
+  openDetail: (target: import("../EditorContext").DetailTarget) => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  // Merge top + bottom into a single flat list
+  const allElements = [
+    ...groups.top.map((el) => ({ ...el, _group: "top" as const })),
+    ...groups.bottom.map((el) => ({ ...el, _group: "bottom" as const })),
+  ].sort((a, b) => {
+    // top group first, then bottom, preserving sortOrder within each
+    if (a._group !== b._group) return a._group === "top" ? -1 : 1;
+    return a.sortOrder - b.sortOrder;
+  });
+
+  const allIds = allElements.map((el) => el.id);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIdx = allElements.findIndex((el) => el.id === active.id);
+    const newIdx = allElements.findIndex((el) => el.id === over.id);
+    if (oldIdx === -1 || newIdx === -1) return;
+    const reordered = arrayMove(allElements, oldIdx, newIdx);
+    // Split back into top/bottom preserving new order
+    const newTop: ElementInstance[] = [];
+    const newBottom: ElementInstance[] = [];
+    reordered.forEach((el, i) => {
+      const clean = { ...el, sortOrder: i };
+      delete (clean as any)._group;
+      if (el._group === "top") newTop.push(clean);
+      else newBottom.push(clean);
+    });
+    saveFooter({ classicGroups: { top: newTop, bottom: newBottom } });
+  };
+
+  const toggleVisibility = (elementId: string) => {
+    const el = allElements.find((e) => e.id === elementId);
+    if (!el) return;
+    const groupKey = el._group;
+    const updated = groups[groupKey].map((e) =>
+      e.id === elementId ? { ...e, isActive: e.isActive === false } : e,
+    );
+    saveFooter({ classicGroups: { ...groups, [groupKey]: updated } });
+  };
+
+  const deleteElement = (elementId: string) => {
+    const el = allElements.find((e) => e.id === elementId);
+    if (!el) return;
+    const groupKey = el._group;
+    const updated = groups[groupKey].filter((e) => e.id !== elementId);
+    saveFooter({ classicGroups: { ...groups, [groupKey]: updated } });
+  };
+
+  const addElement = (elementType: string) => {
+    // Menu elements go to top group (rendered as accordion items)
+    // Dividers go to bottom group (rendered as separators)
+    const groupKey = elementType === "menu" ? "top" : "bottom";
+    const current = groups[groupKey];
+    const maxSort = current.reduce((max, el) => Math.max(max, el.sortOrder), -1);
+    const newEl = createElementInstance(elementType as ElementType, {}, maxSort + 1);
+    saveFooter({ classicGroups: { ...groups, [groupKey]: [...current, newEl] } });
+    setPickerOpen(false);
+    openDetail({ scope: "footer-classic-element", sectionId: "__footer", blockId: groupKey, elementId: newEl.id });
+  };
+
+  // Picker data — only menu and divider allowed in classic footer
+  const footerSlotDef: SlotDefinition = {
+    key: "__footer_slot",
+    name: "Element",
+    description: "",
+    allowedElements: ["menu", "divider"] as ElementType[],
+    minElements: 0,
+    maxElements: -1,
+    defaultElements: [],
+  };
+  const { items: pickerItems, categories: pickerCategories } = buildElementPickerData(footerSlotDef);
+
+  return (
+    <>
+      <AddButton label="Lägg till" indent={1} onClick={() => setPickerOpen(true)} />
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={(e) => setActiveDragId(e.active.id as string)}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveDragId(null)}
+      >
+        <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
+          {allElements.map((el) => (
+            <SortableTreeRow
+              key={el.id}
+              id={el.id}
+              icon={ELEMENT_ICON_NAMES[el.type] ?? "widgets"}
+              name={getElementName(el.type)}
+              preview={getElementPreview(el)}
+              isActive={el.isActive !== false}
+              indent={1}
+              onToggleVisibility={() => toggleVisibility(el.id)}
+              onDelete={() => deleteElement(el.id)}
+              onClick={() => openDetail({ scope: "footer-classic-element", sectionId: "__footer", blockId: el._group, elementId: el.id })}
+            />
+          ))}
+        </SortableContext>
+        <DragOverlay dropAnimation={null}>
+          {activeDragId ? (() => {
+            const el = allElements.find((e) => e.id === activeDragId);
+            if (!el) return null;
+            return <TreeRow icon={ELEMENT_ICON_NAMES[el.type] ?? "widgets"} name={getElementName(el.type)} isActive={true} indent={1} isOverlay noDragHandle />;
+          })() : null}
+        </DragOverlay>
+      </DndContext>
+
+      {pickerOpen && (
+        <PickerModal
+          title="Lägg till element"
+          items={pickerItems}
+          categories={pickerCategories}
+          onSelect={(id) => addElement(id)}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── Footer Classic Tree (legacy — kept for reference) ───────
 
 function createElementId(): string {
   return `elm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

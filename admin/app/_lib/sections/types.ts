@@ -489,8 +489,9 @@ export type SectionDefinitionId = string;
  */
 export type SectionCategory =
   | "hero"
-  | "navigation"
+  | "gallery"
   | "content"
+  | "navigation"
   | "media"
   | "utility";
 

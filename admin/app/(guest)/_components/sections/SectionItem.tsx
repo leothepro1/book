@@ -29,6 +29,16 @@ import { TabsUnderlineRenderer, TabsPillRenderer } from "./renderers/TabsRendere
 import { AccordionDefaultRenderer, AccordionCardRenderer } from "./renderers/AccordionRenderer";
 import { SliderButtonRowRenderer, SliderCardRenderer } from "./renderers/SliderRenderer";
 import { BokningarDefaultRenderer } from "./renderers/BokningarRenderer";
+import { FullscreenSlideshowRenderer } from "./renderers/FullscreenSlideshowRenderer";
+import { SlideshowCardRenderer } from "./renderers/SlideshowCardRenderer";
+import { HeroFullscreenRenderer } from "./renderers/HeroFullscreenRenderer";
+import { HeroBottomAlignedRenderer } from "./renderers/HeroBottomAlignedRenderer";
+import { CarouselRenderer } from "./renderers/CarouselRenderer";
+import { CollectionGridRenderer } from "./renderers/CollectionGridRenderer";
+import { CollectionGridV2Renderer } from "./renderers/CollectionGridV2Renderer";
+import { ProductHeroRenderer } from "./renderers/ProductHeroRenderer";
+import { ProductHeroSplitRenderer } from "./renderers/ProductHeroSplitRenderer";
+import { TextBlocksRenderer } from "./renderers/TextBlocksRenderer";
 
 const RENDERER_MAP: Record<string, React.ComponentType<SectionRendererProps>> = {
   "tabs/underline": TabsUnderlineRenderer,
@@ -38,6 +48,16 @@ const RENDERER_MAP: Record<string, React.ComponentType<SectionRendererProps>> = 
   "slider/button-row": SliderButtonRowRenderer,
   "slider/card": SliderCardRenderer,
   "bokningar/default": BokningarDefaultRenderer,
+  "fullscreen-slideshow/default": FullscreenSlideshowRenderer,
+  "slideshow-card/default": SlideshowCardRenderer,
+  "hero-fullscreen/default": HeroFullscreenRenderer,
+  "hero-bottom-aligned/default": HeroBottomAlignedRenderer,
+  "carousel/default": CarouselRenderer,
+  "collection-grid/default": CollectionGridRenderer,
+  "collection-grid-v2/default": CollectionGridV2Renderer,
+  "product-hero/default": ProductHeroRenderer,
+  "product-hero-split/default": ProductHeroSplitRenderer,
+  "text-blocks/default": TextBlocksRenderer,
 };
 
 /**

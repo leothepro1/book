@@ -67,6 +67,7 @@ import {
   getSectionDefinition,
   ensureSectionsRegistered,
 } from "@/app/_lib/sections/registry";
+import { isStandaloneSection } from "@/app/_lib/sections/mutations";
 import { EditorIcon } from "@/app/_components/EditorIcon";
 import type {
   SectionInstance,
@@ -271,6 +272,15 @@ export function DetailPanel() {
     return section?.colorSchemeId;
   }, [detailTarget, sections]);
 
+  // ── Standalone element detection ─────────────────────────────
+  // True when editing an element that lives directly in the page tree
+  // (not inside a regular section). These get their own color scheme selector.
+  const isStandaloneElement = useMemo(() => {
+    if (!detailTarget?.elementId) return false;
+    const section = sections.find((s) => s.id === detailTarget.sectionId);
+    return section ? isStandaloneSection(section) : false;
+  }, [detailTarget, sections]);
+
   // ── Block data for element forms ───────────────────────────
   // Only computed at block level — provides the block instance
   // and its slot definitions for rendering element forms.
@@ -401,6 +411,15 @@ export function DetailPanel() {
             block={blockData.block}
             slotDefs={blockData.slotDefs}
             onElementChange={handleElementChange}
+          />
+        )}
+
+        {/* Standalone element: Color Scheme selector — only when element is not inside a section */}
+        {resolved.level === "element" && isStandaloneElement && config?.colorSchemes && config.colorSchemes.length > 0 && (
+          <ColorSchemeSelect
+            schemes={config.colorSchemes}
+            value={currentColorSchemeId}
+            onChange={handleColorSchemeChange}
           />
         )}
 

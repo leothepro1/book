@@ -141,6 +141,11 @@ export function ColorSchemeSelect({
                       setOpen(false);
                     }}
                   >
+                    {isActive && (
+                      <span className="material-symbols-rounded sf-dropdown__check sf-dropdown__check--visible">
+                        check
+                      </span>
+                    )}
                     <SchemeMiniPreview scheme={scheme} />
                     <span className="cs-popup__content">
                       <span className="cs-popup__name">{schemeLabel(scheme)}</span>
@@ -152,11 +157,6 @@ export function ColorSchemeSelect({
                           Redigera
                         </span>
                       )}
-                    </span>
-                    <span
-                      className={`material-symbols-rounded sf-dropdown__check${isActive ? " sf-dropdown__check--visible" : ""}`}
-                    >
-                      check
                     </span>
                   </button>
                 </li>

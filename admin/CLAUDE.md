@@ -40,8 +40,13 @@ pages or layouts. Everything is platform-defined and architecturally constrained
 - `npm run db:seed` — prisma db seed
 - `npx prisma generate` — regenerate Prisma client after schema changes
 - Language convention: Swedish UI labels, English code and comments
-
----
+- **Dev server restart procedure — ALWAYS follow ALL steps:**
+  1. `fuser -k 3000/tcp 3001/tcp` — kill processes on ports
+  2. Wait for ports to actually free: `fuser 3000/tcp` must return empty
+  3. `rm -rf .next` — delete cache completely
+  4. ONLY THEN start `npm run dev`
+  Never skip step 2 or 3. Never start a new server while old ports are
+  occupied. If the user says it's broken, it IS broken — trust them.
 
 ## Three surfaces
 
@@ -139,6 +144,167 @@ Locked section rules:
 - Hidden from section picker — cannot be manually added
 - visibleWhen: { key, value } on SettingsField controls conditional
   field visibility (e.g. tab labels hidden when layout === "list")
+
+### Standalone elements
+
+Elements can be placed directly in the page tree without a parent section.
+Under the hood, they are wrapped in a SectionInstance with
+`definitionId: "__standalone"` — invisible to the user.
+
+- `createStandaloneSection()` in mutations.ts creates the wrapper
+- Zero padding, no section styling — renders "naked"
+- In editor: flat row (no chevron), shows element icon/name
+- Color scheme selector appears on element panel (not section)
+- DnD works automatically (it's a real SectionInstance)
+
+---
+
+## Creating section definitions — complete pattern
+
+Every new section follows this exact structure. Copy an existing
+definition (e.g. accordion.ts) and adapt.
+
+### File structure
+
+```
+app/_lib/sections/definitions/{section-name}.ts    ← definition + registration
+app/(guest)/_components/sections/renderers/
+  {SectionName}Renderer.tsx                         ← React component (client)
+  {section-name}-renderer.css                       ← CSS (BEM: .s-{name})
+```
+
+### SectionDefinition fields
+
+```typescript
+{
+  id: string,                    // kebab-case, unique
+  version: "1.0.0",
+  name: string,                  // Swedish UI label
+  description: string,           // for picker tooltip
+  category: "hero" | "navigation" | "content" | "media" | "utility",
+  tags: string[],                // searchable keywords
+  thumbnail: "",                 // URL for picker
+  scope: "free" | "locked",     // free = tenant can add/remove
+
+  settingsSchema: SettingField[],     // section-level controls
+  settingDefaults: Record<string, unknown>,
+
+  presets: SectionPreset[],           // min 1, first is default
+  createDefault: () => Omit<SectionInstance, "id" | "sortOrder">,
+}
+```
+
+Register at end of file: `registerSectionDefinition(mySection);`
+
+### SectionPreset fields
+
+```typescript
+{
+  key: string,                   // unique within section
+  version: "1.0.0",
+  name: string,                  // Swedish
+  description: string,
+  thumbnail: "",
+  cssClass: "s-{sectionId}--{presetKey}",  // BEM convention
+
+  blockTypes: BlockTypeDefinition[],  // min 1
+  minBlocks: number,
+  maxBlocks: number,             // -1 = unlimited
+
+  settingsSchema: SettingField[],     // preset-specific controls
+  settingDefaults: Record<string, unknown>,
+
+  changeStrategy: "reset" | "migrate" | "preserve_compatible",
+  migrations: {},
+
+  createDefaultBlocks: () => Omit<BlockInstance, "id">[],
+}
+```
+
+### BlockTypeDefinition → SlotDefinition → Elements
+
+```typescript
+// Block type
+{
+  type: string,                  // unique within preset
+  version: "1.0.0",
+  name: string,  description: string,  icon: string,
+  slots: SlotDefinition[],
+  settingsSchema: [],  settingDefaults: {},
+}
+
+// Slot
+{
+  key: string,                   // "media" | "content" | "actions" etc.
+  name: string,  description: string,
+  allowedElements: ElementType[],
+  minElements: number,  maxElements: number,  // -1 = unlimited
+  defaultElements: Omit<ElementInstance, "id">[],  // id: "" → generated
+}
+```
+
+### Color scheme rules — NEVER violate
+
+1. **NEVER hardcode hex colors** in renderers — always use CSS variables
+2. Color ownership lives at section level (`section.colorSchemeId`)
+3. Standalone elements get their own colorSchemeId on the wrapper section
+4. Available CSS variables from color scheme:
+   - `var(--background)` — section/card background
+   - `var(--text)` — primary text color
+   - `var(--button-bg)` — solid button background
+   - `var(--button-fg)` — solid button label
+   - `var(--outline-btn)` — outline button border + text
+   - `var(--outline-btn-label)` — outline button label
+5. Derived colors use `color-mix()`:
+   `color-mix(in srgb, var(--text) 12%, transparent)` for borders
+   `color-mix(in srgb, var(--text) 4%, var(--background))` for tinted bg
+6. Renderers receive `colorScheme` in props but should NOT read it
+   directly — use the CSS variables that SectionItem applies
+
+### Typography rules
+
+1. Use `clamp()` for responsive sizing:
+   `clamp(1.5rem, 1.25rem + 1vw, 2rem)` — never fixed px for headings
+2. Font families via CSS variables:
+   - `var(--font-heading)` — headings
+   - `var(--font-body)` — body text
+   - `var(--font-button, var(--font-heading, inherit))` — buttons
+3. Text color: always `var(--text)`, never hardcoded
+
+### Renderer component pattern
+
+```typescript
+"use client";  // REQUIRED — renderers use hooks
+
+export function MyRenderer(props: SectionRendererProps) {
+  const { section, settings, presetSettings, blocks } = props;
+  // ...render using CSS variables, never hardcoded colors
+}
+```
+
+Renderers receive fully resolved, validated data via `SectionRendererProps`.
+They never contain fallback logic or default handling.
+
+### SettingField types available
+
+text, textarea, richtext, image, color, select, segmented,
+toggle, number, range, url, link, cornerRadius, weightRange,
+markers, mapPicker, video, imageList, layoutPicker, menuPicker
+
+Key field props: key, type, label, default, options (for select/segmented),
+min/max/step (for range), group (visual divider), hidden, hideLabel,
+visibleWhen: { key, value } (conditional visibility), translatable
+
+### Registration checklist
+
+1. Create definition file in `definitions/`
+2. Register with `registerSectionDefinition()`
+3. Create renderer in `renderers/`
+4. Create CSS file with BEM classes `.s-{name}`
+5. Import CSS in renderer
+6. All colors via CSS variables — zero hardcoded values
+7. All text sizes via clamp() or design tokens
+8. Test: add section in editor, verify preview renders correctly
 
 ---
 
@@ -357,6 +523,104 @@ Public API: getPublicPolicy(tenantSlug, policyId) — no auth required.
 When proposing solutions: prefer architecture over shortcuts, protect
 system invariants, maintain backward compatibility, never duplicate config,
 never bypass accessors, never hardcode page IDs in shared code.
+
+---
+
+## CSS reuse — MANDATORY
+
+**Every CSS property must reuse existing design tokens and patterns.**
+Never invent new colors, shadows, font sizes, spacing, border-radius,
+transitions, or z-index values. The design system is fully defined —
+use it.
+
+### Design tokens (base.css)
+
+All tokens live in `app/(admin)/base.css`. Always reference these variables:
+
+**Colors:**
+  --admin-bg, --admin-surface, --admin-surface-raised
+  --admin-text, --admin-text-secondary, --admin-text-tertiary
+  --admin-border, --admin-border-focus
+  --admin-accent, --admin-accent-hover
+  --admin-danger, --admin-danger-hover
+  --admin-toggle-on, --admin-toggle-off
+
+**Spacing** (8px base unit):
+  --space-1 (4px), --space-2 (8px), --space-3 (12px),
+  --space-4 (16px), --space-5 (20px), --space-6 (24px), --space-8 (32px)
+
+**Border radius:**
+  --radius-xs (4px), --radius-sm (6px), --radius-md (8px),
+  --radius-lg (12px), --radius-xl (16px), --radius-full (999px)
+
+**Shadows:**
+  --admin-shadow-sm, --admin-shadow-md, --admin-shadow-card
+  --shadow-dropdown, --shadow-modal, --shadow-panel
+
+**Typography:**
+  --font-xs, --font-sm, --font-md, --font-lg, --font-xl, --font-2xl
+  Body: 13px/400, Labels: 12px/500, Headings: 16–22px/600
+
+**Transitions:**
+  --duration-fast, --duration-normal, --duration-slow
+  --ease-default, --ease-spring, --ease-snappy
+
+**Shared field tokens** (sf-* prefix for editor panels):
+  --sf-input-height (36px), --sf-input-font-size (13px),
+  --sf-color-swatch-size (36px), --sf-mono (monospace font stack)
+
+### Existing component classes — ALWAYS reuse these
+
+**Buttons:** .admin-btn, .admin-btn--outline, .admin-btn--accent,
+  .admin-btn--danger, .admin-btn--danger-secondary, .admin-btn--ghost,
+  .admin-btn--sm
+
+**Inputs:** .admin-input--sm, .admin-input--compact,
+  .admin-input--color-hex, .admin-textarea--sm, .admin-label--sm
+
+**Dropdowns:** .admin-dropdown, .admin-dropdown__trigger,
+  .admin-dropdown__list, .admin-dropdown__item,
+  .admin-dropdown__item--active, .admin-dropdown__check
+
+**Toggles:** .admin-toggle, .admin-toggle-on, .admin-toggle-thumb,
+  .admin-toggle-icon, .admin-toggle--sm
+
+**Range/Slider:** .admin-range, .admin-range-input-wrap, .admin-range-unit
+
+**Color picker:** .sf-color-row, .sf-color-swatch, .cp-popup
+
+**Labels & dividers:** .admin-field-label, .admin-hint,
+  .admin-group-label (uppercase divider)
+
+**Modals:** .settings-panel, .settings-panel__overlay,
+  .settings-panel__content, .ml-modal
+
+### Consistent interaction states
+
+**Hover:** Use var(--admin-border-focus) for borders,
+  var(--admin-surface-raised) or existing hover tokens for backgrounds.
+**Active:** scale(0.96) for buttons, scale(0.92) for small elements.
+**Disabled:** opacity: 0.5, cursor: not-allowed.
+**Focus:** border-color + 3px ring using var(--admin-input-focus-ring).
+
+### Rules — never break these
+
+1. **NEVER hardcode** hex colors, pixel shadows, font sizes, spacing,
+   or border-radius — always use CSS variables from base.css
+2. **NEVER duplicate** an existing component class — if .admin-btn exists,
+   use it; do not create a new button class
+3. **NEVER create new modals/overlays** without reusing existing modal
+   patterns (.settings-panel or .ml-modal)
+4. **NEVER invent new hover/active/disabled** patterns — match existing
+   interaction states exactly
+5. **Check base.css first** before writing ANY new CSS property —
+   if a token exists, use it
+6. **BEM naming** — double underscore for children (__), double dash
+   for modifiers (--), with component prefix matching existing patterns
+7. **All new editor panel CSS** must use sf-* field tokens for inputs,
+   labels, and controls to stay consistent with existing panels
+8. When creating ANY file (HTML, CSS, TSX, or any other format), these
+   rules apply — no exceptions
 
 **Quality bar: "Would Shopify approve this?"**
 Every change — no matter how small or complex — must meet Shopify-level
@@ -720,7 +984,7 @@ Every tenant gets an automatic email address based on their subdomain:
   Flow: guest enters email → system generates signed token → sends email
   → guest clicks link → token validated → session cookie set → redirect.
 
-  MagicLinkToken model: tenant+email scoped (not booking-scoped).
+  MagicLinkToken model: tenanskap t+email scoped (not booking-scoped).
   Rate limited: 3 per 15 min per email+tenant.
   Token: 32 random bytes, base64url, 24h expiry, single-use.
   Session: iron-session encrypted cookie, 7-day maxAge.

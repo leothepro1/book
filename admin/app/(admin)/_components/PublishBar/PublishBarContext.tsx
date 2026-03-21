@@ -15,6 +15,7 @@ import { publishDraft, discardDraft } from "../../_lib/tenant/publishDraft";
 import { hasDraftChanges } from "../../_lib/tenant/getDraftDiff";
 import { usePreview } from "../GuestPreview/PreviewContext";
 import { useNavigationGuard } from "../NavigationGuard";
+import { cancelPendingDraft, flushPendingDraft, setSaveState } from "../../_hooks/useDraftUpdate";
 
 /**
  * Pick keys from `source` that exist in `template`.
@@ -79,6 +80,7 @@ export function usePublishBarInternal(): PublishBarInternalValue {
 /* ── Provider ── */
 
 const DIFF_DEBOUNCE_MS = 500;
+const UNDO_COALESCE_MS = 500;
 
 export function PublishBarProvider({ children }: { children: ReactNode }) {
   const { config, updateConfig, notifyDraftSaved } = usePreview();
@@ -95,6 +97,7 @@ export function PublishBarProvider({ children }: { children: ReactNode }) {
   configRef.current = config;
   const diffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lingerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const undoCoalesceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Check for draft changes on mount — show publish bar if existing draft differs from live
   useEffect(() => {
@@ -114,15 +117,27 @@ export function PublishBarProvider({ children }: { children: ReactNode }) {
     return () => {
       if (diffTimerRef.current) clearTimeout(diffTimerRef.current);
       if (lingerTimer.current) clearTimeout(lingerTimer.current);
+      if (undoCoalesceRef.current) clearTimeout(undoCoalesceRef.current);
     };
   }, []);
 
+  // Undo coalescing: rapid changes (e.g. typing) produce ONE undo entry
+  // instead of one per keystroke. First change in a burst saves the snapshot,
+  // subsequent changes within UNDO_COALESCE_MS extend the window.
   const pushUndo = useCallback((snapshot: DraftPatch) => {
-    setUndoStack(prev => [...prev, snapshot]);
-    setRedoStack([]);
-    // Optimistically show dirty, then verify with server
+    if (undoCoalesceRef.current) {
+      // Within coalesce window — extend timer, skip snapshot
+      clearTimeout(undoCoalesceRef.current);
+    } else {
+      // First change in burst — save the pre-change snapshot
+      setUndoStack(prev => [...prev, snapshot]);
+      setRedoStack([]);
+    }
     setHasUnsavedChanges(true);
-    checkDraftDiff();
+    undoCoalesceRef.current = setTimeout(() => {
+      undoCoalesceRef.current = null;
+      checkDraftDiff();
+    }, UNDO_COALESCE_MS);
   }, [checkDraftDiff]);
 
   const markDirty = useCallback(() => {
@@ -133,6 +148,9 @@ export function PublishBarProvider({ children }: { children: ReactNode }) {
   const handleUndo = useCallback(async () => {
     if (undoStack.length === 0 || isUndoing) return;
     setIsUndoing(true);
+
+    // Cancel any pending debounced draft to prevent stale overwrite
+    cancelPendingDraft();
 
     const previousSnapshot = undoStack[undoStack.length - 1];
     const currentConfig = configRef.current;
@@ -158,6 +176,9 @@ export function PublishBarProvider({ children }: { children: ReactNode }) {
     if (redoStack.length === 0 || isUndoing) return;
     setIsUndoing(true);
 
+    // Cancel any pending debounced draft to prevent stale overwrite
+    cancelPendingDraft();
+
     const redoSnapshot = redoStack[redoStack.length - 1];
     const currentConfig = configRef.current;
     if (currentConfig) {
@@ -181,11 +202,24 @@ export function PublishBarProvider({ children }: { children: ReactNode }) {
   const handlePublish = useCallback(async () => {
     if (isPublishing) return;
     setIsPublishing(true);
+
+    // Phase 1: flush pending draft changes
+    setSaveState({ phase: "persisting", progress: 10 });
+    await flushPendingDraft();
+
+    // Phase 2: publish
+    setSaveState({ phase: "persisting", progress: 30 });
     const startTime = Date.now();
     const result = await publishDraft();
+    setSaveState({ phase: "persisting", progress: 90 });
     const elapsed = Date.now() - startTime;
     const remaining = Math.max(0, 2000 - elapsed);
     await new Promise(resolve => setTimeout(resolve, remaining));
+
+    // Phase 3: complete
+    setSaveState({ phase: "done", progress: 100 });
+    setTimeout(() => setSaveState({ phase: "idle", progress: 0 }), 400);
+
     if (result.success) {
       setUndoStack([]);
       setRedoStack([]);
@@ -205,6 +239,10 @@ export function PublishBarProvider({ children }: { children: ReactNode }) {
   const handleDiscard = useCallback(async () => {
     if (isDiscarding) return;
     setIsDiscarding(true);
+
+    // Cancel any pending debounced changes — we're discarding everything
+    cancelPendingDraft();
+
     const startTime = Date.now();
     await discardDraft();
     const elapsed = Date.now() - startTime;
@@ -240,6 +278,7 @@ export function PublishBarProvider({ children }: { children: ReactNode }) {
           return true;
         },
         onDiscard: async () => {
+          cancelPendingDraft();
           await discardDraft();
           setUndoStack([]);
           setRedoStack([]);

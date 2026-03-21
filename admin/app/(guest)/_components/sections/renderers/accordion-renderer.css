@@ -97,11 +97,11 @@
    ═══════════════════════════════════════════════════ */
 
 .s-accordion--default .s-accordion__item {
-  border-top: 1px solid color-mix(in srgb, var(--text, #171717) 12%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
 }
 
 .s-accordion--default .s-accordion__item--last {
-  border-bottom: 1px solid color-mix(in srgb, var(--text, #171717) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
 }
 
 /* ═══════════════════════════════════════════════════
@@ -110,7 +110,7 @@
    ═══════════════════════════════════════════════════ */
 
 .s-accordion--card .s-accordion__item {
-  background: color-mix(in srgb, var(--text, #171717) 4%, var(--background, #ffffff));
+  background: color-mix(in srgb, var(--text) 4%, var(--background));
   border-radius: var(--accordion-card-radius, 12px);
 }
 

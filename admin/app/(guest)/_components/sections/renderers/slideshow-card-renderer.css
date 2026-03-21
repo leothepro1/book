@@ -1,0 +1,115 @@
+/* ═══════════════════════════════════════════════════════════════
+   Slideshow Card (s-sc)
+   Card-style slider — image above, content below.
+   ═══════════════════════════════════════════════════════════════ */
+
+.s-sc {
+  position: relative;
+  width: 100%;
+}
+
+/* ── Track ── */
+
+.s-sc__track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  cursor: grab;
+  user-select: none;
+}
+
+.s-sc__track::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Slide ── */
+
+.s-sc__slide {
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── Image ── */
+
+.s-sc__image {
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  margin-top: var(--space-2, 8px);
+}
+
+.s-sc__image [data-element-id],
+.s-sc__image [data-element-id] a,
+.s-sc__image [data-element-id] div {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+  min-height: 0 !important;
+}
+
+.s-sc__image img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Body (content below image) ── */
+
+.s-sc__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: clamp(1rem, 3vw, 1.5rem) 0;
+  gap: clamp(0.5rem, 1.5vw, 0.75rem);
+  width: 100%;
+}
+
+.s-sc__body > * {
+  max-width: 540px;
+}
+
+/* Full-width buttons must stretch */
+.s-sc__body > [data-element-id] {
+  width: 100%;
+}
+
+/* Compact button inside card slides */
+.s-sc__body {
+  --button-padding: 0.5rem 1.1rem;
+  --font-size-button: 0.875rem;
+}
+
+/* ── Dot indicators ── */
+
+.s-sc__dots {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2, 8px);
+  margin-top: var(--space-5, 20px);
+}
+
+.s-sc__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  border: none;
+  padding: 0;
+  background: var(--text);
+  opacity: 0.2;
+  cursor: pointer;
+  transition:
+    width 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.3s ease;
+}
+
+.s-sc__dot--active {
+  width: 25px;
+  opacity: 1;
+}

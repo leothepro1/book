@@ -64,7 +64,6 @@ export const imageElement: ElementDefinition = {
       key: "link",
       type: "link",
       label: "Länk",
-      hidden: true,
     },
   ],
 

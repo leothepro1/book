@@ -1,8 +1,10 @@
 import type { ResolvedElement } from "@/app/_lib/sections/types";
 
+const PLACEHOLDER_SRC = "https://res.cloudinary.com/dmgmoisae/image/upload/v1774113375/palceholder_21_dygpku.png";
+
 export function ImageElement({ resolved }: { resolved: ResolvedElement }) {
   const { settings } = resolved;
-  const src = settings.src as string;
+  const src = (settings.src as string) || PLACEHOLDER_SRC;
   const width = (settings.width as number) ?? 100;
   const height = (settings.height as number) ?? 300;
   const radiusTopLeft = (settings.radiusTopLeft as number) ?? 0;
@@ -12,27 +14,6 @@ export function ImageElement({ resolved }: { resolved: ResolvedElement }) {
   const overlay = (settings.overlay as number) ?? 0;
 
   const borderRadius = `${radiusTopLeft}px ${radiusTopRight}px ${radiusBottomRight}px ${radiusBottomLeft}px`;
-
-  if (!src) {
-    return (
-      <div
-        style={{
-          width: `${width}%`,
-          height: height > 0 ? height : undefined,
-          minHeight: 120,
-          background: "#F1F0EE",
-          borderRadius,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#999",
-          fontSize: 14,
-        }}
-      >
-        Ingen bild vald
-      </div>
-    );
-  }
 
   return (
     <div

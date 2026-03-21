@@ -1,0 +1,73 @@
+/* ═══════════════════════════════════════════════════════════════
+   Product Hero Split (s-phs)
+   Image top, content bottom. Two-tone via color scheme.
+   ═══════════════════════════════════════════════════════════════ */
+
+.s-phs {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Image — upper half, edge-to-edge, no border-radius ── */
+
+.s-phs__image {
+  width: 100%;
+  overflow: hidden;
+}
+
+.s-phs__image [data-element-id],
+.s-phs__image [data-element-id] a,
+.s-phs__image [data-element-id] div {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+  min-height: 0 !important;
+}
+
+.s-phs__image img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Body — lower half, color scheme background ── */
+
+.s-phs__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+  padding: var(--space-6, 24px);
+  background: var(--background);
+}
+
+/* ── Eyebrow — uppercase, tracked, small ── */
+
+.s-phs__eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: var(--font-xs, 11px);
+}
+
+/* ── Description — reduced opacity via color-mix ── */
+
+.s-phs__description {
+  color: color-mix(in srgb, var(--text) 70%, transparent);
+}
+
+/* ── Ghost button — no background, no border ── */
+
+.s-phs__action {
+  --button-bg: transparent;
+  --button-fg: var(--text);
+  --button-padding: 0;
+  --button-radius: 0;
+  --button-backdrop: none;
+}
+
+.s-phs__action button,
+.s-phs__action a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

@@ -10,6 +10,7 @@ import { getEditorPages } from "@/app/_lib/pages/config";
 import { getPageDefinition } from "@/app/_lib/pages/registry";
 import type { PageId } from "@/app/_lib/pages/types";
 import { EditorPublishBar } from "./EditorPublishBar";
+import { SaveProgressBar } from "@/app/(admin)/_components/SaveProgressBar";
 
 /**
  * Lightweight theme name lookup — avoids depending on the async theme registry.
@@ -40,6 +41,7 @@ export function EditorHeader() {
 
   return (
     <header className="editor-header">
+      <SaveProgressBar />
       <div className="editor-header__nav">
         <button
           type="button"

@@ -51,8 +51,11 @@ function GuestPreviewFrame({
   const { hasUnsavedChanges } = usePublishBar();
   const [copied, setCopied] = useState(false);
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const iframeKeyRef = useRef(0);
 
   // Sync preview-header height with admin-header
   useEffect(() => {
@@ -78,7 +81,34 @@ function GuestPreviewFrame({
   if (iframeSrc !== prevSrcRef.current) {
     prevSrcRef.current = iframeSrc;
     setIframeLoaded(false);
+    setLoadFailed(false);
   }
+
+  // ── Load timeout — if iframe doesn't load within 10s, show retry ──
+  const LOAD_TIMEOUT_MS = 10_000;
+
+  useEffect(() => {
+    if (iframeLoaded || loadFailed) {
+      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
+      return;
+    }
+    loadTimeoutRef.current = setTimeout(() => {
+      if (!iframeLoaded) {
+        setLoadFailed(true);
+        if (__DEV__) console.warn("[GuestPreview] Load timeout — iframe did not load within", LOAD_TIMEOUT_MS, "ms");
+      }
+    }, LOAD_TIMEOUT_MS);
+    return () => {
+      if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
+    };
+  }, [iframeLoaded, loadFailed]);
+
+  // ── Retry handler — force reload iframe ──
+  const handleRetry = useCallback(() => {
+    iframeKeyRef.current += 1;
+    setIframeLoaded(false);
+    setLoadFailed(false);
+  }, []);
 
   // ── PostMessage — fire-and-forget, no ready gate ─────────────
   const postToPreview = useCallback((message: ParentToPreviewMessage) => {
@@ -251,10 +281,21 @@ function GuestPreviewFrame({
         <div className="preview-phone">
           {!iframeLoaded && (
             <div className="preview-spinner-overlay">
-              <div className="preview-spinner" />
+              {loadFailed ? (
+                <div className="preview-failed">
+                  <div className="preview-failed__icon">!</div>
+                  <p className="preview-failed__text">Förhandsgranskningen kunde inte laddas</p>
+                  <button type="button" className="preview-failed__retry" onClick={handleRetry}>
+                    Försök igen
+                  </button>
+                </div>
+              ) : (
+                <div className="preview-spinner" />
+              )}
             </div>
           )}
           <iframe
+            key={iframeKeyRef.current}
             ref={iframeRef}
             src={iframeSrc}
             className="preview-phone__iframe"

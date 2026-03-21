@@ -1,0 +1,238 @@
+/**
+ * Section Definition: Kollektionsrutnät
+ * ──────────────────────────────────────
+ * CSS grid of image cards with overlaid labels.
+ * Section heading above the grid. 2-column layout.
+ * If odd number of items, first item spans full width.
+ */
+
+import type {
+  SectionDefinition,
+  SectionPreset,
+  BlockTypeDefinition,
+  SlotDefinition,
+} from "../types";
+import { NO_ACTION } from "../types";
+import { registerSectionDefinition } from "../registry";
+
+// ─── Slot Definitions ────────────────────────────────────
+
+const imageSlot: SlotDefinition = {
+  key: "image",
+  name: "Huvudbild",
+  description: "Heltäckande bild för kortet.",
+  allowedElements: ["image"],
+  minElements: 1,
+  maxElements: 1,
+  defaultElements: [
+    {
+      type: "image",
+      settings: {
+        src: "",
+        alt: "",
+        width: 100,
+        height: 300,
+        overlay: 0,
+        borderRadius: { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 },
+      },
+      action: NO_ACTION,
+      sortOrder: 0,
+    },
+  ],
+};
+
+const labelSlot: SlotDefinition = {
+  key: "label",
+  name: "Knapp",
+  description: "Knapp som visas ovanpå bilden nere till vänster.",
+  allowedElements: ["button"],
+  minElements: 0,
+  maxElements: 1,
+  defaultElements: [
+    {
+      type: "button",
+      settings: {
+        label: "Kollektion",
+        outline: false,
+        width: "auto",
+        icon: "",
+        icon_placement: "right",
+        icon_size: 20,
+        icon_weight: 400,
+        icon_fill: "outlined",
+      },
+      action: NO_ACTION,
+      sortOrder: 0,
+    },
+  ],
+};
+
+// ─── Block Type: Grid Item ──────────────────────────────
+
+const gridItemBlockType: BlockTypeDefinition = {
+  type: "grid-item",
+  version: "1.0.0",
+  name: "Kort",
+  description: "Ett kort med bild och etikett.",
+  icon: "grid_view",
+  slots: [imageSlot, labelSlot],
+  settingsSchema: [],
+  settingDefaults: {},
+};
+
+// ─── Default Item Factory ───────────────────────────────
+
+function makeItem(label: string, sortOrder: number) {
+  return {
+    type: "grid-item" as const,
+    settings: {},
+    slots: {
+      image: [
+        {
+          id: "",
+          type: "image" as const,
+          settings: {
+            src: "",
+            alt: "",
+            width: 100,
+            height: 300,
+            overlay: 0,
+            borderRadius: { topLeft: 0, topRight: 0, bottomRight: 0, bottomLeft: 0 },
+          },
+          action: NO_ACTION,
+          sortOrder: 0,
+        },
+      ],
+      label: [
+        {
+          id: "",
+          type: "button" as const,
+          settings: {
+            label,
+            outline: false,
+            width: "auto",
+            icon: "",
+            icon_placement: "right",
+            icon_size: 20,
+            icon_weight: 400,
+            icon_fill: "outlined",
+          },
+          action: NO_ACTION,
+          sortOrder: 0,
+        },
+      ],
+    },
+    sortOrder,
+    isActive: true,
+  };
+}
+
+// ─── Preset: Default ────────────────────────────────────
+
+const defaultPreset: SectionPreset = {
+  key: "default",
+  version: "1.0.0",
+  name: "Rutnät",
+  description: "2-kolumns rutnät med bilder och etiketter.",
+  thumbnail: "",
+  cssClass: "s-collection-grid--default",
+
+  blockTypes: [gridItemBlockType],
+  minBlocks: 1,
+  maxBlocks: -1,
+
+  settingsSchema: [
+    {
+      key: "aspectRatio",
+      type: "select",
+      label: "Bildformat",
+      default: "3:4",
+      options: [
+        { value: "1:1", label: "Kvadrat (1:1)" },
+        { value: "3:4", label: "Porträtt (3:4)" },
+        { value: "4:3", label: "Landskap (4:3)" },
+        { value: "16:9", label: "Widescreen (16:9)" },
+      ],
+    },
+  ],
+  settingDefaults: {
+    aspectRatio: "3:4",
+  },
+
+  changeStrategy: "preserve_compatible",
+  migrations: {},
+
+  createDefaultBlocks: () => [
+    makeItem("Restaurang", 0),
+    makeItem("Spa", 1),
+    makeItem("Aktiviteter", 2),
+    makeItem("Rum", 3),
+  ],
+};
+
+// ─── Section Definition ─────────────────────────────────
+
+export const collectionGridSection: SectionDefinition = {
+  id: "collection-grid",
+  version: "1.0.0",
+  name: "Rutnät",
+  description: "Rutnät med bildkort — perfekt för kollektioner och kategorier.",
+  category: "gallery",
+  tags: ["kollektion", "rutnät", "grid", "galleri", "kort", "bilder"],
+  thumbnail: "",
+  scope: "free",
+
+  settingsSchema: [
+    {
+      key: "heading",
+      type: "text",
+      label: "Rubrik",
+      default: "Kollektioner",
+    },
+    {
+      key: "headingSize",
+      type: "select",
+      label: "Textstorlek",
+      default: "md",
+      options: [
+        { value: "xs", label: "Extra liten" },
+        { value: "sm", label: "Liten" },
+        { value: "md", label: "Medium" },
+        { value: "lg", label: "Stor" },
+        { value: "xl", label: "Extra stor" },
+      ],
+    },
+    {
+      key: "headingAlignment",
+      type: "segmented",
+      label: "Justering",
+      default: "left",
+      options: [
+        { value: "left", label: "Vänster" },
+        { value: "center", label: "Center" },
+        { value: "right", label: "Höger" },
+      ],
+    },
+  ],
+  settingDefaults: {
+    heading: "Kollektioner",
+    headingSize: "md",
+    headingAlignment: "left",
+  },
+
+  presets: [defaultPreset],
+
+  createDefault: () => ({
+    definitionId: "collection-grid",
+    definitionVersion: "1.0.0",
+    presetKey: "default",
+    presetVersion: "1.0.0",
+    isActive: true,
+    settings: {},
+    presetSettings: {},
+    blocks: [],
+    title: "Rutnät",
+  }),
+};
+
+registerSectionDefinition(collectionGridSection);

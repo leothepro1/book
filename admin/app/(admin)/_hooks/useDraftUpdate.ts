@@ -32,6 +32,30 @@ let _timer: ReturnType<typeof setTimeout> | null = null;
 let _pending: DraftPatch | null = null;
 let _flushImpl: (() => Promise<void>) | null = null;
 
+// ── Save progress tracking (module-level pub/sub) ────────
+// Drives the global progress bar. Any component can subscribe
+// via useSyncExternalStore. No React dependency here.
+
+type SavePhase = "idle" | "debouncing" | "persisting" | "done";
+type SaveState = { phase: SavePhase; progress: number };
+
+let _saveState: SaveState = { phase: "idle", progress: 0 };
+const _listeners = new Set<() => void>();
+
+export function setSaveState(state: SaveState) {
+  _saveState = state;
+  _listeners.forEach((l) => l());
+}
+
+export function getSaveSnapshot(): SaveState {
+  return _saveState;
+}
+
+export function subscribeSaveState(listener: () => void): () => void {
+  _listeners.add(listener);
+  return () => _listeners.delete(listener);
+}
+
 /**
  * Cancel pending debounced draft persist.
  * Call before undo/redo/discard to prevent stale writes.
@@ -90,20 +114,32 @@ export function useDraftUpdate() {
     _timer = null;
     snapshotRef.current = null;
 
-    if (!changes) return;
+    if (!changes) {
+      setSaveState({ phase: "idle", progress: 0 });
+      return;
+    }
+
+    // Phase: persisting (60% → 90% during DB write)
+    setSaveState({ phase: "persisting", progress: 60 });
 
     const result = await updateDraft(changes);
+
     if (result.success) {
+      setSaveState({ phase: "done", progress: 100 });
       notifyRef.current();
     } else {
       // Rollback optimistic update to pre-burst state
       if (snapshot) {
         updateConfigRef.current(snapshot);
       }
+      setSaveState({ phase: "done", progress: 100 });
       if (process.env.NODE_ENV === "development") {
         console.warn("[useDraftUpdate] Persist failed, rolled back:", result.error);
       }
     }
+
+    // Reset to idle after bar completes
+    setTimeout(() => setSaveState({ phase: "idle", progress: 0 }), 400);
   }, []);
 
   // Register flush for external callers (flushPendingDraft)
@@ -132,7 +168,10 @@ export function useDraftUpdate() {
           }) as DraftPatch
         : changes;
 
-      // 3. Debounce DB persist + iframe refresh
+      // 3. Progress: debouncing phase (0% → 50% during debounce wait)
+      setSaveState({ phase: "debouncing", progress: 20 });
+
+      // 4. Debounce DB persist + iframe refresh
       if (_timer) clearTimeout(_timer);
       _timer = setTimeout(flush, PERSIST_DEBOUNCE_MS);
 

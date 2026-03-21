@@ -51,6 +51,7 @@ import {
   getElementDefinition,
 } from "@/app/_lib/sections/registry";
 import { EditorIcon } from "@/app/_components/EditorIcon";
+import { SegmentedControl } from "../fields/FieldSegmented";
 
 // ═══════════════════════════════════════════════════════════════
 // PUBLIC TYPES
@@ -64,12 +65,18 @@ export type PickerItem = {
   categories?: string[];
   tags: string[];
   icon?: React.ReactNode;
+  /** Tab this item belongs to (used with tabs prop on PickerModal) */
+  tab?: string;
+  /** Preview image shown on hover in the preview panel */
+  thumbnail?: string;
 };
 
 export type PickerCategory = {
   key: string;
   label: string;
   icon?: React.ReactNode;
+  /** Tab this category belongs to (used with tabs prop on PickerModal) */
+  tab?: string;
 };
 
 export type PresetOption = {
@@ -79,14 +86,21 @@ export type PresetOption = {
   thumbnail?: string;
 };
 
+export type PickerTab = {
+  key: string;
+  label: string;
+};
+
 type PickerModalProps = {
   title: string;
   searchPlaceholder?: string;
   items: PickerItem[];
   categories: PickerCategory[];
-  getPresets?: (itemId: string) => PresetOption[];
-  presetLabel?: string;
-  onSelect: (itemId: string, presetKey?: string) => void;
+  tabs?: PickerTab[];
+  defaultTab?: string;
+  /** Returns a preview thumbnail URL for the hovered item */
+  getPreview?: (itemId: string) => string | undefined;
+  onSelect: (itemId: string) => void;
   onClose: () => void;
 };
 
@@ -99,12 +113,14 @@ export function PickerModal({
   searchPlaceholder = "Sök...",
   items,
   categories,
-  getPresets,
-  presetLabel = "Sektions",
+  tabs,
+  defaultTab,
+  getPreview,
   onSelect,
   onClose,
 }: PickerModalProps) {
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState(defaultTab ?? tabs?.[0]?.key ?? "");
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -132,12 +148,17 @@ export function PickerModal({
     return () => document.removeEventListener("keydown", handle);
   }, [onClose]);
 
-  // ── Filter items by search ──
+  // ── Filter items by tab + search ──
   const filtered = useMemo(() => {
-    if (!search.trim()) return items;
+    let result = items;
+    // Tab filter — only when tabs are provided and items have tab field
+    if (tabs && tabs.length > 0 && activeTab) {
+      result = result.filter((item) => item.tab === activeTab);
+    }
+    if (!search.trim()) return result;
     const q = search.toLowerCase().trim();
     const words = q.split(/\s+/);
-    return items.filter((item) => {
+    return result.filter((item) => {
       const haystack = [
         item.name.toLowerCase(),
         item.description.toLowerCase(),
@@ -145,12 +166,17 @@ export function PickerModal({
       ].join(" ");
       return words.every((word) => haystack.includes(word));
     });
-  }, [items, search]);
+  }, [items, search, tabs, activeTab]);
 
   // ── Group filtered items by category ──
   const groupedByCategory = useMemo(() => {
+    // When tabs are active, only show categories that belong to the active tab
+    const activeCats = tabs && tabs.length > 0
+      ? categories.filter((cat) => !cat.tab || cat.tab === activeTab)
+      : categories;
+
     const groups: { category: PickerCategory; items: PickerItem[] }[] = [];
-    for (const cat of categories) {
+    for (const cat of activeCats) {
       const catItems = filtered.filter(
         (item) => item.category === cat.key || item.categories?.includes(cat.key)
       );
@@ -165,7 +191,7 @@ export function PickerModal({
       groups.push({ category: { key: "__other", label: "Övrigt" }, items: uncategorized });
     }
     return groups;
-  }, [filtered, categories]);
+  }, [filtered, categories, tabs, activeTab]);
 
   // ── Hover with delay to allow mouse travel to preset panel ──
   const handleItemEnter = useCallback((id: string) => {
@@ -196,52 +222,34 @@ export function PickerModal({
     return () => { if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current); };
   }, []);
 
-  // ── Presets for active item ──
-  const activePresets: PresetOption[] = useMemo(() => {
-    if (!activeItemId || !getPresets) return [];
-    return getPresets(activeItemId);
-  }, [activeItemId, getPresets]);
+  // ── Preview thumbnail for hovered item ──
+  const previewThumbnail = useMemo(() => {
+    if (!activeItemId) return undefined;
+    // Item-level thumbnail takes priority, then getPreview callback
+    const item = items.find((i) => i.id === activeItemId);
+    if (item?.thumbnail) return item.thumbnail;
+    if (getPreview) return getPreview(activeItemId);
+    return undefined;
+  }, [activeItemId, items, getPreview]);
 
-  // ── Handle item click ──
+  // ── Handle item click — always adds directly ──
   const handleItemClick = useCallback(
     (itemId: string) => {
-      if (getPresets) {
-        const presets = getPresets(itemId);
-        if (presets.length === 0) {
-          onSelect(itemId);
-          onClose();
-          return;
-        }
-        // If item has presets, click selects with default preset
-        onSelect(itemId, presets[0].key);
-        onClose();
-      } else {
-        onSelect(itemId);
-        onClose();
-      }
-    },
-    [getPresets, onSelect, onClose]
-  );
-
-  // ── Handle preset click ──
-  const handlePresetClick = useCallback(
-    (presetKey: string) => {
-      if (!activeItemId) return;
-      onSelect(activeItemId, presetKey);
+      onSelect(itemId);
       onClose();
     },
-    [activeItemId, onSelect, onClose]
+    [onSelect, onClose]
   );
 
-  const showPresets = activePresets.length > 0;
+  const showPreview = !!previewThumbnail;
 
   return createPortal(
     <div
-      className={`pk-popup${showPresets ? " pk-popup--with-presets" : ""}`}
+      className={`pk-popup${showPreview ? " pk-popup--with-presets" : ""}`}
       ref={popupRef}
     >
       {/* Main panel */}
-      <div className={`pk-popup__main${showPresets ? " pk-popup__main--shifted" : ""}`}>
+      <div className={`pk-popup__main${showPreview ? " pk-popup__main--shifted" : ""}`}>
         {/* Search */}
         <div className="pk-popup__search">
           <SearchIcon />
@@ -266,6 +274,17 @@ export function PickerModal({
           )}
         </div>
 
+        {/* Tab switcher */}
+        {tabs && tabs.length > 0 && (
+          <div className="pk-popup__tabs">
+            <SegmentedControl
+              options={tabs.map((t) => ({ value: t.key, label: t.label }))}
+              value={activeTab}
+              onChange={(v) => { setActiveTab(v); setActiveItemId(null); }}
+            />
+          </div>
+        )}
+
         {/* Category accordions */}
         <div className="pk-popup__body">
           {groupedByCategory.length === 0 ? (
@@ -280,45 +299,29 @@ export function PickerModal({
                 onEnter={handleItemEnter}
                 onLeave={handleItemLeave}
                 onClick={handleItemClick}
-                hasPresets={getPresets}
               />
             ))
           )}
         </div>
       </div>
 
-      {/* Preset panel (inline, no transition) */}
-      {showPresets && (
+      {/* Preview panel — shows how the hovered item looks in the guest portal */}
+      {showPreview && (
         <div
           className="pk-popup__presets"
           onMouseEnter={handlePresetPanelEnter}
           onMouseLeave={handlePresetPanelLeave}
         >
           <div className="pk-popup__presets-header">
-            <span className="pk-popup__presets-title">{presetLabel}-preset</span>
+            <span className="pk-popup__presets-title">Förhandsvisning</span>
           </div>
-          <div className="pk-popup__presets-list">
-            {activePresets.map((preset) => (
-              <button
-                key={preset.key}
-                type="button"
-                className="pk-popup__preset"
-                onClick={() => handlePresetClick(preset.key)}
-              >
-                {preset.thumbnail ? (
-                  <img
-                    src={preset.thumbnail}
-                    alt={preset.name}
-                    className="pk-popup__preset-img"
-                    draggable={false}
-                  />
-                ) : (
-                  <div className="pk-popup__preset-empty">
-                    <span>{preset.name}</span>
-                  </div>
-                )}
-              </button>
-            ))}
+          <div className="pk-popup__preview-wrap">
+            <img
+              src={previewThumbnail}
+              alt="Förhandsvisning"
+              className="pk-popup__preview-img"
+              draggable={false}
+            />
           </div>
         </div>
       )}
@@ -336,7 +339,6 @@ function CategoryAccordion({
   onEnter,
   onLeave,
   onClick,
-  hasPresets,
 }: {
   category: PickerCategory;
   items: PickerItem[];
@@ -344,7 +346,6 @@ function CategoryAccordion({
   onEnter: (id: string) => void;
   onLeave: () => void;
   onClick: (id: string) => void;
-  hasPresets?: (id: string) => PresetOption[];
 }) {
   const [open, setOpen] = useState(true);
 
@@ -366,7 +367,6 @@ function CategoryAccordion({
         <div className="pk-accordion__content">
           {items.map((item) => {
             const isActive = item.id === activeItemId;
-            const showChevron = hasPresets ? hasPresets(item.id).length > 0 : false;
             return (
               <button
                 key={item.id}
@@ -380,9 +380,6 @@ function CategoryAccordion({
                   {item.icon ?? <EditorIcon name="widgets" size={16} />}
                 </span>
                 <span className="pk-item__name">{item.name}</span>
-                {showChevron && (
-                  <EditorIcon name="chevron_right" size={14} className="pk-item__chevron" />
-                )}
               </button>
             );
           })}
@@ -402,6 +399,12 @@ function CategoryAccordion({
  */
 export const STANDALONE_PICKER_PREFIX = "element:";
 
+/** Tabs for section/element picker */
+export const SECTION_PICKER_TABS: PickerTab[] = [
+  { key: "sections", label: "Sektioner" },
+  { key: "elements", label: "Element" },
+];
+
 export function buildSectionPickerData(): {
   items: PickerItem[];
   categories: PickerCategory[];
@@ -417,28 +420,38 @@ export function buildSectionPickerData(): {
     description: def.description,
     category: def.category,
     tags: def.tags,
-    icon: <SectionTypeIcon category={def.category} />,
+    icon: getSectionIcon(def.id, def.category),
+    tab: "sections",
   }));
 
   // Standalone elements — first-class items in the picker.
-  // Each element type gets its own entry under the "Element" category.
+  // Each element type gets its own entry, categorized by ELEMENT_CATEGORY_MAP.
   const elementDefs = getAllElementDefinitions();
-  const standaloneItems: PickerItem[] = elementDefs.map((def) => ({
-    id: `${STANDALONE_PICKER_PREFIX}${def.type}`,
-    name: def.name,
-    description: def.description ?? "",
-    category: "element",
-    tags: [def.type],
-    icon: <EditorIcon name={def.icon || "widgets"} size={16} />,
-  }));
+  const standaloneItems: PickerItem[] = elementDefs.map((def) => {
+    const catInfo = ELEMENT_CATEGORY_MAP[def.type] ?? { primary: "el-other" };
+    return {
+      id: `${STANDALONE_PICKER_PREFIX}${def.type}`,
+      name: def.name,
+      description: def.description ?? "",
+      category: `el-${catInfo.primary}`,
+      categories: catInfo.extra?.map((e) => `el-${e}`),
+      tags: [def.type],
+      icon: <EditorIcon name={def.icon || "widgets"} size={16} />,
+      tab: "elements",
+    };
+  });
 
   const categories: PickerCategory[] = [
-    { key: "hero", label: "Hero" },
-    { key: "navigation", label: "Navigation" },
-    { key: "content", label: "Innehåll" },
-    { key: "media", label: "Media" },
-    { key: "utility", label: "Verktyg" },
-    { key: "element", label: "Element" },
+    // Section categories
+    { key: "hero", label: "Hjälte & Bildspel", tab: "sections" },
+    { key: "gallery", label: "Galleri", tab: "sections" },
+    { key: "content", label: "Innehåll", tab: "sections" },
+    { key: "navigation", label: "Navigation", tab: "sections" },
+    // Element categories
+    { key: "el-text", label: "Text", tab: "elements" },
+    { key: "el-media", label: "Media", tab: "elements" },
+    { key: "el-interaktion", label: "Interaktion", tab: "elements" },
+    { key: "el-layout", label: "Layout", tab: "elements" },
   ];
 
   return { items: [...sectionItems, ...standaloneItems], categories };
@@ -645,6 +658,57 @@ function SearchIcon() {
       <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   );
+}
+
+// ─── Per-section icon resolution ────────────────────────────
+
+const SECTION_ICON_MAP: Record<string, React.ReactNode> = {};
+
+function HeroIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M1.5 3.25c0-.966.784-1.75 1.75-1.75h1a.75.75 0 0 1 0 1.5h-1a.25.25 0 0 0-.25.25v1a.75.75 0 0 1-1.5 0z" />
+      <path fillRule="evenodd" d="M1.5 7.25c0-.966.784-1.75 1.75-1.75h9.5c.966 0 1.75.784 1.75 1.75v1.5a1.75 1.75 0 0 1-1.75 1.75h-9.5a1.75 1.75 0 0 1-1.75-1.75zm1.75-.25a.25.25 0 0 0-.25.25v1.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25v-1.5a.25.25 0 0 0-.25-.25z" />
+      <path d="M1.5 12.75c0 .966.784 1.75 1.75 1.75h1a.75.75 0 0 0 0-1.5h-1a.25.25 0 0 1-.25-.25v-1a.75.75 0 0 0-1.5 0z" />
+      <path d="M12.75 1.5c.966 0 1.75.784 1.75 1.75v1a.75.75 0 0 1-1.5 0v-1a.25.25 0 0 0-.25-.25h-1a.75.75 0 0 1 0-1.5z" />
+      <path d="M12.75 14.5a1.75 1.75 0 0 0 1.75-1.75v-1a.75.75 0 0 0-1.5 0v1a.25.25 0 0 1-.25.25h-1a.75.75 0 0 0 0 1.5z" />
+      <path d="M9.75 2.25a.75.75 0 0 1-.75.75h-2a.75.75 0 0 1 0-1.5h2a.75.75 0 0 1 .75.75" />
+      <path d="M9 14.5a.75.75 0 0 0 0-1.5h-2a.75.75 0 0 0 0 1.5z" />
+    </svg>
+  );
+}
+
+function getSectionIcon(sectionId: string, category: string): React.ReactNode {
+  // Per-section overrides
+  switch (sectionId) {
+    // Hero & Bildspel — custom SVG
+    case "hero-fullscreen":
+    case "hero-bottom-aligned":
+    case "product-hero":
+    case "product-hero-split":
+    case "fullscreen-slideshow":
+    case "slideshow-card":
+      return <EditorIcon name="page_menu_ios" size={18} />;
+    // Karusell & Snabblänkar — Material Symbol
+    case "carousel":
+    case "slider":
+      return <EditorIcon name="transition_slide" size={18} />;
+    // Textblock
+    case "text-blocks":
+      return <EditorIcon name="article" size={18} />;
+    // Dragspel
+    case "accordion":
+      return <EditorIcon name="view_headline" size={18} />;
+    // Rutnät
+    case "collection-grid":
+    case "collection-grid-v2":
+      return <EditorIcon name="table_rows" size={18} />;
+    // Flikar
+    case "tabs":
+      return <EditorIcon name="tab" size={18} />;
+  }
+  // Fallback to category icon
+  return <SectionTypeIcon category={category} />;
 }
 
 function SectionTypeIcon({ category }: { category: string }) {
