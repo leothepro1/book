@@ -531,6 +531,34 @@ export async function getProduct(productId: string) {
   });
 }
 
+/**
+ * Search products by title (for collection product picker, etc.)
+ * Returns lightweight results: id, title, first image, status, price.
+ */
+export async function searchProducts(query: string, excludeIds?: string[]) {
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return [];
+
+  return prisma.product.findMany({
+    where: {
+      tenantId: tenantData.tenant.id,
+      status: { not: "ARCHIVED" },
+      title: { contains: query, mode: "insensitive" },
+      ...(excludeIds && excludeIds.length > 0 ? { id: { notIn: excludeIds } } : {}),
+    },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      price: true,
+      currency: true,
+      media: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } },
+    },
+    orderBy: { title: "asc" },
+    take: 20,
+  });
+}
+
 export async function listProducts(params?: {
   status?: "ACTIVE" | "DRAFT";
   collectionId?: string;
@@ -556,8 +584,15 @@ export async function listProducts(params?: {
     where,
     include: {
       media: { orderBy: { sortOrder: "asc" }, take: 1 },
-      variants: { select: { id: true, price: true }, orderBy: { sortOrder: "asc" } },
-      _count: { select: { variants: true } },
+      variants: {
+        select: { id: true, price: true, option1: true, trackInventory: true, inventoryQuantity: true },
+        orderBy: { sortOrder: "asc" },
+      },
+      collectionItems: {
+        include: { collection: { select: { id: true, title: true } } },
+        take: 3,
+      },
+      _count: { select: { variants: true, collectionItems: true } },
     },
     orderBy: { sortOrder: "asc" },
   });
@@ -632,11 +667,21 @@ export async function createCollection(
   const slug = await resolveUniqueCollectionSlug(tenantId, titleToSlug(data.title));
 
   try {
-    const collection = await prisma.productCollection.create({
-      data: {
-        tenantId, title: data.title, description: data.description,
-        slug, imageUrl: data.imageUrl ?? null,
-      },
+    const collection = await prisma.$transaction(async (tx) => {
+      const col = await tx.productCollection.create({
+        data: {
+          tenantId, title: data.title, description: data.description,
+          slug, imageUrl: data.imageUrl ?? null, status: data.status,
+        },
+      });
+      if (data.productIds.length > 0) {
+        await tx.productCollectionItem.createMany({
+          data: data.productIds.map((productId, i) => ({
+            collectionId: col.id, productId, sortOrder: i,
+          })),
+        });
+      }
+      return col;
     });
     return { ok: true, data: { id: collection.id, slug: collection.slug } };
   } catch (error) {
@@ -676,13 +721,27 @@ export async function updateCollection(
   }
 
   try {
-    const collection = await prisma.productCollection.update({
-      where: { id: collectionId },
-      data: {
-        ...(data.title !== undefined && { title: data.title, slug }),
-        ...(data.description !== undefined && { description: data.description }),
-        ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl }),
-      },
+    const collection = await prisma.$transaction(async (tx) => {
+      const col = await tx.productCollection.update({
+        where: { id: collectionId },
+        data: {
+          ...(data.title !== undefined && { title: data.title, slug }),
+          ...(data.description !== undefined && { description: data.description }),
+          ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl }),
+          ...(data.status !== undefined && { status: data.status }),
+        },
+      });
+      if (data.productIds !== undefined) {
+        await tx.productCollectionItem.deleteMany({ where: { collectionId } });
+        if (data.productIds.length > 0) {
+          await tx.productCollectionItem.createMany({
+            data: data.productIds.map((productId, i) => ({
+              collectionId, productId, sortOrder: i,
+            })),
+          });
+        }
+      }
+      return col;
     });
     return { ok: true, data: { id: collection.id, slug: collection.slug } };
   } catch (error) {

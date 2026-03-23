@@ -18,8 +18,9 @@ type ProductListItem = {
   trackInventory: boolean;
   inventoryQuantity: number;
   media: Array<{ url: string; alt: string }>;
-  variants: Array<{ id: string; price: number }>;
-  _count: { variants: number };
+  variants: Array<{ id: string; price: number; option1: string | null; trackInventory: boolean; inventoryQuantity: number }>;
+  collectionItems: Array<{ collection: { id: string; title: string } }>;
+  _count: { variants: number; collectionItems: number };
 };
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -52,10 +53,27 @@ function getDisplayPrice(p: ProductListItem): string {
   return formatPrice(p.price, p.currency);
 }
 
-function getInventoryLabel(p: ProductListItem): string {
-  if (!p.trackInventory) return "—";
-  if (p._count.variants > 0) return "Per variant";
-  return String(p.inventoryQuantity);
+function getInventoryDisplay(p: ProductListItem): { text: string; outOfStock: boolean } {
+  // Product with variants
+  if (p._count.variants > 0 && p.variants.length > 0) {
+    const tracked = p.variants.filter((v) => v.trackInventory);
+    if (tracked.length === 0) return { text: "Lager spåras inte", outOfStock: false };
+    const total = tracked.reduce((sum, v) => sum + v.inventoryQuantity, 0);
+    if (total === 0) return { text: "0 i lager", outOfStock: true };
+    return { text: `${total} i lager för ${tracked.length} ${tracked.length === 1 ? "variant" : "varianter"}`, outOfStock: false };
+  }
+  // Product without variants
+  if (!p.trackInventory) return { text: "Lager spåras inte", outOfStock: false };
+  if (p.inventoryQuantity === 0) return { text: "0 i lager", outOfStock: true };
+  return { text: `${p.inventoryQuantity} i lager`, outOfStock: false };
+}
+
+function getCategoryLabel(p: ProductListItem): string {
+  if (p._count.collectionItems === 0) return "Okategoriserat";
+  const first = p.collectionItems[0]?.collection.title;
+  if (!first) return "Okategoriserat";
+  if (p._count.collectionItems === 1) return first;
+  return `${first} +${p._count.collectionItems - 1}`;
 }
 
 // ── Component ────────────────────────────────────────────────
@@ -73,14 +91,19 @@ export default function ProductsClient({
   const [isPending, startTransition] = useTransition();
   const [showSelectDropdown, setShowSelectDropdown] = useState(false);
   const selectDropdownRef = useRef<HTMLDivElement>(null);
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "DRAFT" | "ARCHIVED">("ALL");
 
-  // Load products
+  // Load all products once (filter client-side)
   useEffect(() => {
-    listProducts().then((data) => {
+    listProducts({ includeArchived: true }).then((data) => {
       setProducts(data as ProductListItem[]);
       setLoaded(true);
     });
   }, []);
+
+  const filteredProducts = statusFilter === "ALL"
+    ? products
+    : products.filter((p) => p.status === statusFilter);
 
   // Wire up add button
   useEffect(() => {
@@ -208,17 +231,38 @@ export default function ProductsClient({
       <span className="products-col products-col--thumb" />
       <span className="products-col products-col--name">Produkt</span>
       <span className="products-col products-col--detail">Status</span>
+      <span className="products-col products-col--detail">Kategori</span>
       <span className="products-col products-col--detail">Lager</span>
       <span className="products-col products-col--detail products-col--right">Pris</span>
     </div>
   );
 
+  const FILTERS: Array<{ key: typeof statusFilter; label: string }> = [
+    { key: "ALL", label: "Alla" },
+    { key: "ACTIVE", label: "Aktiva" },
+    { key: "DRAFT", label: "Utkast" },
+    { key: "ARCHIVED", label: "Arkiverade" },
+  ];
+
   return (
+    <>
+      <div className="products-filter-bar">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            className={`products-filter-btn${statusFilter === f.key ? " products-filter-btn--active" : ""}`}
+            onClick={() => setStatusFilter(f.key)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
     <div className="products-inner">
       {columnHeader}
 
       {/* Product rows */}
-      {products.map((product) => {
+      {filteredProducts.map((product) => {
         const checked = selectedIds.has(product.id);
         const { label: sLabel, className: sClass } = statusLabel(product.status);
         const imgUrl = product.media[0]?.url;
@@ -249,17 +293,18 @@ export default function ProductsClient({
             </div>
             <div className="products-col products-col--name">
               <span className="products-row__title">{product.title}</span>
-              {product._count.variants > 0 && (
-                <span className="products-row__meta">{product._count.variants} varianter</span>
-              )}
             </div>
             <div className="products-col products-col--detail">
               <span className={`products-status ${sClass}`}>{sLabel}</span>
             </div>
             <div className="products-col products-col--detail">
-              <span className={!product.trackInventory ? "products-stock--untracked" : product.inventoryQuantity === 0 ? "products-stock--out" : ""}>
-                {getInventoryLabel(product)}
-              </span>
+              <span className="products-category">{getCategoryLabel(product)}</span>
+            </div>
+            <div className="products-col products-col--detail">
+              {(() => {
+                const inv = getInventoryDisplay(product);
+                return <span style={inv.outOfStock ? { color: "#B21321", fontWeight: 500 } : undefined}>{inv.text}</span>;
+              })()}
             </div>
             <div className="products-col products-col--detail products-col--right">
               {getDisplayPrice(product)}
@@ -306,5 +351,6 @@ export default function ProductsClient({
         document.body,
       )}
     </div>
+    </>
   );
 }

@@ -101,7 +101,17 @@
       "Bash(cp:*)",
       "Bash(source:*)",
       "Bash(tail:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(fuser:*)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(pkill -f \"node.*next\")",
+      "Bash(pkill -9 -f next)",
+      "Bash(pkill -9 -f 'npm run dev')",
+      "Bash(echo \"port status: $?\")",
+      "Bash(/dev/null pkill:*)",
+      "Bash(/dev/null sleep:*)",
+      "Bash(xargs kill:*)",
+      "Bash(ps aux:*)"
     ]
   }
 }

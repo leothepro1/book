@@ -246,6 +246,8 @@ export const CreateCollectionSchema = z.object({
   title: z.string().min(1, "Titel krävs").max(255),
   description: z.string().max(10000).default(""),
   imageUrl: z.string().url().nullable().optional(),
+  status: ProductStatusSchema.default("DRAFT"),
+  productIds: z.array(z.string()).default([]),
 });
 
 export type CreateCollectionInput = z.infer<typeof CreateCollectionSchema>;
@@ -254,6 +256,8 @@ export const UpdateCollectionSchema = z.object({
   title: z.string().min(1).max(255).optional(),
   description: z.string().max(10000).optional(),
   imageUrl: z.string().url().nullable().optional(),
+  status: ProductStatusSchema.optional(),
+  productIds: z.array(z.string()).optional(),
 });
 
 export type UpdateCollectionInput = z.infer<typeof UpdateCollectionSchema>;

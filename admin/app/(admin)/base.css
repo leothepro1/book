@@ -13,7 +13,7 @@
   /* Surface / Background */
   --admin-bg:            #fafafa;
   --admin-surface:       #FFFFFF;
-  --admin-surface-hover: #fafafa;
+  --admin-surface-hover: #f7f7f7;
   --admin-surface-active:#f3f3f3;
   --admin-surface-muted: #f0efed;
   --admin-surface-sunken:#ECEBEA;
@@ -317,7 +317,7 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0;
 }
 
-h1 { font-size: 19px; font-weight: 600; letter-spacing: -0.02em; line-height:1em; }
+h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; line-height:1em; }
 h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; }
 h3 { font-size: 18px; font-weight: 600; }
 h4 { font-size: 16px; font-weight: 500; }

@@ -940,6 +940,9 @@ model ProductCollection {
   slug        String               // URL-safe
   imageUrl    String?              // Collection cover image
 
+  /// ACTIVE = visible on storefront, DRAFT = hidden. Does NOT affect products in the collection.
+  status      ProductStatus @default(DRAFT)
+
   sortOrder   Int       @default(0)
 
   createdAt   DateTime  @default(now())
@@ -949,6 +952,7 @@ model ProductCollection {
 
   @@unique([tenantId, slug])
   @@index([tenantId])
+  @@index([tenantId, status])
   @@index([tenantId, sortOrder])
 }
 

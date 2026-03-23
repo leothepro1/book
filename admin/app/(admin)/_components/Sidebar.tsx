@@ -11,9 +11,13 @@ import { useRole } from './RoleContext';
 
 const NAV_ITEMS = [
   { href: '/home', label: 'Startsida', icon: 'storefront' },
-  { href: '/products', label: 'Produkter', icon: 'sell' },
   { href: '/dashboard/guests', label: 'Gäster', icon: 'group' },
   { href: '/dashboard/analytics', label: 'Analys', icon: 'leaderboard' },
+];
+
+const PRODUCT_ITEMS = [
+  { href: '/collections', label: 'Produktserier' },
+  { href: '/inventory', label: 'Lager' },
 ];
 
 const CONTENT_ITEMS = [
@@ -37,6 +41,7 @@ export function Sidebar() {
   const { isAdmin } = useRole();
 
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
+  const isProductActive = isActive('/products') || PRODUCT_ITEMS.some((item) => isActive(item.href));
   const isContentActive = CONTENT_ITEMS.some((item) => isActive(item.href));
 
   const guardedClick = (e: MouseEvent<HTMLAnchorElement>, href: string) => {
@@ -59,7 +64,7 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="p-3 flex-1 overflow-y-auto flex flex-col gap-[2px]">
         {/* Top nav items */}
-        {NAV_ITEMS.filter((_, i) => i < 3).map((item) => {
+        {NAV_ITEMS.filter((_, i) => i < 2).map((item) => {
           const active = isActive(item.href);
           return (
             <Link
@@ -91,6 +96,80 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Produkter — accordion with sub-items */}
+        <div>
+          <Link
+            href="/products"
+            onClick={(e) => guardedClick(e, '/products')}
+            className={`flex items-center gap-3 p-[10px] rounded-lg ${
+              isProductActive
+                ? 'bg-[#ebebeb] text-[#171717]'
+                : 'text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040]'
+            }`}
+          >
+            <span
+              className="material-symbols-rounded flex-shrink-0"
+              style={{
+                fontSize: 20,
+                fontVariationSettings: isProductActive
+                  ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
+                  : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
+              }}
+            >
+              sell
+            </span>
+            <span className={`text-[14px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+            }`}>
+              Produkter
+            </span>
+          </Link>
+
+          <div className={`overflow-hidden transition-all duration-300 ${
+            isProductActive && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+          }`}>
+            <div className="flex flex-col">
+              {PRODUCT_ITEMS.map((sub, idx) => {
+                const subActive = isActive(sub.href);
+                const activeIdx = PRODUCT_ITEMS.findIndex((s) => isActive(s.href));
+                const hasActiveSub = activeIdx !== -1;
+                const showLine = hasActiveSub && !subActive && idx < activeIdx;
+
+                return (
+                  <Link
+                    key={sub.href}
+                    href={sub.href}
+                    onClick={(e) => guardedClick(e, sub.href)}
+                    className={`relative block py-[6px] rounded-lg text-[14px] font-[500] ${
+                      subActive
+                        ? 'bg-[#ebebeb] text-[#171717]'
+                        : 'text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040]'
+                    }`}
+                    style={{ paddingLeft: 36 }}
+                  >
+                    {subActive ? (
+                      <img
+                        src={CONNECTOR_SVG}
+                        alt=""
+                        className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+                        style={{ width: 21, height: 28, left: 7.5, marginTop: -1.5 }}
+                      />
+                    ) : showLine ? (
+                      <img
+                        src={LINE_SVG}
+                        alt=""
+                        className="absolute pointer-events-none"
+                        style={{ width: 21, left: 7.5, top: -6, bottom: -6, height: 'calc(100% + 12px)' }}
+                      />
+                    ) : null}
+                    {sub.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
 
         {/* Innehåll — accordion with sub-items */}
         <div>
@@ -125,7 +204,8 @@ export function Sidebar() {
               {CONTENT_ITEMS.map((sub, idx) => {
                 const subActive = isActive(sub.href);
                 const activeIdx = CONTENT_ITEMS.findIndex((s) => isActive(s.href));
-                const showLine = !subActive && (activeIdx === -1 || idx < activeIdx);
+                const hasActiveSub = activeIdx !== -1;
+                const showLine = hasActiveSub && !subActive && idx < activeIdx;
 
                 return (
                   <Link
@@ -163,7 +243,7 @@ export function Sidebar() {
         </div>
 
         {/* Bottom nav items (Analys) */}
-        {NAV_ITEMS.filter((_, i) => i >= 3).map((item) => {
+        {NAV_ITEMS.filter((_, i) => i >= 2).map((item) => {
           const active = isActive(item.href);
           return (
             <Link

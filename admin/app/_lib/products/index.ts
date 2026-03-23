@@ -13,6 +13,7 @@ export {
   restoreProduct,
   getProduct,
   listProducts,
+  searchProducts,
   getInventoryHistory,
   getPriceHistory,
   createCollection,

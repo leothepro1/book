@@ -109,6 +109,7 @@
   align-items: center;
   height: 43px;
   gap: 16px;
+  border-radius: .75rem .75rem 0px 0px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--admin-border);
   font-size: 14px;
@@ -150,8 +151,8 @@
 }
 
 .files-header-check--active {
-  background: var(--admin-accent);
-  border-color: var(--admin-accent);
+  background: var(--dark-primary);
+  border-color: var(--dark-primary);
 }
 
 .files-header-check--active .files-header-check__icon {
