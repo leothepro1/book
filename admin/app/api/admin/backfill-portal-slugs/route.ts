@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * One-time backfill: generate portalSlug for existing tenants.
  * Secured with CRON_SECRET — same pattern as cron endpoints.

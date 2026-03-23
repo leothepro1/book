@@ -8,6 +8,8 @@
  *     -H "x-cron-secret: YOUR_CRON_SECRET"
  */
 
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/_lib/db/prisma";
 import { env } from "@/app/_lib/env";
