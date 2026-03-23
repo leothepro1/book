@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";

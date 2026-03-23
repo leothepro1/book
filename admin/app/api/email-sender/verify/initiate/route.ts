@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * POST /api/email-sender/verify/initiate
  *

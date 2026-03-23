@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * DELETE /api/email-sender/verify/cancel
  *

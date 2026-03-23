@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * PMS Webhook Receiver — Booking Engine
  *

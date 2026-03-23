@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Sync Job Runner — DEPRECATED
  *
