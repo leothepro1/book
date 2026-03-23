@@ -559,17 +559,17 @@ button.settings-main__header-crumb:hover {
     font-family: var(--admin-font);
     cursor: pointer;
     color: #303030;
-    background: #fff;
+    background: #E3E3E3;
     border-radius: var(--radius-md);
     justify-content: center;
     align-items: center;
-    gap: var(--space-2);
-    padding: 7px 16px;
-    font-size: var(--font-md);
+    gap: 3px;
+    padding: 5px 12px;
+    font-size: 13px;
     font-weight: var(--font-weight-medium);
     transition: background var(--duration-normal);
     display: inline-flex;
-    border: 1px solid #dbdbdb;
+    border: none;
 }
 
 .settings-btn--muted:hover:not(:disabled) {

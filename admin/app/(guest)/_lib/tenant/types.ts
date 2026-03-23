@@ -317,6 +317,12 @@ export type TenantConfig = {
   menus?: MenuConfig[];
 
   /**
+   * Global layout settings for the booking engine.
+   * Controls max-width and desktop-specific spacing.
+   */
+  layout?: LayoutConfig;
+
+  /**
    * Tenant-level color scheme definitions.
    * Sections reference a scheme by ID via colorSchemeId.
    * The resolve pipeline maps scheme tokens → CSS variables
@@ -345,6 +351,17 @@ export type TenantConfig = {
 
   /** Runtime-only: the tenant's primary locale. */
   _primaryLocale?: string;
+};
+
+// ─── Layout Configuration ────────────────────────────────────
+
+export type LayoutConfig = {
+  /** Max content width in pixels for desktop viewport. Default 1250. */
+  maxWidth: number;
+};
+
+export const LAYOUT_DEFAULTS: LayoutConfig = {
+  maxWidth: 1250,
 };
 
 export type SupportLinks = {

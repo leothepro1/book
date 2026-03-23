@@ -1,7 +1,6 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "./_lib/db/prisma";
-import { toPrismaBookingStatus } from "./_lib/integrations/prisma-mapping";
 import { revalidatePath } from "next/cache";
 import crypto from "crypto";
 
@@ -49,7 +48,7 @@ async function createFakeBooking(formData: FormData) {
       arrival,
       departure,
       unit,
-      status: toPrismaBookingStatus("upcoming"),
+      status: "PRE_CHECKIN",
     },
   });
 

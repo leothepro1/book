@@ -7,7 +7,6 @@ import { getTenantConfig } from "@/app/(guest)/_lib/tenant/getTenantConfig";
 import { getBookingStatus } from "../../../_lib/booking";
 import { ThemeRenderer } from "../../../_lib/themes";
 import { BookingsProvider } from "../../../_components/sections";
-import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { prisma } from "../../../../_lib/db/prisma";
 import type { NormalizedBooking } from "@/app/_lib/integrations/types";
 
@@ -91,14 +90,8 @@ export default async function Page(props: {
   const config = await getTenantConfig(booking.tenantId, { locale });
   const bookingStatus = getBookingStatus(booking);
 
-  let allBookings: NormalizedBooking[];
-  try {
-    const adapter = await resolveAdapter(booking.tenantId);
-    allBookings = await adapter.getBookings(booking.tenantId, { guestEmail: booking.guestEmail });
-  } catch (error) {
-    console.error("[STAYS] Adapter error, returning empty:", error);
-    allBookings = [];
-  }
+  // Booking engine: no PMS sync — show booking from local DB only
+  const allBookings: NormalizedBooking[] = booking ? [booking] : [];
 
   const { currentBookings, previousBookings } = splitBookings(allBookings);
 

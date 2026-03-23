@@ -18,3 +18,4 @@ import "./collection-grid-v2";
 import "./product-hero";
 import "./product-hero-split";
 import "./text-blocks";
+import "./search";

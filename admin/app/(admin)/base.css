@@ -22,7 +22,7 @@
   --admin-sidebar:       #FFFFFF;
 
   /* Borders */
-  --admin-border:        #ebebeb;
+  --admin-border:        #DDDDDD;
   --admin-border-strong: #E6E5E3;
   --admin-border-focus:  #D0D0D0;
 
@@ -362,7 +362,7 @@ label,
 .admin-label {
   font-family: var(--admin-font);
   font-size: var(--font-md);
-  font-weight: 450;
+  font-weight: 400;
   color: var(--admin-text);
   display: block;
   margin-bottom: 7px;
@@ -736,7 +736,7 @@ textarea::placeholder {
 
 .admin-dropdown__item--active {
   font-weight: 500;
-  background: var(--admin-surface-muted);
+  background: #EBEBEB;
 }
 
 /* Check icon inside active item */
@@ -749,6 +749,8 @@ textarea::placeholder {
 .admin-dropdown__text {
   flex: 1;
   overflow: hidden;
+  font-size: 13px;
+  font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

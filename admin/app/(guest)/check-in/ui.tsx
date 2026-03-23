@@ -7,8 +7,6 @@ import TasksStep from "./TasksStep";
 import SuccessView from "./SuccessView";
 import type { CheckInLookupPayload, CheckInLookupResponse, CheckInCommitResponse } from "./actions";
 import type { CheckinCardDefinition, CheckinCardData } from "@/app/_lib/checkin-cards/types";
-import type { CardDesignConfig } from "@/app/_lib/access-pass/card-design";
-
 type Step = "form" | "confirm" | "tasks" | "success";
 
 type Props = {
@@ -21,7 +19,6 @@ type Props = {
   }) => Promise<CheckInCommitResponse>;
   activeCards: CheckinCardDefinition[];
   checkInTime?: string;
-  cardDesign: CardDesignConfig;
   tenantName: string;
   checkinStyles?: Record<string, string>;
 };
@@ -58,7 +55,7 @@ function formatCompactDate(iso: string) {
   return `${dayNamesShort[d.getDay()]}, ${d.getDate()} ${monthNamesShort[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-export default function CheckInClient({ onLookup, onCommit, activeCards, checkInTime, cardDesign, tenantName, checkinStyles }: Props) {
+export default function CheckInClient({ onLookup, onCommit, activeCards, checkInTime, tenantName, checkinStyles }: Props) {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -80,7 +77,7 @@ export default function CheckInClient({ onLookup, onCommit, activeCards, checkIn
     "find-booking": "form",
     "confirm": "confirm",
     "tasks": "tasks",
-    "wallet-card": "success",
+    "success": "success",
   };
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -334,7 +331,6 @@ export default function CheckInClient({ onLookup, onCommit, activeCards, checkIn
         {step === "success" && (
           <SuccessView
             nextHref={nextHref}
-            cardDesign={cardDesign}
             tenantName={tenantName}
             booking={found ? {
               arrivalISO: found.arrivalISO,

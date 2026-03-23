@@ -3,7 +3,6 @@
 import { prisma } from "../../_lib/db/prisma";
 import { getTenantConfig } from "../_lib/tenant";
 import { performCheckIn } from "../_lib/booking/actions";
-import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { resolveTenantFromHost } from "../_lib/tenant/resolveTenantFromHost";
 import { getActiveCheckinCards } from "@/app/_lib/pages/config";
 import "@/app/_lib/checkin-cards/definitions";
@@ -198,13 +197,7 @@ export async function checkInCommit(payload: {
       });
     }
 
-    // Notify PMS adapter (fire-and-forget — never blocks guest flow)
-    try {
-      const adapter = await resolveAdapter(booking.tenantId);
-      await adapter.notifyCheckIn(booking.tenantId, booking.id);
-    } catch (error) {
-      console.error("[CHECK-IN] Adapter notifyCheckIn failed:", error);
-    }
+    // PMS notification removed — booking engine uses real-time queries
   }
 
   const nextHref = token ? `/p/${token}` : (next || "/");

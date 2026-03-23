@@ -92,7 +92,7 @@
 /* ── Header ── */
 .ml-header {
   display: flex;
-  background: var(--admin-surface-muted);
+  background: #F3F3F3;
   border-bottom: 1px solid var(--admin-border);
   align-items: center;
   justify-content: space-between;
@@ -101,9 +101,8 @@
 }
 .ml-title {
   margin: 0;
-  letter-spacing: -0.2px;
   font-family: var(--admin-font);
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--admin-text);
 }
@@ -295,25 +294,25 @@
   background: var(--admin-accent-tint, #EBF5FF);
 }
 .ml-dropzone-btn {
-  padding: 9px 17px;
-  border: none;
-  border-radius: 8px;
-  background: var(--admin-accent);
-  color: var(--admin-primary-text);
-  font-family: var(--admin-font);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s;
-  flex-shrink: 0;
+    background: var(--dark-primary);
+    color: var(--admin-primary-text);
+    font-family: var(--admin-font);
+    cursor: pointer;
+    white-space: nowrap;
+    border: none;
+    border-radius: 8px;
+    flex-shrink: 0;
+    padding: 7px 11px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background .15s;
 }
 .ml-dropzone-btn:hover {
-  background: var(--admin-accent-hover);
+  background: var(--dark-primary-hover);
 }
 .ml-dropzone-text {
   font-family: var(--admin-font);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 400;
   color: var(--admin-text-secondary);
 }
@@ -675,12 +674,12 @@ display: none;
 
 /* ── Buttons ── */
 .ml-btn {
-  padding: 7px 18px;
+  padding: 5px 15px;
   border-radius: 8px;
   border: none;
   font-family: var(--admin-font);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   transition: background 0.15s, opacity 0.15s, transform 0.25s cubic-bezier(0.22, 0.68, 0, 1.06);
 }
@@ -704,11 +703,11 @@ display: none;
 }
 
 .ml-btn--confirm {
-  background: var(--admin-accent);
+  background: var(--dark-primary);
   color: var(--admin-primary-text);
 }
 .ml-btn--confirm:hover:not(:disabled) {
-  background: var(--admin-accent-hover);
+  background: var(--dark-primary-hover);
 }
 
 /* ── Responsive ── */

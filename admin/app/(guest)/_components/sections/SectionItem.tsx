@@ -39,6 +39,7 @@ import { CollectionGridV2Renderer } from "./renderers/CollectionGridV2Renderer";
 import { ProductHeroRenderer } from "./renderers/ProductHeroRenderer";
 import { ProductHeroSplitRenderer } from "./renderers/ProductHeroSplitRenderer";
 import { TextBlocksRenderer } from "./renderers/TextBlocksRenderer";
+import { SearchDefaultRenderer } from "./renderers/SearchRenderer";
 
 const RENDERER_MAP: Record<string, React.ComponentType<SectionRendererProps>> = {
   "tabs/underline": TabsUnderlineRenderer,
@@ -58,6 +59,7 @@ const RENDERER_MAP: Record<string, React.ComponentType<SectionRendererProps>> = 
   "product-hero/default": ProductHeroRenderer,
   "product-hero-split/default": ProductHeroSplitRenderer,
   "text-blocks/default": TextBlocksRenderer,
+  "search/default": SearchDefaultRenderer,
 };
 
 /**

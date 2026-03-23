@@ -4,7 +4,6 @@ import { prisma } from "@/app/_lib/db/prisma";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { getAdapter } from "@/app/_lib/integrations/registry";
 import { encryptCredentials, decryptCredentials } from "@/app/_lib/integrations/crypto";
-import { enqueueSyncJob } from "@/app/_lib/integrations/sync/scheduler";
 import { PmsProviderSchema } from "@/app/_lib/integrations/types";
 import type { PmsProvider } from "@/app/_lib/integrations/types";
 
@@ -196,9 +195,6 @@ export async function connectIntegration(
       isDemoEnvironment,
     },
   });
-
-  // Enqueue initial sync
-  await enqueueSyncJob(tenant.tenant.id, validProvider);
 
   return { ok: true };
 }

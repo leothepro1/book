@@ -13,12 +13,6 @@ import {
   getSyncHistory,
 } from "./actions";
 import type { IntegrationStatusResponse, SyncHistoryItem } from "./actions";
-import {
-  getLockIntegrationStatus,
-  connectLockIntegration,
-  disconnectLockIntegration,
-} from "./lock-actions";
-import type { LockIntegrationStatusResponse } from "./lock-actions";
 import { PROVIDER_FORMS, PROVIDER_DISPLAY } from "./forms";
 import type { FormFieldDefinition } from "./forms";
 import { getMewsDemoCredentials } from "@/app/_lib/integrations/adapters/mews/demo-credentials";
@@ -30,10 +24,6 @@ const AVAILABLE_PROVIDERS = [
   "mews",
   ...(IS_DEV ? ["fake"] : []),
 ] as const;
-
-const LOCK_PROVIDERS: { id: string; name: string; enabled: boolean }[] = [
-  { id: "salto", name: "Salto", enabled: true },
-];
 
 function ProviderLogo({ info, size = 22 }: { info: { logo?: string; icon?: string; name: string }; size?: number }) {
   if (info.logo) {
@@ -132,16 +122,6 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
   const [isLoadingEdit, setIsLoadingEdit] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Lock integration state
-  const [lockIntegration, setLockIntegration] = useState<LockIntegrationStatusResponse>(null);
-  const [showLockPicker, setShowLockPicker] = useState(false);
-  const [isConnectingLock, setIsConnectingLock] = useState(false);
-
-  // Explicit tracking of which integration type is currently being viewed/edited.
-  // This is the ONLY source of truth for disconnect/test/connect action routing.
-  // Never infer from selectedProvider — always set explicitly on navigation.
-  const [activeType, setActiveType] = useState<"pms" | "lock">("pms");
-
   const isConnected = (uiState === "connected" || uiState === "connected-detail") && !isEditing;
 
   // Helper: set breadcrumb with clickable parent
@@ -152,25 +132,14 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
     ]);
   }
 
-  /** Returns "pms" or "lock" — reads from explicit activeType state,
-   *  never inferred from selectedProvider. Set on every navigation. */
-  function currentIntegrationType(): "pms" | "lock" {
-    return activeType;
-  }
-
   useEffect(() => {
     loadStatus();
   }, []);
 
   async function loadStatus() {
-    const [status, lockStatus] = await Promise.all([
-      getIntegrationStatus(),
-      getLockIntegrationStatus(),
-    ]);
+    const status = await getIntegrationStatus();
     setIntegration(status);
-    setLockIntegration(lockStatus);
     setIsEditing(false);
-    setActiveType("pms");
     if (status && status.status !== "disconnected") {
       setUiState("connected");
       setSelectedProvider(status.provider);
@@ -185,9 +154,6 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
   function selectProvider(provider: string) {
     setSelectedProvider(provider);
     setTestResult(null);
-    const info = PROVIDER_DISPLAY[provider];
-    // Explicitly set which integration type we're working with
-    setActiveType(info?.integrationType ?? "pms");
     const form = PROVIDER_FORMS[provider as keyof typeof PROVIDER_FORMS];
     const defaults: Record<string, string> = {};
     form?.fields.forEach((f) => {
@@ -198,7 +164,8 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
     setFormValues(defaults);
     setShowPickerModal(false);
     setUiState("form");
-    setBreadcrumb(info?.name ?? provider);
+    const providerInfo = PROVIDER_DISPLAY[provider];
+    setBreadcrumb(providerInfo?.name ?? provider);
   }
 
   // ── Not connected — landing ─────────────────────────────
@@ -214,7 +181,7 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
         </p>
         <button
           className="settings-btn--select-pms"
-          onClick={() => { setActiveType("pms"); setShowPickerModal(true); }}
+          onClick={() => { setShowPickerModal(true); }}
         >
           Välj PMS
         </button>
@@ -242,7 +209,6 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
         <button
           onClick={() => {
             setSelectedProvider(integration.provider);
-            setActiveType("pms");
             setUiState("connected-detail");
             setBreadcrumb(providerInfo.name);
           }}
@@ -333,88 +299,6 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
                 </button>
               );
             })}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Lock picker modal ──────────────────────────────────────
-
-  function renderLockPickerModal() {
-    return (
-      <div
-        style={{
-          position: "fixed", inset: 0, zIndex: 200,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}
-        onClick={() => setShowLockPicker(false)}
-      >
-        <div style={{
-          position: "absolute", inset: 0,
-          background: "var(--admin-overlay)",
-          animation: "settings-modal-fade-in 0.15s ease",
-        }} />
-        <div
-          style={{
-            position: "relative", zIndex: 1,
-            background: "var(--admin-surface)",
-            borderRadius: 16, padding: 0, width: 440,
-            maxHeight: "80vh", display: "flex", flexDirection: "column",
-            animation: "settings-modal-scale-in 0.2s cubic-bezier(0.32, 0.72, 0, 1)",
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            background: "#F9F8F7", borderBottom: "1px solid #E6E5E3",
-            padding: "20px 20px 12px 20px", borderRadius: "16px 16px 0 0",
-          }}>
-            <h3 style={{ fontSize: 17, fontWeight: 600 }}>Välj låssystem</h3>
-            <button
-              onClick={() => setShowLockPicker(false)}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                border: "none", background: "transparent",
-                cursor: "pointer", color: "var(--admin-text-secondary)",
-              }}
-              aria-label="Stäng"
-            >
-              <EditorIcon name="close" size={20} />
-            </button>
-          </div>
-          <div style={{ display: "grid", gap: 8, padding: 20, overflowY: "auto" }}>
-            {LOCK_PROVIDERS.map((lp) => (
-              <button
-                key={lp.id}
-                disabled={!lp.enabled}
-                onClick={() => {
-                  selectProvider(lp.id);
-                  setShowLockPicker(false);
-                }}
-                className="admin-option-card"
-                style={{
-                  padding: "0.5rem", border: "1px solid #F0EFED", borderRadius: 12,
-                  opacity: lp.enabled ? 1 : 0.5,
-                  cursor: lp.enabled ? "pointer" : "not-allowed",
-                }}
-              >
-                <div className="admin-option-card-left">
-                  <ProviderLogo info={PROVIDER_DISPLAY[lp.id] ?? { name: lp.name, icon: "lock" }} size={42} />
-                  <div className="admin-option-card-title">{lp.name}</div>
-                </div>
-                {lp.enabled ? (
-                  <EditorIcon name="chevron_forward" size={20} style={{ color: "var(--admin-text-tertiary)" }} />
-                ) : (
-                  <span style={{
-                    fontSize: 11, fontWeight: 600, color: "var(--admin-text-tertiary)",
-                    background: "var(--admin-surface-hover)", padding: "2px 6px", borderRadius: 4,
-                  }}>
-                    Kommer snart
-                  </span>
-                )}
-              </button>
-            ))}
           </div>
         </div>
       </div>
@@ -512,24 +396,6 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
             Använd Mews demo-credentials
           </button>
         )}
-        {!isConnected && currentIntegrationType() === "lock" && DEMO_MODE_ENABLED && (
-          <button
-            className="settings-btn--outline"
-            style={{ marginBottom: 16 }}
-            onClick={() => {
-              setFormValues({
-                clientId: "demo_client_id",
-                clientSecret: "demo_client_secret",
-                siteId: "demo_site_001",
-                scenario: "happy",
-              });
-              setTestResult(null);
-            }}
-          >
-            <EditorIcon name="science" size={16} />
-            Använd demo-credentials
-          </button>
-        )}
 
         {/* Form fields */}
         <div className="admin-form">
@@ -564,10 +430,7 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
               disabled={isPending}
               onClick={() => {
                 startTransition(async () => {
-                  const { testLockConnection } = await import("./lock-actions");
-                  const result = currentIntegrationType() === "lock"
-                    ? await testLockConnection()
-                    : await testExistingConnection();
+                  const result = await testExistingConnection();
                   if (result.ok) await loadStatus();
                 });
               }}
@@ -602,9 +465,7 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
                 setIsTesting(true);
                 setTestResult(null);
                 try {
-                  const result = currentIntegrationType() === "lock"
-                    ? await connectLockIntegration(selectedProvider!, formValues).then((r) => ({ ok: r.ok, error: r.error }))
-                    : await testNewConnection(selectedProvider!, formValues);
+                  const result = await testNewConnection(selectedProvider!, formValues);
                   setTestResult(result);
                 } catch {
                   setTestResult({ ok: false, error: "Anslutningen misslyckades" });
@@ -622,9 +483,7 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
               onClick={async () => {
                 setIsConnecting(true);
                 try {
-                  const result = currentIntegrationType() === "lock"
-                    ? await connectLockIntegration(selectedProvider!, formValues)
-                    : await connectIntegration(selectedProvider!, formValues);
+                  const result = await connectIntegration(selectedProvider!, formValues);
                   if (result.ok) {
                     await loadStatus();
                   } else {
@@ -705,10 +564,7 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
                   className="settings-btn--outline"
                   onClick={async () => {
                     setIsLoadingEdit(true);
-                    const { getLockCredentialsForEdit: getLockCreds } = await import("./lock-actions");
-                    const creds = currentIntegrationType() === "lock"
-                      ? await getLockCreds()
-                      : await getCredentialsForEdit();
+                    const creds = await getCredentialsForEdit();
                     if (creds) {
                       setFormValues(creds);
                     }
@@ -741,14 +597,11 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
                     disabled={isPending}
                     onClick={() => {
                       startTransition(async () => {
-                        const result = currentIntegrationType() === "lock"
-                          ? await disconnectLockIntegration()
-                          : await disconnectIntegration();
+                        const result = await disconnectIntegration();
                         if (result.ok) {
                           setConfirmDisconnect(false);
                           setSelectedProvider(null);
                           onSubTitleChange?.(null);
-                          // Reload both PMS and lock status from DB
                           await loadStatus();
                         }
                       });
@@ -964,74 +817,7 @@ export function IntegrationsContent({ onSubTitleChange }: IntegrationsContentPro
         {(uiState === "form" || uiState === "connected-detail") && renderConfigForm()}
       </div>
 
-      {/* Digitala nycklar — only on overview states */}
-      {(uiState === "not-connected" || uiState === "connected") && (
-        <div>
-          <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>
-            Låssystem
-          </h3>
-          <p className="admin-desc" style={{ marginBottom: 16 }}>
-            Koppla in din leverantör av digitala nycklar för att aktivera digital incheckning.
-          </p>
-
-          {lockIntegration && lockIntegration.status !== "disconnected" ? (
-            /* Connected lock overview — same pattern as PMS card */
-            <button
-              onClick={() => {
-                setSelectedProvider(lockIntegration.provider);
-                setActiveType("lock");
-                setFormValues(lockIntegration.maskedCredentials);
-                // Populate integration state so renderConfigForm() works
-                setIntegration({
-                  provider: lockIntegration.provider,
-                  status: lockIntegration.status,
-                  lastSyncAt: lockIntegration.lastTestedAt,
-                  lastErrorAt: null,
-                  lastError: lockIntegration.lastError,
-                  consecutiveFailures: lockIntegration.consecutiveFailures,
-                  externalTenantId: null,
-                  isDemoEnvironment: false,
-                  maskedCredentials: lockIntegration.maskedCredentials,
-                });
-                setUiState("connected-detail");
-                const info = PROVIDER_DISPLAY[lockIntegration.provider];
-                setBreadcrumb(info?.name ?? lockIntegration.provider);
-              }}
-              className="admin-option-card"
-              style={{ padding: "0.5rem", border: "1px solid #F0EFED", borderRadius: 12 }}
-            >
-              <div className="admin-option-card-left">
-                <ProviderLogo info={PROVIDER_DISPLAY[lockIntegration.provider] ?? { name: lockIntegration.provider, icon: "lock" }} size={42} />
-                <div className="admin-option-card-title">
-                  {PROVIDER_DISPLAY[lockIntegration.provider]?.name ?? lockIntegration.provider}
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{
-                  padding: "3px 8px", borderRadius: 10,
-                  fontSize: 12, fontWeight: 500,
-                  color: lockIntegration.status === "active" ? "#195f3c" : "#C62828",
-                  background: lockIntegration.status === "active" ? "#22c55e33" : "#C6282814",
-                }}>
-                  {lockIntegration.status === "active" ? "Ansluten" : "Åtgärd krävs"}
-                </span>
-                <EditorIcon name="chevron_forward" size={20} style={{ color: "var(--admin-text-tertiary)" }} />
-              </div>
-            </button>
-          ) : (
-            /* Not connected */
-            <button
-              className="settings-btn--select-pms"
-              onClick={() => { setActiveType("lock"); setShowLockPicker(true); }}
-            >
-              Välj låssystem
-            </button>
-          )}
-
-        </div>
-      )}
       {showPickerModal && createPortal(renderPickerModal(), document.body)}
-      {showLockPicker && createPortal(renderLockPickerModal(), document.body)}
       {activeTooltip && createPortal(
         <div
           style={{

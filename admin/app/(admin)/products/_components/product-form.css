@@ -1,0 +1,971 @@
+/* ── Product Form — container overrides ── */
+
+.container:has(.products-page) {
+  max-width: none;
+  padding: 0;
+  height: 100dvh;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+}
+
+.products-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.products-page .admin-editor {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ── Product Form Layout ── */
+
+.pf-header {
+  border-bottom: none;
+  justify-content: space-between;
+  align-items: center;
+  height: auto;
+  padding: 16px;
+  display: flex;
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pf-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Actions dropdown ── */
+
+.pf-actions-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 200px;
+  background: var(--admin-surface);
+  border-radius: 12px;
+  padding: 4px;
+  z-index: 50;
+  box-shadow: 0 20px 24px #1919190d, 0 5px 8px #19191907, 0 0 0 1px #2a1c0012;
+  animation: .12s ease-out settings-dropdown-in;
+}
+
+.pf-actions-dropdown__item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: var(--admin-font);
+  color: var(--admin-text);
+  text-align: left;
+}
+
+.pf-actions-dropdown__item:hover {
+  background: #f7f7f7;
+}
+
+.pf-actions-dropdown__item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pf-actions-dropdown__item--danger {
+  color: var(--admin-danger);
+}
+
+.pf-actions-dropdown__item--danger:hover {
+  background: var(--admin-danger-tint);
+}
+
+/* ── Two-column body ── */
+
+.pf-body {
+  display: flex;
+  gap: 16px;
+  padding: 0 16px 110px;
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pf-main {
+  flex: 7;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pf-sidebar {
+  flex: 3;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Card internals ── */
+
+.pf-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0;
+}
+
+.pf-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--admin-text);
+}
+
+.pf-field {
+  margin-bottom: 16px;
+}
+
+.pf-field:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Media layout ── */
+
+.pf-media-grid-flat {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px;
+}
+
+.pf-media-cell--featured {
+  grid-row: 1 / 3;
+  grid-column: 1;
+}
+
+.pf-media-cell--small,
+.pf-media-cell--add {
+  aspect-ratio: 1;
+}
+
+.pf-media-cell {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.pf-media-cell--small {
+  aspect-ratio: 1;
+}
+
+.pf-media-cell__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  border: 1px solid var(--admin-border);
+  background: transparent;
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+}
+
+.pf-media-cell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: var(--radius-md);
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+.pf-media-cell:hover::after {
+  opacity: 1;
+}
+
+.pf-media-cell--add::after {
+  display: none;
+}
+
+.pf-media-cell__drag {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+  cursor: grab;
+}
+
+.pf-media-cell:hover .pf-media-cell__drag {
+  opacity: 1;
+}
+
+.pf-media-cell__remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.pf-media-cell:hover .pf-media-cell__remove {
+  opacity: 1;
+}
+
+.pf-media-cell--add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed var(--admin-border);
+  background: #F7F7F7;
+  color: #303030;
+  cursor: pointer;
+  transition: border-color var(--duration-fast), color var(--duration-fast);
+}
+
+.pf-media-cell--add:hover {
+  border-color: var(--admin-border-focus);
+  color: var(--admin-text-secondary);
+}
+
+.pf-media-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 32px 16px;
+  border: 1.5px dashed #bbb;
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+  background: #FDFDFD;
+}
+
+.pf-media-empty__btn {
+  padding: 5px 12px;
+  border: 1px solid #ddd;
+  background: none;
+  color: #303030;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--admin-font);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+
+.pf-media-empty__btn:hover {
+  background: #ebebeb;
+  border-color: var(--admin-border-focus);
+}
+
+/* ── Add option button (empty variant state) ── */
+
+.pf-add-option-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  margin: -4px -8px;
+  border: none;
+  background: none;
+  color: var(--admin-text-secondary);
+  font-size: 13px;
+  font-family: var(--admin-font);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+
+.pf-add-option-btn:hover {
+  background: var(--admin-surface-hover, #fafafa);
+  color: var(--admin-text);
+}
+
+/* ── Add option button in header (when options exist) ── */
+
+.pf-add-option-header-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--admin-border);
+  background: transparent;
+  color: var(--admin-text);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--admin-font);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+
+.pf-add-option-header-btn:hover {
+  background: var(--admin-surface-hover, #fafafa);
+  border-color: var(--admin-border-focus);
+}
+
+/* ── Options ── */
+
+.pf-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pf-option {
+  padding: 12px;
+  background: #f9f8f7;
+  border-radius: var(--radius-md);
+}
+
+.pf-option__row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.pf-option__name-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.pf-option__values-field {
+  flex: 2;
+  min-width: 0;
+}
+
+.pf-option__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--admin-text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+
+.pf-option__remove:hover {
+  background: var(--admin-danger-tint);
+  color: var(--admin-danger);
+}
+
+.pf-option-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ── Unified focus ring for all inputs ── */
+
+.pf-main .email-sender__input:focus,
+.pf-sidebar .email-sender__input:focus {
+  box-shadow: 0 0 0 3px rgba(39, 131, 222, 0.1);
+}
+
+/* ── Price input ── */
+
+.pf-price-input-wrap {
+  position: relative;
+  max-width: 200px;
+}
+
+.pf-price-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 32px 0 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: var(--admin-font);
+  color: var(--admin-text);
+  background: #fff;
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-price-input:focus {
+  border-color: var(--admin-border-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(39, 131, 222, 0.1);
+}
+
+.pf-price-input::placeholder {
+  color: var(--admin-text-tertiary);
+}
+
+.pf-price-input-suffix {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: var(--admin-text-tertiary);
+  pointer-events: none;
+}
+
+/* ── Price footer + expandable panel ── */
+
+.pf-price-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-top: 1px solid #E3E3E3;
+}
+
+.pf-price-footer__pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pf-price-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: #f0f0f0;
+  color: #616161;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: default;
+}
+
+.pf-price-pill__value {
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: #E2E2E2;
+  color: #616161;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.pf-price-footer__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--admin-text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast);
+}
+
+.pf-price-footer__toggle:hover {
+  background: #f3f3f3;
+}
+
+/* ── Price extras expandable ── */
+
+.pf-price-extras {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pf-price-extras--open {
+  max-height: 200px;
+}
+
+.pf-price-extras__inner {
+  padding: 16px;
+  border-top: 1px solid var(--admin-border);
+}
+
+/* ── Checkbox row ── */
+
+.pf-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.pf-checkbox-label {
+  font-size: 14px;
+  color: var(--admin-text);
+  user-select: none;
+}
+
+/* ── Collection picker ── */
+
+.pf-collection-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface);
+  cursor: text;
+  transition: border-color var(--duration-fast);
+}
+
+.pf-collection-trigger:focus-within {
+  border-color: var(--admin-border-focus);
+  box-shadow: 0 0 0 3px rgba(39, 131, 222, 0.1);
+}
+
+.pf-collection-trigger__input {
+  flex: 1;
+  height: 32px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 400 !important;
+  font-family: var(--admin-font);
+  color: var(--admin-text);
+  outline: none;
+  min-width: 0;
+}
+
+.pf-collection-search {
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: var(--admin-font);
+  color: var(--admin-text);
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.pf-collection-search:focus {
+  border-color: var(--admin-border-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(39, 131, 222, 0.1);
+}
+
+.pf-collection-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.pf-collection-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 6px;
+  background: #E3E3E3;
+  color: #303030;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.pf-collection-pill__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: #616161;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background var(--duration-fast), color var(--duration-fast);
+  padding: 0;
+}
+
+.pf-collection-pill__remove:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: #303030;
+}
+
+/* ── Variant price inherited state ── */
+
+.pf-variant-input--inherited {
+  color: var(--admin-text-tertiary);
+}
+
+/* ── Connected option list ── */
+
+.pf-option-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px 16px 16px;
+}
+
+.pf-option-list__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--admin-border);
+  border-top: 1px solid var(--admin-border);
+  border-radius: 0 0 8px 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--admin-text-secondary);
+  font-family: var(--admin-font);
+  transition: background var(--duration-fast);
+}
+
+.pf-option-list__footer:hover {
+  background: var(--admin-surface-hover, #fafafa);
+}
+
+/* ── Option card (replaces mi-card for products) ── */
+
+.pf-option-card {
+  background: #fff;
+  border: 1px solid var(--admin-border);
+  overflow: hidden;
+  /* border-radius and border-bottom set inline per card */
+}
+
+.pf-main .mi-card__field-label,
+.pf-sidebar .mi-card__field-label {
+  color: #303030;
+  font-size: 13px;
+  font-weight: 400;
+  margin-bottom: 0;
+}
+
+.mi-card--editing .mi-card__inline-edit,
+.pf-option-card--editing .mi-card__inline-edit {
+  gap: 16px;
+  flex-direction: column;
+  margin-right: 16px;
+}
+
+/* ── Value badges (collapsed card) ── */
+
+.pf-value-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -12px 0 12px 0;
+}
+
+.pf-value-badge {
+  display: inline-block;
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: #E3E3E3;
+  color: #303030;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* ── Option card hover (collapsed state) ── */
+
+.pf-option-card-collapsed {
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.pf-option-card-collapsed:hover {
+  background: var(--admin-surface-hover, #fafafa);
+}
+
+/* ── Option card footer (delete + done) ── */
+
+.pf-option-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 12px;
+  margin-top: 4px;
+  margin-right: 16px;
+  border-top: none;
+}
+
+.pf-option-footer__delete {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 0;
+  border: none;
+  background: transparent;
+  color: var(--admin-danger);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--admin-font);
+  cursor: pointer;
+  transition: opacity var(--duration-fast);
+}
+
+.pf-option-footer__delete:hover {
+  opacity: 0.75;
+}
+
+/* ── Option value rows (DnD individual inputs) ── */
+
+.pf-values-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pf-value-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: end;
+  margin-left: -28px;
+}
+
+.pf-value-row__handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  flex-shrink: 0;
+  color: var(--admin-text-tertiary);
+  cursor: grab;
+  transition: color var(--duration-fast);
+}
+
+.pf-value-row__handle:hover {
+  color: var(--admin-text-secondary);
+}
+
+.pf-value-row__handle:active {
+  cursor: grabbing;
+}
+
+.pf-value-row__handle-spacer {
+  width: 24px;
+  flex-shrink: 0;
+}
+
+.pf-value-row__input-wrap {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.pf-value-row__input {
+  width: 100%;
+  height: 36px;
+  padding: 0 32px 0 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: var(--admin-font);
+  color: var(--admin-text);
+  background: #fff;
+  box-sizing: border-box;
+  transition: border-color var(--duration-fast);
+}
+
+.pf-value-row__input:focus {
+  border-color: var(--admin-border-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(39, 131, 222, 0.1);
+}
+
+.pf-value-row__input::placeholder {
+  color: var(--admin-text-tertiary);
+}
+
+.pf-value-row__remove {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--admin-text-tertiary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+
+.pf-value-row__remove:hover {
+  background: var(--admin-danger-tint);
+  color: var(--admin-danger);
+}
+
+/* ── Variant table ── */
+
+.pf-variant-table {
+  margin-top: 0px;
+  border-top: 1px solid var(--admin-border);
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.pf-variant-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: #F7F7F7;
+  border-bottom: 1px solid var(--admin-border);
+  font-size: 13px;
+  font-weight: 400;
+  color: #616161;
+}
+
+.pf-variant-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.pf-variant-row:last-child {
+  border-bottom: none;
+}
+
+.pf-variant-col--img {
+  width: 50px;
+  flex-shrink: 0;
+  margin-right: 15px;
+}
+
+.pf-variant-img {
+  width: 50px;
+  height: 50px;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.pf-variant-img__src {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pf-variant-img--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--admin-border);
+  color: var(--admin-accent);
+  transition: border-color var(--duration-fast), color var(--duration-fast);
+}
+
+.pf-variant-img--empty:hover {
+  border-color: var(--admin-accent);
+  color: var(--admin-accent);
+}
+
+.pf-variant-col--name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--admin-text);
+  margin-left: 0;
+}
+
+.pf-variant-col--price,
+.pf-variant-col--stock {
+  width: 120px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.pf-variant-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: var(--admin-font);
+  color: var(--admin-text);
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-variant-input:focus {
+  border-color: var(--admin-border-focus);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(39, 131, 222, 0.1);
+}
+
+.pf-variant-input-wrap {
+  position: relative;
+}
+
+.pf-variant-input-wrap .pf-variant-input {
+  padding-right: 28px;
+}
+
+.pf-variant-input-suffix {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--admin-text-tertiary);
+  pointer-events: none;
+}
+
+/* ── Sticky footer ── */
+
+.pf-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  background: transparent;
+  border-top: none;
+  z-index: 10;
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}

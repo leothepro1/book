@@ -25,7 +25,6 @@ export type IntegrationPrerequisite = {
 
 export type CheckInPrerequisiteStatus = {
   pms: IntegrationPrerequisite;
-  digitalLock: IntegrationPrerequisite;
   allMet: boolean;
 };
 
@@ -61,18 +60,6 @@ function providerDisplayName(provider: string): string {
   return PROVIDER_NAMES[provider] ?? provider;
 }
 
-const LOCK_PROVIDER_NAMES: Record<string, string> = {
-  salto: "Salto",
-  assa_abloy: "Assa Abloy",
-  nuki: "Nuki",
-  manual: "Manuell",
-  fake: "Fake Lock",
-};
-
-function lockProviderDisplayName(provider: string): string {
-  return LOCK_PROVIDER_NAMES[provider] ?? provider;
-}
-
 // ── getCheckInPrerequisiteStatus ─────────────────────────────
 
 export async function getCheckInPrerequisiteStatus(): Promise<CheckInPrerequisiteStatus> {
@@ -80,7 +67,6 @@ export async function getCheckInPrerequisiteStatus(): Promise<CheckInPrerequisit
   if (!tenantData) {
     return {
       pms: { connected: false, providerName: null, reason: "Inte inloggad" },
-      digitalLock: { connected: false, providerName: null, reason: "Inte inloggad" },
       allMet: false,
     };
   }
@@ -125,48 +111,9 @@ export async function getCheckInPrerequisiteStatus(): Promise<CheckInPrerequisit
     pms = { connected: false, providerName: providerDisplayName(integration.provider), reason: "Okänd status" };
   }
 
-  // ── Digital lock check ──
-  let digitalLock: IntegrationPrerequisite;
-
-  const lockIntegration = await prisma.tenantLockIntegration.findUnique({
-    where: { tenantId: tenantData.tenant.id },
-    select: {
-      provider: true,
-      status: true,
-      lastTestedAt: true,
-      credentialsEncrypted: true,
-    },
-  });
-
-  if (!lockIntegration) {
-    digitalLock = { connected: false, providerName: null, reason: "Ingen leverantör ansluten" };
-  } else if (!lockIntegration.credentialsEncrypted) {
-    digitalLock = { connected: false, providerName: lockProviderDisplayName(lockIntegration.provider), reason: "API-nyckel saknas" };
-  } else if (lockIntegration.status === "pending") {
-    digitalLock = { connected: false, providerName: lockProviderDisplayName(lockIntegration.provider), reason: "Anslutningen är inte verifierad" };
-  } else if (lockIntegration.status === "error") {
-    digitalLock = { connected: false, providerName: lockProviderDisplayName(lockIntegration.provider), reason: "Anslutningen har ett fel — kontrollera integrationen" };
-  } else if (lockIntegration.status === "disconnected") {
-    digitalLock = { connected: false, providerName: lockProviderDisplayName(lockIntegration.provider), reason: "Integrationen är frånkopplad" };
-  } else if (lockIntegration.status === "active") {
-    if (lockIntegration.lastTestedAt) {
-      const hoursSinceTest = (Date.now() - lockIntegration.lastTestedAt.getTime()) / (1000 * 60 * 60);
-      if (hoursSinceTest > 24) {
-        digitalLock = { connected: false, providerName: lockProviderDisplayName(lockIntegration.provider), reason: "Senaste test för länge sedan — kontrollera anslutningen" };
-      } else {
-        digitalLock = { connected: true, providerName: lockProviderDisplayName(lockIntegration.provider), reason: null };
-      }
-    } else {
-      digitalLock = { connected: true, providerName: lockProviderDisplayName(lockIntegration.provider), reason: null };
-    }
-  } else {
-    digitalLock = { connected: false, providerName: lockProviderDisplayName(lockIntegration.provider), reason: "Okänd status" };
-  }
-
   return {
     pms,
-    digitalLock,
-    allMet: pms.connected && digitalLock.connected,
+    allMet: pms.connected,
   };
 }
 

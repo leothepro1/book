@@ -101,6 +101,10 @@ export type MediaLibraryModalProps = {
   open: boolean;
   onClose: () => void;
   onConfirm: (asset: MediaLibraryResult) => void;
+  /** Called with all selected assets when multiSelect is true. */
+  onConfirmMulti?: (assets: MediaLibraryResult[]) => void;
+  /** Enable multi-select mode — checkboxes on items, "Välj" adds all selected. */
+  multiSelect?: boolean;
   /** Pre-select an asset by URL */
   currentValue?: string;
   /** Restrict listing to a folder */
@@ -142,6 +146,8 @@ export function MediaLibraryModal({
   open,
   onClose,
   onConfirm,
+  onConfirmMulti,
+  multiSelect = false,
   currentValue,
   folder,
   uploadFolder = "sections",
@@ -374,6 +380,23 @@ export function MediaLibraryModal({
 
   // ── Confirm ──
   const handleConfirm = useCallback(() => {
+    if (multiSelect && onConfirmMulti) {
+      // Multi-select: confirm all selected
+      if (selectedIds.size === 0) return;
+      const assets = state.items
+        .filter((i) => selectedIds.has(i.id))
+        .map((asset) => ({
+          id: asset.id,
+          url: asset.url,
+          publicId: asset.publicId,
+          filename: asset.filename,
+          width: asset.width,
+          height: asset.height,
+          mimeType: asset.mimeType,
+        }));
+      onConfirmMulti(assets);
+      return;
+    }
     if (!selectedId) return;
     const asset = state.items.find((i) => i.id === selectedId);
     if (!asset) return;
@@ -386,7 +409,7 @@ export function MediaLibraryModal({
       height: asset.height,
       mimeType: asset.mimeType,
     });
-  }, [selectedId, state.items, onConfirm]);
+  }, [selectedId, selectedIds, state.items, onConfirm, onConfirmMulti, multiSelect]);
 
   // ── Backdrop click ──
   const handleBackdropClick = useCallback(
@@ -641,8 +664,18 @@ export function MediaLibraryModal({
                       <MediaGridItem
                         key={item.id}
                         item={item}
-                        selected={item.id === selectedId}
-                        onSelect={() => setSelectedId(item.id === selectedId ? null : item.id)}
+                        selected={multiSelect ? selectedIds.has(item.id) : item.id === selectedId}
+                        onSelect={() => {
+                          if (multiSelect) {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
+                              return next;
+                            });
+                          } else {
+                            setSelectedId(item.id === selectedId ? null : item.id);
+                          }
+                        }}
                       />
                     ))}
                   </div>
@@ -655,9 +688,9 @@ export function MediaLibraryModal({
                       <MediaListItem
                         key={item.id}
                         item={item}
-                        selected={mode === "inline" ? selectedIds.has(item.id) : item.id === selectedId}
+                        selected={(mode === "inline" || multiSelect) ? selectedIds.has(item.id) : item.id === selectedId}
                         onSelect={() => {
-                          if (mode === "inline") {
+                          if (mode === "inline" || multiSelect) {
                             setSelectedIds((prev) => {
                               const next = new Set(prev);
                               if (next.has(item.id)) next.delete(item.id);
@@ -703,7 +736,7 @@ export function MediaLibraryModal({
               <button
                 type="button"
                 className="ml-btn ml-btn--confirm"
-                disabled={!selectedId}
+                disabled={multiSelect ? selectedIds.size === 0 : !selectedId}
                 onClick={handleConfirm}
               >
                 Välj

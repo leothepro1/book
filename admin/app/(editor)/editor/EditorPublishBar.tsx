@@ -33,7 +33,7 @@ export function EditorPublishBar() {
     handlePublish,
   } = usePublishBarInternal();
 
-  const { inspectorActive, setInspectorActive } = useEditor();
+  const { inspectorActive, setInspectorActive, viewportMode, setViewportMode } = useEditor();
 
   const canUndo = undoStack.length > 0 && !isUndoing && !isLingeringAfterPublish;
   const canRedo = redoStack.length > 0 && !isUndoing && !isLingeringAfterPublish;
@@ -51,6 +51,24 @@ export function EditorPublishBar() {
           <EditorIcon name="web_traffic" size={20} />
         </button>
       </Tooltip>
+      <div className="editor-publish__viewport">
+        <button
+          type="button"
+          className={`editor-publish__viewport-btn${viewportMode === "desktop" ? " editor-publish__viewport-btn--active" : ""}`}
+          onClick={() => setViewportMode("desktop")}
+          aria-label="Datorvy"
+        >
+          <EditorIcon name="desktop_windows" size={18} />
+        </button>
+        <button
+          type="button"
+          className={`editor-publish__viewport-btn${viewportMode === "mobile" ? " editor-publish__viewport-btn--active" : ""}`}
+          onClick={() => setViewportMode("mobile")}
+          aria-label="Mobilvy"
+        >
+          <EditorIcon name="smartphone" size={18} />
+        </button>
+      </div>
       <div className="editor-publish__group">
         <Tooltip label="Ångra">
           <button

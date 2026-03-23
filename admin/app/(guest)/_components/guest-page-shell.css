@@ -1,0 +1,21 @@
+/* ── Guest Page Shell — Desktop layout constraints ── */
+
+.g-header-inner,
+.g-content {
+  width: 100%;
+  max-width: var(--layout-max-width, 1250px);
+  margin: 0 auto;
+  padding-left: 32px;
+  padding-right: 32px;
+  box-sizing: border-box;
+}
+
+/* Mobile: no max-width constraint, tighter padding */
+@media (max-width: 767px) {
+  .g-header-inner,
+  .g-content {
+    max-width: none;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}

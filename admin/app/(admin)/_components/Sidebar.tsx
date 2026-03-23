@@ -11,6 +11,7 @@ import { useRole } from './RoleContext';
 
 const NAV_ITEMS = [
   { href: '/home', label: 'Startsida', icon: 'storefront' },
+  { href: '/products', label: 'Produkter', icon: 'sell' },
   { href: '/dashboard/guests', label: 'Gäster', icon: 'group' },
   { href: '/dashboard/analytics', label: 'Analys', icon: 'leaderboard' },
 ];
@@ -35,7 +36,7 @@ export function Sidebar() {
   const { open: openSettings } = useSettings();
   const { isAdmin } = useRole();
 
-  const isActive = (path: string) => pathname === path;
+  const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
   const isContentActive = CONTENT_ITEMS.some((item) => isActive(item.href));
 
   const guardedClick = (e: MouseEvent<HTMLAnchorElement>, href: string) => {
@@ -57,8 +58,8 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="p-3 flex-1 overflow-y-auto flex flex-col gap-[2px]">
-        {/* Top nav items (Startsida, Gäster) */}
-        {NAV_ITEMS.filter((_, i) => i < 2).map((item) => {
+        {/* Top nav items */}
+        {NAV_ITEMS.filter((_, i) => i < 3).map((item) => {
           const active = isActive(item.href);
           return (
             <Link
@@ -162,7 +163,7 @@ export function Sidebar() {
         </div>
 
         {/* Bottom nav items (Analys) */}
-        {NAV_ITEMS.filter((_, i) => i >= 2).map((item) => {
+        {NAV_ITEMS.filter((_, i) => i >= 3).map((item) => {
           const active = isActive(item.href);
           return (
             <Link

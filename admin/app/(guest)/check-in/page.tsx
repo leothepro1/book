@@ -7,9 +7,7 @@ import { resolveTenantFromHost } from "../_lib/tenant/resolveTenantFromHost";
 import { CheckInDisabled } from "./CheckInDisabled";
 import { getTenantConfig } from "../_lib/tenant";
 import { getActiveCheckinCards, getPageSettings } from "@/app/_lib/pages/config";
-import { getCardDesign } from "@/app/_lib/access-pass/card-design";
 import { FONT_CATALOG } from "@/app/_lib/fonts/catalog";
-import { resolveWalletDesignFromConfig } from "@/app/_lib/access-pass/resolveFromPageSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +19,6 @@ export default async function Page() {
   }
 
   const config = await getTenantConfig(tenant.id);
-
-  // Published config (pageSettings) is primary, WalletCardDesign model is fallback
-  const fromConfig = resolveWalletDesignFromConfig(config);
-  const cardDesign = fromConfig ?? await getCardDesign(tenant.id);
 
   const activeCards = getActiveCheckinCards(config);
   const ps = getPageSettings(config, "check-in");
@@ -51,27 +45,16 @@ export default async function Page() {
     "--field-text": (ps.fieldStyle as string) === "transparent" ? (ps.textColor as string) || "#121212" : "#121212",
   };
 
-  // Preload wallet card images
-  const preloadUrls: string[] = [];
-  if (cardDesign.logoUrl) preloadUrls.push(cardDesign.logoUrl);
-  if (cardDesign.background.mode === "IMAGE") preloadUrls.push(cardDesign.background.imageUrl);
-
   return (
-    <>
-      {preloadUrls.map((url) => (
-        <link key={url} rel="preload" as="image" href={url} />
-      ))}
-      <Suspense fallback={<div style={{ padding: 24 }}>Loading…</div>}>
-        <CheckInClient
-          onLookup={checkInLookup}
-          onCommit={checkInCommit}
-          activeCards={activeCards}
-          checkInTime={config.property?.checkInTime || "15:00"}
-          cardDesign={cardDesign}
-          tenantName={config.property?.name || ""}
-          checkinStyles={checkinStyles}
-        />
-      </Suspense>
-    </>
+    <Suspense fallback={<div style={{ padding: 24 }}>Loading…</div>}>
+      <CheckInClient
+        onLookup={checkInLookup}
+        onCommit={checkInCommit}
+        activeCards={activeCards}
+        checkInTime={config.property?.checkInTime || "15:00"}
+        tenantName={config.property?.name || ""}
+        checkinStyles={checkinStyles}
+      />
+    </Suspense>
   );
 }

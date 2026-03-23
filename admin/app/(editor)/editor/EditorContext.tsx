@@ -51,6 +51,9 @@ export type DetailTarget = {
   elementId?: string;
 };
 
+/** Preview viewport mode — controls preview frame size in canvas. */
+export type ViewportMode = "mobile" | "desktop";
+
 /** Editor context value exposed via useEditor(). */
 export type EditorContextValue = {
   /** Active rail tab. Controls which panel is visible. */
@@ -98,6 +101,10 @@ export type EditorContextValue = {
   /** Active step within a multi-step page (e.g. check-in flow). null = default/main. */
   activeStepId: string | null;
   setActiveStepId: (stepId: string | null) => void;
+
+  /** Preview viewport mode — "mobile" (phone frame) or "desktop" (wide frame). */
+  viewportMode: ViewportMode;
+  setViewportMode: (mode: ViewportMode) => void;
 };
 
 // ─── Context ────────────────────────────────────────────────
@@ -115,6 +122,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const [inspectorActive, setInspectorActive] = useState(false);
   const [inspectorHoveredSectionId, setInspectorHoveredSectionId] = useState<string | null>(null);
   const [activeStepId, setActiveStepId] = useState<string | null>(null);
+  const [viewportMode, setViewportMode] = useState<ViewportMode>("desktop");
 
   const selectSection = useCallback((id: string | null) => {
     setSelectedSectionId(id);
@@ -192,6 +200,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
         setInspectorHoveredSectionId,
         activeStepId,
         setActiveStepId,
+        viewportMode,
+        setViewportMode,
       }}
     >
       {children}

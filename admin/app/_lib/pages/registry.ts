@@ -64,7 +64,7 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
       { id: "find-booking", label: "Hitta bokning", icon: "search" },
       { id: "confirm", label: "Bekräfta bokning", icon: "fact_check" },
       { id: "tasks", label: "Uppgifter", icon: "assignment" },
-      { id: "wallet-card", label: "Wallet-card", icon: "wallet" },
+      { id: "success", label: "Bekräftelse", icon: "check_circle" },
     ],
     pageSettings: {
       fields: [
@@ -138,11 +138,6 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
         buttonColor: "#121212",
         textColor: "#121212",
         borderColor: "#D7DADE",
-        walletBgColor: "#1a1a2e",
-        walletBgImageUrl: "",
-        walletOverlayOpacity: 0.3,
-        walletLogoUrl: "",
-        walletDateColor: "#ffffff",
       },
     },
   },

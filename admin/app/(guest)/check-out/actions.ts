@@ -3,7 +3,6 @@
 import { prisma } from "../../_lib/db/prisma";
 import { redirect } from "next/navigation";
 import { performCheckOut } from "../_lib/booking/actions";
-import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 
 type Method = "booking" | "nameArrival" | "email";
 
@@ -79,19 +78,7 @@ export async function checkOutLookup(payload: any): Promise<void> {
 
   // Notify PMS adapter (no-op for manual provider)
   if (!res.already) {
-    try {
-      // Get full booking to resolve tenantId for adapter
-      const fullBooking = await prisma.booking.findUnique({
-        where: { id: booking.id },
-        select: { tenantId: true },
-      });
-      if (fullBooking) {
-        const adapter = await resolveAdapter(fullBooking.tenantId);
-        await adapter.notifyCheckOut(fullBooking.tenantId, booking.id);
-      }
-    } catch (error) {
-      console.error("[CHECK-OUT] Adapter notifyCheckOut failed:", error);
-    }
+    // PMS notification removed — booking engine uses real-time queries
   }
 
   if (token) redirect(`/p/${token}`);

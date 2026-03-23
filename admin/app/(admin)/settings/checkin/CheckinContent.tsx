@@ -686,7 +686,7 @@ function PrerequisiteModal({
 
   const canActivate = status?.allMet && confirmed && !activating;
   const unmetCount = status
-    ? [status.pms, status.digitalLock].filter((s) => !s.connected).length
+    ? [status.pms].filter((s) => !s.connected).length
     : 0;
 
   return createPortal(
@@ -784,13 +784,6 @@ function PrerequisiteModal({
                   connectedLabel="PMS ansluten"
                   disconnectedLabel="PMS saknas"
                   status={status.pms}
-                  onConfigure={() => onNavigate("integrations")}
-                />
-                <PrerequisiteCard
-                  label="Digitala nycklar"
-                  connectedLabel="Digitala nycklar anslutna"
-                  disconnectedLabel="Digitala nycklar saknas"
-                  status={status.digitalLock}
                   onConfigure={() => onNavigate("integrations")}
                 />
               </div>

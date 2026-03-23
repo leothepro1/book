@@ -35,6 +35,7 @@ import { useEditor } from "../EditorContext";
 import { getPageDefinition } from "@/app/_lib/pages/registry";
 import { getPageSettings, buildPageSettingsPatch, getPageUndoSnapshot } from "@/app/_lib/pages/config";
 import type { SettingField } from "@/app/(guest)/_lib/themes/types";
+import { LAYOUT_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
 
 // ─── Font helpers ─────────────────────────────────────────────
 
@@ -99,11 +100,6 @@ export function SettingsPanel() {
   // Page-aware: check if current page uses settings mode
   const pageDef = getPageDefinition(currentPageId);
   const isSettingsMode = pageDef.editorMode === "settings" && !!pageDef.pageSettings?.fields.length;
-
-  // Wallet-card step gets its own settings view
-  if (activeStepId === "wallet-card") {
-    return <WalletCardSettingsView />;
-  }
 
   if (isSettingsMode) {
     return (
@@ -237,6 +233,7 @@ export function SettingsPanel() {
         <span className="editor-panel__title">Inställningar</span>
       </div>
       <div className="editor-panel__body">
+        <LayoutAccordion />
         <LogoAccordion />
         <TypographyAccordion />
         <ButtonsAccordion />
@@ -444,235 +441,139 @@ function PageSettingsView({
   );
 }
 
+
 // ═══════════════════════════════════════════════════════════════
-// WALLET CARD SETTINGS VIEW
+// LOGO ACCORDION
 // ═══════════════════════════════════════════════════════════════
 
-
-type WalletState = {
-  bgMode: "fill" | "gradient" | "image";
-  bgColor: string;
-  gradDirection: "up" | "down";
-  bgImageUrl: string;
-  overlayOpacity: number;
-  logoUrl: string;
-  dateColor: string;
-};
-
-function WalletCardSettingsFields({ state, set }: { state: WalletState; set: (patch: Partial<WalletState>) => void }) {
-  const [libraryOpen, setLibraryOpen] = useState(false);
-  const [logoLibraryOpen, setLogoLibraryOpen] = useState(false);
-
-  return (
-    <div className="sf-form">
-      {/* ── Bakgrund ── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-        <div className="sf-group-label">Bakgrund</div>
-        <div>
-          <span className="cs-section-label" style={{ marginBottom: 7, display: "block" }}>Bild</span>
-          {state.bgImageUrl ? (
-            <div className="img-upload">
-              <div className="img-upload-result">
-                <div className="img-upload-result-thumb">
-                  <img src={state.bgImageUrl} alt="" className="img-upload-result-img" />
-                </div>
-                <div className="img-upload-result-meta">
-                  <span className="img-upload-result-filename">
-                    {state.bgImageUrl.split("/").pop()?.split("?")[0] || "bild"}
-                  </span>
-                  <button type="button" className="img-upload-replace-btn" onClick={() => setLibraryOpen(true)}>
-                    Ändra
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="img-upload-trash-btn"
-                  onClick={() => set({ bgImageUrl: "" })}
-                  aria-label="Ta bort bild"
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path fillRule="evenodd" d="m6.83 0-.35.15-1.33 1.33-.15.35V3H0v1h2v11.5l.5.5h11l.5-.5V4h2V3h-5V1.83l-.15-.35L9.52.15 9.17 0H6.83ZM10 3v-.96L8.96 1H7.04L6 2.04V3h4ZM5 4H3v11h10V4H5Zm2 3v5H6V7h1Zm3 .5V7H9v5h1V7.5Z" fill="currentColor"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="img-upload">
-              <div className="img-upload-empty" onClick={() => setLibraryOpen(true)} style={{ cursor: "pointer" }}>
-                <span className="img-upload-btn">Välj bild</span>
-              </div>
-            </div>
-          )}
-        </div>
-        <ColorTokenField
-          label="Bakgrundsfärg"
-          value={state.bgColor}
-          onChange={(hex) => set({ bgColor: hex })}
-        />
-      </div>
-
-      {/* ── Logotyp & text ── */}
-      <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 18, display: "flex", flexDirection: "column", gap: 18 }}>
-        <div className="sf-group-label">Logotyp & text</div>
-        <div>
-          <span className="cs-section-label" style={{ marginBottom: 7, display: "block" }}>Logotyp</span>
-          {state.logoUrl ? (
-            <div className="img-upload">
-              <div className="img-upload-result">
-                <div className="img-upload-result-thumb">
-                  <img src={state.logoUrl} alt="" className="img-upload-result-img" />
-                </div>
-                <div className="img-upload-result-meta">
-                  <span className="img-upload-result-filename">
-                    {state.logoUrl.split("/").pop()?.split("?")[0] || "logotyp"}
-                  </span>
-                  <button type="button" className="img-upload-replace-btn" onClick={() => setLogoLibraryOpen(true)}>
-                    Ändra
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="img-upload-trash-btn"
-                  onClick={() => set({ logoUrl: "" })}
-                  aria-label="Ta bort logotyp"
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path fillRule="evenodd" d="m6.83 0-.35.15-1.33 1.33-.15.35V3H0v1h2v11.5l.5.5h11l.5-.5V4h2V3h-5V1.83l-.15-.35L9.52.15 9.17 0H6.83ZM10 3v-.96L8.96 1H7.04L6 2.04V3h4ZM5 4H3v11h10V4H5Zm2 3v5H6V7h1Zm3 .5V7H9v5h1V7.5Z" fill="currentColor"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="img-upload">
-              <div className="img-upload-empty" onClick={() => setLogoLibraryOpen(true)} style={{ cursor: "pointer" }}>
-                <span className="img-upload-btn">Välj logotyp</span>
-              </div>
-            </div>
-          )}
-        </div>
-        <ColorTokenField
-          label="Datumfärg"
-          value={state.dateColor}
-          onChange={(hex) => set({ dateColor: hex })}
-        />
-      </div>
-
-      <MediaLibraryModal
-        open={logoLibraryOpen}
-        onClose={() => setLogoLibraryOpen(false)}
-        onConfirm={(asset) => { set({ logoUrl: asset.url }); setLogoLibraryOpen(false); }}
-        currentValue={state.logoUrl}
-        uploadFolder="hospitality/wallet-card"
-        accept="image"
-      />
-
-      <MediaLibraryModal
-        open={libraryOpen}
-        onClose={() => setLibraryOpen(false)}
-        onConfirm={(asset) => { set({ bgImageUrl: asset.url }); setLibraryOpen(false); }}
-        currentValue={state.bgImageUrl}
-        uploadFolder="hospitality/wallet-card"
-        accept="image"
-      />
-    </div>
-  );
-}
-
-function WalletCardSettingsView() {
+function LayoutAccordion() {
   const { config } = usePreview();
   const { pushUndo } = usePublishBar();
   const saveDraft = useDraftUpdate();
-  const { currentPageId } = useEditor();
 
-  // Read wallet card state from pageSettings (draft-aware via PreviewContext)
-  const pageSettings = config ? getPageSettings(config, currentPageId) : {};
-  const [migrated, setMigrated] = useState(false);
+  const [open, setOpen] = useState(false);
 
-  // One-time migration: if pageSettings has no wallet fields, seed from WalletCardDesign API
-  useEffect(() => {
-    if (migrated || !config || pageSettings.walletBgColor !== undefined) {
-      setMigrated(true);
-      return;
-    }
-    fetch("/api/wallet-card-design")
-      .then((r) => r.json())
-      .then((data) => {
-        const patch: Record<string, unknown> = {
-          walletBgColor: data.backgroundColor ?? "#1a1a2e",
-          walletBgImageUrl: data.backgroundImageUrl ?? "",
-          walletOverlayOpacity: data.overlayOpacity ?? 0.3,
-          walletLogoUrl: data.logoUrl ?? "",
-          walletDateColor: data.dateTextColor ?? "#ffffff",
-        };
-        saveDraft(buildPageSettingsPatch(config, currentPageId, patch));
-        setMigrated(true);
-      })
-      .catch(() => setMigrated(true));
-  }, [config, migrated, pageSettings.walletBgColor, currentPageId, saveDraft]);
+  const maxWidth = config?.layout?.maxWidth ?? LAYOUT_DEFAULTS.maxWidth;
+  const [localMaxWidth, setLocalMaxWidth] = useState(maxWidth);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState(false);
 
-  const state: WalletState = {
-    bgMode: "fill",
-    bgColor: (pageSettings.walletBgColor as string) ?? "#1a1a2e",
-    gradDirection: "down",
-    bgImageUrl: (pageSettings.walletBgImageUrl as string) ?? "",
-    overlayOpacity: (pageSettings.walletOverlayOpacity as number) ?? 0.3,
-    logoUrl: (pageSettings.walletLogoUrl as string) ?? "",
-    dateColor: (pageSettings.walletDateColor as string) ?? "#ffffff",
-  };
+  // Sync local from config
+  const prevMaxWidth = useRef(maxWidth);
+  if (maxWidth !== prevMaxWidth.current) {
+    prevMaxWidth.current = maxWidth;
+    setLocalMaxWidth(maxWidth);
+  }
 
-  // Convert state → CardDesignConfig for live preview
-  const toDesignConfig = useCallback((s: WalletState): import("@/app/_lib/access-pass/card-design").CardDesignConfig => {
-    let background: import("@/app/_lib/access-pass/card-design").CardBackground;
-    if (s.bgImageUrl) {
-      background = { mode: "IMAGE", imageUrl: s.bgImageUrl, overlayOpacity: s.overlayOpacity };
-    } else {
-      background = { mode: "SOLID", color: s.bgColor };
-    }
-    return { background, logoUrl: s.logoUrl || null, dateTextColor: s.dateColor };
-  }, []);
+  const snapshotLayout = useCallback(
+    () => ({ layout: { maxWidth: config?.layout?.maxWidth ?? LAYOUT_DEFAULTS.maxWidth } }),
+    [config?.layout],
+  );
 
-  // Post design to preview iframe for instant update
-  const postToPreview = useCallback((s: WalletState) => {
-    const iframe = document.querySelector<HTMLIFrameElement>(".editor-canvas iframe");
-    if (iframe?.contentWindow) {
-      iframe.contentWindow.postMessage(
-        { type: "wallet-card-update", design: toDesignConfig(s) },
-        window.location.origin,
-      );
-    }
-  }, [toDesignConfig]);
+  const handleMaxWidthChange = useCallback(
+    (value: number) => {
+      setLocalMaxWidth(value);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        pushUndo(snapshotLayout());
+        saveDraft({ layout: { maxWidth: value } } as any);
+      }, 300);
+    },
+    [pushUndo, snapshotLayout, saveDraft],
+  );
 
-  // Save to draft + push undo + post to preview
-  const set = useCallback((patch: Partial<WalletState>) => {
-    if (!config) return;
-    const next = { ...state, ...patch };
+  const min = 800, max = 1920, step = 10, unit = "px";
+  const pct = ((localMaxWidth - min) / (max - min)) * 100;
 
-    // Push undo snapshot before mutation
-    pushUndo(getPageUndoSnapshot(config, currentPageId));
+  const resolve = useCallback(
+    (clientX: number) => {
+      const track = trackRef.current;
+      if (!track) return localMaxWidth;
+      const rect = track.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const raw = min + ratio * (max - min);
+      return Math.max(min, Math.min(max, Math.round(raw / step) * step));
+    },
+    [localMaxWidth],
+  );
 
-    // Save wallet fields to pageSettings
-    const settingsPatch: Record<string, unknown> = {
-      walletBgColor: next.bgColor,
-      walletBgImageUrl: next.bgImageUrl,
-      walletOverlayOpacity: next.overlayOpacity,
-      walletLogoUrl: next.logoUrl,
-      walletDateColor: next.dateColor,
-    };
-    saveDraft(buildPageSettingsPatch(config, currentPageId, settingsPatch));
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      setDragging(true);
+      const v = resolve(e.clientX);
+      setLocalMaxWidth(v);
+      handleMaxWidthChange(v);
+    },
+    [resolve, handleMaxWidthChange],
+  );
 
-    // Instant preview update via postMessage
-    postToPreview(next);
-  }, [config, state, currentPageId, pushUndo, saveDraft, postToPreview]);
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!dragging) return;
+      const v = resolve(e.clientX);
+      setLocalMaxWidth(v);
+      handleMaxWidthChange(v);
+    },
+    [dragging, resolve, handleMaxWidthChange],
+  );
+
+  const onPointerUp = useCallback(() => setDragging(false), []);
 
   return (
-    <>
-      <div className="editor-panel__header">
-        <span className="editor-panel__title">Wallet-card</span>
-      </div>
-      <div className="editor-panel__body">
-        <WalletCardSettingsFields state={state} set={set} />
-      </div>
-    </>
+    <div className="dp-accordion">
+      <button
+        type="button"
+        className="dp-accordion__trigger"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="dp-accordion__label">Layout</span>
+        <EditorIcon
+          name="expand_more"
+          size={18}
+          className={`dp-accordion__chevron ${open ? "dp-accordion__chevron--open" : ""}`}
+        />
+      </button>
+      {open && (
+        <div className="dp-accordion__content">
+          <span className="cs-section-label">Maxbredd (dator)</span>
+          <div className="sf-range-row" style={{ marginTop: 8 }}>
+            <div
+              ref={trackRef}
+              className="sf-range__track"
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+            >
+              <div className="sf-range__fill" style={{ width: `${pct}%` }} />
+              <div className={`sf-range__thumb${dragging ? " sf-range__thumb--active" : ""}`} style={{ left: `${pct}%` }}>
+                <div className="sf-range__pin">
+                  <span className="sf-range__pin-value">{localMaxWidth}{unit}</span>
+                </div>
+              </div>
+            </div>
+            <div className="sf-range-input-wrap">
+              <input
+                type="number"
+                className="sf-range-input"
+                value={localMaxWidth}
+                min={min}
+                max={max}
+                step={step}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (!isNaN(v)) handleMaxWidthChange(Math.min(max, Math.max(min, v)));
+                }}
+              />
+              <span className="sf-range-unit">{unit}</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

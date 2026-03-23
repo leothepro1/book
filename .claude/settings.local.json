@@ -86,7 +86,22 @@
       "Bash(host bedfront.com)",
       "Bash(npm ls:*)",
       "Bash(find \"/workspaces/hospitality/admin/app/\\(admin\\)\" -maxdepth 1 -type d)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(ls -la /workspaces/book/admin/app/'\\(preview-checkin\\)'/)",
+      "Bash(ls /workspaces/book/admin/app/'\\(guest\\)'/p/'[token]'/_lib/)",
+      "Bash(fuser -k 3000/tcp 3001/tcp)",
+      "Bash(fuser 3000/tcp)",
+      "Bash(source /usr/local/share/nvm/nvm.sh)",
+      "Bash(nvm use:*)",
+      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"Ja kör\" npx prisma db push --accept-data-loss --force-reset)",
+      "Bash(fuser -k 3000/tcp)",
+      "Read(//workspaces/**)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(cp:*)",
+      "Bash(source:*)",
+      "Bash(tail:*)",
+      "Bash(git reset:*)"
     ]
   }
 }

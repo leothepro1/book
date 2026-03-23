@@ -1,69 +1,123 @@
 /**
- * PMS Adapter Interface
+ * PMS Adapter Interface — Booking Engine
  *
  * The contract every PMS implementation must satisfy.
  * No optional methods — all methods are required.
  *
  * Platform code never calls a PMS directly.
- * All booking/guest data access goes through an adapter
+ * All availability/booking data access goes through an adapter
  * resolved via resolveAdapter(tenantId).
+ *
+ * Capabilities:
+ *   1. Availability + Rates  — search for available rooms with pricing
+ *   2. Room types            — category metadata (capacity, images, facilities)
+ *   3. Restrictions          — min/max stay, CTA/CTD per date
+ *   4. Booking lookup        — existing booking by reference
+ *   5. Guest data            — guest info tied to a booking
+ *   6. Add-ons              — extras available for a category/rate plan
+ *   7. Payment status        — paid/unpaid/outstanding for a booking
+ *   8. Connection            — test credentials, verify webhooks
  */
 
-import type { NormalizedBooking, NormalizedGuest, PmsProvider, SyncResult } from "./types";
+import type {
+  PmsProvider,
+  AvailabilityParams,
+  AvailabilityResult,
+  RoomCategory,
+  Restriction,
+  BookingLookup,
+  GuestData,
+  Addon,
+  PaymentStatus,
+} from "./types";
 
 export interface PmsAdapter {
   readonly provider: PmsProvider;
 
-  getBookings(
+  // ── 1. Availability + Rates ─────────────────────────────────
+  /**
+   * Search for available rooms/units within a date range.
+   * Returns categories with rate plans, pricing, and unit counts.
+   * This is the primary query powering the booking engine search.
+   */
+  getAvailability(
     tenantId: string,
-    filters?: { guestEmail?: string; status?: NormalizedBooking["status"][] }
-  ): Promise<NormalizedBooking[]>;
+    params: AvailabilityParams,
+  ): Promise<AvailabilityResult>;
 
-  getBooking(
+  // ── 2. Room Types ───────────────────────────────────────────
+  /**
+   * Fetch all room categories/types for this property.
+   * Used for search filters, category pages, and admin UI.
+   */
+  getRoomTypes(tenantId: string): Promise<RoomCategory[]>;
+
+  // ── 3. Restrictions ─────────────────────────────────────────
+  /**
+   * Fetch stay restrictions for a date range.
+   * Returns min/max stay, closed-to-arrival/departure per date.
+   * Used to disable invalid dates in the calendar picker.
+   */
+  getRestrictions(
     tenantId: string,
-    externalId: string
-  ): Promise<NormalizedBooking | null>;
+    from: Date,
+    to: Date,
+    categoryExternalId?: string,
+  ): Promise<Restriction[]>;
 
+  // ── 4. Booking Lookup ───────────────────────────────────────
+  /**
+   * Look up an existing booking by PMS reference or confirmation number.
+   * Used for "find my booking" and modify/cancel flows.
+   */
+  lookupBooking(
+    tenantId: string,
+    reference: string,
+  ): Promise<BookingLookup | null>;
+
+  // ── 5. Guest Data ───────────────────────────────────────────
+  /**
+   * Fetch guest data linked to a booking.
+   * Limited to what the PMS exposes (name, email, phone, address).
+   */
   getGuest(
     tenantId: string,
-    externalId: string
-  ): Promise<NormalizedGuest | null>;
+    bookingExternalId: string,
+  ): Promise<GuestData | null>;
 
-  notifyCheckIn(
+  // ── 6. Add-ons ──────────────────────────────────────────────
+  /**
+   * Fetch available add-ons for a category or rate plan.
+   * Returns breakfast, packages, parking, etc.
+   */
+  getAddons(
     tenantId: string,
-    externalId: string
-  ): Promise<void>;
+    categoryExternalId?: string,
+  ): Promise<Addon[]>;
 
-  notifyCheckOut(
+  // ── 7. Payment Status ───────────────────────────────────────
+  /**
+   * Check payment status for a booking.
+   * Returns total, paid, outstanding balance.
+   * Not all PMS providers support this — ManualAdapter returns null.
+   */
+  getPaymentStatus(
     tenantId: string,
-    externalId: string
-  ): Promise<void>;
+    bookingExternalId: string,
+  ): Promise<PaymentStatus | null>;
 
+  // ── 8. Connection & Webhooks ────────────────────────────────
+  /**
+   * Test that the provided credentials are valid.
+   * Called during integration setup in admin settings.
+   */
   testConnection(
-    credentials: Record<string, string>
+    credentials: Record<string, string>,
   ): Promise<{ ok: boolean; error?: string }>;
 
   /**
-   * Sync bookings from the PMS into the platform.
-   * Returns a summary of created/updated/cancelled bookings.
-   * For ManualAdapter: no-op, returns empty result.
-   */
-  syncBookings(
-    tenantId: string,
-    since?: Date
-  ): Promise<SyncResult>;
-
-  /**
-   * Extract a booking external ID from a webhook payload.
-   * Returns null if the payload doesn't contain a booking reference
-   * or the adapter doesn't support webhooks.
-   */
-  getWebhookBookingId(payload: unknown): string | null;
-
-  /**
    * Extract the PMS's tenant/property identifier from a webhook payload.
-   * This identifier must match TenantIntegration.externalTenantId
-   * to resolve which platform tenant this webhook belongs to.
+   * Resolves which platform tenant this webhook belongs to.
    * Returns null if the adapter doesn't support webhooks.
    */
   resolveWebhookTenant(payload: unknown): string | null;
@@ -71,14 +125,11 @@ export interface PmsAdapter {
   /**
    * Verify the cryptographic signature on an incoming webhook.
    * Each PMS has its own signing mechanism (HMAC, RSA, etc.).
-   * The rawBody must be verified BEFORE parsing as JSON.
-   *
-   * Returns true if the signature is valid, false otherwise.
-   * ManualAdapter always returns false (rejects all webhooks).
+   * Returns true if valid, false otherwise.
    */
   verifyWebhookSignature(
     rawBody: Buffer,
     headers: Record<string, string>,
-    credentials: Record<string, string>
+    credentials: Record<string, string>,
   ): Promise<boolean>;
 }

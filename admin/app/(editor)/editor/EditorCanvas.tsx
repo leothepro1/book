@@ -20,17 +20,16 @@ export function EditorCanvas() {
     inspectorActive,
     currentPageId,
     activeStepId,
+    viewportMode,
     setInspectorHoveredSectionId,
     openDetail,
   } = useEditor();
 
   const previewRoute = useMemo(
     () => {
-      // Wallet-card step gets its own preview route
-      if (activeStepId === "wallet-card") return "/devtest-wallet" as PreviewRoute;
       return getPreviewRoute(currentPageId) as PreviewRoute;
     },
-    [currentPageId, activeStepId],
+    [currentPageId],
   );
 
   const handleInspectorHover = useCallback(
@@ -44,10 +43,10 @@ export function EditorCanvas() {
   );
 
   return (
-    <div className="editor-canvas">
+    <div className="editor-canvas" data-viewport={viewportMode}>
       <GuestPreviewFrame
         route={previewRoute}
-        className="editor-canvas__preview"
+        className={`editor-canvas__preview${viewportMode === "desktop" ? " editor-canvas__preview--desktop" : ""}`}
         scrollTarget={detailTarget}
         inspectorActive={inspectorActive}
         inspectorPageId={currentPageId}

@@ -36,6 +36,7 @@ import type {
 import { STAYS_CORE_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
 import type { SectionInstance } from "@/app/_lib/sections/types";
 import { bokningarSection } from "@/app/_lib/sections/definitions/bokningar";
+import { searchSection } from "@/app/_lib/sections/definitions/search";
 
 // ═══════════════════════════════════════════════════════════════
 // INTERNAL HELPERS
@@ -93,6 +94,7 @@ export function getPageSections(
  * When adding a new locked section, add it here too.
  */
 const LOCKED_SECTION_MAP: Partial<Record<PageId, Array<{ createDefault: () => ReturnType<typeof bokningarSection.createDefault>; id: string }>>> = {
+  home: [searchSection],
   stays: [bokningarSection],
 };
 

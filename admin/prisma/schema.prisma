@@ -18,57 +18,6 @@ enum BookingStatus {
   CANCELLED
 }
 
-enum AccessPassType {
-  ROOM_KEY
-  GATE
-  GENERIC
-}
-
-enum AccessPassStatus {
-  PENDING
-  ACTIVE
-  EXPIRED
-  REVOKED
-}
-
-enum WalletBackgroundMode {
-  SOLID
-  GRADIENT
-  IMAGE
-}
-
-enum AccessPassEventType {
-  ISSUED
-  REVOKED
-  RENDERED_APPLE
-  RENDERED_GOOGLE
-  RENDER_FAILED
-  VALIDATE_ALLOW
-  VALIDATE_DENY
-}
-
-enum LockProvider {
-  fake
-  salto
-  assa_abloy
-  nuki
-  manual
-}
-
-enum KeyStatus {
-  active
-  revoked
-  expired
-}
-
-enum KeyEventType {
-  key_created
-  key_revoked
-  key_expired
-  connection_tested
-  connection_failed
-}
-
 // ============================================================================
 // TENANT & BOOKINGS (Organizations-based)
 // ============================================================================
@@ -147,14 +96,12 @@ model Tenant {
   updatedAt DateTime @updatedAt
 
   bookings           Booking[]
-  walletCardDesign   WalletCardDesign?
   mediaAssets        MediaAsset[]
   integration        TenantIntegration?
   syncJobs           SyncJob[]
   syncEvents         SyncEvent[]
   businessEntities   BusinessEntity[]
   policies           TenantPolicy[]
-  lockIntegration    TenantLockIntegration?
   locales            TenantLocale[]
   translations       TenantTranslation[]
   emailTemplates     EmailTemplate[]
@@ -163,6 +110,8 @@ model Tenant {
   emailDomains       EmailDomain[]
   magicLinkTokens    MagicLinkToken[]
   guestAccounts      GuestAccount[]
+  products           Product[]
+  productCollections ProductCollection[]
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -264,7 +213,6 @@ model Booking {
   guestAccount   GuestAccount? @relation(fields: [guestAccountId], references: [id], onDelete: SetNull)
 
   magicLinks   MagicLink[]
-  accessPasses AccessPass[]
   createdAt    DateTime    @default(now())
 
   @@index([tenantId])
@@ -286,96 +234,6 @@ model MagicLink {
 
   @@index([token])
   @@index([bookingId])
-}
-
-// ============================================================================
-// ACCESS PASSES (Hotellkort / Wallet Passes)
-// ============================================================================
-
-/// A canonical access credential tied to a booking.
-/// Can be rendered to Apple/Google Wallet via adapter layer.
-/// Token is NEVER stored in cleartext — only SHA-256 hash + pepper.
-model AccessPass {
-  id       String @id @default(cuid())
-  tenantId String
-
-  bookingId String
-  booking   Booking @relation(fields: [bookingId], references: [id])
-
-  /// Denormalized for admin filtering — always matches booking.guestEmail
-  guestId   String
-
-  type      AccessPassType
-
-  /// Persisted status. UI should use computeEffectiveStatus() which also
-  /// considers validFrom/validTo and revokedAt at query time.
-  status    AccessPassStatus @default(PENDING)
-
-  /// Activation window — pass is only ACTIVE within this range
-  validFrom DateTime
-  validTo   DateTime
-
-  /// Revocation data (kill switch)
-  revokedAt        DateTime?
-  revokedByUserId  String?
-  revokeReason     String?
-
-  /// Globally unique external identifier (safe to expose in URLs/QR codes)
-  serial    String @unique
-
-  /// SHA-256(tokenRaw + pepper). tokenRaw is returned ONCE at issuance and never stored.
-  tokenHash String @unique
-
-  /// Last 4 chars of tokenRaw — for support identification only
-  tokenLast4 String
-
-  /// Optimistic locking — increment on every mutation
-  version   Int @default(1)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  events    AccessPassEvent[]
-
-  /// Hard constraint: one pass per booking per type. Prevents duplicates
-  /// even under concurrent requests (DB-level enforcement).
-  @@unique([tenantId, bookingId, type])
-
-  @@index([tenantId])
-  @@index([bookingId])
-  @@index([guestId])
-  @@index([tenantId, status])
-  @@index([tenantId, guestId])
-  @@index([validTo])
-}
-
-/// Immutable audit log for every access pass state change.
-/// Never deleted, never updated — append-only.
-model AccessPassEvent {
-  id       String @id @default(cuid())
-  tenantId String
-
-  passId   String
-  pass     AccessPass @relation(fields: [passId], references: [id])
-
-  type     AccessPassEventType
-
-  /// Who triggered this event (null for system/automated events)
-  actorUserId String?
-
-  /// Request context (nullable — not always available)
-  ip        String?
-  userAgent String?
-
-  /// Arbitrary structured data (e.g. renderer output, deny reason)
-  metadata  Json?
-
-  createdAt DateTime @default(now())
-
-  @@index([tenantId])
-  @@index([passId])
-  @@index([tenantId, passId])
-  @@index([type])
 }
 
 // ============================================================================
@@ -528,10 +386,6 @@ model WebhookEvent {
 }
 
 // ============================================================================
-// WALLET CARD DESIGN (Per-tenant card styling for Apple/Google Wallet)
-// ============================================================================
-
-// ============================================================================
 // MEDIA ASSETS (Organization-scoped media library)
 // ============================================================================
 
@@ -592,106 +446,6 @@ model MediaAsset {
   @@index([tenantId, createdAt])
   @@index([tenantId, mimeType])
   @@index([deletedAt])  // For cleanup job: find soft-deleted assets
-}
-
-/// Visual design template for wallet passes. One per tenant.
-/// Controls background, logo placement, and date text styling.
-/// All passes issued by this tenant inherit these settings.
-model WalletCardDesign {
-  id       String @id @default(cuid())
-  tenantId String @unique
-  tenant   Tenant @relation(fields: [tenantId], references: [id])
-
-  // ── Background ────────────────────────────────────────────────────
-  backgroundMode           WalletBackgroundMode @default(SOLID)
-  /// Hex color for SOLID and GRADIENT base color
-  backgroundColor          String?
-  /// Gradient direction: "up" or "down" (matches guest portal theme)
-  gradientDirection        String?              @default("down")
-  /// Image URL for IMAGE mode
-  backgroundImageUrl       String?
-  /// Dark overlay opacity for IMAGE mode (0..1)
-  overlayOpacity           Float?               @default(0.3)
-
-  // ── Logo ──────────────────────────────────────────────────────────
-  /// Logo image displayed top-left on the card
-  logoUrl                  String?
-
-  // ── Date text ─────────────────────────────────────────────────────
-  /// Text color for the check-in/check-out date range (top-right)
-  dateTextColor            String             @default("#ffffff")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-// ============================================================================
-// DIGITAL KEY INTEGRATION
-// ============================================================================
-
-/// Lock system integration per tenant (1:1).
-/// Follows same pattern as TenantIntegration for PMS.
-model TenantLockIntegration {
-  id                   String       @id @default(cuid())
-  tenantId             String       @unique
-  tenant               Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  provider             LockProvider
-  credentialsEncrypted Bytes?
-  credentialsIv        Bytes?
-  status               String       @default("pending") // active | disconnected | error | pending
-  consecutiveFailures  Int          @default(0)
-  lastTestedAt         DateTime?
-  lastError            String?
-
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-
-  digitalKeys          DigitalKey[]
-  keyEvents            KeyEvent[]
-}
-
-/// A digital key issued to a guest for a specific booking.
-/// One active key per booking per tenant.
-model DigitalKey {
-  id             String    @id @default(cuid())
-  tenantId       String
-  bookingId      String
-  integrationId  String
-  integration    TenantLockIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-
-  keyId          String    // External ID at lock provider
-  provider       LockProvider
-  status         KeyStatus @default(active)
-  validFrom      DateTime
-  validTo        DateTime
-  walletPayload  Json
-  portalPayload  Json
-
-  revokedAt      DateTime?
-  revokedBy      String?   // userId who revoked
-
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  events         KeyEvent[]
-
-  @@unique([tenantId, bookingId])
-  @@index([tenantId, status])
-}
-
-/// Append-only event log for digital key lifecycle.
-model KeyEvent {
-  id            String    @id @default(cuid())
-  tenantId      String
-  integrationId String
-  integration   TenantLockIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  keyId         String?
-  key           DigitalKey? @relation(fields: [keyId], references: [id], onDelete: SetNull)
-  bookingId     String?
-  eventType     KeyEventType
-  metadata      Json?
-  createdAt     DateTime  @default(now())
 }
 
 // ============================================================================
@@ -941,4 +695,440 @@ model GuestOtpCode {
   guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
 
   @@index([guestAccountId])
+}
+
+// ============================================================================
+// PRODUCT CATALOG (Shopify-grade product infrastructure)
+// ============================================================================
+
+enum ProductStatus {
+  ACTIVE
+  DRAFT
+  ARCHIVED
+}
+
+enum InventoryChangeReason {
+  PURCHASE
+  MANUAL_ADJUSTMENT
+  RETURN
+  RESERVATION
+  RESERVATION_RELEASED
+  INITIAL
+}
+
+/// Core product model. Every sellable item — breakfast buffet, bike rental,
+/// welcome package, room upgrade — is a Product.
+///
+/// Shopify parity:
+///   - Title, description (rich text), status (active/draft)
+///   - Media (images + video via ProductMedia join)
+///   - Price (base price on product, overridable per variant)
+///   - Inventory tracking (optional, per product or per variant)
+///   - Variants (option-based: "Tid" → "07:00", "08:30")
+///   - Collections (many-to-many via ProductCollectionItem)
+///
+/// Pricing strategy:
+///   - Product has a base price (used when no variants exist)
+///   - Each variant can override price independently
+///   - Prices stored in smallest currency unit (ören/cents)
+///
+/// Inventory strategy:
+///   - trackInventory: false → unlimited stock, no tracking
+///   - trackInventory: true → inventoryQuantity is source of truth
+///   - continueSellingWhenOutOfStock: allows overselling when true
+///   - When variants exist, inventory is tracked PER VARIANT (not product)
+model Product {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // ── Core fields ────────────────────────────────────────────
+  title       String
+  description String   @db.Text   @default("")
+  slug        String               // URL-safe, auto-generated from title
+
+  status      ProductStatus @default(DRAFT)
+
+  // ── Pricing ────────────────────────────────────────────────
+  /// Base price in smallest currency unit (ören). Used when no variants exist.
+  /// When variants exist, each variant has its own price.
+  price       Int       @default(0)
+  currency    String    @default("SEK")
+
+  /// Compare-at price for showing discounts (crossed-out price). Null = no discount.
+  compareAtPrice Int?
+
+  // ── Inventory (product-level) ──────────────────────────────
+  /// Whether to track inventory for this product.
+  /// When variants exist, inventory is tracked per variant instead.
+  trackInventory              Boolean @default(false)
+  /// Available quantity. Only meaningful when trackInventory = true AND no variants.
+  inventoryQuantity           Int     @default(0)
+  /// Allow purchases even when inventory is 0.
+  continueSellingWhenOutOfStock Boolean @default(false)
+
+  // ── Tax ─────────────────────────────────────────────────────
+  /// Whether to charge VAT/tax on this product.
+  taxable     Boolean   @default(true)
+
+  // ── Optimistic locking ─────────────────────────────────────
+  /// Incremented on every update. Prevents concurrent overwrites.
+  version     Int       @default(1)
+
+  // ── Sort / display ─────────────────────────────────────────
+  sortOrder   Int       @default(0)
+
+  // ── Soft delete ────────────────────────────────────────────
+  /// Null = active. Set = archived (hidden from storefront, data preserved).
+  archivedAt  DateTime?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // ── Relations ──────────────────────────────────────────────
+  media       ProductMedia[]
+  options     ProductOption[]
+  variants    ProductVariant[]
+  collectionItems ProductCollectionItem[]
+  tags            ProductTagItem[]
+  inventoryChanges InventoryChange[]
+  priceChanges PriceChange[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, sortOrder])
+  @@index([tenantId, archivedAt])
+}
+
+/// Product media — images and videos attached to a product.
+/// Ordered by sortOrder. First item (sortOrder=0) is the featured image.
+///
+/// References Cloudinary URLs directly (same pattern as MediaAsset).
+/// Supports both images and video.
+model ProductMedia {
+  id        String @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// Cloudinary delivery URL
+  url       String
+  /// "image" or "video"
+  type      String    @default("image")
+  /// Alt text for accessibility
+  alt       String    @default("")
+  /// Display order (0 = featured image)
+  sortOrder Int       @default(0)
+  /// Original filename
+  filename  String    @default("")
+  /// Width in pixels (images only)
+  width     Int?
+  /// Height in pixels (images only)
+  height    Int?
+
+  createdAt DateTime  @default(now())
+
+  @@index([productId])
+  @@index([productId, sortOrder])
+}
+
+/// Product option — a named axis of variation (e.g. "Tid", "Storlek").
+/// Each option has multiple values (e.g. "07:00", "08:30").
+///
+/// Shopify allows up to 3 options per product. We enforce the same limit
+/// in application code (not DB constraint — easier to change later).
+///
+/// Options are ordered by sortOrder. Values are stored as a JSON array
+/// to preserve ordering without a separate table.
+model ProductOption {
+  id        String @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// Display name (e.g. "Tid", "Storlek", "Färg")
+  name      String
+  /// Ordered list of option values (e.g. ["07:00", "08:30", "10:00"])
+  values    Json      // String[]
+  /// Display order among options
+  sortOrder Int       @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([productId, name])
+  @@index([productId])
+}
+
+/// Product variant — a specific combination of option values.
+/// Each variant can have its own price, inventory, and SKU.
+///
+/// Shopify model: if a product has options "Tid" with ["07:00","08:30"]
+/// and "Storlek" with ["Liten","Stor"], there are 4 variants:
+///   07:00/Liten, 07:00/Stor, 08:30/Liten, 08:30/Stor
+///
+/// option1/option2/option3 store the selected value for each option
+/// (positional — matches ProductOption.sortOrder 0/1/2).
+///
+/// When variants exist, product-level price/inventory are ignored.
+/// Each variant is the source of truth for its own price and stock.
+model ProductVariant {
+  id        String @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// Selected value for option at position 0 (e.g. "07:00")
+  option1   String?
+  /// Selected value for option at position 1 (e.g. "Liten")
+  option2   String?
+  /// Selected value for option at position 2
+  option3   String?
+
+  /// Variant-specific image URL (Cloudinary). Shown on product page for this variant.
+  imageUrl  String?
+
+  /// Variant-specific price in smallest currency unit. Overrides product.price.
+  price     Int
+  /// Compare-at price for showing discounts. Null = no discount.
+  compareAtPrice Int?
+
+  /// SKU — stock keeping unit (optional, tenant-defined)
+  sku       String?
+
+  /// Whether this variant tracks inventory.
+  trackInventory              Boolean @default(false)
+  /// Available quantity for this specific variant.
+  inventoryQuantity           Int     @default(0)
+  /// Allow purchases when this variant's stock is 0.
+  continueSellingWhenOutOfStock Boolean @default(false)
+
+  /// Optimistic locking — incremented on every mutation.
+  version   Int       @default(1)
+
+  /// Display order among variants
+  sortOrder Int       @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  inventoryChanges InventoryChange[]
+
+  @@index([productId])
+  @@index([productId, sortOrder])
+  @@index([productId, sku])
+}
+
+// ============================================================================
+// PRODUCT COLLECTIONS (Shopify-grade collection infrastructure)
+// ============================================================================
+
+/// Product collection — a named group of products.
+/// Products can belong to multiple collections (many-to-many).
+///
+/// Examples: "Mat & Dryck", "Aktiviteter", "Paket", "Alla produkter"
+///
+/// Shopify parity:
+///   - Title, description, image
+///   - Manual sorting via ProductCollectionItem.sortOrder
+///   - Products can be in multiple collections simultaneously
+model ProductCollection {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String   @db.Text   @default("")
+  slug        String               // URL-safe
+  imageUrl    String?              // Collection cover image
+
+  sortOrder   Int       @default(0)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items       ProductCollectionItem[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([tenantId, sortOrder])
+}
+
+/// Join table: Product ↔ Collection (many-to-many with sort order).
+/// A product can appear in multiple collections.
+/// Each membership has its own sort position within that collection.
+model ProductCollectionItem {
+  id           String @id @default(cuid())
+  collectionId String
+  collection   ProductCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// Position within this collection
+  sortOrder    Int       @default(0)
+
+  createdAt    DateTime  @default(now())
+
+  @@unique([collectionId, productId])
+  @@index([collectionId, sortOrder])
+  @@index([productId])
+}
+
+// ============================================================================
+// PRODUCT TAGS (Global tag registry + product-tag association)
+// ============================================================================
+
+/// Global tag registry — shared across all products for a tenant.
+/// Normalized: each unique tag string exists once per tenant.
+/// Enables tag-based search, filtering, and autocomplete.
+model ProductTag {
+  id       String @id @default(cuid())
+  tenantId String
+
+  /// Normalized tag name (lowercase, trimmed)
+  name     String
+
+  createdAt DateTime @default(now())
+
+  items    ProductTagItem[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+/// Join table: Product ↔ Tag (many-to-many).
+model ProductTagItem {
+  id        String @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       ProductTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([productId, tagId])
+  @@index([productId])
+  @@index([tagId])
+}
+
+// ============================================================================
+// INVENTORY LEDGER (Append-only audit trail for stock changes)
+// ============================================================================
+
+/// Every inventory change — purchase, manual adjustment, return, reservation —
+/// is recorded as an immutable ledger entry. Never updated, never deleted.
+///
+/// The current quantity is the SUM of all changes for that product/variant.
+/// Product.inventoryQuantity / Variant.inventoryQuantity are denormalized
+/// caches updated atomically alongside each ledger entry.
+///
+/// This is the Shopify model: you can always reconstruct inventory history
+/// and answer "why did the stock change?"
+model InventoryChange {
+  id        String @id @default(cuid())
+  tenantId  String
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// Null when the change applies to the product level (no variants).
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  /// Signed quantity delta. Negative = stock decreased (purchase, adjustment down).
+  /// Positive = stock increased (return, adjustment up, initial stock).
+  quantityDelta Int
+
+  /// Resulting quantity AFTER this change was applied.
+  /// Denormalized for fast reads — avoids summing the entire ledger.
+  quantityAfter Int
+
+  /// Why this change happened.
+  reason    InventoryChangeReason
+
+  /// Human-readable note (e.g. "Manuell justering", "Order #1234")
+  note      String?
+
+  /// Who triggered this change. Null for system/automated changes (purchases).
+  actorUserId String?
+
+  /// Reference to the order/reservation that caused this change.
+  referenceId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@index([variantId])
+  @@index([tenantId, productId])
+  @@index([tenantId, createdAt])
+  @@index([reason])
+}
+
+// ============================================================================
+// PRICE HISTORY (Audit trail for price changes)
+// ============================================================================
+
+/// Every price change on a product or variant is recorded.
+/// Append-only — never updated, never deleted.
+/// Used for analytics, audit, and "was this price correct at order time?"
+model PriceChange {
+  id        String @id @default(cuid())
+  tenantId  String
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// Null when the change applies to the product-level price.
+  variantId String?
+
+  /// Price BEFORE this change (smallest currency unit).
+  previousPrice Int
+  /// Price AFTER this change (smallest currency unit).
+  newPrice      Int
+  /// Currency code at time of change.
+  currency      String
+
+  /// Who changed the price. Null for system/automated changes.
+  actorUserId   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@index([tenantId, productId])
+  @@index([tenantId, createdAt])
+}
+
+// ============================================================================
+// INVENTORY RESERVATIONS (Soft locks for cart/checkout)
+// ============================================================================
+
+/// Temporary stock reservation created when an item is added to cart.
+/// Prevents overselling by holding stock for a limited time.
+/// Released on purchase (converted to InventoryChange) or expiry.
+///
+/// TTL: 15 minutes (configurable). Expired reservations are cleaned up
+/// by a periodic job and stock is released.
+model InventoryReservation {
+  id        String @id @default(cuid())
+  tenantId  String
+
+  productId String
+  variantId String?
+
+  /// Number of units reserved.
+  quantity  Int
+
+  /// When this reservation expires and stock is released.
+  expiresAt DateTime
+
+  /// Session or cart identifier that owns this reservation.
+  sessionId String
+
+  /// Whether this reservation has been consumed (converted to a purchase).
+  consumed  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, productId])
+  @@index([tenantId, variantId])
+  @@index([expiresAt])
+  @@index([sessionId])
 }

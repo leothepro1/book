@@ -1,25 +1,13 @@
 /**
- * Sync Job Runner
+ * Sync Job Runner — DEPRECATED
  *
- * POST /api/integrations/run-jobs
- *
- * Processes multiple pending sync jobs per invocation with a time budget.
- * Called by a cron job every minute.
- * Secured with CRON_SECRET header.
- *
- * Processes up to 10 jobs or 45 seconds — whichever comes first.
- * The 45-second budget keeps execution safely under Vercel's 60s limit.
+ * The booking engine uses real-time PMS queries instead of background sync.
+ * This endpoint is kept to prevent cron infrastructure from 404-ing.
+ * Returns immediately with zero jobs processed.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/app/_lib/env";
-import { claimNextPendingJob } from "@/app/_lib/integrations/sync/scheduler";
-import { runSyncJob } from "@/app/_lib/integrations/sync/engine";
-import { isCircuitOpen, markJobCircuitOpen } from "@/app/_lib/integrations/sync/circuit-breaker";
-import type { PmsProvider } from "@/app/_lib/integrations/types";
-
-const TIME_BUDGET_MS = 45_000;
-const MAX_JOBS_PER_INVOCATION = 10;
 
 export async function POST(request: NextRequest) {
   const secret = request.headers.get("x-cron-secret");
@@ -27,33 +15,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let processed = 0;
-  const startTime = Date.now();
-
-  while (
-    processed < MAX_JOBS_PER_INVOCATION &&
-    Date.now() - startTime < TIME_BUDGET_MS
-  ) {
-    const job = await claimNextPendingJob();
-    if (!job) break; // Queue empty
-
-    const circuitOpen = await isCircuitOpen(
-      job.tenantId,
-      job.provider as PmsProvider,
-    );
-
-    if (circuitOpen) {
-      await markJobCircuitOpen(job.id, job.tenantId, job.provider);
-      processed++;
-      continue;
-    }
-
-    await runSyncJob(job.id);
-    processed++;
-  }
-
-  return NextResponse.json({
-    processed,
-    durationMs: Date.now() - startTime,
-  });
+  return NextResponse.json({ processed: 0, durationMs: 0, note: "Sync jobs deprecated — booking engine uses real-time PMS queries" });
 }

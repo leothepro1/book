@@ -1,13 +1,17 @@
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
+import { LAYOUT_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
 import { themeToStyleAttr, backgroundStyle } from "../_lib/theme";
 import GuestHeader from "./GuestHeader";
 import GuestFooter from "./GuestFooter";
 import { EmbedProvider } from "./EmbedOverlay";
+import "./guest-page-shell.css";
 
 /**
- * Wraps guest portal page content with theme CSS vars, background, header, and footer.
+ * Wraps booking engine page content with theme CSS vars, background, header, and footer.
  * Each page passes its own config (resolved from the correct tenant).
- * Replaces the old layout-level config fetch that was hardcoded to a single tenant.
+ *
+ * Injects --layout-max-width CSS variable from config.layout.maxWidth.
+ * Desktop viewports use this to constrain content width with horizontal padding.
  */
 export default function GuestPageShell({
   config,
@@ -18,13 +22,21 @@ export default function GuestPageShell({
 }) {
   const cssVars = themeToStyleAttr(config.theme);
   const bgStyle = backgroundStyle(config.theme.background, config.theme.colors);
+  const maxWidth = config.layout?.maxWidth ?? LAYOUT_DEFAULTS.maxWidth;
+
+  const shellVars: React.CSSProperties = {
+    ...cssVars,
+    "--layout-max-width": `${maxWidth}px`,
+  } as React.CSSProperties;
 
   return (
-    <div style={cssVars} className="g-body">
+    <div style={shellVars} className="g-body">
       <div style={bgStyle} className="min-h-dvh flex flex-col">
         <EmbedProvider>
           <GuestHeader config={config} />
-          <main className="flex-1">{children}</main>
+          <main className="g-main flex-1">
+            <div className="g-content">{children}</div>
+          </main>
           <GuestFooter config={config} />
         </EmbedProvider>
       </div>

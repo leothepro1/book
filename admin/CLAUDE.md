@@ -6,15 +6,43 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-A hospitality SaaS platform where hotels and resorts create a guest portal
-for their visitors. Guests receive a magic link and access a personalized
-portal to view bookings, check in, access services, and contact the hotel.
+**Shopify for bookings.** A hospitality commerce platform where hotels,
+resorts, and campgrounds build and run their entire booking engine.
+Tenants get a white-label storefront on their own subdomain with a
+visual editor, product catalog, availability search, checkout, and
+order management — exactly like Shopify, but purpose-built for
+hospitality bookings.
 
-The tenant configures the portal using a visual editor — the core product.
-Think Shopify's theme editor, purpose-built for guest journey portals.
+This is NOT a guest service portal. This IS a commerce platform.
+The mental model is always Shopify:
+
+  Shopify products     → Accommodation categories (room types, cabins, camping)
+  Shopify collections  → Product groups (summer packages, weekend deals)
+  Shopify orders       → Bookings (reservations with guests, dates, payments)
+  Shopify themes       → Booking engine themes (visual editor, section builder)
+  Shopify analytics    → Booking analytics (revenue, occupancy, conversion)
+  Shopify checkout     → Booking flow (search → select → pay → confirm)
 
 The platform is intentionally controlled. Tenants cannot create arbitrary
 pages or layouts. Everything is platform-defined and architecturally constrained.
+
+### What we are building (roadmap context)
+
+- Visual editor with section builder (DONE — Shopify-grade)
+- White-label multi-tenant with subdomains (DONE)
+- Desktop/mobile responsive preview (DONE)
+- PMS integration for real-time availability + rates (adapter pattern DONE, Mews TODO)
+- Search container with morphing panels — locked section (DONE)
+- Layout settings (max-width, desktop padding) (DONE)
+- Product catalog (accommodation categories, rate plans, add-ons)
+- Product templates (category detail pages)
+- Theme templates (full-page theme presets)
+- Checkout flow (guest info → payment → confirmation)
+- Order management (bookings, cancellations, modifications)
+- Analytics dashboard (revenue, occupancy, conversion rates)
+- Email notifications (booking confirmed, payment received, etc.)
+
+Every feature ships at Shopify quality or not at all.
 
 ---
 
@@ -50,11 +78,11 @@ pages or layouts. Everything is platform-defined and architecturally constrained
 
 ## Three surfaces
 
-1. Admin editor — tenants design the portal
-2. Guest portal — what guests see
+1. Admin editor — tenants design the booking engine
+2. Booking engine — what visitors see (publicly accessible, no auth required)
 3. Platform backend
 
-Editor and guest portal share configuration models.
+Editor and booking engine share configuration models.
 
 ---
 
@@ -109,7 +137,7 @@ Left panel (sp-list):
   Mall — section builder
   Sidfot — footer singleton
 
-Canvas: live portal preview
+Canvas: live booking engine preview
 Right panel: DetailPanel — configuration panels
 
 Edit pipeline:
@@ -369,7 +397,6 @@ Each has a dedicated editor panel.
 - `/api/tenant/preview-stream` — live preview SSE
 - `/api/webhooks/clerk` — org/user sync (Svix verification)
 - `/api/webhooks/resend` — email delivery status (Svix verification)
-- `/api/wallet-card-design` — Apple/Google Wallet styling
 - `/api/email-templates` — template CRUD + preview + test send
 - `/api/admin/backfill-portal-slugs` — one-time slug backfill (CRON_SECRET)
 - `/api/admin/backfill-email-from` — one-time emailFrom backfill (CRON_SECRET)
@@ -380,19 +407,45 @@ Each has a dedicated editor panel.
 
 Aggregator pattern — normalizes data from multiple hotel systems (Mews,
 Apaleo, Opera) into a canonical format. Hotels connect once, platform
-works with normalized data everywhere.
+queries real-time availability, rates, and restrictions everywhere.
 
-### Adapter contract
+**Architecture: real-time queries, not background sync.**
+The booking engine queries PMS on demand (availability search, rate lookup,
+booking creation). There is no background sync loop — data is always fresh.
+
+### Adapter contract (8 capabilities)
 
 Every PMS implements PmsAdapter interface:
-  getBookings, syncBookings, testConnection, notifyCheckIn/Out,
-  verifyWebhookSignature
+
+  1. getAvailability(params)       — rooms/units per date with rate plans
+  2. getRoomTypes(tenantId)        — categories, capacity, images, facilities
+  3. getRestrictions(from, to)     — min/max stay, CTA/CTD per date
+  4. lookupBooking(reference)      — existing booking by confirmation number
+  5. getGuest(bookingExternalId)   — guest data linked to a booking
+  6. getAddons(categoryId?)        — extras (breakfast, parking, cleaning)
+  7. getPaymentStatus(bookingId)   — paid/unpaid/outstanding balance
+  8. testConnection(credentials)   — validate PMS credentials
+
+Plus webhook infrastructure: resolveWebhookTenant(), verifyWebhookSignature()
 
 `resolveAdapter(tenantId)` is the ONLY entry point for platform code.
 Never call PMS APIs directly. Registry maps provider → adapter instance.
 
-Implemented: Mews (production), Fake (dev/test), Manual (no external PMS)
+Implemented: Mews (stubbed — infrastructure ready), Fake (full dev data), Manual (no PMS)
 Planned: Apaleo, Opera
+
+### Normalized types (types.ts)
+
+  RoomCategory      — accommodation type (id, name, description, images, capacity, base price)
+  RatePlan          — pricing option (flexible/non-refundable, price per night, total, addons)
+  AvailabilityResult — search result (categories with rate plans, units, search params)
+  Restriction       — stay constraints (min/max nights, CTA/CTD per date)
+  BookingLookup     — existing booking (guest, dates, status, amount, rate plan)
+  GuestData         — guest info (name, email, phone, address)
+  Addon             — extra service (name, price, pricing mode)
+  PaymentStatus     — payment state (total, paid, outstanding, status)
+
+All types have Zod schemas for runtime validation.
 
 ### Credentials & encryption
 
@@ -401,63 +454,42 @@ Key: INTEGRATION_ENCRYPTION_KEY env var (min 32 chars).
 Credentials never logged, never returned to client in cleartext.
 Sensitive fields masked as "••••••••••••••••" in UI.
 
-### Sync machinery
-
-Three cron endpoints drive all syncing:
-  /api/integrations/poll     — every 5 min, enqueue stale syncs + recover stuck jobs
-  /api/integrations/run-jobs — every 1 min, claim and execute pending jobs
-  /api/integrations/cleanup  — daily 03:00, purge old events/jobs/dedup records
-
-All secured with x-cron-secret header.
-
-Sync lifecycle:
-  Poll creates job (pending) → run-jobs claims atomically (prevents double-exec)
-  → circuit breaker check → runSyncJob() → adapter.syncBookings()
-  → upsertSyncedBooking() per booking (idempotent) → recordSuccess/Failure
-
 ### Resilience layers
 
-1. Rate limiting — DB-backed token bucket (200 req/30s per accessToken).
-   Key is SHA-256 of token. Survives serverless cold starts.
-2. Circuit breaker — consecutiveFailures counter on TenantIntegration.
-   Opens after 5 failures → status = "error". Resets on 1 success.
-3. Stuck job recovery — Poll detects running > 10 min → resets to pending.
-4. Idempotent upsert — lastSyncedAt prevents webhook + poller race.
-5. Webhook dedup — WebhookDedup table with unique dedupKey.
-6. Individual error tracking — BookingSyncError per booking, max 5 retries.
-7. Retry with backoff — 2^attempt × 60s + jitter, max 30 min.
+1. Rate limiting — DB-backed token bucket (200 req/30s per accessToken)
+2. Circuit breaker — consecutiveFailures on TenantIntegration (opens after 5)
+3. Webhook dedup — WebhookDedup table with unique dedupKey (7d retention)
+4. Webhook signature verification — provider-specific (Mews: URL token)
+5. Audit logging — SyncEvent append-only log for all PMS interactions
 
 ### Data models
 
   TenantIntegration — 1:1 with Tenant. Provider, encrypted creds, status, circuit breaker
-  SyncJob — queued sync jobs with status, attempt, backoff scheduling
-  SyncEvent — append-only audit log (90d retention)
-  BookingSyncError — per-booking error tracking with retry count
+  SyncEvent — append-only audit log (webhook events, connection tests)
   RateLimit — token bucket per accessToken (DB-backed)
   WebhookDedup — dedup key per webhook event (7d retention)
 
 ### Key files
 
-- Core types: `app/_lib/integrations/types.ts`
+- Normalized types: `app/_lib/integrations/types.ts`
 - Adapter interface: `app/_lib/integrations/adapter.ts`
 - Registry: `app/_lib/integrations/registry.ts`
 - Resolution: `app/_lib/integrations/resolve.ts`
 - Mews adapter: `app/_lib/integrations/adapters/mews/`
-- Sync engine: `app/_lib/integrations/sync/engine.ts`
-- Scheduler: `app/_lib/integrations/sync/scheduler.ts`
+- Fake adapter: `app/_lib/integrations/adapters/fake/`
 - Circuit breaker: `app/_lib/integrations/sync/circuit-breaker.ts`
 - Encryption: `app/_lib/integrations/crypto.ts`
 
 ### Integration invariants — never violate these
 
-1. resolveAdapter(tenantId) is the only way to get an adapter
-2. All PMS data normalized to NormalizedBooking / NormalizedGuest
+1. resolveAdapter(tenantId) is the ONLY way to get an adapter
+2. All PMS data normalized to canonical types (RoomCategory, RatePlan, etc.)
 3. Credentials encrypted at rest, decrypted only at call time
-4. One bad booking never aborts entire sync
-5. Sync jobs deduped — only one pending/running per tenant
-6. lastSyncedAt prevents concurrent webhook + poller data races
-7. Circuit breaker uses consecutive failures (works with backoff)
-8. Fake adapter throws in production — dev/test only
+4. Real-time queries — no background sync, data is always fresh from PMS
+5. Circuit breaker uses consecutive failures (opens after 5)
+6. Webhook dedup via DB unique constraint
+7. Fake adapter throws in production — dev/test only
+8. Every adapter method returns normalized data — never raw PMS responses
 
 ---
 
@@ -630,13 +662,14 @@ This applies to scalability, robustness, race safety, error handling, UX
 polish, code structure, and architectural decisions. No shortcuts, no
 "good enough for now", no tech debt disguised as pragmatism.
 
-This is not aspirational — it is the baseline. This platform is architecturally
-equivalent to Shopify in its domain: Resend email integration, a visual editor
-with draft/publish state, a theme library, multi-tenant infrastructure with
-subdomain routing, and a section builder. The quality, architecture, and
-attention to edge cases must match that level from the start. There is never
-a valid reason to cut corners, skip edge cases, or ship something that would
-not pass enterprise review. Every feature ships complete or not at all.
+This IS Shopify for bookings. Not "inspired by" or "similar to" — it IS
+the same caliber of platform. Products, categories, orders, analytics,
+themes, checkout, multi-tenant infrastructure, visual editor, section
+builder, PMS integrations, email notifications, payment processing.
+The quality, architecture, and attention to edge cases must match Shopify
+from the start. There is never a valid reason to cut corners, skip edge
+cases, or ship something that would not pass enterprise review. Every
+feature ships complete or not at all. No temporary solutions.
 
 ---
 
@@ -722,7 +755,7 @@ ResourceId format for resource types:
 
 Key file: `app/_lib/translations/resource-types.ts`
 
-### Fallback chain (guest portal render)
+### Fallback chain (booking engine render)
 
   1. Tenant translation for requested locale
   2. Platform default for requested locale (PLATFORM namespace only)
@@ -830,8 +863,8 @@ Shopify pattern: every tenant gets a unique subdomain automatically.
 ### URL structure
 
   Admin app:       bedfront.com (Vercel, Clerk auth)
-  Tenant portal:   {portalSlug}.bedfront.com (wildcard DNS)
-  Portal page:     {portalSlug}.bedfront.com/home/{portalToken}
+  Booking engine:  {portalSlug}.bedfront.com (wildcard DNS)
+  Booking page:    {portalSlug}.bedfront.com/home/{portalToken}
 
   Example:
     Admin:   bedfront.com/design
@@ -859,7 +892,7 @@ Format: `{name-base}-{random6}` (e.g. "grand-hotel-stockholm-x4k9mq").
 ### portalToken
 
 Every Booking has a unique `portalToken` field — the URL identifier for
-guest portal access. Different from the booking-scoped MagicLink model.
+booking engine access. Different from the booking-scoped MagicLink model.
 
   - Generated on booking creation in upsertSyncedBooking()
   - Immutable — a booking's portal URL never changes
@@ -924,8 +957,8 @@ Every tenant gets an automatic email address based on their subdomain:
 
   BOOKING_CONFIRMED    — after booking synced with PRE_CHECKIN status
   BOOKING_CANCELLED    — after booking status → CANCELLED
-  CHECK_IN_CONFIRMED   — after check-in (sync or guest portal action)
-  CHECK_OUT_CONFIRMED  — after check-out (sync or guest portal action)
+  CHECK_IN_CONFIRMED   — after check-in (sync or booking engine action)
+  CHECK_OUT_CONFIRMED  — after check-out (sync or booking engine action)
   MAGIC_LINK           — guest requests portal login link
   SUPPORT_REPLY        — hotel replies to support ticket
 
@@ -980,7 +1013,7 @@ Every tenant gets an automatic email address based on their subdomain:
 
 ### Magic link authentication
 
-  Email-based guest portal login — no passwords.
+  Email-based booking engine login — no passwords.
   Flow: guest enters email → system generates signed token → sends email
   → guest clicks link → token validated → session cookie set → redirect.
 

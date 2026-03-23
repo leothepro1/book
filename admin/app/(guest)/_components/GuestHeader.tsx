@@ -438,10 +438,16 @@ export default function GuestHeader({ config }: { config: TenantConfig }) {
 
   const headerStyle: React.CSSProperties = {
     ...schemeCssVars,
-    padding: `${hdr.paddingTop}px ${hdr.paddingRight}px ${hdr.paddingBottom}px ${hdr.paddingLeft}px`,
     ...(hdr.showDivider
       ? { borderBottom: `1px solid var(--header-divider, color-mix(in srgb, var(--text) 12%, transparent))` }
       : { borderBottom: "none" }),
+  };
+
+  const headerInnerStyle: React.CSSProperties = {
+    paddingTop: hdr.paddingTop,
+    paddingBottom: hdr.paddingBottom,
+    paddingLeft: hdr.paddingLeft,
+    paddingRight: hdr.paddingRight,
   };
 
   const isCenter = hdr.logoPosition === "center";
@@ -492,7 +498,7 @@ export default function GuestHeader({ config }: { config: TenantConfig }) {
         className="sticky top-0 z-30 bg-[var(--background)]"
         style={headerStyle}
       >
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
+        <div className="g-header-inner mx-auto flex items-center justify-between" style={headerInnerStyle}>
           {isCenter ? (
             <>
               <div className="flex items-center gap-3" style={{ flex: "1 1 0", minWidth: 0 }}>
