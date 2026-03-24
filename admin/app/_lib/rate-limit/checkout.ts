@@ -49,12 +49,15 @@ export async function getClientIp(): Promise<string> {
 
 /**
  * Check rate limit. Returns true if allowed, false if exceeded.
+ * Disabled in development to avoid blocking during testing.
  */
 export async function checkRateLimit(
   prefix: string,
   maxRequests: number,
   windowMs: number,
 ): Promise<boolean> {
+  if (process.env.NODE_ENV === "development") return true;
+
   cleanup(windowMs);
 
   const ip = await getClientIp();

@@ -70,9 +70,9 @@
 /* ── Column 1: Back button — sticky ────────────── */
 
 .co__back-col {
-  position: sticky;
-  top: 40px;
-  height: max-content;
+    height: max-content;
+    position: relative;
+    top: 0;
 }
 
 @media (max-width: 900px) {
@@ -143,9 +143,7 @@
               0px 4px 8px 0px rgba(0,0,0,0.10);
 }
 
-.co__step--active .co__step-header {
-  padding-bottom: 4px;
-}
+
 
 .co__step--leaving {
   border-color: #ddd;
@@ -157,9 +155,9 @@
 .co__step-header {
   width: 100%;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 24px;
+  padding: 24px 24px 0;
   border-radius: 12px;
   text-align: left;
 }
@@ -296,8 +294,18 @@
   min-height: 0;
 }
 
+/*
+ * Bottom spacer — lives OUTSIDE the body morph.
+ * Always 24px. In closed state it looks like header bottom-padding.
+ * In open state it sits below content — content lives between
+ * title and spacer, with header bottom-padding morphed into content area.
+ */
+.co__step-spacer {
+  height: 24px;
+}
+
 .co__step-content {
-  padding: 0 24px 24px;
+  padding: 10px 24px 0px 24px;
 }
 
 /*
@@ -660,35 +668,58 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 0 0px 20px;
+  padding: 0 0 20px;
 }
 
-.co__card-field { display: flex; flex-direction: column; gap: 4px; }
-
-.co__card-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.co__card-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #1a1a1a;
-}
-
-.co__card-input-wrap {
-  padding: 10px 14px;
-  height: 44px;
-  font-size: 16px;
-  place-content:center;
-  border: 1.5px solid #8C8C8C;
+/* Stripe Element inside a floating label wrapper — matches co__float-input exactly */
+.co__stripe-wrap {
+  width: 100%;
+  height: 51px;
+  padding: 14px 16px;
+  border: 1px solid #d7d7d7;
   border-radius: 8px;
   background: #fff;
   transition: border-color 0.15s;
+  display: flex;
+  align-items: center;
 }
 
-.co__card-input-wrap:focus-within { border-color: #1a1a1a; }
+/* When Stripe element has content, shift down to make room for floated label */
+.co__float[data-filled] .co__stripe-wrap {
+  padding: 22px 16px 6px;
+}
+
+.co__stripe-wrap:focus-within {
+  border-color: #1a1a1a;
+  border-width: 2px;
+  padding-left: 15px;
+  padding-right: 15px;
+}
+
+.co__float[data-filled] .co__stripe-wrap:focus-within {
+  padding: 21px 15px 5px;
+}
+
+/* Stripe element fills the wrapper */
+.co__stripe-wrap > * {
+  width: 100%;
+}
+
+/* Card brand icon — absolutely positioned right */
+.co__card-brand {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+/* Label for Stripe elements — same positioning as co__float-label */
+.co__float-label--stripe {
+  left: 17px;
+}
 
 /* ── Payment skeleton ──────────────────────────── */
 
@@ -704,7 +735,7 @@
 .co__skel-method {
   height: 56px;
   border-bottom: 1px solid #eee;
-  background: #fafafa;
+  background: #ebebeb;
   animation: co-shimmer 1.4s ease-in-out infinite;
 }
 
@@ -800,30 +831,174 @@
   margin-bottom: 20px;
 }
 
-.co__guest-input {
+/* ── Checkout floating input — global ─────────── */
+/*
+ * Airbnb-grade floating label input.
+ *
+ * Height: 51px. Border-radius: 8px.
+ *
+ * Resting (empty): label centered vertically, 16px, acts as placeholder.
+ * Filled (≥1 char): label floats to top-left (12px), input text sits
+ *   lower — both visible, never overlapping.
+ *
+ * Transition: label animates position + size over 150ms ease-out.
+ * The label disappears instantly (opacity 0) when the user starts
+ * typing, then fades + slides into the floated position.
+ */
+
+.co__float {
+  position: relative;
   width: 100%;
-  padding: 10px 14px;
-  font-size: 14px;
+}
+
+/* ── Input ─────────────────────────────────────── */
+
+.co__float-input {
+  width: 100%;
+  height: 51px;
+  padding: 14px 16px;
+  font-size: 15px;
   font-weight: 400;
-  border: 1.5px solid #DFDFDF;
+  color: #1a1a1a;
+  border: 1px solid #d7d7d7;
   border-radius: 8px;
   background: #fff;
-  color: #1a1a1a;
   outline: none;
   font-family: inherit;
-  transition: 0.15s;
+  transition: border-color 0.15s;
 }
 
-.co__guest-input:focus {
-  border-color: #005BD3;
-  outline: 1px solid #005BD3;
+/* When filled: shift text down to make room for floated label */
+.co__float[data-filled] .co__float-input {
+  padding: 22px 16px 5px;
 }
 
-.co__guest-input::placeholder {
-  color: #999;
+.co__float-input:focus {
+  border-color: #1a1a1a;
+  border-width: 2px;
+  /* Compensate 2px border so input doesn't shift */
+  padding-left: 15px;
+  padding-right: 15px;
 }
 
-/* ── Contact form (Step 1) ────────────────────── */
+.co__float[data-filled] .co__float-input:focus {
+  padding: 21px 15px 5px;
+}
+
+.co__float-input::placeholder {
+  color: transparent;
+}
+
+/* ── Label ─────────────────────────────────────── */
+
+.co__float-label {
+  position: absolute;
+  left: 17px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 15px;
+  font-weight: 400;
+  color: #717171;
+  pointer-events: none;
+  transform-origin: left top;
+  transition: none; /* instant disappear */
+}
+
+/* Filled: label floats up — with smooth entrance */
+.co__float[data-filled] .co__float-label {
+  top: 6px;
+  transform: translateY(0);
+  font-size: 12px;
+  font-weight: 400;
+  color: #717171;
+  transition: top 0.15s ease-out,
+              transform 0.15s ease-out,
+              font-size 0.15s ease-out;
+}
+
+/* ── Select ────────────────────────────────────── */
+
+.co__float-select {
+  width: 100%;
+  height: 51px;
+  padding: 22px 44px 6px 16px;
+  font-size: 15px;
+  font-weight: 400;
+  color: #1a1a1a;
+  border: 1px solid #d7d7d7;
+  border-radius: 8px;
+  background: #fff;
+  outline: none;
+  font-family: inherit;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.co__float-select:focus {
+  border-color: #1a1a1a;
+  border-width: 2px;
+  padding: 21px 43px 5px 15px;
+}
+
+/* Select always has a value — label always floated */
+.co__float-select ~ .co__float-label {
+  top: 8px;
+  transform: translateY(0);
+  font-size: 14px;
+  font-weight: 400;
+  color: #717171;
+}
+
+.co__float-chevron {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 22px;
+  color: #717171;
+  pointer-events: none;
+}
+
+/* ── Icons (address search etc) ────────────────── */
+
+.co__float-icon {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 20px;
+  color: #717171;
+  pointer-events: none;
+}
+
+.co__float-input--has-icon {
+  padding-right: 44px;
+}
+
+.co__float[data-filled] .co__float-input--has-icon {
+  padding-right: 44px;
+}
+
+/* ── Error state ───────────────────────────────── */
+
+.co__float-input--error {
+  border-color: #c13515;
+}
+
+.co__float-input--error:focus {
+  border-color: #c13515;
+}
+
+.co__float-select--error {
+  border-color: #c13515;
+}
+
+.co__float-select--error:focus {
+  border-color: #c13515;
+}
+
+/* ── Contact form layout ─────────────────────── */
 
 .co__contact-form {
   display: flex;
@@ -836,10 +1011,6 @@
   flex-direction: column;
 }
 
-.co__contact-field > .co__card-label {
-  margin-bottom: 4px;
-}
-
 .co__contact-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -850,52 +1021,6 @@
   .co__contact-row {
     grid-template-columns: 1fr;
   }
-}
-
-.co__select-wrap {
-  position: relative;
-}
-
-.co__select-chevron {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 20px;
-  color: #666;
-  pointer-events: none;
-}
-
-.co__guest-select {
-  width: 100%;
-  padding: 10px 14px;
-  font-size: 14px;
-  font-weight: 400;
-  border: 1.5px solid #DFDFDF;
-  border-radius: 8px;
-  background: #fff;
-  color: #1a1a1a;
-  outline: none;
-  font-family: inherit;
-  appearance: none;
-  padding-right: 40px;
-  cursor: pointer;
-  transition: 0.15s;
-}
-
-.co__guest-select:focus {
-  border-color: #005BD3;
-  outline: 1px solid #005BD3;
-}
-
-.co__guest-input--error {
-   border-color: #DD1D1D;
-  outline: 1px solid#DD1D1D;
-}
-
-.co__guest-input--error:focus {
-  border-color: #DD1D1D;
-  outline: 1px solid#DD1D1D;
 }
 
 /* Error slide — same pattern as email-sender__slide */
@@ -1042,8 +1167,9 @@
     border: 1px solid #ddd;
     height: max-content;
     padding: 24px;
-    position: relative;
-    top: 67px;
+    position: sticky;
+    top: 3rem;
+    margin-top:64px;
     border-radius: 12px;
 }
 
@@ -1070,10 +1196,10 @@
 }
 
 .co__summary-image {
-  width: 105px;
+  width: 97px;
   height: 80px;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: 10px;
   flex-shrink: 0;
 }
 
@@ -1103,15 +1229,15 @@
 }
 
 .co__summary-label {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
-  color: color-mix(in srgb, var(--text, #000) 45%, transparent);
+  color: #171717;
 }
 
 .co__summary-value {
   font-size: 14px;
   color: var(--text, #1a1a1a);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .co__summary-price-row {
@@ -1128,11 +1254,11 @@
   align-items: center;
   gap: 4px;
   padding: 0;
-  margin-top: 8px;
+  margin-top: -9px;
   border: none;
   background: transparent;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--text, #1a1a1a);
   cursor: pointer;
   text-decoration: underline;
@@ -1166,10 +1292,7 @@
 }
 
 .co__breakdown-currency {
-  font-size: 12px;
-  font-weight: 400;
-  color: color-mix(in srgb, var(--text, #000) 45%, transparent);
-  margin-top: 1px;
+display:none;
 }
 
 .co__breakdown-divider {

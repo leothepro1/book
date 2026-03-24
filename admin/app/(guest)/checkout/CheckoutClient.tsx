@@ -42,13 +42,24 @@ type PaymentMethod = "card" | "paypal" | "gpay" | "applepay";
 
 const CARD_STYLE = {
   base: {
-    fontSize: "14px",
+    fontSize: "16px",
     fontFamily: '"Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
     color: "#1a1a1a",
     fontWeight: "400",
-    "::placeholder": { color: "#999" },
+    lineHeight: "51px",
+    "::placeholder": { color: "transparent" },
   },
-  invalid: { color: "#dc2626" },
+  invalid: { color: "#c13515" },
+};
+
+// Stripe elements with content get data-filled via onChange tracking
+const CARD_STYLE_FILLED = {
+  base: {
+    ...CARD_STYLE.base,
+    lineHeight: "24px",
+    "::placeholder": { color: "transparent" },
+  },
+  invalid: CARD_STYLE.invalid,
 };
 
 const ALL_PAYMENT_METHODS: Array<{ id: PaymentMethod; title: string; svg: string; redirectDesc?: string; walletType?: "gpay" | "applepay" }> = [
@@ -77,6 +88,89 @@ const ALL_PAYMENT_METHODS: Array<{ id: PaymentMethod; title: string; svg: string
   },
 ];
 
+// ── Card Inputs with floating labels ────────────────────────
+
+function CardInputs({
+  onReady,
+  onCardChange,
+  cardName,
+  onCardNameChange,
+}: {
+  onReady: () => void;
+  onCardChange: (info: CardInfo | null) => void;
+  cardName: string;
+  onCardNameChange: (v: string) => void;
+}) {
+  const [numberFilled, setNumberFilled] = useState(false);
+  const [cardBrand, setCardBrand] = useState<string>("unknown");
+  const [expiryFilled, setExpiryFilled] = useState(false);
+  const [cvcFilled, setCvcFilled] = useState(false);
+
+  return (
+    <div className="co__card-inputs">
+      {/* Card number */}
+      <div className="co__float" data-filled={numberFilled ? "" : undefined}>
+        <div className="co__stripe-wrap">
+          <CardNumberElement
+            options={{ style: numberFilled ? CARD_STYLE_FILLED : CARD_STYLE, showIcon: false, disableLink: true }}
+            onReady={onReady}
+            onChange={(e) => {
+              setNumberFilled(!e.empty);
+              setCardBrand(e.brand ?? "unknown");
+              if (e.complete && e.brand && e.brand !== "unknown") {
+                onCardChange({
+                  brand: e.brand,
+                  last4: "",
+                  funding: (e as unknown as { funding?: string }).funding ?? "unknown",
+                });
+              }
+            }}
+          />
+        </div>
+        <span className="co__float-label co__float-label--stripe">Kortnummer</span>
+        {cardBrand && cardBrand !== "unknown" && BRAND_SVGS[cardBrand] && (
+          <span className="co__card-brand" dangerouslySetInnerHTML={{ __html: BRAND_SVGS[cardBrand] }} />
+        )}
+      </div>
+
+      {/* Expiry + CVC row */}
+      <div className="co__contact-row">
+        <div className="co__float" data-filled={expiryFilled ? "" : undefined}>
+          <div className="co__stripe-wrap">
+            <CardExpiryElement
+              options={{ style: expiryFilled ? CARD_STYLE_FILLED : CARD_STYLE }}
+              onChange={(e) => setExpiryFilled(!e.empty)}
+            />
+          </div>
+          <span className="co__float-label co__float-label--stripe">Utgångsdatum</span>
+        </div>
+        <div className="co__float" data-filled={cvcFilled ? "" : undefined}>
+          <div className="co__stripe-wrap">
+            <CardCvcElement
+              options={{ style: cvcFilled ? CARD_STYLE_FILLED : CARD_STYLE }}
+              onChange={(e) => setCvcFilled(!e.empty)}
+            />
+          </div>
+          <span className="co__float-label co__float-label--stripe">CVC</span>
+        </div>
+      </div>
+
+      {/* Cardholder name */}
+      <div className="co__float" data-filled={cardName ? "" : undefined}>
+        <input
+          type="text"
+          className="co__float-input"
+          placeholder="Namn på kort"
+          value={cardName}
+          onChange={(e) => onCardNameChange(e.target.value)}
+          autoComplete="cc-name"
+        />
+        <span className="co__float-label">Namn på kort</span>
+      </div>
+    </div>
+  );
+}
+
 // ── Step 2: Payment Method Accordion ───────────────────────
 
 interface CardInfo {
@@ -97,12 +191,16 @@ function PaymentMethodAccordion({
   selectedMethod,
   onMethodChange,
   onCardChange,
+  cardName,
+  onCardNameChange,
 }: {
   methods: typeof ALL_PAYMENT_METHODS;
   onReady: () => void;
   selectedMethod: PaymentMethod;
   onMethodChange: (m: PaymentMethod) => void;
   onCardChange: (info: CardInfo | null) => void;
+  cardName: string;
+  onCardNameChange: (v: string) => void;
 }) {
   return (
     <div className="co__methods">
@@ -133,40 +231,12 @@ function PaymentMethodAccordion({
             <div className={`co__method-body${isOpen ? " co__method-body--open" : ""}`}>
               <div className="co__method-inner">
                 {method.id === "card" && (
-                  <div className="co__card-inputs">
-                    <div className="co__card-field">
-                      <label className="co__card-label">Kortnummer</label>
-                      <div className="co__card-input-wrap">
-                        <CardNumberElement
-                          options={{ style: CARD_STYLE, showIcon: true, disableLink: true }}
-                          onReady={onReady}
-                          onChange={(e) => {
-                            if (e.complete && e.brand && e.brand !== "unknown") {
-                              onCardChange({
-                                brand: e.brand,
-                                last4: "", // last4 comes from PaymentMethod after confirm
-                                funding: (e as unknown as { funding?: string }).funding ?? "unknown",
-                              });
-                            }
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div className="co__card-row">
-                      <div className="co__card-field">
-                        <label className="co__card-label">Utgångsdatum</label>
-                        <div className="co__card-input-wrap">
-                          <CardExpiryElement options={{ style: CARD_STYLE }} />
-                        </div>
-                      </div>
-                      <div className="co__card-field">
-                        <label className="co__card-label">CVC</label>
-                        <div className="co__card-input-wrap">
-                          <CardCvcElement options={{ style: CARD_STYLE }} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <CardInputs
+                    onReady={onReady}
+                    onCardChange={onCardChange}
+                    cardName={cardName}
+                    onCardNameChange={onCardNameChange}
+                  />
                 )}
                 {method.redirectDesc && (
                   <p className="co__method-redirect">
@@ -414,6 +484,7 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
   const [paymentType, setPaymentType] = useState<PaymentType>("full");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [cardInfo, setCardInfo] = useState<CardInfo | null>(null);
+  const [cardName, setCardName] = useState("");
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   // ── Contact info (step 1) ───────────────────────────────────
@@ -424,7 +495,12 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
   const [contactAddress, setContactAddress] = useState("");
   const [contactPostalCode, setContactPostalCode] = useState("");
   const [contactCity, setContactCity] = useState("");
+  // Validation state: "dirty" = field has had content at some point.
+  // "touched" = blur after dirty, OR submit attempted.
+  // Errors only show for touched fields — never for fields the user hasn't interacted with yet.
+  const [contactDirty, setContactDirty] = useState<Record<string, boolean>>({});
   const [contactTouched, setContactTouched] = useState<Record<string, boolean>>({});
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const addressInputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
@@ -500,14 +576,21 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
   }, [contactCountry]);
 
   // ── Contact validation helpers ────────────────────────────────
+  // ── Validation: errors only show for touched fields ──────────
+  // "touched" = (field was dirty AND blurred) OR (submit was attempted)
+  // This means: tabbing through empty fields shows nothing.
+  // Clearing a field you typed in and leaving → shows error.
+  // Clicking "Nästa" with empty fields → shows all errors at once.
+  const isTouched = (f: string) => contactTouched[f] || submitAttempted;
+
   const contactErrors: Record<string, string> = {};
-  if (contactTouched.email && !contactEmail) contactErrors.email = "E-post krävs";
-  else if (contactTouched.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) contactErrors.email = "Ogiltig e-postadress";
-  if (contactTouched.firstName && !contactFirstName.trim()) contactErrors.firstName = "Förnamn krävs";
-  if (contactTouched.lastName && !contactLastName.trim()) contactErrors.lastName = "Efternamn krävs";
-  if (contactTouched.address && !contactAddress.trim()) contactErrors.address = "Adress krävs";
-  if (contactTouched.postalCode && !contactPostalCode.trim()) contactErrors.postalCode = "Postnummer krävs";
-  if (contactTouched.city && !contactCity.trim()) contactErrors.city = "Stad krävs";
+  if (isTouched("email") && !contactEmail) contactErrors.email = "Ange din e-postadress";
+  else if (isTouched("email") && contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) contactErrors.email = "E-postadressen ser inte komplett ut";
+  if (isTouched("firstName") && !contactFirstName.trim()) contactErrors.firstName = "Ange ditt förnamn";
+  if (isTouched("lastName") && !contactLastName.trim()) contactErrors.lastName = "Ange ditt efternamn";
+  if (isTouched("address") && !contactAddress.trim()) contactErrors.address = "Ange din adress";
+  if (isTouched("postalCode") && !contactPostalCode.trim()) contactErrors.postalCode = "Ange postnummer";
+  if (isTouched("city") && !contactCity.trim()) contactErrors.city = "Ange stad";
 
   const contactValid =
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail) &&
@@ -649,7 +732,14 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
   };
 
 
-  const markTouched = (field: string) => setContactTouched((p) => ({ ...p, [field]: true }));
+  // Mark dirty on change (field has had content), touched on blur (only if dirty)
+  const markDirty = (field: string) => {
+    if (!contactDirty[field]) setContactDirty((p) => ({ ...p, [field]: true }));
+  };
+  const markTouched = (field: string) => {
+    // Only show error on blur if user actually typed something at some point
+    if (contactDirty[field]) setContactTouched((p) => ({ ...p, [field]: true }));
+  };
 
 
   const COUNTRIES = [
@@ -666,28 +756,44 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
       case 1:
         return (
           <>
-            <div className="co__contact-form">
+            <div
+              className="co__contact-form"
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                const form = e.currentTarget;
+                const focusable = Array.from(form.querySelectorAll<HTMLElement>("input, select"));
+                const idx = focusable.indexOf(e.target as HTMLElement);
+                if (idx >= 0 && idx < focusable.length - 1) {
+                  e.preventDefault();
+                  focusable[idx + 1].focus();
+                } else if (idx === focusable.length - 1) {
+                  e.preventDefault();
+                  if (contactValid) handleNext(1); else setSubmitAttempted(true);
+                }
+              }}
+            >
               {/* Email */}
               <div className="co__contact-field">
-                <label className="co__card-label">E-postadress</label>
-                <input
-                  type="email"
-                  className={`co__guest-input${contactErrors.email ? " co__guest-input--error" : ""}`}
-                  placeholder="din@email.se"
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                  onBlur={() => markTouched("email")}
-                  autoComplete="email"
-                />
+                <div className="co__float" data-filled={contactEmail ? "" : undefined}>
+                  <input
+                    type="email"
+                    className={`co__float-input${contactErrors.email ? " co__float-input--error" : ""}`}
+                    placeholder="E-postadress"
+                    value={contactEmail}
+                    onChange={(e) => { setContactEmail(e.target.value); markDirty("email"); }}
+                    onBlur={() => markTouched("email")}
+                    autoComplete="email"
+                  />
+                  <span className="co__float-label">E-postadress</span>
+                </div>
                 <FieldError error={contactErrors.email} />
               </div>
 
               {/* Country */}
               <div className="co__contact-field">
-                <label className="co__card-label">Land</label>
-                <div className="co__select-wrap">
+                <div className="co__float" data-filled="">
                   <select
-                    className="co__guest-select"
+                    className="co__float-select"
                     value={contactCountry}
                     onChange={(e) => setContactCountry(e.target.value)}
                   >
@@ -695,55 +801,60 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
                       <option key={c.code} value={c.code}>{c.name}</option>
                     ))}
                   </select>
-                  <span className="material-symbols-rounded co__select-chevron">expand_more</span>
+                  <span className="co__float-label">Land</span>
+                  <span className="material-symbols-rounded co__float-chevron">expand_more</span>
                 </div>
               </div>
 
               {/* First + Last name */}
               <div className="co__contact-row">
                 <div className="co__contact-field">
-                  <label className="co__card-label">Förnamn</label>
-                  <input
-                    type="text"
-                    className={`co__guest-input${contactErrors.firstName ? " co__guest-input--error" : ""}`}
-                    placeholder="Anna"
-                    value={contactFirstName}
-                    onChange={(e) => setContactFirstName(e.target.value)}
-                    onBlur={() => markTouched("firstName")}
-                    autoComplete="given-name"
-                  />
+                  <div className="co__float" data-filled={contactFirstName ? "" : undefined}>
+                    <input
+                      type="text"
+                      className={`co__float-input${contactErrors.firstName ? " co__float-input--error" : ""}`}
+                      placeholder="Förnamn"
+                      value={contactFirstName}
+                      onChange={(e) => { setContactFirstName(e.target.value); markDirty("firstName"); }}
+                      onBlur={() => markTouched("firstName")}
+                      autoComplete="given-name"
+                    />
+                    <span className="co__float-label">Förnamn</span>
+                  </div>
                   <FieldError error={contactErrors.firstName} />
                 </div>
                 <div className="co__contact-field">
-                  <label className="co__card-label">Efternamn</label>
-                  <input
-                    type="text"
-                    className={`co__guest-input${contactErrors.lastName ? " co__guest-input--error" : ""}`}
-                    placeholder="Andersson"
-                    value={contactLastName}
-                    onChange={(e) => setContactLastName(e.target.value)}
-                    onBlur={() => markTouched("lastName")}
-                    autoComplete="family-name"
-                  />
+                  <div className="co__float" data-filled={contactLastName ? "" : undefined}>
+                    <input
+                      type="text"
+                      className={`co__float-input${contactErrors.lastName ? " co__float-input--error" : ""}`}
+                      placeholder="Efternamn"
+                      value={contactLastName}
+                      onChange={(e) => { setContactLastName(e.target.value); markDirty("lastName"); }}
+                      onBlur={() => markTouched("lastName")}
+                      autoComplete="family-name"
+                    />
+                    <span className="co__float-label">Efternamn</span>
+                  </div>
                   <FieldError error={contactErrors.lastName} />
                 </div>
               </div>
 
               {/* Address with Google autocomplete */}
               <div className="co__contact-field">
-                <label className="co__card-label">Adress</label>
-                <div className="co__address-wrap">
+                <div className="co__float" data-filled={contactAddress ? "" : undefined}>
                   <input
                     ref={addressInputRef}
                     type="text"
-                    className={`co__guest-input co__guest-input--address${contactErrors.address ? " co__guest-input--error" : ""}`}
-                    placeholder="Sök din adress..."
+                    className={`co__float-input co__float-input--has-icon${contactErrors.address ? " co__float-input--error" : ""}`}
+                    placeholder="Adress"
                     value={contactAddress}
-                    onChange={(e) => setContactAddress(e.target.value)}
+                    onChange={(e) => { setContactAddress(e.target.value); markDirty("address"); }}
                     onBlur={() => markTouched("address")}
                     autoComplete="street-address"
                   />
-                  <span className="co__address-icon material-symbols-rounded">search</span>
+                  <span className="co__float-label">Adress</span>
+                  <span className="material-symbols-rounded co__float-icon">search</span>
                 </div>
                 <FieldError error={contactErrors.address} />
               </div>
@@ -751,35 +862,39 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
               {/* Postal code + City */}
               <div className="co__contact-row">
                 <div className="co__contact-field">
-                  <label className="co__card-label">Postnummer</label>
-                  <input
-                    type="text"
-                    className={`co__guest-input${contactErrors.postalCode ? " co__guest-input--error" : ""}`}
-                    placeholder="123 45"
-                    value={contactPostalCode}
-                    onChange={(e) => setContactPostalCode(e.target.value)}
-                    onBlur={() => markTouched("postalCode")}
-                    autoComplete="postal-code"
-                  />
+                  <div className="co__float" data-filled={contactPostalCode ? "" : undefined}>
+                    <input
+                      type="text"
+                      className={`co__float-input${contactErrors.postalCode ? " co__float-input--error" : ""}`}
+                      placeholder="Postnummer"
+                      value={contactPostalCode}
+                      onChange={(e) => { setContactPostalCode(e.target.value); markDirty("postalCode"); }}
+                      onBlur={() => markTouched("postalCode")}
+                      autoComplete="postal-code"
+                    />
+                    <span className="co__float-label">Postnummer</span>
+                  </div>
                   <FieldError error={contactErrors.postalCode} />
                 </div>
                 <div className="co__contact-field">
-                  <label className="co__card-label">Stad</label>
-                  <input
-                    type="text"
-                    className={`co__guest-input${contactErrors.city ? " co__guest-input--error" : ""}`}
-                    placeholder="Stockholm"
-                    value={contactCity}
-                    onChange={(e) => setContactCity(e.target.value)}
-                    onBlur={() => markTouched("city")}
-                    autoComplete="address-level2"
-                  />
+                  <div className="co__float" data-filled={contactCity ? "" : undefined}>
+                    <input
+                      type="text"
+                      className={`co__float-input${contactErrors.city ? " co__float-input--error" : ""}`}
+                      placeholder="Stad"
+                      value={contactCity}
+                      onChange={(e) => { setContactCity(e.target.value); markDirty("city"); }}
+                      onBlur={() => markTouched("city")}
+                      autoComplete="address-level2"
+                    />
+                    <span className="co__float-label">Stad</span>
+                  </div>
                   <FieldError error={contactErrors.city} />
                 </div>
               </div>
             </div>
             <div className="co__step-footer">
-              <button type="button" className="co__next-btn" disabled={!contactValid} onClick={() => handleNext(1)}>Nästa</button>
+              <button type="button" className="co__next-btn" onClick={() => { if (contactValid) { handleNext(1); } else { setSubmitAttempted(true); } }}>Nästa</button>
             </div>
           </>
         );
@@ -861,6 +976,8 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
                   selectedMethod={paymentMethod}
                   onMethodChange={setPaymentMethod}
                   onCardChange={setCardInfo}
+                  cardName={cardName}
+                  onCardNameChange={setCardName}
                 />
               </Elements>
             ) : (
@@ -986,6 +1103,7 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
                     </div>
                   </div>
                 </div>
+                <div className="co__step-spacer" />
               </div>
             );
           })}
