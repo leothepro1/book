@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { format, differenceInDays, parseISO } from "date-fns";
 import { sv } from "date-fns/locale";
@@ -122,7 +122,7 @@ function PaymentMethodAccordion({
                 )}
               </span>
               <span className="co__method-radio">
-                {isOpen && <span className="co__method-radio-dot" />}
+                <span className="co__method-radio-dot" />
               </span>
             </button>
             <div className={`co__method-body${isOpen ? " co__method-body--open" : ""}`}>
@@ -363,7 +363,29 @@ function ConfirmButton({
 export function CheckoutClient({ product, checkIn, checkOut, guests, nights, tenantId, bookingTerms }: CheckoutProps) {
   const router = useRouter();
   const [activeStep, setActiveStep] = useState<StepId>(1);
+  const [visibleStep, setVisibleStep] = useState<StepId>(1); // which body is expanded (lags activeStep for stagger)
+  const [leavingStep, setLeavingStep] = useState<StepId | null>(null); // card losing focus
   const [completedSteps, setCompletedSteps] = useState<Set<StepId>>(new Set());
+  const [hasTransitioned, setHasTransitioned] = useState(false); // enables content animation after first step change
+  const staggerTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Orchestrated step transition: close old → wait → open new
+  const transitionToStep = useCallback((nextStep: StepId) => {
+    if (staggerTimerRef.current) clearTimeout(staggerTimerRef.current);
+
+    if (!hasTransitioned) setHasTransitioned(true);
+    const prevStep = activeStep;
+    setLeavingStep(prevStep);
+    setActiveStep(nextStep);
+    // Phase 1: collapse old content (let CSS run ~200ms)
+    setVisibleStep(0 as StepId); // nothing expanded
+
+    staggerTimerRef.current = setTimeout(() => {
+      // Phase 2: expand new content
+      setVisibleStep(nextStep);
+      setLeavingStep(null);
+    }, 200);
+  }, [activeStep]);
 
   const [paymentType, setPaymentType] = useState<PaymentType>("full");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
@@ -371,6 +393,7 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [priceBreakdownOpen, setPriceBreakdownOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
+  const [klarnaInfoOpen, setKlarnaInfoOpen] = useState(false);
   const [paymentReady, setPaymentReady] = useState(false);
   const [availableWallets, setAvailableWallets] = useState<{ gpay: boolean; applepay: boolean }>({ gpay: false, applepay: false });
 
@@ -435,11 +458,11 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
 
   const handleNext = (step: StepId) => {
     setCompletedSteps((prev) => new Set(prev).add(step));
-    if (step < 3) setActiveStep((step + 1) as StepId);
+    if (step < 3) transitionToStep((step + 1) as StepId);
   };
 
   const handleEdit = (step: StepId) => {
-    setActiveStep(step);
+    transitionToStep(step);
   };
 
   const handlePaymentSuccess = () => {
@@ -490,27 +513,38 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
       case 1:
         return (
           <>
-            <div className="co__payment-options">
-              <label className={`co__payment-option${paymentType === "full" ? " co__payment-option--active" : ""}`}>
-                <input type="radio" name="payment" checked={paymentType === "full"} onChange={() => { setPaymentType("full"); setClientSecret(null); }} />
-                <div className="co__payment-option-info">
-                  <span className="co__payment-option-title">
-                    Betala {product ? `${formatPriceDisplay(product.price, product.currency)} kr` : "—"} nu
-                  </span>
-                  <span className="co__payment-option-desc">
-                    Hela beloppet debiteras direkt och din bokning bekräftas.
-                  </span>
-                </div>
-              </label>
-              <label className={`co__payment-option${paymentType === "klarna" ? " co__payment-option--active" : ""}`}>
-                <input type="radio" name="payment" checked={paymentType === "klarna"} onChange={() => { setPaymentType("klarna"); setClientSecret(null); }} />
-                <div className="co__payment-option-info">
-                  <span className="co__payment-option-title">Betala över tid med Klarna</span>
-                  <span className="co__payment-option-desc">
-                    Välj ett flexibelt betalningsalternativ som fungerar för dig.
-                  </span>
-                </div>
-              </label>
+            <div className="co__methods">
+              {([
+                { id: "full" as PaymentType, title: `Betala ${product ? `${formatPriceDisplay(product.price, product.currency)} kr` : "—"} nu` },
+                { id: "klarna" as PaymentType, title: "Betala över tid med Klarna", desc: "Välj ett flexibelt betalningsalternativ som fungerar för dig." },
+              ]).map((opt) => {
+                const isActive = paymentType === opt.id;
+                return (
+                  <div key={opt.id} className={`co__method${isActive ? " co__method--active" : ""}`}>
+                    <button
+                      type="button"
+                      className="co__method-header"
+                      onClick={() => { setPaymentType(opt.id); setClientSecret(null); }}
+                    >
+                      <span className="co__method-info">
+                        <span className="co__method-title">{opt.title}</span>
+                        {opt.desc && <span className="co__method-desc">{opt.desc}</span>}
+                        {opt.id === "klarna" && (
+                          <span
+                            className="co__method-more"
+                            onClick={(e) => { e.stopPropagation(); setKlarnaInfoOpen(true); }}
+                          >
+                            Mer information
+                          </span>
+                        )}
+                      </span>
+                      <span className="co__method-radio">
+                        <span className="co__method-radio-dot" />
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
             <div className="co__step-footer">
               <button type="button" className="co__next-btn" onClick={() => handleNext(1)}>Nästa</button>
@@ -585,28 +619,43 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
         <div className="co__steps">
           {([1, 2, 3] as StepId[]).map((stepId) => {
             const isActive = activeStep === stepId;
+            const isBodyOpen = visibleStep === stepId;
+            const isLeaving = leavingStep === stepId;
             const isCompleted = completedSteps.has(stepId) && !isActive;
             const summary = getStepSummary(stepId);
+            const showSummary = isCompleted && summary;
 
             return (
-              <div key={stepId} className={`co__step${isActive ? " co__step--active" : ""}`}>
+              <div
+                key={stepId}
+                className={[
+                  "co__step",
+                  isActive && !isLeaving ? "co__step--active" : "",
+                  isLeaving ? "co__step--leaving" : "",
+                ].filter(Boolean).join(" ")}
+              >
                 <div className="co__step-header">
                   <div className="co__step-header-left">
                     <div className="co__step-title">{stepId}. {STEP_TITLES[stepId]}</div>
-                    {isCompleted && summary && (
-                      <div className="co__step-summary">{summary}</div>
-                    )}
+                    <div className={`co__step-summary${showSummary ? " co__step-summary--visible" : ""}`}>
+                      <div className="co__step-summary-inner">
+                        {summary ?? "\u00A0"}
+                      </div>
+                    </div>
                   </div>
-                  {isCompleted && (
-                    <button type="button" className="co__step-edit" onClick={() => handleEdit(stepId)}>
-                      Ändra
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className={`co__step-edit${isCompleted ? " co__step-edit--visible" : ""}`}
+                    onClick={() => handleEdit(stepId)}
+                    tabIndex={isCompleted ? 0 : -1}
+                  >
+                    Ändra
+                  </button>
                 </div>
 
-                <div className={`co__step-body${isActive ? " co__step-body--open" : ""}`}>
+                <div className={`co__step-body${isBodyOpen ? " co__step-body--open" : ""}`}>
                   <div className="co__step-inner">
-                    <div className="co__step-content">
+                    <div className="co__step-content" {...(hasTransitioned ? { "data-animate": "" } : {})}>
                       {renderStepContent(stepId)}
                     </div>
                   </div>
@@ -741,6 +790,23 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
             </ul>
           </div>
         )}
+      </CheckoutModal>
+
+      {/* Klarna info modal */}
+      <CheckoutModal
+        open={klarnaInfoOpen}
+        onClose={() => setKlarnaInfoOpen(false)}
+        title="Betala över tid"
+      >
+        <div className="co__klarna-modal">
+          <p className="co__klarna-modal-desc">
+            Välj ett av Klarnas flexibla betalningsalternativ, som till exempel att dela upp din kostnad i mindre betalningar eller betala hela summan senare.
+          </p>
+          <div className="co__klarna-modal-divider" />
+          <p className="co__klarna-modal-legal">
+            Kredit tillhandahålls av Klarna Bank AB. Klarnas villkor gäller.
+          </p>
+        </div>
       </CheckoutModal>
     </div>
   );

@@ -16,7 +16,7 @@
 
 .co {
   display: grid;
-  grid-template-columns: 64px 1fr 380px;
+  grid-template-columns: 50px 1fr 320px;
   gap: 0;
   min-height: 100vh;
   max-width: 1100px;
@@ -96,9 +96,10 @@
 .co__step {
   border: 1px solid #ddd;
   border-radius: 12px;
-  transition: border-color 0.15s ease-out,
-              box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-              transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: border-color, box-shadow, transform;
+  transition: border-color 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
   transform: translateY(0);
 }
 
@@ -108,6 +109,20 @@
               0px 2px 6px 0px rgba(0,0,0,0.04),
               0px 4px 8px 0px rgba(0,0,0,0.10);
   transform: translateY(-1px);
+}
+
+.co__step--active .co__step-header {
+  padding-bottom: 4px;
+}
+
+/* Leaving-active: card is losing focus — fade shadow faster than expand */
+.co__step--leaving {
+  border-color: #ddd;
+  box-shadow: none;
+  transform: translateY(0);
+  transition: border-color 0.25s ease-out,
+              box-shadow 0.25s ease-out,
+              transform 0.3s ease-out;
 }
 
 .co__step-header {
@@ -126,18 +141,43 @@
 }
 
 .co__step-title {
-    color: var(--text, #1a1a1a);
-    letter-spacing: -.01em;
-    font-size: 1rem;
-    font-weight: 550;
+  color: var(--text, #1a1a1a);
+  letter-spacing: -.01em;
+  font-size: 1rem;
+  font-weight: 550;
 }
+
+/* ── Summary — slides in from below with fade ──── */
 
 .co__step-summary {
   font-size: 14px;
   font-weight: 400;
   color: color-mix(in srgb, var(--text, #000) 55%, transparent);
-  margin-top: 4px;
   line-height: 1.5;
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.co__step-summary--visible {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition: grid-template-rows 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.15s,
+              opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.2s;
+}
+
+.co__step-summary-inner {
+  overflow: hidden;
+  min-height: 0;
+  padding-top: 0;
+  transition: padding-top 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.co__step-summary--visible .co__step-summary-inner {
+  padding-top: 4px;
+  transition-delay: 0.15s;
 }
 
 .co__step-summary-card,
@@ -152,24 +192,41 @@
   flex-shrink: 0;
 }
 
+/* ── Edit button — fades in ────────────────────── */
+
 .co__step-edit {
-    color: var(--text, #1a1a1a);
-    text-underline-offset: 2px;
-    cursor: pointer;
-    background: #f2f2f2;
-    border: none;
-    border-radius: 10px;
-    flex-shrink: 0;
-    margin-left: 16px;
-    padding: 8px 17px;
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 1em;
-    text-decoration: none;
+  color: var(--text, #1a1a1a);
+  text-underline-offset: 2px;
+  cursor: pointer;
+  background: #f2f2f2;
+  border: none;
+  border-radius: 10px;
+  flex-shrink: 0;
+  margin-left: 16px;
+  padding: 8px 17px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1em;
+  text-decoration: none;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.25s ease-out,
+              transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+              background 0.15s;
+  pointer-events: none;
+}
+
+.co__step-edit--visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+  transition: opacity 0.25s cubic-bezier(0.22, 1, 0.36, 1) 0.25s,
+              transform 0.3s cubic-bezier(0.22, 1, 0.36, 1) 0.25s,
+              background 0.15s;
 }
 
 .co__step-edit:hover {
-  opacity: 0.7;
+  background: #e8e8e8;
 }
 
 /* ── Step footer (next button) ─────────────────── */
@@ -189,34 +246,42 @@
   background: var(--text, #1a1a1a);
   color: var(--background, #fff);
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, transform 0.15s;
 }
 
 .co__next-btn:hover {
   opacity: 0.88;
 }
 
-/* ── Step body — morph transition ──────────────── */
+.co__next-btn:active {
+  transform: scale(0.97);
+}
 
-/* Closed: fast collapse (200ms) */
+/* ── Step body — orchestrated morph ──────────────── */
+
+/*
+ * Two-layer animation:
+ *   1. Grid-template-rows: 0fr → 1fr (height morph)
+ *   2. Inner content opacity (separate, staggered)
+ *
+ * Close: content fades out first (150ms), then height collapses (300ms)
+ * Open:  height expands first (400ms spring), content fades in after 120ms
+ */
+
 .co__step-body {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.2s ease-out,
-              opacity 0.15s ease-out;
-  opacity: 0;
+  will-change: grid-template-rows;
+  transition: grid-template-rows 0.3s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-/* Open: smooth expand (500ms, spring curve) */
 .co__step-body--open {
   grid-template-rows: 1fr;
-  opacity: 1;
-  transition: grid-template-rows 0.5s cubic-bezier(0.22, 1, 0.36, 1),
-              opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1) 0.08s;
+  transition: grid-template-rows 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.08s;
 }
 
 .co__step-inner {
-  overflow: visible;
+  overflow: hidden;
   min-height: 0;
 }
 
@@ -224,66 +289,30 @@
   padding: 0 24px 24px;
 }
 
+/*
+ * Content enter/exit: driven by a data attribute so that
+ * initial render (no transition yet) shows content immediately,
+ * while subsequent step changes get the staggered fade + slide.
+ */
+.co__step-content[data-animate] {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.15s ease-out,
+              transform 0.15s ease-out;
+}
+
+.co__step-body--open .co__step-content[data-animate] {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.16s,
+              transform 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.12s;
+}
+
 .co__step-desc {
   font-size: 14px;
   font-weight: 400;
   color: color-mix(in srgb, var(--text, #000) 55%, transparent);
   margin: 0 0 20px;
-  line-height: 1.5;
-}
-
-/* ── Payment options (Step 1) ──────────────────── */
-
-.co__payment-options {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.co__payment-option {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 16px;
-  border: 1.5px solid color-mix(in srgb, var(--text, #000) 12%, transparent);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: border-color 0.15s;
-}
-
-.co__payment-option:hover {
-  border-color: color-mix(in srgb, var(--text, #000) 25%, transparent);
-}
-
-.co__payment-option--active,
-.co__payment-option:has(input:checked) {
-  border-color: var(--text, #1a1a1a);
-  border-width: 2px;
-  padding: 15.5px; /* compensate for thicker border */
-}
-
-.co__payment-option input[type="radio"] {
-  margin-top: 3px;
-  accent-color: var(--text, #1a1a1a);
-}
-
-.co__payment-option-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.co__payment-option-title {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  color: var(--text, #1a1a1a);
-}
-
-.co__payment-option-desc {
-  font-size: 13px;
-  font-weight: 400;
-  color: color-mix(in srgb, var(--text, #000) 55%, transparent);
   line-height: 1.5;
 }
 
@@ -430,10 +459,10 @@
 /* ── Payment method accordion ──────────────────── */
 
 .co__methods {
-  border: none;
-  border-radius: 0px;
-  overflow: visible;
-  margin-bottom: 8px;
+    border: none;
+    border-radius: 0;
+    margin-bottom: 8px;
+    overflow: visible;
 }
 
 .co__method { border-bottom: 1px solid #EBEBEB; }
@@ -465,17 +494,26 @@
   transition: border-color 0.15s;
 }
 
-.co__method--active .co__method-radio { border-color: #1a1a1a; outline: 1px solid #1a1a1a; }
+.co__method--active .co__method-radio {
+  border-color: #1a1a1a;
+  outline: 1px solid #1a1a1a;
+  transition: border-color 0.2s, outline-color 0.2s;
+}
 
 .co__method-radio-dot {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
   width: 15px;
   height: 15px;
   border-radius: 50%;
   background: #1a1a1a;
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.co__method--active .co__method-radio-dot {
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .co__method-svg { display: flex; align-items: center; flex-shrink: 0; }
@@ -492,6 +530,50 @@
   font-weight: 400;
 }
 
+.co__method-desc {
+  font-size: 13px;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--text, #000) 55%, transparent);
+  line-height: 1.5;
+}
+
+.co__method-more {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text, #1a1a1a);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.co__method-more:hover {
+  opacity: 0.7;
+}
+
+/* ── Klarna info modal ─────────────────────────── */
+
+.co__klarna-modal-desc {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text, #1a1a1a);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.co__klarna-modal-divider {
+  height: 1px;
+  background: #EBEBEB;
+  margin: 16px 0;
+}
+
+.co__klarna-modal-legal {
+  font-size: 12px;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--text, #000) 55%, transparent);
+  line-height: 1.5;
+  margin: 0;
+}
+
 .co__method-cards {
   display: flex;
   align-items: center;
@@ -502,12 +584,26 @@
 .co__method-body {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: grid-template-rows;
+  transition: grid-template-rows 0.25s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-.co__method-body--open { grid-template-rows: 1fr; }
+.co__method-body--open {
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
 
-.co__method-inner { overflow: hidden; min-height: 0; }
+.co__method-inner {
+  overflow: hidden;
+  min-height: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease-out;
+}
+
+.co__method-body--open .co__method-inner {
+  opacity: 1;
+  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1) 0.1s;
+}
 
 .co__method-redirect {
   font-size: 13px;
@@ -659,7 +755,7 @@
   font-size: 12px;
   font-weight: 400;
   color: #1a1a1a;
-  margin: -16px 0 16px;
+  margin: 0 0 16px;
   line-height: 1.5;
 }
 
