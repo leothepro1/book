@@ -14,7 +14,7 @@ import "./guest-header.css";
 function LogoPlaceholder({ width }: { width: number }) {
   return (
     <div
-      style={{ width, height: 28 }}
+      style={{ width, height: 28, cursor: "pointer" }}
       className="rounded-md border border-[var(--border)] bg-white/5"
       aria-label="Logo placeholder"
     />
@@ -25,7 +25,7 @@ function HeaderLogo({ logoUrl, logoWidth }: { logoUrl?: string; logoWidth?: numb
   const w = logoWidth ?? 120;
   if (logoUrl) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={logoUrl} alt="Logo" style={{ width: w, height: "auto" }} />;
+    return <img src={logoUrl} alt="Logo" style={{ width: w, height: "auto", cursor: "pointer" }} />;
   }
   return <LogoPlaceholder width={w} />;
 }
@@ -65,7 +65,7 @@ function HeaderIconButton({
   return (
     <button
       type="button"
-      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-[var(--text)] hover:bg-white/5"
+      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-[var(--text)] hover:bg-white/5 cursor-pointer"
       style={{ width: "max-content", height: "max-content" }}
       aria-label={label}
       onClick={onClick}
@@ -127,21 +127,21 @@ function MenuPanel({
           "--menu-font-family": "var(--font-heading)",
           "--menu-font-size": "18px",
           "--menu-font-weight": "700",
-          "--menu-font-color": "var(--text)",
+          "--menu-font-color": "#222",
         } as React.CSSProperties;
       case "accent":
         return {
           "--menu-font-family": "var(--font-button, var(--font-body))",
           "--menu-font-size": "15px",
           "--menu-font-weight": "400",
-          "--menu-font-color": buttonBg ?? "var(--button-bg, var(--text))",
+          "--menu-font-color": buttonBg ?? "#222",
         } as React.CSSProperties;
       default: // "body"
         return {
           "--menu-font-family": "var(--font-body)",
           "--menu-font-size": "15px",
           "--menu-font-weight": "400",
-          "--menu-font-color": "var(--text)",
+          "--menu-font-color": "#222",
         } as React.CSSProperties;
     }
   }, [menuFont, config]);
@@ -426,6 +426,19 @@ export default function GuestHeader({ config }: { config: TenantConfig }) {
   }, []);
 
   const closeLang = useCallback(() => setLangOpen(false), []);
+  const langAnchorRef = useRef<HTMLDivElement>(null);
+
+  // Close language dropdown on outside click (desktop)
+  useEffect(() => {
+    if (!langOpen) return;
+    const handle = (e: MouseEvent) => {
+      if (langAnchorRef.current && !langAnchorRef.current.contains(e.target as Node)) {
+        setLangOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [langOpen]);
 
   // Close all panels on navigation
   useEffect(() => {
@@ -452,22 +465,58 @@ export default function GuestHeader({ config }: { config: TenantConfig }) {
 
   const isCenter = hdr.logoPosition === "center";
 
-  // Menu button: shows "menu" when closed, "close" when open
+  // Menu button: shows "menu" when closed, "close" when open (mobile only)
   const menuButton = showMenu ? (
-    <HeaderIconButton
-      icon={<HeaderSymbol name={menuOpen ? "close" : "menu"} />}
-      label={menuOpen ? "Stäng meny" : "Öppna meny"}
-      onClick={toggleMenu}
-    />
+    <span key="menu-btn" className="desktop-nav-hide">
+      <HeaderIconButton
+        icon={<HeaderSymbol name={menuOpen ? "close" : "menu"} />}
+        label={menuOpen ? "Stäng meny" : "Öppna meny"}
+        onClick={toggleMenu}
+      />
+    </span>
+  ) : null;
+
+  // Desktop inline nav (horizontal menu items)
+  const desktopNavStyle = useMemo((): React.CSSProperties => {
+    const menuFont = hdr.menuFont ?? "body";
+    switch (menuFont) {
+      case "heading":
+        return { fontFamily: "var(--font-heading)", fontSize: 15, fontWeight: 700 };
+      case "accent":
+        return { fontFamily: "var(--font-button, var(--font-body))", fontSize: 14, fontWeight: 450 };
+      default:
+        return { fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 450 };
+    }
+  }, [hdr.menuFont]);
+
+  const desktopNav = showMenu && headerMenu ? (
+    <nav className="desktop-nav" style={desktopNavStyle}>
+      {headerMenu.items.map((item) => (
+        <a key={item.id} href={item.url} className="desktop-nav__item">
+          {item.label}
+        </a>
+      ))}
+    </nav>
   ) : null;
 
   const currentLocaleInfo = SUPPORTED_LOCALES.find((l) => l.code === currentLocale);
   const langButton = showLanguageSwitcher ? (
-    <HeaderIconButton
-      icon={<HeaderSymbol name="language" />}
-      label={currentLocaleInfo?.nativeName ?? "Språk"}
-      onClick={toggleLang}
-    />
+    <div className="lang-anchor" ref={langAnchorRef}>
+      <HeaderIconButton
+        icon={<HeaderSymbol name="language" />}
+        label={currentLocaleInfo?.nativeName ?? "Språk"}
+        onClick={toggleLang}
+      />
+      <LanguagePanel
+        open={langOpen}
+        onClose={closeLang}
+        currentLocale={currentLocale}
+        primaryLocale={primaryLocale}
+        publishedLocales={publishedLocales}
+        showFlags={showFlags}
+        pathname={pathname}
+      />
+    </div>
   ) : null;
 
   // Compute button placement for left and right slots
@@ -516,6 +565,7 @@ export default function GuestHeader({ config }: { config: TenantConfig }) {
               <div className="flex items-center gap-3">
                 {leftButtons}
                 <HeaderLogo logoUrl={logoUrl} logoWidth={logoWidth} />
+                {desktopNav}
               </div>
               <div className="flex items-center justify-end gap-3">
                 {rightButtons}
@@ -537,17 +587,7 @@ export default function GuestHeader({ config }: { config: TenantConfig }) {
         />
       )}
 
-      {showLanguageSwitcher && (
-        <LanguagePanel
-          open={langOpen}
-          onClose={closeLang}
-          currentLocale={currentLocale}
-          primaryLocale={primaryLocale}
-          publishedLocales={publishedLocales}
-          showFlags={showFlags}
-          pathname={pathname}
-        />
-      )}
+      {/* LanguagePanel is now rendered inside the lang-anchor wrapper */}
     </>
   );
 }

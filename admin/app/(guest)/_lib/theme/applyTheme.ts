@@ -38,15 +38,17 @@ const SHADOW_MAP: Record<ButtonShadow, string> = {
 // ─── ThemeConfig → CSS Custom Properties ─────────────────
 
 export function themeToStyleAttr(theme: ThemeConfig) {
+  const colors = theme.colors ?? {} as Partial<ThemeConfig["colors"]>;
+  const typo = theme.typography ?? {} as Partial<ThemeConfig["typography"]>;
   return {
-    "--background": theme.colors.background,
-    "--text": theme.colors.text,
-    "--button-bg": theme.colors.buttonBg,
-    "--button-fg": theme.colors.buttonText,
-    "--muted-opacity": String(theme.typography.mutedOpacity ?? 0.72),
-    "--font-heading": fontStack(theme.typography.headingFont),
-    "--font-body": fontStack(theme.typography.bodyFont),
-    "--font-button": fontStack(theme.typography.buttonFont ?? theme.typography.headingFont),
+    "--background": colors.background ?? "#fff",
+    "--text": colors.text ?? "#2D2C2B",
+    "--button-bg": colors.buttonBg ?? "#000",
+    "--button-fg": colors.buttonText ?? "#fff",
+    "--muted-opacity": String(typo.mutedOpacity ?? 0.72),
+    "--font-heading": fontStack(typo.headingFont ?? "inter"),
+    "--font-body": fontStack(typo.bodyFont ?? "inter"),
+    "--font-button": fontStack(typo.buttonFont ?? typo.headingFont ?? "inter"),
     "--button-radius": theme.buttons?.radiusPx != null
       ? `${theme.buttons.radiusPx}px`
       : RADIUS_MAP[theme.buttons?.radius ?? "rounder"],

@@ -76,7 +76,7 @@
   display: inline-grid;
   overflow: hidden;
   height: 1.2em;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.2;
 }
@@ -191,7 +191,7 @@
   border-radius: 8px;
   background: var(--admin-surface);
   color: var(--admin-text);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 450;
   line-height: 1em;
   cursor: pointer;
@@ -271,7 +271,7 @@
   display: flex;
   align-items: center;
   gap: 0;
-  background: #ebebeb;
+  background: #F1F1F1;
   border-radius: 8px;
 }
 
@@ -318,32 +318,31 @@
 }
 
 .editor-publish__inspector--active {
-  background: #ebebeb;
+  background: #f1f1f1;
   color: var(--admin-accent);
 }
 
 .editor-publish__inspector--active:hover {
-  background: #ebebeb;
+  background: #f1f1f1;
   color: var(--admin-accent)
 }
 
-/* ── Viewport toggle (segmented) ── */
-
 .editor-publish__viewport {
-  display: flex;
-  align-items: center;
-  background: #ebebeb;
-  border-radius: 8px;
-  padding: 2px;
-  gap: 2px;
+    background: #f1f1f1;
+    border-radius: 8px;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    display: flex;
+    height: 32px;
 }
 
 .editor-publish__viewport-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 27px;
+  height: 27px;
   border: none;
   background: none;
   color: var(--admin-text-tertiary);
@@ -398,7 +397,7 @@
 .editor-publish__btn:disabled {
     cursor: default;
     opacity: 1;
-    background: #ebebeb;
+    background: #F1F1F1;
     color: #8f8f8f;
 }
 
@@ -443,7 +442,7 @@
 }
 
 .editor-rail__btn--active {
-    background: var(--admin-border);
+    background: #f1f1f1;
     color: var(--admin-accent);
 }
 
@@ -469,7 +468,7 @@
 }
 
 .editor-panel__title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 550;
   color: var(--admin-text);
 }
@@ -534,7 +533,7 @@
 }
 
 .sp-page-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 550;
   color: var(--admin-text);
   letter-spacing: -0.01em;
@@ -545,7 +544,7 @@
     text-transform: none;
     border-top: 1px solid var(--admin-border);
     padding: 12px 16px 0px;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 550;
 }
 
@@ -667,7 +666,7 @@
   font-weight: 450;
   color: var(--admin-text);
   white-space: nowrap;
-  overflow: hidden;
+  overflow: visible;
   text-overflow: ellipsis;
   padding: 0 4px;
 }
@@ -914,7 +913,7 @@
 }
 
 .sp-modal__title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--admin-text);
   margin: 0 0 6px;
@@ -969,7 +968,7 @@
 /* ── Canvas (column 3) ── */
 
 .editor-canvas {
-    background: #f7f7f7;
+    background: #f1f1f1;
     justify-content: center;
     align-items: center;
     display: flex;
@@ -1112,7 +1111,7 @@
   flex: 1;
   border: none;
   background: transparent;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 400 !important;
   line-height: 1em;
   font-family: inherit;
@@ -1189,7 +1188,7 @@
   background: transparent;
   cursor: pointer;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #303030;
   line-height: 1em;
@@ -1250,7 +1249,7 @@
 
 .pk-item__name {
   flex: 1;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 400;
   color: #303030;
   line-height: 1em;
@@ -1384,7 +1383,7 @@
 
 .dp-header__title {
   flex: 1;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--admin-text);
   letter-spacing: -0.01em;
@@ -1433,7 +1432,7 @@
   gap: 7px;
   width: max-content;
   padding: 4px 11px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   display: flex;
   background: var(--admin-success-tint, #B7F3D7);
@@ -1464,7 +1463,7 @@
   background: var(--admin-surface-muted);
 }
 .dp-accordion__label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--admin-text);
 }
@@ -1543,7 +1542,7 @@
 }
 
 .dp-el-group__name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   text-align: left;
   color: var(--admin-text);
@@ -1580,7 +1579,7 @@
   width: 100%;
   padding: 12.5px 16px;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   transition: border-color .15s, color .15s;
   display: flex;
 }
@@ -1592,7 +1591,7 @@
 .sched-trigger--set { border-color: var(--admin-text); font-weight: 500; }
 .sched-trigger--set .sched-trigger-value { color: var(--admin-text); }
 .sched-label {
-  font-size: 14px;
+  font-size: 13x;
   font-weight: 500;
   color: var(--admin-text);
 }
@@ -1702,7 +1701,7 @@
   color: var(--admin-text-secondary);
   padding: 4px 0;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 400;
 }
 .sched-day {
@@ -1770,7 +1769,7 @@
 }
 .sched-picker-item {
   padding: 7px 4px; border: none; background: none;
-  border-radius: 7px; font-size: 14px; font-weight: 500;
+  border-radius: 7px; font-size: 13px; font-weight: 500;
   color: var(--admin-text); cursor: pointer; text-align: center;
   font-family: inherit;
   transition: background 0.12s ease;
@@ -1857,7 +1856,7 @@
 /* ── Segmented control ── */
 
 .sf-segmented {
-    background: #EBEBEB;
+    background: #F1F1F1;
     height:max-content;
     border-radius: 8px;
     gap: 0px;
@@ -2259,7 +2258,7 @@
 }
 
 .sf-group-label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--admin-text);
   letter-spacing: -0.01em;
@@ -2467,7 +2466,7 @@
   flex: 1;
   border: none;
   background: transparent;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1em;
   font-family: inherit;
   color: var(--admin-text);
@@ -2611,7 +2610,7 @@
   border-radius: 8px;
   cursor: pointer;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 400;
   color: var(--admin-text);
   width: 100%;
@@ -3104,7 +3103,7 @@
   width: 100%;
   padding: 16px;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   transition: background 0.1s;
   display: flex;
   box-shadow: 0 .3125rem .3125rem -.15625rem #00000008, 0 .1875rem .1875rem -.09375rem #00000005, 0 .125rem .125rem -.0625rem #00000005, 0 .0625rem .0625rem -.03125rem #00000008, 0 .03125rem .03125rem #0000000a, 0 0 0 .0625rem #0000000f;
@@ -3136,7 +3135,7 @@
 }
 
 .layout-picker-popup__label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--admin-text);
 }
@@ -3476,7 +3475,7 @@
 }
 
 .rt-link-modal__title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--admin-text);
 }
@@ -3756,7 +3755,7 @@
 }
 .rt-type-dropdown__item {
 flex-direction: row;
-font-size: 14px;
+font-size: 13px;
 display:flex;
 cursor:pointer;
 font-weight: 400;
@@ -3963,7 +3962,7 @@ border-radius: 8px;
   padding: 0 32px 0 10px;
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-input-radius);
-  font-size: 14px;
+  font-size: 13px;
   font-family: inherit;
   font-weight: 400;
   color: var(--admin-text);
@@ -3986,7 +3985,7 @@ border-radius: 8px;
   padding: 0 32px 0 10px;
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-input-radius);
-  font-size: 14px;
+  font-size: 13px;
   font-family: inherit;
   color: var(--admin-text);
   background: var(--admin-surface);
@@ -4629,7 +4628,7 @@ border-radius: 8px;
 }
 
 .sp-font-header__title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 550;
   color: var(--admin-text);
   letter-spacing: -0.01em;
@@ -4649,7 +4648,6 @@ border-radius: 8px;
   border: 1px solid #E6E5E3 !important;
   border-radius: 8px;
   line-height: 1em;
-  font-size: 14px;
   color: var(--admin-text);
   background: #fff !important;
   outline: none;
@@ -5289,7 +5287,7 @@ border-radius: 8px;
   border-radius: var(--radius-md);
   cursor: pointer;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--admin-text);
   width: 100%;
   text-align: center;
@@ -5310,7 +5308,7 @@ border-radius: 8px;
   position: absolute;
   top: 4px;
   right: 4px;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--admin-accent);
 }
 

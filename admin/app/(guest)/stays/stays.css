@@ -1,0 +1,305 @@
+/* Stays Results Page — .stays namespace */
+
+.stays {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: clamp(1rem, 3vw, 2rem) clamp(1rem, 4vw, 2rem);
+}
+
+/* ── Compact search bar ────────────────────────────── */
+
+.stays__search-bar {
+  margin-bottom: clamp(1.5rem, 3vw, 2rem);
+}
+
+.stays__search-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.stays__search-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 140px;
+}
+
+.stays__search-field--guests {
+  max-width: 100px;
+  flex: 0 0 100px;
+}
+
+.stays__search-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--text, #000) 55%, transparent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stays__search-input {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1.5px solid color-mix(in srgb, var(--text, #000) 15%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text, #1a1a1a);
+  font-family: inherit;
+}
+
+.stays__search-input:focus {
+  outline: none;
+  border-color: var(--text, #1a1a1a);
+}
+
+.stays__search-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  background: var(--button-bg, #1a1a1a);
+  color: var(--button-fg, #fff);
+  cursor: pointer;
+  height: 38px;
+  transition: opacity 0.15s;
+}
+
+.stays__search-btn:hover {
+  opacity: 0.88;
+}
+
+/* ── Results header ────────────────────────────────── */
+
+.stays__results-header {
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--text, #000) 55%, transparent);
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--text, #000) 8%, transparent);
+}
+
+/* ── Grid ──────────────────────────────────────────── */
+
+.stays__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ── Category card ─────────────────────────────────── */
+
+.stays__card {
+  display: grid;
+  grid-template-columns: 220px 1fr auto;
+  gap: 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--text, #000) 8%, transparent);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+
+.stays__card:hover {
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--text, #000) 6%, transparent);
+}
+
+@media (max-width: 640px) {
+  .stays__card {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stays__card-image {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text, #000) 4%, var(--background, #fff));
+}
+
+.stays__card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.stays__card-placeholder {
+  width: 100%;
+  height: 100%;
+  background: color-mix(in srgb, var(--text, #000) 6%, var(--background, #fff));
+}
+
+.stays__card-info {
+  padding: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+@media (max-width: 640px) {
+  .stays__card-info {
+    padding: 0 1rem;
+  }
+}
+
+.stays__card-type {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: color-mix(in srgb, var(--text, #000) 45%, transparent);
+}
+
+.stays__card-title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--text, #1a1a1a);
+  margin: 0;
+}
+
+.stays__card-desc {
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--text, #000) 60%, transparent);
+  margin: 0.25rem 0 0;
+  line-height: 1.4;
+}
+
+.stays__card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--text, #000) 50%, transparent);
+  margin-top: 0.375rem;
+}
+
+.stays__card-facilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+
+.stays__card-facility {
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text, #000) 5%, transparent);
+  color: color-mix(in srgb, var(--text, #000) 65%, transparent);
+}
+
+.stays__card-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem 1.25rem;
+  gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .stays__card-action {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1rem 1rem;
+  }
+}
+
+.stays__card-price {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text, #1a1a1a);
+  white-space: nowrap;
+}
+
+.stays__card-price-unit {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--text, #000) 45%, transparent);
+}
+
+.stays__card-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  background: var(--button-bg, #1a1a1a);
+  color: var(--button-fg, #fff);
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.stays__card-btn:hover {
+  opacity: 0.88;
+}
+
+.stays__card-unavailable {
+  font-size: 0.8125rem;
+  color: #d97706;
+  text-align: right;
+}
+
+/* ── Empty / loading ───────────────────────────────── */
+
+.stays__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(3rem, 8vw, 5rem) 1rem;
+  text-align: center;
+  gap: 0.5rem;
+}
+
+.stays__empty-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text, #1a1a1a);
+  margin: 0;
+}
+
+.stays__empty-text {
+  font-size: 0.875rem;
+  color: color-mix(in srgb, var(--text, #000) 50%, transparent);
+  margin: 0;
+  max-width: 40ch;
+}
+
+/* ── Skeleton ──────────────────────────────────────── */
+
+.stays__card--skeleton {
+  pointer-events: none;
+}
+
+.stays__skeleton-pulse {
+  animation: stays-pulse 1.5s ease-in-out infinite;
+  background: color-mix(in srgb, var(--text, #000) 6%, var(--background, #fff));
+}
+
+.stays__skeleton-line {
+  height: 12px;
+  border-radius: 6px;
+  width: 60%;
+  animation: stays-pulse 1.5s ease-in-out infinite;
+  background: color-mix(in srgb, var(--text, #000) 6%, var(--background, #fff));
+  margin-bottom: 0.5rem;
+}
+
+.stays__skeleton-line--sm { width: 30%; }
+.stays__skeleton-line--lg { width: 80%; }
+
+@keyframes stays-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}

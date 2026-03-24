@@ -8,7 +8,7 @@ import { RichTextEditor } from "@/app/_components/RichTextEditor";
 import { MediaLibraryModal } from "@/app/(admin)/_components/MediaLibrary";
 import type { MediaLibraryResult } from "@/app/(admin)/_components/MediaLibrary";
 import { PublishBarUI } from "@/app/(admin)/_components/PublishBar/PublishBar";
-import { createCollection, updateCollection, searchProducts } from "@/app/_lib/products";
+import { createCollection, updateCollection, searchProducts, listCollections } from "@/app/_lib/products";
 import {
   DndContext,
   PointerSensor,
@@ -41,6 +41,9 @@ type ExistingCollection = {
   slug: string;
   imageUrl: string | null;
   status: "ACTIVE" | "DRAFT" | "ARCHIVED";
+  isAccommodationType: boolean;
+  addonCollectionId: string | null;
+  addonCollection?: { id: string; title: string; imageUrl: string | null } | null;
   items: Array<{ product: { id: string; title: string; media: Array<{ url: string }> } }>;
 };
 
@@ -51,6 +54,7 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
   const [isDiscarding, setIsDiscarding] = useState(false);
   const [savedAt, setSavedAt] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const isEdit = !!collection;
 
   // ── Core fields ──
@@ -61,6 +65,46 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
   const [status, setStatus] = useState<"ACTIVE" | "DRAFT">(collection?.status === "ACTIVE" ? "ACTIVE" : "DRAFT");
   const [statusOpen, setStatusOpen] = useState(false);
   const statusRef = useRef<HTMLDivElement>(null);
+  const [isAccommodationType, setIsAccommodationType] = useState(collection?.isAccommodationType ?? false);
+
+  // ── Addon collection picker ──
+  type CollectionItem = { id: string; title: string; imageUrl: string | null; _count?: { items: number } };
+  const [addonCollection, setAddonCollection] = useState<CollectionItem | null>(
+    collection?.addonCollection ? { id: collection.addonCollection.id, title: collection.addonCollection.title, imageUrl: collection.addonCollection.imageUrl } : null,
+  );
+  const [addonPickerOpen, setAddonPickerOpen] = useState(false);
+  const [addonPickerCollections, setAddonPickerCollections] = useState<CollectionItem[]>([]);
+  const [addonPickerLoading, setAddonPickerLoading] = useState(false);
+  const [addonPickerSearch, setAddonPickerSearch] = useState("");
+
+  const openAddonPicker = useCallback(() => {
+    setAddonPickerOpen(true);
+    setAddonPickerSearch("");
+    setAddonPickerLoading(true);
+    listCollections().then((cols) => {
+      // Exclude self + exclude accommodation type collections (only regular product categories)
+      const filtered = (cols as (CollectionItem & { isAccommodationType?: boolean })[]).filter(
+        (c) => c.id !== collection?.id && !c.isAccommodationType,
+      );
+      setAddonPickerCollections(filtered);
+      setAddonPickerLoading(false);
+    });
+  }, [collection?.id]);
+
+  const selectAddonCollection = useCallback((col: CollectionItem) => {
+    setAddonCollection(col);
+    setAddonPickerOpen(false);
+    setDirty(true);
+  }, []);
+
+  const removeAddonCollection = useCallback(() => {
+    setAddonCollection(null);
+    setDirty(true);
+  }, []);
+
+  const filteredAddonCollections = addonPickerSearch
+    ? addonPickerCollections.filter((c) => c.title.toLowerCase().includes(addonPickerSearch.toLowerCase()))
+    : addonPickerCollections;
 
   // ── Product picker ──
   type ProductItem = { id: string; title: string; status: string; price: number; currency: string; media: Array<{ url: string }> };
@@ -175,23 +219,29 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
     return () => document.removeEventListener("mousedown", handle);
   }, [statusOpen]);
 
-  // Track dirty
-  const initialRender = useRef(true);
+  // Track dirty — skip initial hydration + data loads
+  const readyRef = useRef(false);
   useEffect(() => {
-    if (initialRender.current) { initialRender.current = false; return; }
+    if (!readyRef.current) return;
     setDirty(true);
   }, [title, description, imageUrl, status, addedProducts.length]);
+  useEffect(() => {
+    const t = setTimeout(() => { readyRef.current = true; }, 300);
+    return () => clearTimeout(t);
+  }, []);
 
   const breadcrumbTitle = title.trim() || "Skapa produktserie";
 
   // ── Save ──
   const handleSave = useCallback(() => {
     setIsSaving(true);
+    setSaveError(null);
     startTransition(async () => {
       const productIds = addedProducts.map((p) => p.id);
+      const addonCollectionId = addonCollection?.id ?? null;
       const result = isEdit
-        ? await updateCollection(collection!.id, { title, description, imageUrl: imageUrl || null, status, productIds })
-        : await createCollection({ title, description, imageUrl: imageUrl || null, status, productIds });
+        ? await updateCollection(collection!.id, { title, description, imageUrl: imageUrl || null, status, productIds, isAccommodationType, addonCollectionId })
+        : await createCollection({ title, description, imageUrl: imageUrl || null, status, productIds, isAccommodationType, addonCollectionId });
 
       setIsSaving(false);
       if (result.ok) {
@@ -203,9 +253,12 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
         } else {
           router.refresh();
         }
+      } else {
+        setSaveError(result.error);
+        setTimeout(() => setSaveError(null), 5000);
       }
     });
-  }, [title, description, imageUrl, isEdit, collection, router]);
+  }, [title, description, imageUrl, status, addedProducts, isEdit, collection, router]);
 
   const handleDiscard = useCallback(() => {
     setIsDiscarding(true);
@@ -213,6 +266,13 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
     setDescription(collection?.description ?? "");
     setImageUrl(collection?.imageUrl ?? "");
     setStatus(collection?.status === "ACTIVE" ? "ACTIVE" : "DRAFT");
+    setAddedProducts(
+      (collection?.items ?? []).map((i) => ({
+        id: i.product.id, title: i.product.title, status: "ACTIVE",
+        price: 0, currency: "SEK", media: i.product.media,
+      })),
+    );
+    setSaveError(null);
     setTimeout(() => { setDirty(false); setIsDiscarding(false); }, 100);
   }, [collection]);
 
@@ -265,7 +325,6 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="T.ex. Mat & Dryck"
-                  autoFocus
                 />
               </div>
 
@@ -281,6 +340,80 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
               </div>
 
             </div>
+
+            {/* Accommodation type toggle */}
+            <div style={CARD}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontSize: "var(--font-sm)", fontWeight: 600, color: "var(--admin-text)" }}>Boendetyp</div>
+                  <div style={{ fontSize: "var(--font-xs)", color: "var(--admin-text-secondary)", marginTop: 2 }}>
+                    Visa i sökformuläret som filteralternativ
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isAccommodationType}
+                  className={`admin-toggle${isAccommodationType ? " admin-toggle-on" : ""}`}
+                  onClick={() => { setIsAccommodationType(!isAccommodationType); setDirty(true); }}
+                >
+                  <span className="admin-toggle-thumb" />
+                </button>
+              </div>
+            </div>
+
+            {/* Addon collection — only for accommodation types */}
+            {isAccommodationType && (
+              <div style={CARD}>
+                <div className="pf-card-header" style={{ marginBottom: 4 }}>
+                  <span className="pf-card-title">Tilläggsprodukter</span>
+                </div>
+                <p style={{ fontSize: "var(--font-xs)", color: "var(--admin-text-secondary)", margin: "0 0 12px" }}>
+                  Välj en kategori att erbjuda som tilläggsprodukter
+                </p>
+                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                  <div className="pf-collection-trigger" style={{ flex: 1 }}>
+                    <EditorIcon name="search" size={18} style={{ color: "var(--admin-text-tertiary)", flexShrink: 0 }} />
+                    <input
+                      type="text"
+                      className="pf-collection-trigger__input"
+                      placeholder="Sök kategorier"
+                      onFocus={openAddonPicker}
+                      readOnly
+                    />
+                  </div>
+                  <button type="button" className="settings-btn--muted" onClick={openAddonPicker}>
+                    Bläddra
+                  </button>
+                </div>
+                <div style={{ borderTop: "1px solid var(--admin-border)" }}>
+                  {!addonCollection ? (
+                    <p style={{ padding: "16px 0", fontSize: 13, color: "var(--admin-text-tertiary)", margin: 0, textAlign: "center" }}>
+                      Ingen kategori vald
+                    </p>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--admin-border)" }}>
+                      {addonCollection.imageUrl ? (
+                        <img src={addonCollection.imageUrl} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover", border: "1px solid var(--admin-border)", flexShrink: 0, marginLeft: 16 }} />
+                      ) : (
+                        <div style={{ width: 36, height: 36, borderRadius: 6, border: "1px solid var(--admin-border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--admin-text-tertiary)", flexShrink: 0, marginLeft: 16 }}>
+                          <EditorIcon name="folder" size={16} />
+                        </div>
+                      )}
+                      <span style={{ flex: "1 1 0%", fontSize: 13, color: "var(--admin-text)", marginLeft: 12 }}>{addonCollection.title}</span>
+                      <button
+                        type="button"
+                        style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--admin-text-tertiary)", display: "flex", alignItems: "center", padding: 4, borderRadius: 4, flexShrink: 0 }}
+                        onClick={removeAddonCollection}
+                        aria-label="Ta bort"
+                      >
+                        <EditorIcon name="close" size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Products in collection */}
             <div style={CARD}>
@@ -400,6 +533,17 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
             </div>
           </div>
         </div>
+
+        {/* Error banner */}
+        {saveError && (
+          <div className="pf-error-banner">
+            <EditorIcon name="error" size={16} />
+            <span>{saveError}</span>
+            <button type="button" className="pf-error-banner__close" onClick={() => setSaveError(null)}>
+              <EditorIcon name="close" size={14} />
+            </button>
+          </div>
+        )}
 
         {/* Unsaved changes bar */}
         <PublishBarUI
@@ -531,6 +675,97 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
               <button className="settings-btn--connect" style={{ fontSize: 13, padding: "6px 15px", height: "max-content" }} onClick={confirmPicker}>
                 Klar
               </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* Addon collection picker modal */}
+      {addonPickerOpen && createPortal(
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setAddonPickerOpen(false)}
+        >
+          <div style={{ position: "absolute", inset: 0, background: "var(--admin-overlay)", animation: "settings-modal-fade-in 0.15s ease" }} />
+          <div
+            style={{
+              position: "relative", zIndex: 1, background: "var(--admin-surface)",
+              borderRadius: 16, width: 560, maxHeight: "80vh", minHeight: 400,
+              display: "flex", flexDirection: "column", overflow: "hidden",
+              animation: "settings-modal-scale-in 0.2s cubic-bezier(0.32, 0.72, 0, 1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 20px 12px", borderBottom: "1px solid var(--admin-border)", background: "var(--admin-surface)" }}>
+              <h3 style={{ fontSize: 17, fontWeight: 600, margin: 0 }}>Välj kategori</h3>
+              <button
+                type="button"
+                onClick={() => setAddonPickerOpen(false)}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", cursor: "pointer", color: "var(--admin-text-secondary)" }}
+                aria-label="Stäng"
+              >
+                <EditorIcon name="close" size={20} />
+              </button>
+            </div>
+
+            {/* Search */}
+            <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--admin-border)" }}>
+              <div className="pf-collection-trigger">
+                <EditorIcon name="search" size={18} style={{ color: "var(--admin-text-tertiary)", flexShrink: 0 }} />
+                <input
+                  type="text"
+                  className="pf-collection-trigger__input"
+                  value={addonPickerSearch}
+                  onChange={(e) => setAddonPickerSearch(e.target.value)}
+                  placeholder="Sök kategorier"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Collection list */}
+            <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+              {addonPickerLoading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <div key={`skel-${i}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: "1px solid var(--admin-border)" }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 6, background: "var(--admin-surface-raised)", flexShrink: 0, animation: "skeleton-shimmer 1.2s ease-in-out infinite" }} />
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ height: 12, borderRadius: 4, background: "var(--admin-surface-raised)", width: `${50 + (i % 3) * 20}%`, animation: "skeleton-shimmer 1.2s ease-in-out infinite" }} />
+                    </div>
+                  </div>
+                ))
+              ) : filteredAddonCollections.length === 0 ? (
+                <p style={{ padding: 20, textAlign: "center", fontSize: 13, color: "var(--admin-text-tertiary)", margin: 0 }}>
+                  Inga kategorier hittades
+                </p>
+              ) : (
+                filteredAddonCollections.map((col) => (
+                  <div
+                    key={col.id}
+                    onClick={() => selectAddonCollection(col)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 12, padding: "10px 20px",
+                      cursor: "pointer", borderBottom: "1px solid var(--admin-border)",
+                    }}
+                  >
+                    {col.imageUrl ? (
+                      <img src={col.imageUrl} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover", border: "1px solid var(--admin-border)", flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: 36, height: 36, borderRadius: 6, border: "1px solid var(--admin-border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--admin-text-tertiary)", flexShrink: 0 }}>
+                        <EditorIcon name="folder" size={16} />
+                      </div>
+                    )}
+                    <span style={{ flex: "1 1 0%", fontSize: 13, color: "var(--admin-text)" }}>{col.title}</span>
+                    {col._count && (
+                      <span style={{ fontSize: "var(--font-xs)", color: "var(--admin-text-tertiary)" }}>
+                        {col._count.items} {col._count.items === 1 ? "produkt" : "produkter"}
+                      </span>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>,

@@ -1,0 +1,211 @@
+/* Orders Admin — .ord namespace */
+
+.ord {
+  padding: var(--space-6) var(--space-8);
+  max-width: 1100px;
+}
+
+.ord__header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.ord__title {
+  font-size: var(--font-xl);
+  font-weight: 600;
+  color: var(--admin-text);
+  margin: 0;
+}
+
+.ord__count {
+  font-size: var(--font-sm);
+  color: var(--admin-text-secondary);
+}
+
+/* ── Filters ───────────────────────────────────────── */
+
+.ord__filters {
+  display: flex;
+  gap: var(--space-1);
+  margin-bottom: var(--space-5);
+}
+
+.ord__filter {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-xs);
+  font-weight: 500;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--admin-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ord__filter:hover {
+  border-color: var(--admin-border-focus);
+  color: var(--admin-text);
+}
+
+.ord__filter--active {
+  background: var(--admin-text);
+  color: var(--admin-bg);
+  border-color: var(--admin-text);
+}
+
+/* ── Table ─────────────────────────────────────────── */
+
+.ord__table-wrap {
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.ord__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-sm);
+}
+
+.ord__table thead {
+  background: var(--admin-surface);
+}
+
+.ord__table th {
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  font-weight: 500;
+  font-size: var(--font-xs);
+  color: var(--admin-text-secondary);
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.ord__table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--admin-border);
+  color: var(--admin-text);
+  vertical-align: middle;
+}
+
+.ord__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ord__table tbody tr:hover {
+  background: var(--admin-surface);
+}
+
+.ord__cell-num {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ord__cell-date {
+  color: var(--admin-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ord__cell-products {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--admin-text-secondary);
+}
+
+.ord__cell-total {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ord__customer-name {
+  font-weight: 500;
+}
+
+.ord__customer-email {
+  font-size: var(--font-xs);
+  color: var(--admin-text-tertiary);
+}
+
+/* ── Status badges ─────────────────────────────────── */
+
+.ord__badge {
+  display: inline-block;
+  padding: 2px 10px;
+  font-size: var(--font-xs);
+  font-weight: 500;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.ord__badge--pending {
+  background: color-mix(in srgb, var(--admin-text-secondary) 12%, transparent);
+  color: var(--admin-text-secondary);
+}
+
+.ord__badge--paid {
+  background: color-mix(in srgb, #2563eb 12%, transparent);
+  color: #2563eb;
+}
+
+.ord__badge--fulfilled {
+  background: color-mix(in srgb, #16a34a 12%, transparent);
+  color: #16a34a;
+}
+
+.ord__badge--cancelled {
+  background: color-mix(in srgb, var(--admin-danger) 12%, transparent);
+  color: var(--admin-danger);
+}
+
+.ord__badge--refunded {
+  background: color-mix(in srgb, #d97706 12%, transparent);
+  color: #d97706;
+}
+
+/* ── View link ─────────────────────────────────────── */
+
+.ord__view-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--admin-text-tertiary);
+  transition: color 0.15s, background 0.15s;
+  text-decoration: none;
+}
+
+.ord__view-link:hover {
+  color: var(--admin-text);
+  background: var(--admin-surface);
+}
+
+/* ── Empty / Loading ───────────────────────────────── */
+
+.ord__loading,
+.ord__empty {
+  text-align: center;
+  padding: var(--space-8) !important;
+  color: var(--admin-text-tertiary);
+}
+
+/* ── Pagination ────────────────────────────────────── */
+
+.ord__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+.ord__page-info {
+  font-size: var(--font-sm);
+  color: var(--admin-text-secondary);
+}

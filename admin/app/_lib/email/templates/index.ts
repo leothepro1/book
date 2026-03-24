@@ -18,6 +18,7 @@ import CheckOutConfirmed from "./check-out-confirmed";
 import MagicLink from "./magic-link";
 import SupportReply from "./support-reply";
 import GuestOtp from "./guest-otp";
+import OrderConfirmed from "./order-confirmed";
 import type { EmailEventType } from "../registry";
 import type { EmailBranding } from "../branding";
 
@@ -40,6 +41,7 @@ const TEMPLATE_MAP: Record<EmailEventType, TemplateRenderer> = {
   MAGIC_LINK: (v, b) => render(React.createElement(MagicLink as any, { ...v, branding: b })),
   SUPPORT_REPLY: (v, b) => render(React.createElement(SupportReply as any, { ...v, branding: b })),
   GUEST_OTP: (v, b) => render(React.createElement(GuestOtp as any, { ...v, branding: b })),
+  ORDER_CONFIRMED: (v, b) => render(React.createElement(OrderConfirmed as any, { ...v, branding: b })),
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

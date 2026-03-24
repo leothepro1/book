@@ -33,8 +33,8 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
   },
   {
     id: "stays",
-    label: "Bokningar",
-    icon: "calendar_today",
+    label: "Sökning",
+    icon: "travel_explore",
     layout: { header: true, body: "sections", footer: true },
     editorMode: "full",
     availableLayouts: [{ id: "default", label: "Standard" }],
@@ -59,7 +59,7 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
     editorMode: "settings",
     availableLayouts: [{ id: "default", label: "Standard" }],
     defaultLayout: "default",
-    editorVisible: true,
+    editorVisible: false,
     steps: [
       { id: "find-booking", label: "Hitta bokning", icon: "search" },
       { id: "confirm", label: "Bekräfta bokning", icon: "fact_check" },
@@ -241,6 +241,16 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
         borderColor: "#D7DADE",
       },
     },
+  },
+  {
+    id: "product",
+    label: "Produkter",
+    icon: "sell",
+    layout: { header: true, body: "sections", footer: true },
+    editorMode: "full",
+    availableLayouts: [{ id: "default", label: "Standard" }],
+    defaultLayout: "default",
+    editorVisible: true,
   },
   {
     id: "help-center",

@@ -69,6 +69,13 @@ type ExistingProduct = {
   description: string;
   slug: string;
   status: "ACTIVE" | "DRAFT" | "ARCHIVED";
+  productType: string;
+  pmsSourceId: string | null;
+  pmsProvider: string | null;
+  pmsSyncedAt: Date | string | null;
+  pmsData: unknown;
+  titleOverride: string | null;
+  descriptionOverride: string | null;
   price: number;
   compareAtPrice: number | null;
   currency: string;
@@ -91,11 +98,13 @@ export default function ProductForm({ product }: { product?: ExistingProduct }) 
   const [isDiscarding, setIsDiscarding] = useState(false);
   const [savedAt, setSavedAt] = useState(false); // linger after save
   const [dirty, setDirty] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Mark dirty on any change
   const markDirty = useCallback(() => setDirty(true), []);
 
   const isEdit = !!product;
+  const isPms = product?.productType === "PMS_ACCOMMODATION";
 
   // ── Core fields (pre-populated from product when editing) ──
   const [title, setTitle] = useState(product?.title ?? "");
@@ -190,17 +199,21 @@ export default function ProductForm({ product }: { product?: ExistingProduct }) 
     return () => document.removeEventListener("mousedown", handle);
   }, [collectionsOpen]);
 
-  // Track dirty state — only primitive values that change on user input
-  const initialRender = useRef(true);
+  // Track dirty state — only after the form has stabilised (skip initial hydration + data loads)
+  const readyRef = useRef(false);
   const mediaCount = media.length;
   const optionsCount = options.length;
   const variantsCount = variants.length;
   const collectionsCount = selectedCollectionIds.size;
   const tagsCount = tags.length;
   useEffect(() => {
-    if (initialRender.current) { initialRender.current = false; return; }
+    if (!readyRef.current) return;
     setDirty(true);
   }, [title, description, price, compareAtPrice, taxable, status, mediaCount, optionsCount, variantsCount, collectionsCount, tagsCount]);
+  useEffect(() => {
+    const t = setTimeout(() => { readyRef.current = true; }, 300);
+    return () => clearTimeout(t);
+  }, []);
 
   // Close status dropdown on outside click
   useEffect(() => {
@@ -350,28 +363,43 @@ export default function ProductForm({ product }: { product?: ExistingProduct }) 
   // ── Save ──
   const handleSave = useCallback(() => {
     setIsSaving(true);
+    setSaveError(null);
     startTransition(async () => {
-      const payload = {
-        title,
-        description,
-        media: media.map(({ _id, ...m }) => m),
-        options: options.filter((o) => o.name && o.values.length > 0),
-        variants,
-        status,
-        price,
-        compareAtPrice: compareAtPrice || undefined,
-        currency: "SEK",
-        taxable,
-        trackInventory: product?.trackInventory ?? false,
-        inventoryQuantity: product?.inventoryQuantity ?? 0,
-        continueSellingWhenOutOfStock: product?.continueSellingWhenOutOfStock ?? false,
-        collectionIds: Array.from(selectedCollectionIds),
-        tags,
-      };
+      // PMS products: only send editable fields — never price/variants/options/inventory
+      const payload = isPms
+        ? {
+            title, // maps to titleOverride on server
+            description, // maps to descriptionOverride on server
+            media: media.map(({ _id, ...m }) => m),
+            status,
+            collectionIds: Array.from(selectedCollectionIds),
+            tags,
+          }
+        : {
+            title,
+            description,
+            media: media.map(({ _id, ...m }) => m),
+            options: options.filter((o) => o.name && o.values.length > 0),
+            variants,
+            status,
+            price,
+            compareAtPrice: compareAtPrice || undefined,
+            currency: product?.currency ?? "SEK",
+            taxable,
+            trackInventory: product?.trackInventory ?? false,
+            inventoryQuantity: product?.inventoryQuantity ?? 0,
+            continueSellingWhenOutOfStock: product?.continueSellingWhenOutOfStock ?? false,
+            collectionIds: Array.from(selectedCollectionIds),
+            tags,
+          };
 
-      const result = isEdit
-        ? await updateProduct(product!.id, { ...payload, expectedVersion: product!.version })
-        : await createProduct(payload);
+      let result;
+      if (isEdit) {
+        result = await updateProduct(product!.id, { ...payload, expectedVersion: product!.version });
+      } else {
+        // createProduct is always STANDARD — PMS products are never created via this form
+        result = await createProduct(payload as Parameters<typeof createProduct>[0]);
+      }
 
       setIsSaving(false);
       if (result.ok) {
@@ -383,29 +411,46 @@ export default function ProductForm({ product }: { product?: ExistingProduct }) 
         } else {
           router.refresh();
         }
+      } else {
+        setSaveError(result.error);
+        setTimeout(() => setSaveError(null), 5000);
       }
     });
-  }, [title, description, price, compareAtPrice, taxable, status, media, options, variants, selectedCollectionIds, tags, router, isEdit, product]);
+  }, [title, description, price, compareAtPrice, taxable, status, media, options, variants, selectedCollectionIds, tags, router, isEdit, product, isPms]);
 
   const handleDiscard = useCallback(() => {
     setIsDiscarding(true);
-    setTitle("");
-    setDescription("");
-    setPrice(0);
-    setCompareAtPrice(0);
-    setTaxable(true);
-    setStatus("DRAFT");
-    setMedia([]);
-    setOptions([]);
-    setVariants([]);
-    setSelectedCollectionIds(new Set());
-    setTags([]);
+    setTitle(product?.title ?? "");
+    setDescription(product?.description ?? "");
+    setPrice(product?.price ?? 0);
+    setCompareAtPrice(product?.compareAtPrice ?? 0);
+    setTaxable(product?.taxable ?? true);
+    setStatus(product?.status === "ACTIVE" ? "ACTIVE" : "DRAFT");
+    setMedia(product?.media
+      ? product.media.map((m) => ({ ...m, type: m.type as "image" | "video", _id: makeMediaId() }))
+      : [],
+    );
+    setOptions(product?.options
+      ? product.options.map((o) => ({ id: makeOptionId(), name: o.name, values: Array.isArray(o.values) ? o.values as string[] : [] }))
+      : [],
+    );
+    setVariants(product?.variants
+      ? product.variants.map((v) => ({
+          option1: v.option1 ?? null, option2: v.option2 ?? null, option3: v.option3 ?? null,
+          imageUrl: v.imageUrl ?? null, price: v.price, compareAtPrice: v.compareAtPrice ?? undefined,
+          sku: v.sku ?? undefined, trackInventory: v.trackInventory,
+          inventoryQuantity: v.inventoryQuantity, continueSellingWhenOutOfStock: v.continueSellingWhenOutOfStock,
+        }))
+      : [],
+    );
+    setSelectedCollectionIds(new Set((product?.collectionItems ?? []).map((ci) => ci.collection.id)));
+    setTags((product?.tags ?? []).map((t) => t.tag.name));
     setTagInput("");
     setTimeout(() => {
       setDirty(false);
       setIsDiscarding(false);
     }, 100);
-  }, []);
+  }, [product]);
 
   return (
     <div className="admin-page admin-page--no-preview products-page">
@@ -462,7 +507,6 @@ export default function ProductForm({ product }: { product?: ExistingProduct }) 
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="T.ex. Frukostbuffé"
-                  autoFocus
                 />
               </div>
 
@@ -530,7 +574,20 @@ export default function ProductForm({ product }: { product?: ExistingProduct }) 
               </div>
             </div>
 
-            {/* Card 2: Price */}
+            {/* Card 2: Price — locked for PMS products */}
+            {isPms ? (
+              <div style={{ ...CARD }}>
+                <div className="pf-card-header" style={{ padding: 0, marginBottom: 8 }}>
+                  <span className="pf-card-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    Pris
+                    <span className="material-symbols-rounded" style={{ fontSize: 16, color: "var(--admin-text-tertiary)" }}>lock</span>
+                  </span>
+                </div>
+                <p style={{ fontSize: "var(--font-xs)", color: "var(--admin-text-tertiary)", margin: 0 }}>
+                  Styrs av ditt PMS &middot; Kan inte ändras här
+                </p>
+              </div>
+            ) : (
             <div style={{ ...CARD, padding: 0 }}>
               <div style={{ padding: 16 }}>
                 <div className="pf-card-header" style={{ padding: 0, marginBottom: 12 }}>
@@ -607,7 +664,22 @@ export default function ProductForm({ product }: { product?: ExistingProduct }) 
               </div>
             </div>
 
-            {/* Card 3: Variants */}
+            )}
+
+            {/* Card 3: Variants — hidden for PMS products */}
+            {isPms ? (
+              <div style={{ ...CARD }}>
+                <div className="pf-card-header" style={{ padding: 0, marginBottom: 8 }}>
+                  <span className="pf-card-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    Varianter
+                    <span className="material-symbols-rounded" style={{ fontSize: 16, color: "var(--admin-text-tertiary)" }}>lock</span>
+                  </span>
+                </div>
+                <p style={{ fontSize: "var(--font-xs)", color: "var(--admin-text-tertiary)", margin: 0 }}>
+                  Varianter och lager hanteras av ditt PMS.
+                </p>
+              </div>
+            ) : (
             <div style={{ ...CARD, padding: 0 }}>
               <div className="pf-card-header" style={{ padding: "16px 16px 12px" }}>
                 <span className="pf-card-title">Varianter</span>
@@ -738,6 +810,34 @@ export default function ProductForm({ product }: { product?: ExistingProduct }) 
                 </>
               )}
             </div>
+            )}
+
+            {/* PMS info panel — only for PMS products */}
+            {isPms && product && (
+              <div style={{ ...CARD, background: "var(--admin-surface)" }}>
+                <div className="pf-card-header" style={{ padding: 0, marginBottom: 12 }}>
+                  <span className="pf-card-title">PMS-information</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", fontSize: "var(--font-sm)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "var(--admin-text-secondary)" }}>Källa</span>
+                    <span>{product.pmsProvider ?? "—"}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "var(--admin-text-secondary)" }}>PMS-ID</span>
+                    <span style={{ fontFamily: "var(--sf-mono, monospace)", fontSize: "var(--font-xs)" }}>{product.pmsSourceId ?? "—"}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "var(--admin-text-secondary)" }}>Senast sync</span>
+                    <span>
+                      {product.pmsSyncedAt
+                        ? new Date(product.pmsSyncedAt).toLocaleString("sv-SE")
+                        : "Aldrig"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right column (30%) */}
@@ -900,6 +1000,17 @@ export default function ProductForm({ product }: { product?: ExistingProduct }) 
             </div>
           </div>
         </div>
+
+        {/* Error banner */}
+        {saveError && (
+          <div className="pf-error-banner">
+            <EditorIcon name="error" size={16} />
+            <span>{saveError}</span>
+            <button type="button" className="pf-error-banner__close" onClick={() => setSaveError(null)}>
+              <EditorIcon name="close" size={14} />
+            </button>
+          </div>
+        )}
 
         {/* Unsaved changes bar */}
         <PublishBarUI

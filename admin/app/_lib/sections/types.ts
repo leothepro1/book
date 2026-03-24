@@ -120,7 +120,14 @@ export type ElementType =
   | "video"
   | "gallery"
   | "menu"
-  | "logo";
+  | "logo"
+  | "product-title"
+  | "product-description"
+  | "product-highlights"
+  | "product-features"
+  | "product-price"
+  | "product-booking-form"
+  | "add-to-cart";
 
 /**
  * A named settings bundle for an element type.
@@ -539,7 +546,14 @@ export type SectionDefinition = {
    * The auto-seed effect only creates the section on this page.
    * Ignored for "free" scope sections.
    */
-  lockedTo?: import("@/app/_lib/pages/types").PageId;
+  lockedTo?: import("@/app/_lib/pages/types").PageId | import("@/app/_lib/pages/types").PageId[];
+
+  /**
+   * For free sections: restricts this section to a specific page.
+   * When set, the section only appears in the picker on this page.
+   * Does not affect locked sections (use lockedTo instead).
+   */
+  pageScope?: import("@/app/_lib/pages/types").PageId;
 
   /**
    * Platform-admin contract for DetailPanel rendering.

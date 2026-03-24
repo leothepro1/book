@@ -1,0 +1,76 @@
+/* Checkout Modal — .com namespace */
+
+.com__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.3s ease;
+}
+
+.com__overlay--visible {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.com__modal {
+  opacity: 0;
+  background: #fff;
+  border-radius: 16px;
+  flex-direction: column;
+  width: 90%;
+  max-width: 480px;
+  max-height: 85vh;
+  transition: opacity .25s, transform .25s cubic-bezier(.4, 0, 1, 1);
+  display: flex;
+  overflow: hidden;
+  transform: translateY(16px) scale(.97);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+
+.com__overlay--visible .com__modal {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.com__header {
+  border-bottom: 1px solid #ebebeb;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 24px 8px 24px;
+  display: flex;
+}
+
+.com__title {
+  color: var(--text, #1a1a1a);
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.com__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--text, #1a1a1a);
+  transition: background 0.15s;
+}
+
+.com__close:hover {
+  background: #f2f2f2;
+}
+
+.com__body {
+  padding: 24px;
+  overflow-y: auto;
+}

@@ -1,0 +1,13 @@
+/* Purchase Block — .s-purchase namespace */
+
+.s-purchase {
+  padding: 0;
+  position: sticky;
+  top: 1.5rem;
+}
+
+.s-purchase__card {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.75rem, 1.5vw, 1rem);
+}

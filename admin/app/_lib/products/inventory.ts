@@ -163,7 +163,7 @@ export async function reserveInventory(input: {
 
   return prisma.$transaction(async (tx) => {
     // Decrement stock
-    const result = await adjustInventoryInternal(tx, {
+    const result = await adjustInventoryInTx(tx, {
       tenantId,
       productId: input.productId,
       variantId: input.variantId ?? null,
@@ -179,6 +179,50 @@ export async function reserveInventory(input: {
     await tx.inventoryReservation.create({
       data: {
         tenantId,
+        productId: input.productId,
+        variantId: input.variantId ?? null,
+        quantity: input.quantity,
+        expiresAt,
+        sessionId: input.sessionId,
+      },
+    });
+
+    return result;
+  });
+}
+
+/**
+ * Reserve inventory for a checkout session (no admin auth required).
+ * Used by the public checkout API route where there is no Clerk session.
+ * Takes an explicit tenantId instead of resolving from auth.
+ */
+export async function reserveInventoryForTenant(input: {
+  tenantId: string;
+  productId: string;
+  variantId?: string | null;
+  quantity: number;
+  sessionId: string;
+  ttlMinutes?: number;
+}): Promise<InventoryResult> {
+  const ttl = input.ttlMinutes ?? 15;
+  const expiresAt = new Date(Date.now() + ttl * 60 * 1000);
+
+  return prisma.$transaction(async (tx) => {
+    const result = await adjustInventoryInTx(tx, {
+      tenantId: input.tenantId,
+      productId: input.productId,
+      variantId: input.variantId ?? null,
+      quantityDelta: -input.quantity,
+      reason: "RESERVATION",
+      note: `Reservation för checkout ${input.sessionId}`,
+      referenceId: input.sessionId,
+    });
+
+    if (!result.ok) return result;
+
+    await tx.inventoryReservation.create({
+      data: {
+        tenantId: input.tenantId,
         productId: input.productId,
         variantId: input.variantId ?? null,
         quantity: input.quantity,
@@ -216,7 +260,7 @@ export async function releaseExpiredReservations(): Promise<{ released: number }
       if (updated.count === 0) return; // Already consumed
 
       // Return stock
-      await adjustInventoryInternal(tx, {
+      await adjustInventoryInTx(tx, {
         tenantId: res.tenantId,
         productId: res.productId,
         variantId: res.variantId,
@@ -233,9 +277,17 @@ export async function releaseExpiredReservations(): Promise<{ released: number }
   return { released };
 }
 
-// ── Internal helper (works within an existing transaction) ───
+// ── Transaction helper (exported for webhook/order handlers) ──
 
-async function adjustInventoryInternal(
+export type PrismaTransaction = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+/**
+ * Adjust inventory within an existing transaction.
+ * Creates an append-only ledger entry and updates denormalized quantity.
+ * Exported for use in webhook handlers and order management where
+ * the caller owns the transaction.
+ */
+export async function adjustInventoryInTx(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   input: {
     tenantId: string;

@@ -499,6 +499,7 @@ const PAGE_TO_PREVIEW_ROUTE: Record<PageId, string> = {
   login: "/login",
   "help-center": "/p/[token]/help-center",
   support: "/p/[token]/support",
+  product: "/preview/product",
 };
 
 /**

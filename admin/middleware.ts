@@ -7,6 +7,12 @@ import { getCachedLocalePublished, setCachedLocalePublished } from '@/app/_lib/t
 const isPublicRoute = createRouteMatcher([
   '/',
   '/p/(.*)',
+  '/shop/(.*)',
+  '/stays(.*)',
+  '/checkout(.*)',
+  '/api/checkout/(.*)',
+  '/api/availability(.*)',
+  '/api/bookings/(.*)',
   '/check-in(.*)',
   '/check-out(.*)',
   '/preview/(.*)',
@@ -249,6 +255,8 @@ export const config = {
     '/(api(?!/webhooks))(.*)',
     // Guest portal paths — needed for locale detection
     '/p/(.*)',
+    '/shop/(.*)',
+    '/stays(.*)',
     '/check-in(.*)',
     '/check-out(.*)',
     '/login(.*)',

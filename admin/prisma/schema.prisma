@@ -18,6 +18,28 @@ enum BookingStatus {
   CANCELLED
 }
 
+enum OrderStatus {
+  PENDING       // checkout started, payment not yet received
+  PAID          // payment confirmed via webhook
+  FULFILLED     // tenant marked as fulfilled
+  CANCELLED     // cancelled before or after payment
+  REFUNDED      // full refund issued
+}
+
+enum OrderEventType {
+  CREATED
+  PAID
+  FULFILLED
+  CANCELLED
+  REFUNDED
+  NOTE_ADDED
+  EMAIL_SENT
+  INVENTORY_RESERVED
+  INVENTORY_CONSUMED
+  INVENTORY_RELEASED
+  STRIPE_WEBHOOK_RECEIVED
+}
+
 // ============================================================================
 // TENANT & BOOKINGS (Organizations-based)
 // ============================================================================
@@ -92,6 +114,12 @@ model Tenant {
   earlyCheckinEnabled   Boolean @default(false)
   earlyCheckinDays      Int     @default(0)
 
+  // Stripe Connect — each tenant connects their OWN Stripe account
+  stripeAccountId          String?   // acct_xxx — connected Stripe account ID
+  stripeOnboardingComplete Boolean   @default(false)
+  stripeLivemode           Boolean   @default(false)
+  stripeConnectedAt        DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -112,6 +140,7 @@ model Tenant {
   guestAccounts      GuestAccount[]
   products           Product[]
   productCollections ProductCollection[]
+  orders             Order[]
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -469,6 +498,7 @@ enum EmailEventType {
   MAGIC_LINK
   SUPPORT_REPLY
   GUEST_OTP
+  ORDER_CONFIRMED
 }
 
 enum TranslationNamespace {
@@ -707,6 +737,11 @@ enum ProductStatus {
   ARCHIVED
 }
 
+enum ProductType {
+  STANDARD
+  PMS_ACCOMMODATION
+}
+
 enum InventoryChangeReason {
   PURCHASE
   MANUAL_ADJUSTMENT
@@ -748,6 +783,15 @@ model Product {
   slug        String               // URL-safe, auto-generated from title
 
   status      ProductStatus @default(DRAFT)
+  productType ProductType   @default(STANDARD)
+
+  // ── PMS link (only for PMS_ACCOMMODATION) ──────────────────
+  pmsSourceId         String?          // external ID from PMS (e.g. Mews serviceId)
+  pmsProvider         String?          // "mews" | "apaleo" | "fake"
+  pmsSyncedAt         DateTime?        // last time PMS data was pulled
+  pmsData             Json?            // raw PMS snapshot — for debugging, never rendered
+  titleOverride       String?          // tenant-set title, overrides PMS name
+  descriptionOverride String?          // tenant-set description
 
   // ── Pricing ────────────────────────────────────────────────
   /// Base price in smallest currency unit (ören). Used when no variants exist.
@@ -795,10 +839,13 @@ model Product {
   priceChanges PriceChange[]
 
   @@unique([tenantId, slug])
+  @@unique([tenantId, pmsSourceId, pmsProvider])
   @@index([tenantId])
   @@index([tenantId, status])
+  @@index([tenantId, productType])
   @@index([tenantId, sortOrder])
   @@index([tenantId, archivedAt])
+  @@index([tenantId, pmsProvider, pmsSourceId])
 }
 
 /// Product media — images and videos attached to a product.
@@ -944,6 +991,18 @@ model ProductCollection {
   status      ProductStatus @default(DRAFT)
 
   sortOrder   Int       @default(0)
+
+  /// When true: collection appears in search form "Boendetyp" dropdown
+  /// and acts as accommodation category filter for PMS availability search.
+  isAccommodationType Boolean @default(false)
+
+  /// ID of another ProductCollection whose STANDARD products are offered
+  /// as add-on products when booking accommodations from this collection.
+  /// Only meaningful when isAccommodationType = true.
+  addonCollectionId   String?
+
+  /// Optimistic locking — incremented on every update
+  version     Int       @default(1)
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -1135,4 +1194,107 @@ model InventoryReservation {
   @@index([tenantId, variantId])
   @@index([expiresAt])
   @@index([sessionId])
+}
+
+// ============================================================================
+// ORDERS (Commerce — Shopify-grade order management)
+// ============================================================================
+
+model Order {
+  id                      String      @id @default(cuid())
+  tenantId                String
+  tenant                  Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Sequential per tenant — human-friendly order number (e.g. #1001)
+  orderNumber             Int
+
+  status                  OrderStatus @default(PENDING)
+
+  // Guest info — denormalized for fast display
+  guestEmail              String
+  guestName               String
+  guestPhone              String?
+
+  // Money — always integer (ören/cents), never float
+  subtotalAmount          Int           // before tax
+  taxAmount               Int           @default(0)
+  totalAmount             Int           // what guest paid
+  currency                String        @default("SEK")
+
+  // Stripe references
+  stripeCheckoutSessionId String?       @unique
+  stripePaymentIntentId   String?       @unique
+
+  // Timestamps
+  paidAt                  DateTime?
+  fulfilledAt             DateTime?
+  cancelledAt             DateTime?
+  refundedAt              DateTime?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  // Relations
+  lineItems               OrderLineItem[]
+  events                  OrderEvent[]
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@index([guestEmail])
+}
+
+model OrderLineItem {
+  id            String   @id @default(cuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId     String
+  variantId     String?
+
+  // Snapshot — frozen at purchase time — NEVER join back to Product
+  title         String   // product title at purchase time
+  variantTitle  String?  // variant label at purchase time
+  sku           String?
+  imageUrl      String?
+
+  quantity      Int
+  unitAmount    Int      // price per unit in ören/cents
+  totalAmount   Int      // quantity * unitAmount
+  currency      String   @default("SEK")
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model OrderEvent {
+  id          String          @id @default(cuid())
+  orderId     String
+  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  type        OrderEventType
+  message     String?
+  metadata    Json            @default("{}")
+  actorUserId String?         // Clerk userId or null for system events
+  createdAt   DateTime        @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+/// Stripe webhook event deduplication — prevents double-processing.
+/// Uses unique constraint on stripeEventId as atomic idempotency gate.
+model StripeWebhookEvent {
+  stripeEventId  String   @id   // evt_xxx — Stripe's unique event ID
+  processedAt    DateTime @default(now())
+  tenantId       String
+  eventType      String
+
+  @@index([tenantId])
+}
+
+/// Atomic counter for sequential order numbers per tenant.
+/// Uses UPDATE ... RETURNING pattern for race-safe increment.
+model OrderNumberSequence {
+  tenantId    String   @id
+  lastNumber  Int      @default(1000)
+  updatedAt   DateTime @updatedAt
 }

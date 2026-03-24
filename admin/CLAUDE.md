@@ -34,10 +34,10 @@ pages or layouts. Everything is platform-defined and architecturally constrained
 - PMS integration for real-time availability + rates (adapter pattern DONE, Mews TODO)
 - Search container with morphing panels — locked section (DONE)
 - Layout settings (max-width, desktop padding) (DONE)
-- Product catalog (accommodation categories, rate plans, add-ons)
+- Product catalog with collections (DONE — full CRUD, variants, inventory, pricing)
 - Product templates (category detail pages)
 - Theme templates (full-page theme presets)
-- Checkout flow (guest info → payment → confirmation)
+- **Stripe + cart + checkout (NEXT — see "Commerce engine" section below)**
 - Order management (bookings, cancellations, modifications)
 - Analytics dashboard (revenue, occupancy, conversion rates)
 - Email notifications (booking confirmed, payment received, etc.)
@@ -853,6 +853,292 @@ blocks publish success.
 9. Swedish (sv) is always primary — cannot be removed or unpublished
 10. Atomic locale deletion — locale + all translations in one transaction
 11. configChannel has no React dependencies — pure module-level pub/sub
+
+---
+
+## Product catalog — complete data model
+
+Shopify-grade product infrastructure. Full CRUD with variants, options,
+inventory tracking, price history, collections, and tags. All operations
+are tenant-scoped and admin-gated.
+
+### Product model
+
+Product is the core catalog entity. Fields:
+
+  title, slug (auto-generated, unique per tenant, Swedish-normalized)
+  description (max 10000), status (ACTIVE/DRAFT/ARCHIVED)
+  price (base, in smallest currency unit — ören for SEK, e.g. 12900 = 129 kr)
+  currency (default "SEK"), compareAtPrice (strikethrough price, must be > price)
+  taxable (boolean), trackInventory, inventoryQuantity, continueSellingWhenOutOfStock
+  version (optimistic locking — every update increments, rejects stale writes)
+  sortOrder, archivedAt (soft delete timestamp)
+
+### Product media
+
+ProductMedia — images and videos attached to a product.
+Fields: url, type (image|video), alt, filename, width, height, sortOrder.
+DnD reordering via MediaLibrary component.
+
+### Options and variants (Shopify model)
+
+ProductOption — axis of variation (e.g. "Tid", "Storlek", "Typ").
+  name + values (JSON array). Max 3 options per product, max 100 values each.
+
+ProductVariant — specific combination of option values.
+  option1/option2/option3 (positional, nullable), imageUrl, price (override),
+  compareAtPrice, sku, trackInventory, inventoryQuantity,
+  continueSellingWhenOutOfStock, version, sortOrder.
+
+**Price resolution:** variant.price > 0 → use variant price, else inherit product.price.
+`effectivePrice(productPrice, variantPrice)` is the ONLY entry point.
+`formatPriceDisplay()` handles currency formatting (12900 → "129" for SEK).
+
+### Collections (produktserier)
+
+ProductCollection — groups of products with many-to-many relationship.
+Fields: title, slug, description, imageUrl, status (ACTIVE/DRAFT), version, sortOrder.
+
+ProductCollectionItem — join table with sortOrder per membership.
+A product can belong to multiple collections. Each membership has independent sort order.
+DnD reordering in admin UI.
+
+### Tags
+
+ProductTag — global tag registry per tenant (normalized lowercase).
+ProductTagItem — many-to-many join. Tags are searchable, filterable.
+
+### Inventory system
+
+Optional per product OR per variant (when variants exist).
+
+**Append-only ledger:** InventoryChange tracks every quantity change.
+  quantityDelta (signed), quantityAfter (denormalized), reason, note, actorUserId.
+
+  Reasons: PURCHASE, MANUAL_ADJUSTMENT, RETURN, RESERVATION,
+           RESERVATION_RELEASED, INITIAL.
+
+Reservation flow: reserve() → purchase (consume stock) or expire (release stock).
+continueSellingWhenOutOfStock allows overselling when stock = 0.
+
+### Price audit trail
+
+**Append-only ledger:** PriceChange tracks every price modification.
+  previousPrice, newPrice, currency, actorUserId, createdAt.
+
+### Enterprise features
+
+1. **Optimistic locking** — Product.version, Collection.version, Variant.version.
+   updateProduct rejects with code "VERSION_CONFLICT" if expectedVersion mismatches.
+2. **Slug uniqueness** — [tenantId, slug] constraint. Auto-generated from title
+   with Swedish normalization (å→a, ä→a, ö→o). Collision resolution with suffix.
+3. **Soft delete** — ARCHIVED status + archivedAt. Hidden from storefront, data preserved.
+   restoreProduct() to unarchive.
+4. **Variant validation** — every variant must have values for all options. No duplicates.
+
+### Guest-facing product rendering (current state)
+
+Products displayed via section renderers — NOT individual product pages:
+  CollectionGridRenderer — 2-column CSS grid, configurable aspect ratio
+  ProductHeroRenderer — full-width image + heading + text + buttons
+  ProductHeroSplitRenderer — split layout
+  CollectionGridV2Renderer — newer variant
+
+**Currently display-only.** No variant selection UI, no "add to cart" button.
+Products are manually curated into sections by admins via the visual editor.
+
+### Key files
+
+- Types + validation: `app/_lib/products/types.ts`
+- Server actions: `app/_lib/products/actions.ts`
+- Inventory logic: `app/_lib/products/inventory.ts`
+- Pricing logic: `app/_lib/products/pricing.ts`
+- Admin UI: `app/(admin)/products/`, `app/(admin)/collections/`
+- Guest renderers: `app/(guest)/_components/sections/renderers/`
+
+---
+
+## Commerce engine — Stripe, cart, checkout, orders (NEXT MILESTONE)
+
+This section documents the full commerce stack we are building. The mental
+model is always: **"What would Shopify do?"**
+
+### Scope
+
+Connect the existing product catalog to a complete purchase flow:
+  Product page → Add to cart → Cart → Checkout → Payment → Order → Analytics
+
+### What exists today
+
+- Product catalog: full CRUD, variants, options, inventory, pricing ✅
+- Collections: many-to-many grouping with sort order ✅
+- Inventory ledger: append-only with reservation flow ✅
+- Price history: append-only audit trail ✅
+- Guest renderers: display-only product cards/heroes ✅
+
+### What needs to be built
+
+#### 1. Stripe integration (payment processing)
+
+Shopify model: each tenant connects their own Stripe account.
+
+  **Stripe Connect (Standard)** — tenants onboard their own Stripe account.
+  Platform takes no cut (or configurable application fee later).
+
+  Per tenant:
+    stripeAccountId — connected Stripe account ID (acct_xxx)
+    stripeOnboardingComplete — boolean
+    stripeLivemode — boolean (test vs live)
+
+  Payment methods: Stripe Checkout Session or Payment Intents.
+  Webhooks: checkout.session.completed, payment_intent.succeeded/failed,
+            charge.refunded, charge.dispute.created.
+
+  **Stripe product sync is NOT needed.** Products live in our DB.
+  Stripe is payment-only — we create Checkout Sessions / Payment Intents
+  with line items from our product catalog.
+
+#### 2. Cart (client-side + server-validated)
+
+Shopify model: cart is a lightweight object, server-validated at checkout.
+
+  Cart stored client-side (localStorage or cookie), validated server-side
+  before checkout. Cart is NOT a DB model — it's ephemeral until checkout.
+
+  CartItem shape:
+    productId, variantId (nullable if no variants), quantity,
+    price (snapshot at add time — re-validated at checkout)
+
+  Cart operations:
+    addToCart, removeFromCart, updateQuantity, clearCart
+    validateCart (server) — checks stock, price freshness, product status
+
+  Cart UI:
+    Slide-out drawer (Shopify-style) or dedicated cart page
+    Line items with thumbnail, title, variant info, quantity, price
+    Subtotal, taxes, total
+
+#### 3. Checkout flow
+
+Shopify model: collect info → review → pay → confirm.
+
+  Step 1: Guest info (name, email, phone — link to GuestData type from PMS)
+  Step 2: Review order (line items, totals, policies)
+  Step 3: Payment (Stripe Checkout Session redirect OR embedded Payment Element)
+  Step 4: Confirmation page (order summary, confirmation number, email sent)
+
+  Checkout creates an Order record BEFORE payment (status: PENDING).
+  Stripe webhook updates order to PAID on success, FAILED on failure.
+
+  **Inventory reservation at checkout start:**
+    reserve() → creates InventoryChange with reason RESERVATION
+    On payment success → consume (PURCHASE)
+    On timeout/failure → release (RESERVATION_RELEASED)
+    Reservation TTL: ~15 minutes (configurable per tenant)
+
+#### 4. Order model (new Prisma models needed)
+
+  **Order** — the purchase record
+    id, tenantId, orderNumber (sequential, tenant-scoped, e.g. #1001)
+    status: PENDING → PAID → FULFILLED → CANCELLED → REFUNDED
+    email, guestName, guestPhone (denormalized for fast display)
+    subtotal, taxTotal, total, currency
+    stripePaymentIntentId, stripeCheckoutSessionId
+    paidAt, fulfilledAt, cancelledAt, refundedAt
+    metadata (JSON — extensible)
+    createdAt, updatedAt
+
+  **OrderLineItem** — each product/variant in the order
+    id, orderId, productId, variantId (nullable)
+    title (snapshot), variantTitle (snapshot), sku (snapshot)
+    quantity, unitPrice, totalPrice, currency
+    imageUrl (snapshot)
+
+  **OrderEvent** — append-only audit log (Shopify timeline model)
+    id, orderId, type (CREATED, PAID, FULFILLED, CANCELLED, REFUNDED,
+                       NOTE_ADDED, EMAIL_SENT, INVENTORY_RESERVED,
+                       INVENTORY_CONSUMED, INVENTORY_RELEASED)
+    message, metadata (JSON), actorUserId, createdAt
+
+  **Key principle: snapshot product data on OrderLineItem.**
+  Product title, price, image at time of purchase are frozen on the line item.
+  If the product is later edited or deleted, the order record is unaffected.
+  This is how Shopify does it — orders are immutable purchase receipts.
+
+#### 5. Product detail pages
+
+  Individual product pages for variant selection and add-to-cart.
+  URL: /{tenantSlug}/products/{productSlug}
+
+  Shows: title, description, media gallery, option selectors (dropdowns/swatches),
+  variant price, inventory status, add-to-cart button.
+
+  Collection pages: /{tenantSlug}/collections/{collectionSlug}
+  Grid of products in the collection with links to product detail pages.
+
+#### 6. Analytics and reporting
+
+Shopify model: sales dashboard with product-level breakdowns.
+
+  **Per-product metrics:**
+    Total revenue, total units sold, total orders containing product
+    Revenue by variant, units by variant
+    Average order value for orders containing product
+    Conversion rate (views → add-to-cart → purchase)
+
+  **Per-collection metrics:**
+    Total revenue from products in collection
+    Best/worst performing products in collection
+
+  **Global metrics:**
+    Total revenue (by day/week/month), total orders, average order value
+    Top products by revenue, top products by units sold
+    Orders by status (pending, paid, fulfilled, cancelled, refunded)
+
+  **Implementation:** Query OrderLineItem joined with Product/Variant.
+  No separate analytics tables needed initially — aggregate from orders.
+  Add materialized views or summary tables when scale demands it.
+
+#### 7. Email notifications (order lifecycle)
+
+  order_confirmed — sent immediately after payment succeeds
+  order_fulfilled — sent when tenant marks order as fulfilled
+  order_cancelled — sent on cancellation
+  order_refunded — sent on refund
+  shipping_notification — optional, if physical goods
+
+  Uses existing Resend infrastructure + email template system.
+
+### Architectural decisions
+
+1. **Stripe is payment-only** — no product sync to Stripe. Our DB is the
+   source of truth for products, prices, and inventory.
+2. **Cart is client-side** — no Cart DB model. Server validates at checkout.
+3. **Orders snapshot product data** — line items freeze title, price, image.
+   Orders are immutable receipts.
+4. **Inventory reserved at checkout, consumed on payment.** Reservation has
+   a TTL. Uses existing InventoryChange ledger with RESERVATION/PURCHASE reasons.
+5. **Sequential order numbers per tenant** — human-friendly (#1001, #1002).
+   Use DB sequence or atomic counter, NOT UUID for display.
+6. **Webhook-driven payment status** — never poll Stripe. Webhook updates
+   order status. Idempotent via stripePaymentIntentId.
+7. **Multi-tenant Stripe Connect** — each tenant has their own Stripe account.
+   Platform creates Checkout Sessions on behalf of connected account.
+8. **Analytics from order data** — no separate analytics pipeline initially.
+   Query orders + line items with date filters and aggregations.
+
+### Commerce invariants — never violate these
+
+1. Product prices in smallest currency unit (ören/cents) — never floats
+2. effectivePrice() is the ONLY price resolution function
+3. Order line items snapshot all product data at purchase time
+4. Inventory changes are append-only — never UPDATE, always INSERT
+5. Stripe webhooks are idempotent — check order status before transitioning
+6. Cart validated server-side before creating checkout — never trust client prices
+7. Order numbers are sequential per tenant — never gaps in production
+8. All payment operations tenant-scoped via Stripe Connect
+9. No Stripe secret keys in client code — server actions only
+10. Reservation TTL enforced — unreleased reservations auto-expire
 
 ---
 

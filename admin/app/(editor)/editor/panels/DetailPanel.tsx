@@ -382,11 +382,7 @@ export function DetailPanel() {
 
       {/* ── Body ── */}
       <div className="dp-body">
-        {/* Schedule badge — shown when item is scheduled */}
-        <ScheduleBadge
-          scheduledShow={(resolved.values.scheduledShow as string) ?? undefined}
-          scheduledHide={(resolved.values.scheduledHide as string) ?? undefined}
-        />
+        {/* Schedule badge — disabled */}
 
         {hasSettings && (
           <SettingsForm
@@ -434,14 +430,7 @@ export function DetailPanel() {
           />
         )}
 
-        {/* Accordion: Schemalägg — hidden when editableFields is set and doesn't include scheduling */}
-        {(!resolved._editableFields || resolved._editableFields.has("scheduledShow")) && (
-          <ScheduleAccordion
-            scheduledShow={(resolved.values.scheduledShow as string) ?? undefined}
-            scheduledHide={(resolved.values.scheduledHide as string) ?? undefined}
-            onChange={handleChange}
-          />
-        )}
+        {/* Schedule accordion — disabled */}
 
         {/* Content tree removed — direct navigation to element panels */}
       </div>
@@ -1100,7 +1089,7 @@ function HeaderDetailPanel({
         {/* Menu */}
         <span className="sf-group-label">Meny</span>
         <div>
-          <span className="sf-label" style={{ display: "block", marginBottom: 6 }}>Position</span>
+          <span className="sf-label" style={{ display: "block", marginBottom: 6 }}>Position (mobil)</span>
           <SegmentedControl
             options={[
               { value: "left", label: "Vänster" },

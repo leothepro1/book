@@ -237,6 +237,40 @@ export const PaymentStatusSchema = z.object({
 
 export type PaymentStatus = z.infer<typeof PaymentStatusSchema>;
 
+// ── Booking Creation ────────────────────────────────────────
+
+export const CreateBookingParamsSchema = z.object({
+  categoryId: z.string(),
+  ratePlanId: z.string(),
+  checkIn: z.string(),
+  checkOut: z.string(),
+  guests: z.number().int().min(1),
+  guestInfo: z.object({
+    firstName: z.string().min(1),
+    lastName: z.string().min(1),
+    email: z.string().email(),
+    phone: z.string().nullable().optional(),
+  }),
+  addons: z.array(z.object({
+    addonId: z.string(),
+    quantity: z.number().int().min(1),
+  })).default([]),
+  specialRequests: z.string().optional(),
+});
+
+export type CreateBookingParams = z.infer<typeof CreateBookingParamsSchema>;
+
+export const BookingConfirmationSchema = z.object({
+  externalId: z.string(),
+  confirmationNumber: z.string(),
+  status: z.enum(["CONFIRMED", "PENDING_PAYMENT", "WAITLISTED"]),
+  totalAmount: z.number(),
+  currency: z.string(),
+  cancellationDeadline: z.string().nullable().optional(),
+});
+
+export type BookingConfirmation = z.infer<typeof BookingConfirmationSchema>;
+
 // ── Sync Event Types (kept for webhook/cron infra) ──────────
 
 export const SyncEventTypeSchema = z.enum([

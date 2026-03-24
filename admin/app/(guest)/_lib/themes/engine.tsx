@@ -102,13 +102,40 @@ export async function ThemeRenderer({
   const manifest = resolvedManifest;
 
   const template = manifest.templates[templateKey];
+  // No theme template — render page sections only (no theme slots)
   if (!template) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn(
-        `[ThemeEngine] No template "${templateKey}" in theme "${manifest.id}". Rendering empty.`,
-      );
+    await ensureSectionsRegistered();
+    const pageSections = getPageSections(config, templateKey);
+    console.log(`[ThemeEngine] No template for "${templateKey}", rendering ${pageSections.length} page sections. Config pages: ${Object.keys(config.pages || {}).join(",")}`);
+    if (pageSections.length > 0) {
+      console.log(`[ThemeEngine] First section: ${pageSections[0].definitionId} active=${pageSections[0].isActive}`);
     }
-    return null;
+    const pageItems = resolvePageItems([], pageSections, config);
+    console.log(`[ThemeEngine] Resolved ${pageItems.length} page items for "${templateKey}"`);
+    if (pageItems.length === 0) {
+      console.log(`[ThemeEngine] WARNING: 0 page items, returning null for "${templateKey}"`);
+      return null;
+    }
+    return (
+      <MapsProvider maps={config.maps ?? []}>
+      <MenusProvider menus={config.menus ?? []}>
+      <SpecialLinkProvider maps={config.maps ?? []}>
+      <div style={{ padding: `${DEFAULT_PAGE_PADDING}px ${DEFAULT_PAGE_PADDING}px 124px ${DEFAULT_PAGE_PADDING}px` }}>
+        {pageItems.map((item) => {
+          if (item.kind === "section") {
+            return (
+              <SectionErrorBoundary key={item.renderProps.section.id} sectionId={item.renderProps.section.id} sectionType={item.renderProps.definition.id}>
+                <SectionItem renderProps={item.renderProps} />
+              </SectionErrorBoundary>
+            );
+          }
+          return null;
+        })}
+      </div>
+      </SpecialLinkProvider>
+      </MenusProvider>
+      </MapsProvider>
+    );
   }
 
   // ── Render context (observability) ──────────────────────
@@ -191,7 +218,7 @@ export async function ThemeRenderer({
   const themeRenderedTypes = new Set(
     [...headerSlots, ...templateSlots, ...footerSlots].map((s) => s.type),
   );
-  const pageCards = templateKey === "home" ? (config.home?.cards ?? []) : [];
+  const pageCards: typeof config.home.cards = [];
   const pageSections = getPageSections(config, templateKey);
   const pageItems = resolvePageItems(pageCards, pageSections, config).filter(
     (item) => item.kind !== "section" || !themeRenderedTypes.has(item.renderProps.definition.id),

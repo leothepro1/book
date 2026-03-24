@@ -142,6 +142,15 @@ function SectionListPane() {
   const saveDraft = useDraftUpdate();
   const { openDetail, inspectorHoveredSectionId, currentPageId } = useEditor();
 
+  // Preview product name for product page
+  const [previewProductName, setPreviewProductName] = useState<string | null>(null);
+  useEffect(() => {
+    if (currentPageId !== "product") { setPreviewProductName(null); return; }
+    import("@/app/_lib/products/actions").then(({ getPreviewProductName }) =>
+      getPreviewProductName().then(setPreviewProductName),
+    );
+  }, [currentPageId]);
+
   // Resolve page layout contract and editor mode from current page
   const layout = useMemo(() => getPageLayout(currentPageId), [currentPageId]);
   const editorMode = useMemo(() => getPageDefinition(currentPageId).editorMode, [currentPageId]);
@@ -203,7 +212,12 @@ function SectionListPane() {
 
     // Find all locked definitions that target this page
     const lockedDefs = getAllSectionDefinitions().filter(
-      (d) => d.scope === "locked" && d.lockedTo === currentPageId,
+      (d) => {
+        if (d.scope !== "locked") return false;
+        if (!d.lockedTo) return false;
+        if (Array.isArray(d.lockedTo)) return d.lockedTo.includes(currentPageId);
+        return d.lockedTo === currentPageId;
+      },
     );
     if (lockedDefs.length === 0) {
       hasSeededRef.current = currentPageId;
@@ -512,8 +526,8 @@ function SectionListPane() {
 
   const pickerData = useMemo(() => {
     if (!registryReady) return { items: [], categories: [] };
-    return buildSectionPickerData();
-  }, [registryReady]);
+    return buildSectionPickerData({ pageId: currentPageId });
+  }, [registryReady, currentPageId]);
 
   // ── Standalone element picker (test — allows all element types) ──
 
@@ -741,6 +755,9 @@ function SectionListPane() {
       {/* ── Page header ── */}
       <div className="sp-page-header">
         <span className="sp-page-name">{getPageDefinition(currentPageId).label}</span>
+        {currentPageId === "product" && previewProductName && (
+          <span className="sp-page-subtitle">Förhandsvisar: {previewProductName}</span>
+        )}
       </div>
 
       {/* ── Header section (if layout supports it) ── */}

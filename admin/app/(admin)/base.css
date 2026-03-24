@@ -11,7 +11,7 @@
 :root,
 [data-theme="light"] {
   /* Surface / Background */
-  --admin-bg:            #fafafa;
+  --admin-bg:            #F3F3F4;
   --admin-surface:       #FFFFFF;
   --admin-surface-hover: #f7f7f7;
   --admin-surface-active:#f3f3f3;
@@ -113,7 +113,7 @@
   /* ── Typography scale ── */
   --font-xs:                     12px;
   --font-sm:                     13px;
-  --font-md:                     14px;
+  --font-md:                     13px;
   --font-lg:                     15px;
   --font-xl:                     16px;
   --font-2xl:                    17px;

@@ -24,7 +24,8 @@ export type EmailEventType =
   | "CHECK_OUT_CONFIRMED"
   | "MAGIC_LINK"
   | "SUPPORT_REPLY"
-  | "GUEST_OTP";
+  | "GUEST_OTP"
+  | "ORDER_CONFIRMED";
 
 export interface EmailEventDefinition {
   type: EmailEventType;
@@ -114,6 +115,21 @@ export const EMAIL_EVENT_REGISTRY: readonly EmailEventDefinition[] = [
     variables: ["guestName", "otpCode", "hotelName", "expiresInMinutes"],
     defaultSubject: "Din inloggningskod — {{hotelName}}",
     defaultPreviewText: "Din kod är giltig i {{expiresInMinutes}} minuter.",
+  },
+  {
+    type: "ORDER_CONFIRMED",
+    label: "Orderbekräftelse",
+    description: "Skickas när en betalning genomförts.",
+    variables: [
+      "guestName",
+      "orderNumber",
+      "orderTotal",
+      "currency",
+      "tenantName",
+    ],
+    defaultSubject: "Tack för din beställning #{{orderNumber}}",
+    defaultPreviewText:
+      "Hej {{guestName}}, din beställning #{{orderNumber}} är bekräftad.",
   },
 ] as const;
 

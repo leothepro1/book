@@ -105,54 +105,7 @@ const classic: ThemeManifest = {
   templates: {
     home: {
       name: "Startsida",
-      sections: [
-        {
-          id: "hero",
-          type: "hero",
-          variant: "contained",
-          order: 0,
-          defaults: {},
-          schema: [
-            {
-              key: "heroImageUrl",
-              type: "image",
-              label: "Omslagsbild",
-              description: "Bakgrundsbild för hero-sektionen",
-            },
-          ],
-        },
-        {
-          id: "info-bar",
-          type: "info-bar",
-          variant: "split-cards",
-          order: 1,
-          defaults: { showWeather: true, showBookingStatus: true },
-          schema: [
-            { key: "showBookingStatus", type: "toggle", label: "Visa bokningsstatus", default: true },
-            { key: "showWeather", type: "toggle", label: "Visa väder", default: true },
-          ],
-        },
-        {
-          id: "quick-links",
-          type: "quick-links",
-          variant: "grid",
-          order: 2,
-          defaults: { columns: 3 },
-          schema: [
-            {
-              key: "columns",
-              type: "select",
-              label: "Kolumner",
-              default: 3,
-              options: [
-                { value: "3", label: "3 kolumner" },
-                { value: "4", label: "4 kolumner" },
-                { value: "5", label: "5 kolumner" },
-              ],
-            },
-          ],
-        },
-      ],
+      sections: [],
     },
 
     stays: {

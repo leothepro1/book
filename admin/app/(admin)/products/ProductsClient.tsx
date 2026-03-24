@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { EditorIcon } from "@/app/_components/EditorIcon";
-import { listProducts, archiveProduct } from "@/app/_lib/products";
+import { listProducts, archiveProduct, effectivePrice, formatPriceDisplay } from "@/app/_lib/products";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -13,6 +13,8 @@ type ProductListItem = {
   title: string;
   slug: string;
   status: "ACTIVE" | "DRAFT" | "ARCHIVED";
+  productType: string;
+  pmsProvider: string | null;
   price: number;
   currency: string;
   trackInventory: boolean;
@@ -26,11 +28,7 @@ type ProductListItem = {
 // ── Helpers ──────────────────────────────────────────────────
 
 function formatPrice(amount: number, currency: string): string {
-  const value = amount / 100;
-  if (currency === "SEK") {
-    return new Intl.NumberFormat("sv-SE", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value) + " kr";
-  }
-  return new Intl.NumberFormat("sv-SE", { style: "currency", currency }).format(value);
+  return formatPriceDisplay(amount, currency) + (currency === "SEK" ? " kr" : "");
 }
 
 function statusLabel(status: string): { label: string; className: string } {
@@ -44,7 +42,7 @@ function statusLabel(status: string): { label: string; className: string } {
 
 function getDisplayPrice(p: ProductListItem): string {
   if (p._count.variants > 0 && p.variants.length > 0) {
-    const prices = p.variants.map((v) => v.price);
+    const prices = p.variants.map((v) => effectivePrice(p.price, v.price));
     const min = Math.min(...prices);
     const max = Math.max(...prices);
     if (min === max) return formatPrice(min, p.currency);
@@ -92,6 +90,7 @@ export default function ProductsClient({
   const [showSelectDropdown, setShowSelectDropdown] = useState(false);
   const selectDropdownRef = useRef<HTMLDivElement>(null);
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "DRAFT" | "ARCHIVED">("ALL");
+  const [typeFilter, setTypeFilter] = useState<"ALL" | "STANDARD" | "PMS_ACCOMMODATION">("ALL");
 
   // Load all products once (filter client-side)
   useEffect(() => {
@@ -101,9 +100,11 @@ export default function ProductsClient({
     });
   }, []);
 
-  const filteredProducts = statusFilter === "ALL"
-    ? products
-    : products.filter((p) => p.status === statusFilter);
+  const filteredProducts = products.filter((p) => {
+    if (statusFilter !== "ALL" && p.status !== statusFilter) return false;
+    if (typeFilter !== "ALL" && p.productType !== typeFilter) return false;
+    return true;
+  });
 
   // Wire up add button
   useEffect(() => {
@@ -153,7 +154,9 @@ export default function ProductsClient({
       for (const id of ids) {
         await archiveProduct(id);
       }
-      setProducts((prev) => prev.filter((p) => !selectedIds.has(p.id)));
+      setProducts((prev) => prev.map((p) =>
+        selectedIds.has(p.id) ? { ...p, status: "ARCHIVED" as const } : p,
+      ));
       setSelectedIds(new Set());
       setShowDeleteConfirm(false);
     });
@@ -244,6 +247,12 @@ export default function ProductsClient({
     { key: "ARCHIVED", label: "Arkiverade" },
   ];
 
+  const TYPE_FILTERS: Array<{ key: typeof typeFilter; label: string }> = [
+    { key: "ALL", label: "Alla typer" },
+    { key: "STANDARD", label: "Produkter" },
+    { key: "PMS_ACCOMMODATION", label: "Boenden" },
+  ];
+
   return (
     <>
       <div className="products-filter-bar">
@@ -253,6 +262,17 @@ export default function ProductsClient({
             type="button"
             className={`products-filter-btn${statusFilter === f.key ? " products-filter-btn--active" : ""}`}
             onClick={() => setStatusFilter(f.key)}
+          >
+            {f.label}
+          </button>
+        ))}
+        <span style={{ width: 1, height: 20, background: "var(--admin-border)", margin: "0 var(--space-2)" }} />
+        {TYPE_FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            className={`products-filter-btn${typeFilter === f.key ? " products-filter-btn--active" : ""}`}
+            onClick={() => setTypeFilter(f.key)}
           >
             {f.label}
           </button>
@@ -301,13 +321,13 @@ export default function ProductsClient({
               <span className="products-category">{getCategoryLabel(product)}</span>
             </div>
             <div className="products-col products-col--detail">
-              {(() => {
+              {product.productType !== "PMS_ACCOMMODATION" && (() => {
                 const inv = getInventoryDisplay(product);
-                return <span style={inv.outOfStock ? { color: "#B21321", fontWeight: 500 } : undefined}>{inv.text}</span>;
+                return <span style={inv.outOfStock ? { color: "var(--admin-danger)", fontWeight: 500 } : undefined}>{inv.text}</span>;
               })()}
             </div>
             <div className="products-col products-col--detail products-col--right">
-              {getDisplayPrice(product)}
+              {product.productType !== "PMS_ACCOMMODATION" && getDisplayPrice(product)}
             </div>
           </div>
         );

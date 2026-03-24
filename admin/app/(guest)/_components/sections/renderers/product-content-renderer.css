@@ -1,0 +1,44 @@
+/* Product Content — .s-pcontent namespace */
+
+.s-pcontent {
+  padding: 0;
+}
+
+.s-pcontent__grid {
+  display: grid;
+  grid-template-columns: 65% 35%;
+  gap: clamp(1.5rem, 3vw, 2.5rem);
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .s-pcontent__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.s-pcontent__main {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1rem, 2vw, 1.5rem);
+}
+
+.s-pcontent__sidebar {
+    flex-direction: column;
+    gap: clamp(.75rem, 1.5vw, 1rem);
+    display: flex;
+    position: sticky;
+    top: 1.5rem;
+    background: #fff;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    padding: 24px;
+    border-radius: 12px;
+    overflow: visible;
+}
+
+.s-pcontent__empty {
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--text, #000) 30%, transparent);
+  padding: 2rem 0;
+  text-align: center;
+}

@@ -20,8 +20,10 @@ export default function GuestPageShell({
   config: TenantConfig;
   children: React.ReactNode;
 }) {
-  const cssVars = themeToStyleAttr(config.theme);
-  const bgStyle = backgroundStyle(config.theme.background, config.theme.colors);
+  const cssVars = config.theme ? themeToStyleAttr(config.theme) : {};
+  const bgStyle = config.theme?.background && config.theme?.colors
+    ? backgroundStyle(config.theme.background, config.theme.colors)
+    : {};
   const maxWidth = config.layout?.maxWidth ?? LAYOUT_DEFAULTS.maxWidth;
 
   const shellVars: React.CSSProperties = {

@@ -405,13 +405,18 @@ export const SECTION_PICKER_TABS: PickerTab[] = [
   { key: "elements", label: "Element" },
 ];
 
-export function buildSectionPickerData(): {
+export function buildSectionPickerData(context?: { pageId?: string }): {
   items: PickerItem[];
   categories: PickerCategory[];
 } {
   // Locked sections are auto-seeded by the platform — exclude from the picker
+  // pageScope sections only appear on their designated page
   const defs = getAllSectionDefinitions().filter(
-    (d) => d.scope !== "locked",
+    (d) => {
+      if (d.scope === "locked") return false;
+      if (d.pageScope && d.pageScope !== context?.pageId) return false;
+      return true;
+    },
   );
 
   const sectionItems: PickerItem[] = defs.map((def) => ({

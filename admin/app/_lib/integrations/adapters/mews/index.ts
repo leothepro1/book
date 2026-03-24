@@ -23,6 +23,8 @@ import type {
   GuestData,
   Addon,
   PaymentStatus,
+  CreateBookingParams,
+  BookingConfirmation,
 } from "../../types";
 import type { MewsCredentials } from "./credentials";
 import { MewsClient } from "./client";
@@ -113,6 +115,16 @@ export class MewsAdapter implements PmsAdapter {
   ): Promise<PaymentStatus | null> {
     // TODO: Call Mews bills/getAll for the reservation
     return null;
+  }
+
+  // ── 9. Create Booking ──────────────────────────────────────
+
+  async createBooking(
+    _tenantId: string,
+    _params: CreateBookingParams,
+  ): Promise<BookingConfirmation> {
+    // TODO: Implement Mews reservations/create API call
+    throw new Error("MewsAdapter.createBooking() is not yet implemented.");
   }
 
   // ── 8. Connection & Webhooks ────────────────────────────────

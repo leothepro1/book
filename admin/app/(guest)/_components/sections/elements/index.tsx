@@ -19,6 +19,12 @@ import { VideoElement } from "./VideoElement";
 import { GalleryElement } from "./GalleryElement";
 import { MenuElement } from "./MenuElement";
 import { LogoElement } from "./LogoElement";
+import { ProductTitleElement } from "./ProductTitleElement";
+import { ProductDescriptionElement } from "./ProductDescriptionElement";
+import { ProductHighlightsElement } from "./ProductHighlightsElement";
+import { ProductFeaturesElement } from "./ProductFeaturesElement";
+import { ProductPriceElement } from "./ProductPriceElement";
+import { ProductBookingFormElement } from "./ProductBookingFormElement";
 import { ElementLinkWrapper } from "./ElementLinkWrapper";
 
 const ELEMENT_RENDERERS: Record<string, React.ComponentType<{ resolved: ResolvedElement }>> = {
@@ -35,6 +41,12 @@ const ELEMENT_RENDERERS: Record<string, React.ComponentType<{ resolved: Resolved
   gallery: GalleryElement,
   menu: MenuElement,
   logo: LogoElement,
+  "product-title": ProductTitleElement,
+  "product-description": ProductDescriptionElement,
+  "product-highlights": ProductHighlightsElement,
+  "product-features": ProductFeaturesElement,
+  "product-price": ProductPriceElement,
+  "product-booking-form": ProductBookingFormElement,
 };
 
 export function ElementRenderer({ resolved }: { resolved: ResolvedElement }) {

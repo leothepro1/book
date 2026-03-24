@@ -1,0 +1,112 @@
+/* Collection Page — .cp namespace */
+
+.cp {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: clamp(1rem, 3vw, 2.5rem) clamp(1rem, 4vw, 2rem);
+}
+
+.cp__header {
+  margin-bottom: clamp(1.5rem, 3vw, 2.5rem);
+}
+
+.cp__title {
+  font-family: var(--font-heading, inherit);
+  font-size: clamp(1.5rem, 1.25rem + 1vw, 2.25rem);
+  font-weight: 600;
+  color: var(--text, #1a1a1a);
+  margin: 0 0 0.5rem;
+}
+
+.cp__description {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--text, #000) 65%, transparent);
+  margin: 0;
+  max-width: 60ch;
+}
+
+/* ── Product grid ──────────────────────────────────── */
+
+.cp__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(1rem, 2vw, 1.5rem);
+}
+
+@media (min-width: 480px) {
+  .cp__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 768px) {
+  .cp__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ── Product card ──────────────────────────────────── */
+
+.cp__card {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.cp__card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--text, #000) 8%, transparent);
+}
+
+.cp__card-image {
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text, #000) 4%, var(--background, #fff));
+  border-radius: 12px;
+}
+
+.cp__card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s;
+}
+
+.cp__card:hover .cp__card-image img {
+  transform: scale(1.03);
+}
+
+.cp__card-placeholder {
+  width: 100%;
+  height: 100%;
+  background: color-mix(in srgb, var(--text, #000) 6%, var(--background, #fff));
+}
+
+.cp__card-info {
+  padding: 0.75rem 0.25rem;
+}
+
+.cp__card-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text, #1a1a1a);
+  margin: 0 0 0.25rem;
+}
+
+.cp__card-price {
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--text, #000) 60%, transparent);
+}
+
+/* ── Empty state ───────────────────────────────────── */
+
+.cp__empty {
+  text-align: center;
+  padding: 3rem 0;
+  font-size: 0.9375rem;
+  color: color-mix(in srgb, var(--text, #000) 50%, transparent);
+}

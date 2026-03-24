@@ -40,6 +40,10 @@ import { ProductHeroRenderer } from "./renderers/ProductHeroRenderer";
 import { ProductHeroSplitRenderer } from "./renderers/ProductHeroSplitRenderer";
 import { TextBlocksRenderer } from "./renderers/TextBlocksRenderer";
 import { SearchDefaultRenderer } from "./renderers/SearchRenderer";
+import { ProductGalleryDefaultRenderer } from "./renderers/ProductGalleryRenderer";
+import { ProductContentDefaultRenderer } from "./renderers/ProductContentRenderer";
+import { SearchResultsDefaultRenderer } from "./renderers/SearchResultsRenderer";
+import { PurchaseBlockDefaultRenderer } from "./renderers/PurchaseBlockRenderer";
 
 const RENDERER_MAP: Record<string, React.ComponentType<SectionRendererProps>> = {
   "tabs/underline": TabsUnderlineRenderer,
@@ -60,6 +64,10 @@ const RENDERER_MAP: Record<string, React.ComponentType<SectionRendererProps>> = 
   "product-hero-split/default": ProductHeroSplitRenderer,
   "text-blocks/default": TextBlocksRenderer,
   "search/default": SearchDefaultRenderer,
+  "product-gallery/default": ProductGalleryDefaultRenderer,
+  "product-content/default": ProductContentDefaultRenderer,
+  "search-results/default": SearchResultsDefaultRenderer,
+  "purchase-block/default": PurchaseBlockDefaultRenderer,
 };
 
 /**

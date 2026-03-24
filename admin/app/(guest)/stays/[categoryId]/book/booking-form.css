@@ -1,0 +1,163 @@
+/* Booking Form — .bf namespace */
+
+.bf {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: clamp(1.5rem, 4vw, 3rem) clamp(1rem, 4vw, 2rem);
+}
+
+.bf__layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .bf__layout { grid-template-columns: 1fr; }
+}
+
+.bf__main { display: flex; flex-direction: column; }
+
+.bf__heading {
+  font-size: clamp(1.25rem, 1rem + 0.5vw, 1.5rem);
+  font-weight: 600;
+  color: var(--text, #1a1a1a);
+  margin: 0 0 1.5rem;
+}
+
+.bf__subheading {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text, #1a1a1a);
+  margin: 0 0 0.5rem;
+}
+
+/* ── Form fields ───────────────────────────────────── */
+
+.bf__form { display: flex; flex-direction: column; gap: 1rem; }
+.bf__row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 480px) { .bf__row { grid-template-columns: 1fr; } }
+
+.bf__field { display: flex; flex-direction: column; gap: 0.25rem; }
+
+.bf__label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--text, #000) 55%, transparent);
+}
+
+.bf__input, .bf__textarea {
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1.5px solid color-mix(in srgb, var(--text, #000) 15%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text, #1a1a1a);
+  font-family: inherit;
+}
+
+.bf__input:focus, .bf__textarea:focus {
+  outline: none;
+  border-color: var(--text, #1a1a1a);
+}
+
+.bf__textarea { resize: vertical; }
+
+.bf__btn {
+  padding: 0.875rem 2rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  background: var(--button-bg, #1a1a1a);
+  color: var(--button-fg, #fff);
+  cursor: pointer;
+  transition: opacity 0.15s;
+  margin-top: 0.5rem;
+  align-self: flex-start;
+}
+
+.bf__btn:hover:not(:disabled) { opacity: 0.88; }
+.bf__btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Review step ───────────────────────────────────── */
+
+.bf__review { display: flex; flex-direction: column; gap: 1.5rem; }
+
+.bf__summary-card {
+  border: 1px solid color-mix(in srgb, var(--text, #000) 10%, transparent);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+}
+
+.bf__summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8125rem;
+  color: var(--text, #1a1a1a);
+  padding: 0.25rem 0;
+}
+
+.bf__summary-label {
+  color: color-mix(in srgb, var(--text, #000) 55%, transparent);
+}
+
+.bf__summary-divider {
+  height: 1px;
+  background: color-mix(in srgb, var(--text, #000) 8%, transparent);
+  margin: 0.5rem 0;
+}
+
+.bf__summary-row--total {
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.bf__guest-info {
+  font-size: 0.875rem;
+  color: var(--text, #1a1a1a);
+  line-height: 1.5;
+}
+
+.bf__guest-info p { margin: 0; }
+.bf__requests { color: color-mix(in srgb, var(--text, #000) 55%, transparent); font-style: italic; margin-top: 0.25rem; }
+
+.bf__edit-link {
+  background: none;
+  border: none;
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--text, #000) 55%, transparent);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 0.25rem;
+}
+
+.bf__error {
+  padding: 0.75rem 1rem;
+  background: color-mix(in srgb, #dc2626 6%, transparent);
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 0.8125rem;
+}
+
+/* ── Sidebar ───────────────────────────────────────── */
+
+.bf__sidebar { position: sticky; top: 1.5rem; }
+
+@media (max-width: 768px) { .bf__sidebar { display: none; } }
+
+.bf__sidebar-card {
+  border: 1px solid color-mix(in srgb, var(--text, #000) 10%, transparent);
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bf__sidebar-title { font-size: 0.9375rem; font-weight: 600; color: var(--text, #1a1a1a); }
+.bf__sidebar-dates { font-size: 0.75rem; color: color-mix(in srgb, var(--text, #000) 55%, transparent); }
+.bf__sidebar-divider { height: 1px; background: color-mix(in srgb, var(--text, #000) 8%, transparent); margin: 0.25rem 0; }
+.bf__sidebar-total { display: flex; justify-content: space-between; font-size: 0.9375rem; font-weight: 600; color: var(--text, #1a1a1a); }

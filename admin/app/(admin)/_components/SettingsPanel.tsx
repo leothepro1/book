@@ -10,6 +10,7 @@ import { PoliciesContent } from '@/app/(admin)/settings/policies/PoliciesContent
 import { CheckinContent } from '@/app/(admin)/settings/checkin/CheckinContent';
 import { LanguagesContent } from '@/app/(admin)/settings/languages/LanguagesContent';
 import { EmailContent } from '@/app/(admin)/settings/email/EmailContent';
+import { PaymentsContent } from '@/app/(admin)/settings/payments/PaymentsContent';
 import { useRole } from './RoleContext';
 import { useNavigationGuard } from './NavigationGuard';
 
@@ -39,6 +40,7 @@ const NAV_ITEMS: { items: SettingsNavItem[]; divider?: boolean }[] = [
       { id: 'organization', label: 'Organisation', icon: 'corporate_fare', adminOnly: true },
       { id: 'users', label: 'Användare', icon: 'face', adminOnly: true },
       { id: 'billing', label: 'Fakturering', icon: 'contract', adminOnly: true },
+      { id: 'payments', label: 'Betalningar', icon: 'payments', adminOnly: true },
     ],
     divider: true,
   },
@@ -281,6 +283,8 @@ export function SettingsPanel() {
                 <LanguagesContent key={resetKey} onSubTitleChange={setSubTitle} triggerAdd={addLanguageTrigger} />
               ) : activeItem === 'email' ? (
                 <EmailContent key={resetKey} onSubTitleChange={setSubTitleWithFresh} onHeaderExtraChange={setHeaderExtra} />
+              ) : activeItem === 'payments' ? (
+                <PaymentsContent key={resetKey} onSubTitleChange={setSubTitle} />
               ) : activeItem === 'checkin-checkout' ? (
                 <CheckinContent key={resetKey} onSubTitleChange={setSubTitle} onHeaderExtraChange={setHeaderExtra} onNavigate={(tab) => { setActiveTab(tab); setSubTitle(null); setResetKey((k) => k + 1); }} />
               ) : (

@@ -137,8 +137,8 @@
 }
 
 .pf-card-title {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 550;
   color: var(--admin-text);
 }
 
@@ -643,18 +643,19 @@
 }
 
 .pf-option-list__footer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border: 1px solid var(--admin-border);
-  border-top: 1px solid var(--admin-border);
-  border-radius: 0 0 8px 8px;
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--admin-text-secondary);
-  font-family: var(--admin-font);
-  transition: background var(--duration-fast);
+    border: 1px solid var(--admin-border);
+    border-top: 1px solid var(--admin-border);
+    cursor: pointer;
+    color: var(--admin-text-secondary);
+    font-size: 13px;
+    font-family: var(--admin-font);
+    transition: background var(--duration-fast);
+    border-radius: 0 0 8px 8px;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    display: flex;
+    font-weight: 500;
 }
 
 .pf-option-list__footer:hover {
@@ -958,6 +959,42 @@
   font-size: 12px;
   color: var(--admin-text-tertiary);
   pointer-events: none;
+}
+
+/* ── Error banner ── */
+
+.pf-error-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  margin: 0 var(--space-4) var(--space-2);
+  max-width: 1000px;
+  background: var(--admin-danger-tint, #fef2f2);
+  color: var(--admin-danger);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  animation: settings-modal-fade-in 0.15s ease;
+}
+
+.pf-error-banner__close {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--admin-danger);
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+
+.pf-error-banner__close:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 /* ── Sticky footer ── */

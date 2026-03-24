@@ -16,12 +16,16 @@
 }
 
 .products-page .admin-content {
-  padding: 0;
-  margin: 0 16px;
-  background: #fff;
-  box-shadow: 0 .3125rem .3125rem -.15625rem #00000008, 0 .1875rem .1875rem -.09375rem #00000005, 0 .125rem .125rem -.0625rem #00000005, 0 .0625rem .0625rem -.03125rem #00000008, 0 .03125rem .03125rem #0000000a, 0 0 0 .0625rem #0000000f;
-  border-radius: .75rem;
-  overflow: visible !important;
+    background: #fff;
+    border-radius: .75rem;
+    overflow:hidden;
+    margin: 0 16px;
+    padding: 0;
+    box-shadow: 0 .3125rem .3125rem -.15625rem #00000008, 0 .1875rem .1875rem -.09375rem #00000005, 0 .125rem .125rem -.0625rem #00000005, 0 .0625rem .0625rem -.03125rem #00000008, 0 .03125rem .03125rem #0000000a, 0 0 0 .0625rem #0000000f;
+    overflow: hidden !important;
+    height: max-content;
+    min-height: auto !important;
+    max-height: max-content;
 }
 
 .products-page {
@@ -106,6 +110,7 @@
 
 .products-row {
   display: flex;
+  overflow:hidden;
   align-items: center;
   gap: 16px;
   padding: 16px 16px;

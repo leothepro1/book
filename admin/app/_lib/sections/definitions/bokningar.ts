@@ -104,7 +104,6 @@ export const bokningarSection: SectionDefinition = {
   tags: ["bokningar", "stays", "bookings"],
   thumbnail: "",
   scope: "locked",
-  lockedTo: "stays",
   editableFields: ["cardLayout", "heading", "description", "layout", "cardShadow", "cardImageUrl", "colorSchemeId", "paddingTop"],
 
   settingsSchema: [

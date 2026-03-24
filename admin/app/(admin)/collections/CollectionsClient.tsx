@@ -11,8 +11,18 @@ type CollectionListItem = {
   title: string;
   slug: string;
   imageUrl: string | null;
+  status: "ACTIVE" | "DRAFT" | "ARCHIVED";
   _count: { items: number };
 };
+
+function statusLabel(status: string): { label: string; className: string } {
+  switch (status) {
+    case "ACTIVE": return { label: "Aktiv", className: "products-status--active" };
+    case "DRAFT": return { label: "Utkast", className: "products-status--draft" };
+    case "ARCHIVED": return { label: "Arkiverad", className: "products-status--archived" };
+    default: return { label: status, className: "" };
+  }
+}
 
 export default function CollectionsClient({
   onAddRef,
@@ -27,6 +37,7 @@ export default function CollectionsClient({
   const [isPending, startTransition] = useTransition();
   const [showSelectDropdown, setShowSelectDropdown] = useState(false);
   const selectDropdownRef = useRef<HTMLDivElement>(null);
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "DRAFT">("ALL");
 
   // Load collections
   useEffect(() => {
@@ -89,6 +100,10 @@ export default function CollectionsClient({
       setShowDeleteConfirm(false);
     });
   }, [selectedIds]);
+
+  const filteredCollections = statusFilter === "ALL"
+    ? collections
+    : collections.filter((c) => c.status === statusFilter);
 
   if (!loaded) return null;
 
@@ -161,16 +176,39 @@ export default function CollectionsClient({
       </button>
       <span className="products-col products-col--thumb" />
       <span className="products-col products-col--name">Produktserie</span>
+      <span className="products-col products-col--detail">Status</span>
       <span className="products-col products-col--detail">Produkter</span>
+      <span className="products-col products-col--detail" />
+      <span className="products-col products-col--detail" />
     </div>
   );
 
+  const FILTERS: Array<{ key: typeof statusFilter; label: string }> = [
+    { key: "ALL", label: "Alla" },
+    { key: "ACTIVE", label: "Aktiva" },
+    { key: "DRAFT", label: "Utkast" },
+  ];
+
   return (
+    <>
+      <div className="products-filter-bar">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            className={`products-filter-btn${statusFilter === f.key ? " products-filter-btn--active" : ""}`}
+            onClick={() => setStatusFilter(f.key)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
     <div className="products-inner">
       {columnHeader}
 
-      {collections.map((col) => {
+      {filteredCollections.map((col) => {
         const checked = selectedIds.has(col.id);
+        const { label: sLabel, className: sClass } = statusLabel(col.status);
 
         return (
           <div
@@ -200,8 +238,13 @@ export default function CollectionsClient({
               <span className="products-row__title">{col.title}</span>
             </div>
             <div className="products-col products-col--detail">
+              <span className={`products-status ${sClass}`}>{sLabel}</span>
+            </div>
+            <div className="products-col products-col--detail">
               {col._count.items} {col._count.items === 1 ? "produkt" : "produkter"}
             </div>
+            <div className="products-col products-col--detail" />
+            <div className="products-col products-col--detail" />
           </div>
         );
       })}
@@ -244,5 +287,6 @@ export default function CollectionsClient({
         document.body,
       )}
     </div>
+    </>
   );
 }

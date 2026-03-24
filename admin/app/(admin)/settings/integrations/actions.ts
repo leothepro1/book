@@ -196,6 +196,19 @@ export async function connectIntegration(
     },
   });
 
+  // Fire-and-forget: auto-sync PMS products on connect
+  // Creates accommodation products + collections automatically
+  import("@/app/_lib/products/pms-sync")
+    .then(({ syncPmsProducts }) =>
+      syncPmsProducts(tenant.tenant.id, validProvider),
+    )
+    .then((r) =>
+      console.log(`[pms-sync] Auto-sync on connect: ${r.created} created, ${r.updated} updated, ${r.errors.length} errors`),
+    )
+    .catch((err) =>
+      console.error("[pms-sync] Auto-sync on connect failed:", err),
+    );
+
   return { ok: true };
 }
 

@@ -38,6 +38,10 @@ const envSchema = z.object({
   ACCESS_PASS_PEPPER: z.string().optional(),
   MEDIA_CLEANUP_SECRET: z.string().optional(),
 
+  // Stripe — server-only (never NEXT_PUBLIC_)
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+
   /** Clerk org ID for dev mode mock auth. Must NOT be set in production. */
   DEV_ORG_ID: z.string().optional(),
 
@@ -162,6 +166,14 @@ export const env = {
       return "dev_guest_session_secret_placeholder_32";
     }
     return requiredMin("GUEST_SESSION_SECRET", parsed.GUEST_SESSION_SECRET, 32);
+  },
+
+  // Stripe — lazy, throw on first access if missing
+  get STRIPE_SECRET_KEY() {
+    return required("STRIPE_SECRET_KEY", parsed.STRIPE_SECRET_KEY);
+  },
+  get STRIPE_WEBHOOK_SECRET() {
+    return required("STRIPE_WEBHOOK_SECRET", parsed.STRIPE_WEBHOOK_SECRET);
   },
 
   // Truly optional

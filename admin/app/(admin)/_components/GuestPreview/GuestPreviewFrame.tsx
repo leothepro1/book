@@ -25,6 +25,7 @@ const ROUTE_TO_SLUG: Readonly<Record<string, string>> = {
   "/login": "login",
   "/p/[token]/help-center": "help-center",
   "/p/[token]/support": "support",
+  "/preview/product": "product",
 } as const;
 
 // Share URL uses the app's base URL for now. Once tenant context is

@@ -6,6 +6,7 @@ import HelpCenterPage from "../../../(guest)/p/[token]/help-center/page";
 import SupportPage from "../../../(guest)/p/[token]/support/page";
 import CheckInPage from "../../../(guest)/check-in/page";
 import LoginPage from "../../../(guest)/login/page";
+import { ProductPreviewPage } from "./ProductPreviewPage";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,8 @@ export default async function PreviewPage(props: {
       return <CheckInPage />;
     case "login":
       return <LoginPage searchParams={props.searchParams} />;
+    case "product":
+      return <ProductPreviewPage />;
     default:
       return notFound();
   }

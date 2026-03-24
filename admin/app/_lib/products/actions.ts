@@ -16,6 +16,7 @@
  *   8. Tenant-scoped + admin-gated (every operation)
  */
 
+import { z } from "zod";
 import { prisma } from "@/app/_lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
@@ -27,6 +28,8 @@ import {
   UpdateCollectionSchema,
   titleToSlug,
   validateVariantsAgainstOptions,
+  ProductActionError,
+  isPmsProduct,
 } from "./types";
 import type {
   CreateProductInput,
@@ -40,7 +43,7 @@ import type { InventoryChangeReason } from "@prisma/client";
 
 type ActionResult<T = void> =
   | { ok: true; data: T }
-  | { ok: false; error: string; code?: "VERSION_CONFLICT" };
+  | { ok: false; error: string; code?: "VERSION_CONFLICT" | "PMS_PRODUCT_IMMUTABLE_FIELD" | "PMS_PRODUCT_CREATE_FORBIDDEN" };
 
 // ── Slug collision resolution (retry loop + DB constraint) ───
 
@@ -100,6 +103,15 @@ export async function createProduct(
   }
 
   const data = parsed.data;
+
+  // PMS products cannot be created via createProduct()
+  if ((input as Record<string, unknown>).productType === "PMS_ACCOMMODATION") {
+    return {
+      ok: false,
+      error: "PMS-boenden importeras automatiskt från ditt PMS.",
+      code: "PMS_PRODUCT_CREATE_FORBIDDEN",
+    };
+  }
 
   // Validate variants match options
   if (data.variants.length > 0) {
@@ -284,17 +296,48 @@ export async function updateProduct(
 
   const data = parsed.data;
 
-  // Validate variants if both options and variants are being updated
-  if (data.options && data.variants) {
-    const variantError = validateVariantsAgainstOptions(data.options, data.variants);
+  const existing = await prisma.product.findFirst({
+    where: { id: productId, tenantId },
+    select: {
+      id: true, slug: true, title: true, version: true, price: true, currency: true,
+      productType: true,
+      options: { orderBy: { sortOrder: "asc" }, select: { name: true, values: true } },
+    },
+  });
+  if (!existing) return { ok: false, error: "Produkten hittades inte" };
+
+  // PMS products: reject changes to price, variants, options, inventory
+  if (isPmsProduct(existing)) {
+    const immutableFields = ["price", "compareAtPrice", "variants", "options",
+      "trackInventory", "inventoryQuantity", "continueSellingWhenOutOfStock"] as const;
+    for (const field of immutableFields) {
+      if (data[field] !== undefined) {
+        return {
+          ok: false,
+          error: "Pris och lager styrs av ditt PMS och kan inte ändras här.",
+          code: "PMS_PRODUCT_IMMUTABLE_FIELD",
+        };
+      }
+    }
+  }
+
+  // Validate variants against options (use provided options, or fall back to existing)
+  if (data.variants && data.variants.length > 0) {
+    const effectiveOptions = data.options ?? (existing.options.map((o) => ({
+      name: o.name,
+      values: Array.isArray(o.values) ? o.values as string[] : [],
+    })));
+    const variantError = validateVariantsAgainstOptions(effectiveOptions, data.variants);
     if (variantError) return { ok: false, error: variantError };
   }
 
-  const existing = await prisma.product.findFirst({
-    where: { id: productId, tenantId },
-    select: { id: true, slug: true, title: true, version: true, price: true, currency: true },
-  });
-  if (!existing) return { ok: false, error: "Produkten hittades inte" };
+  // Validate compareAtPrice against effective price (provided or existing)
+  if (data.compareAtPrice != null && data.compareAtPrice > 0) {
+    const effectivePrice = data.price ?? existing.price;
+    if (data.compareAtPrice <= effectivePrice) {
+      return { ok: false, error: "Jämförpris måste vara högre än priset" };
+    }
+  }
 
   // Optimistic locking check
   if (data.expectedVersion !== undefined && data.expectedVersion !== existing.version) {
@@ -414,8 +457,15 @@ export async function updateProduct(
         }
       }
 
-      // 5. Replace collections
+      // 5. Replace collections (preserve existing sortOrder within each collection)
       if (data.collectionIds !== undefined) {
+        // Get existing sort positions before deleting
+        const existingItems = await tx.productCollectionItem.findMany({
+          where: { productId },
+          select: { collectionId: true, sortOrder: true },
+        });
+        const existingSortMap = new Map(existingItems.map((i) => [i.collectionId, i.sortOrder]));
+
         await tx.productCollectionItem.deleteMany({ where: { productId } });
         if (data.collectionIds.length > 0) {
           const collections = await tx.productCollection.findMany({
@@ -425,7 +475,10 @@ export async function updateProduct(
           const validIds = new Set(collections.map((c) => c.id));
           const memberships = data.collectionIds
             .filter((id) => validIds.has(id))
-            .map((collectionId) => ({ collectionId, productId, sortOrder: 0 }));
+            .map((collectionId) => ({
+              collectionId, productId,
+              sortOrder: existingSortMap.get(collectionId) ?? 0,
+            }));
           if (memberships.length > 0) {
             await tx.productCollectionItem.createMany({ data: memberships });
           }
@@ -649,7 +702,7 @@ export async function getPriceHistory(
 // ═════════════════════════════════════════════════════════════
 
 export async function createCollection(
-  input: CreateCollectionInput,
+  input: z.input<typeof CreateCollectionSchema>,
 ): Promise<ActionResult<{ id: string; slug: string }>> {
   const auth = await requireAdmin();
   if (!auth.ok) return { ok: false, error: auth.error };
@@ -672,14 +725,23 @@ export async function createCollection(
         data: {
           tenantId, title: data.title, description: data.description,
           slug, imageUrl: data.imageUrl ?? null, status: data.status,
+          isAccommodationType: data.isAccommodationType ?? false,
+          addonCollectionId: data.addonCollectionId ?? null,
         },
       });
       if (data.productIds.length > 0) {
-        await tx.productCollectionItem.createMany({
-          data: data.productIds.map((productId, i) => ({
-            collectionId: col.id, productId, sortOrder: i,
-          })),
+        // Validate all products belong to this tenant
+        const products = await tx.product.findMany({
+          where: { id: { in: data.productIds }, tenantId },
+          select: { id: true },
         });
+        const validIds = new Set(products.map((p) => p.id));
+        const memberships = data.productIds
+          .filter((id) => validIds.has(id))
+          .map((productId, i) => ({ collectionId: col.id, productId, sortOrder: i }));
+        if (memberships.length > 0) {
+          await tx.productCollectionItem.createMany({ data: memberships });
+        }
       }
       return col;
     });
@@ -695,7 +757,7 @@ export async function createCollection(
 export async function updateCollection(
   collectionId: string,
   input: UpdateCollectionInput,
-): Promise<ActionResult<{ id: string; slug: string }>> {
+): Promise<ActionResult<{ id: string; slug: string; version: number }>> {
   const auth = await requireAdmin();
   if (!auth.ok) return { ok: false, error: auth.error };
 
@@ -710,11 +772,17 @@ export async function updateCollection(
 
   const existing = await prisma.productCollection.findFirst({
     where: { id: collectionId, tenantId },
-    select: { id: true, slug: true, title: true },
+    select: { id: true, slug: true, title: true, version: true },
   });
   if (!existing) return { ok: false, error: "Kategorin hittades inte" };
 
   const data = parsed.data;
+
+  // Optimistic locking check
+  if (data.expectedVersion !== undefined && data.expectedVersion !== existing.version) {
+    return { ok: false, error: "Produktserien har ändrats av någon annan. Ladda om och försök igen.", code: "VERSION_CONFLICT" };
+  }
+
   let slug = existing.slug;
   if (data.title && data.title !== existing.title) {
     slug = await resolveUniqueCollectionSlug(tenantId, titleToSlug(data.title), collectionId);
@@ -729,21 +797,31 @@ export async function updateCollection(
           ...(data.description !== undefined && { description: data.description }),
           ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl }),
           ...(data.status !== undefined && { status: data.status }),
+          ...(data.isAccommodationType !== undefined && { isAccommodationType: data.isAccommodationType }),
+          ...(data.addonCollectionId !== undefined && { addonCollectionId: data.addonCollectionId }),
+          version: { increment: 1 },
         },
       });
       if (data.productIds !== undefined) {
         await tx.productCollectionItem.deleteMany({ where: { collectionId } });
         if (data.productIds.length > 0) {
-          await tx.productCollectionItem.createMany({
-            data: data.productIds.map((productId, i) => ({
-              collectionId, productId, sortOrder: i,
-            })),
+          // Validate all products belong to this tenant
+          const products = await tx.product.findMany({
+            where: { id: { in: data.productIds }, tenantId },
+            select: { id: true },
           });
+          const validIds = new Set(products.map((p) => p.id));
+          const memberships = data.productIds
+            .filter((id) => validIds.has(id))
+            .map((productId, i) => ({ collectionId, productId, sortOrder: i }));
+          if (memberships.length > 0) {
+            await tx.productCollectionItem.createMany({ data: memberships });
+          }
         }
       }
       return col;
     });
-    return { ok: true, data: { id: collection.id, slug: collection.slug } };
+    return { ok: true, data: { id: collection.id, slug: collection.slug, version: collection.version } };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       return { ok: false, error: "En kategori med denna URL finns redan." };
@@ -776,6 +854,77 @@ export async function listCollections() {
   return prisma.productCollection.findMany({
     where: { tenantId: tenantData.tenant.id },
     include: { _count: { select: { items: true } } },
+    orderBy: { sortOrder: "asc" },
+  });
+}
+
+// ═════════════════════════════════════════════════════════════
+// PMS SYNC ACTION
+// ═════════════════════════════════════════════════════════════
+
+export async function syncPmsProductsAction(): Promise<
+  ActionResult<{ created: number; updated: number; unchanged: number; errors: Array<{ pmsSourceId: string; error: string }> }>
+> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return { ok: false, error: "Inte inloggad" };
+
+  const { syncPmsProducts } = await import("./pms-sync");
+
+  // Determine provider from tenant integration
+  const integration = await prisma.tenantIntegration.findUnique({
+    where: { tenantId: tenantData.tenant.id },
+    select: { provider: true, status: true },
+  });
+
+  const provider = integration?.status === "active" ? integration.provider : "manual";
+
+  const result = await syncPmsProducts(tenantData.tenant.id, provider);
+  return { ok: true, data: result };
+}
+
+// ═════════════════════════════════════════════════════════════
+// ACCOMMODATION TYPES — public query
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * Get the name of the product used for editor preview.
+ * Returns the first active product's display title (PMS preferred).
+ */
+export async function getPreviewProductName(): Promise<string | null> {
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return null;
+
+  const product = await prisma.product.findFirst({
+    where: { tenantId: tenantData.tenant.id, status: "ACTIVE" },
+    orderBy: [{ productType: "desc" }, { createdAt: "asc" }],
+    select: { title: true, titleOverride: true, pmsData: true },
+  });
+
+  if (!product) return null;
+  const pmsRaw = product.pmsData as Record<string, unknown> | null;
+  return product.titleOverride ?? (pmsRaw?.name as string | undefined) ?? product.title;
+}
+
+/**
+ * Returns all collections where isAccommodationType = true and status = ACTIVE.
+ * Used by the search form dropdown. Public — no auth required.
+ */
+export async function getAccommodationTypes(tenantId: string) {
+  return prisma.productCollection.findMany({
+    where: {
+      tenantId,
+      isAccommodationType: true,
+      status: "ACTIVE",
+    },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      imageUrl: true,
+    },
     orderBy: { sortOrder: "asc" },
   });
 }

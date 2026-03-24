@@ -29,6 +29,8 @@ import type {
   GuestData,
   Addon,
   PaymentStatus,
+  CreateBookingParams,
+  BookingConfirmation,
 } from "./types";
 
 export interface PmsAdapter {
@@ -105,6 +107,16 @@ export interface PmsAdapter {
     tenantId: string,
     bookingExternalId: string,
   ): Promise<PaymentStatus | null>;
+
+  // ── 9. Create Booking ──────────────────────────────────────
+  /**
+   * Create a new booking in the PMS.
+   * Returns confirmation with PMS reference and status.
+   */
+  createBooking(
+    tenantId: string,
+    params: CreateBookingParams,
+  ): Promise<BookingConfirmation>;
 
   // ── 8. Connection & Webhooks ────────────────────────────────
   /**

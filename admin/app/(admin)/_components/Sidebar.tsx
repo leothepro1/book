@@ -11,6 +11,7 @@ import { useRole } from './RoleContext';
 
 const NAV_ITEMS = [
   { href: '/home', label: 'Startsida', icon: 'storefront' },
+  { href: '/orders', label: 'Beställningar', icon: 'shopping_bag' },
   { href: '/dashboard/guests', label: 'Gäster', icon: 'group' },
   { href: '/dashboard/analytics', label: 'Analys', icon: 'leaderboard' },
 ];
@@ -41,7 +42,8 @@ export function Sidebar() {
   const { isAdmin } = useRole();
 
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
-  const isProductActive = isActive('/products') || PRODUCT_ITEMS.some((item) => isActive(item.href));
+  const isProductsLinkActive = isActive('/products');
+  const isProductAccordionOpen = isProductsLinkActive || PRODUCT_ITEMS.some((item) => isActive(item.href));
   const isContentActive = CONTENT_ITEMS.some((item) => isActive(item.href));
 
   const guardedClick = (e: MouseEvent<HTMLAnchorElement>, href: string) => {
@@ -56,7 +58,7 @@ export function Sidebar() {
       className={`fixed left-0 top-0 h-screen transition-all duration-300 ease-in-out z-30 flex flex-col ${
         isCollapsed ? 'w-16' : 'w-[270px]'
       }`}
-      style={{ background: '#f7f7f7', borderRight: '1px solid var(--admin-border)' }}
+      style={{ background: '#EBEBEB' }}
     >
       {/* Profile row */}
       <SidebarUserRow isCollapsed={isCollapsed} />
@@ -71,16 +73,16 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               onClick={(e) => guardedClick(e, item.href)}
-              className={`flex items-center gap-3 p-[10px] rounded-lg ${
+              className={`flex items-center gap-3 px-[10px] py-[8px] rounded-lg ${
                 active
-                  ? 'bg-[#ebebeb] text-[#171717]'
-                  : 'text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040]'
+                  ? 'bg-[#FAFAFA] text-[#303030]'
+                  : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
               }`}
             >
               <span
                 className="material-symbols-rounded flex-shrink-0"
                 style={{
-                  fontSize: 20,
+                  fontSize: 18,
                   fontVariationSettings: active
                     ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
                     : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
@@ -88,7 +90,7 @@ export function Sidebar() {
               >
                 {item.icon}
               </span>
-              <span className={`text-[14px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              <span className={`text-[13px] tracking-[-0.15px] font-[550] whitespace-nowrap overflow-hidden transition-all duration-200 ${
                 isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
               }`}>
                 {item.label}
@@ -102,24 +104,24 @@ export function Sidebar() {
           <Link
             href="/products"
             onClick={(e) => guardedClick(e, '/products')}
-            className={`flex items-center gap-3 p-[10px] rounded-lg ${
-              isProductActive
-                ? 'bg-[#ebebeb] text-[#171717]'
-                : 'text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040]'
+            className={`flex items-center gap-3 px-[10px] py-[8px] rounded-lg ${
+              isProductsLinkActive
+                ? 'bg-[#FAFAFA] text-[#303030]'
+                : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
             }`}
           >
             <span
               className="material-symbols-rounded flex-shrink-0"
               style={{
-                fontSize: 20,
-                fontVariationSettings: isProductActive
+                fontSize: 18,
+                fontVariationSettings: isProductAccordionOpen
                   ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
                   : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
               }}
             >
               sell
             </span>
-            <span className={`text-[14px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+            <span className={`text-[13px] tracking-[-0.15px] font-[550] whitespace-nowrap overflow-hidden transition-all duration-200 ${
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
             }`}>
               Produkter
@@ -127,7 +129,7 @@ export function Sidebar() {
           </Link>
 
           <div className={`overflow-hidden transition-all duration-300 ${
-            isProductActive && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+            isProductAccordionOpen && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
           }`}>
             <div className="flex flex-col">
               {PRODUCT_ITEMS.map((sub, idx) => {
@@ -141,10 +143,10 @@ export function Sidebar() {
                     key={sub.href}
                     href={sub.href}
                     onClick={(e) => guardedClick(e, sub.href)}
-                    className={`relative block py-[6px] rounded-lg text-[14px] font-[500] ${
+                    className={`relative block py-[6px] rounded-lg text-[13px] font-[550] ${
                       subActive
-                        ? 'bg-[#ebebeb] text-[#171717]'
-                        : 'text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040]'
+                        ? 'bg-[#FAFAFA] text-[#303030]'
+                        : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
                     }`}
                     style={{ paddingLeft: 36 }}
                   >
@@ -176,12 +178,12 @@ export function Sidebar() {
           <Link
             href={CONTENT_ITEMS[0].href}
             onClick={(e) => guardedClick(e, CONTENT_ITEMS[0].href)}
-            className="flex items-center gap-3 p-[10px] rounded-lg text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040]"
+            className="flex items-center gap-3 px-[10px] py-[8px] rounded-lg text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]"
           >
             <span
               className="material-symbols-rounded flex-shrink-0"
               style={{
-                fontSize: 20,
+                fontSize: 18,
                 fontVariationSettings: isContentActive
                   ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
                   : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
@@ -189,7 +191,7 @@ export function Sidebar() {
             >
               wall_art
             </span>
-            <span className={`text-[14px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+            <span className={`text-[13px] tracking-[-0.15px] font-[550] whitespace-nowrap overflow-hidden transition-all duration-200 ${
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
             }`}>
               Innehåll
@@ -212,10 +214,10 @@ export function Sidebar() {
                     key={sub.href}
                     href={sub.href}
                     onClick={(e) => guardedClick(e, sub.href)}
-                    className={`relative block py-[6px] rounded-lg text-[14px] font-[500] ${
+                    className={`relative block py-[6px] rounded-lg text-[13px] font-[550] ${
                       subActive
-                        ? 'bg-[#ebebeb] text-[#171717]'
-                        : 'text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040]'
+                        ? 'bg-[#FAFAFA] text-[#303030]'
+                        : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
                     }`}
                     style={{ paddingLeft: 36 }}
                   >
@@ -250,16 +252,16 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               onClick={(e) => guardedClick(e, item.href)}
-              className={`flex items-center gap-3 p-[10px] rounded-lg ${
+              className={`flex items-center gap-3 px-[10px] py-[8px] rounded-lg ${
                 active
-                  ? 'bg-[#ebebeb] text-[#171717]'
-                  : 'text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040]'
+                  ? 'bg-[#FAFAFA] text-[#303030]'
+                  : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
               }`}
             >
               <span
                 className="material-symbols-rounded flex-shrink-0"
                 style={{
-                  fontSize: 20,
+                  fontSize: 18,
                   fontVariationSettings: active
                     ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
                     : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
@@ -267,7 +269,7 @@ export function Sidebar() {
               >
                 {item.icon}
               </span>
-              <span className={`text-[14px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              <span className={`text-[13px] tracking-[-0.15px] font-[550] whitespace-nowrap overflow-hidden transition-all duration-200 ${
                 isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
               }`}>
                 {item.label}
@@ -280,18 +282,18 @@ export function Sidebar() {
         {isAdmin && (
           <button
             onClick={() => openSettings()}
-            className="w-full flex items-center gap-3 p-[10px] rounded-lg text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040] cursor-pointer"
+            className="w-full flex items-center gap-3 px-[10px] py-[8px] rounded-lg text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030] cursor-pointer"
           >
             <span
               className="material-symbols-rounded flex-shrink-0"
               style={{
-                fontSize: 20,
+                fontSize: 18,
                 fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
               }}
             >
               settings
             </span>
-            <span className={`text-[14px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+            <span className={`text-[13px] tracking-[-0.15px] font-[550] whitespace-nowrap overflow-hidden transition-all duration-200 ${
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
             }`}>
               Inställningar
@@ -304,13 +306,13 @@ export function Sidebar() {
       <div className="p-3 flex-shrink-0 border-t border-[#E6E5E3]">
         <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
           {!isCollapsed && (
-            <button className="p-2 text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040] rounded-lg">
-              <span className="material-symbols-rounded" style={{ fontSize: 20 }}>help</span>
+            <button className="p-2 text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030] rounded-lg">
+              <span className="material-symbols-rounded" style={{ fontSize: 18 }}>help</span>
             </button>
           )}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-2 text-[#404040] hover:bg-[#f3f3f3] hover:text-[#404040] rounded-lg"
+            className="p-2 text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030] rounded-lg"
             aria-label={isCollapsed ? 'Expandera sidebar' : 'Kollapsa sidebar'}
           >
             {isCollapsed ? (

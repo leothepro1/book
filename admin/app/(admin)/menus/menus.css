@@ -216,7 +216,7 @@
 
 .mi-card__label {
   flex: 1;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 400;
   color: var(--admin-text);
   padding: 12px 0;

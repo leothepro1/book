@@ -8,14 +8,16 @@ export type PreviewMode = "draft" | "live";
 /**
  * Preview route: vilken guest portal sida ska visas
  */
-export type PreviewRoute = 
+export type PreviewRoute =
   | "/p/[token]"           // Portal home
   | "/p/[token]/account"   // Account page
   | "/p/[token]/stays"     // Stays page
   | "/check-in"            // Check-in
   | "/check-out"           // Check-out
   | "/p/[token]/help-center" // Help center
-  | "/p/[token]/support";    // Support
+  | "/p/[token]/support"     // Support
+  | "/preview/product"        // Product page
+  | "/login";                 // Login page
 
 /**
  * Props för GuestPreview component

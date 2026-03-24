@@ -19,6 +19,8 @@ import type {
   GuestData,
   Addon,
   PaymentStatus,
+  CreateBookingParams,
+  BookingConfirmation,
 } from "../types";
 
 export class ManualAdapter implements PmsAdapter {
@@ -80,6 +82,13 @@ export class ManualAdapter implements PmsAdapter {
     _bookingExternalId: string,
   ): Promise<PaymentStatus | null> {
     return null;
+  }
+
+  async createBooking(
+    _tenantId: string,
+    _params: CreateBookingParams,
+  ): Promise<BookingConfirmation> {
+    throw new Error("ManualAdapter does not support booking creation. Connect a PMS to enable online bookings.");
   }
 
   async testConnection(

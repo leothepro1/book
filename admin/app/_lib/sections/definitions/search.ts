@@ -67,7 +67,7 @@ export const searchSection: SectionDefinition = {
   tags: ["search", "booking", "sök", "bokning"],
   thumbnail: "",
   scope: "locked",
-  lockedTo: "home",
+  lockedTo: ["home", "stays"],
   editableFields: [],
 
   settingsSchema: [],

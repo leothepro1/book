@@ -19,3 +19,7 @@ import "./product-hero";
 import "./product-hero-split";
 import "./text-blocks";
 import "./search";
+import "./product-gallery";
+import "./product-content";
+import "./search-results";
+import "./purchase-block";
