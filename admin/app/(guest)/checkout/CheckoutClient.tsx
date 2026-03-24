@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { format, differenceInDays, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { sv } from "date-fns/locale";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardNumberElement, CardExpiryElement, CardCvcElement, PaymentRequestButtonElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -23,15 +23,20 @@ interface CheckoutProps {
     currency: string;
     ratePlanName: string | null;
   } | null;
+  productSlug: string;
   checkIn: string | null;
   checkOut: string | null;
   guests: number;
   nights: number;
-  tenantId: string;
   bookingTerms: string | null;
+  header: {
+    logoUrl: string | null;
+    logoWidth: number;
+  };
+  ratePlanId: string | null;
 }
 
-type StepId = 1 | 2 | 3;
+type StepId = 1 | 2 | 3 | 4;
 type PaymentType = "full" | "klarna";
 type PaymentMethod = "card" | "paypal" | "gpay" | "applepay";
 
@@ -185,12 +190,14 @@ function ConfirmButton({
   disabled,
   onSuccess,
   clientSecret,
+  onBeforeConfirm,
 }: {
   paymentMethod: PaymentMethod;
   paymentType: PaymentType;
   disabled: boolean;
   onSuccess: () => void;
   clientSecret: string | null;
+  onBeforeConfirm?: () => Promise<boolean>;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -205,6 +212,16 @@ function ConfirmButton({
     if (!stripe || !clientSecret) return;
     setProcessing(true);
     setError(null);
+
+    // Submit guest info before confirming payment
+    if (onBeforeConfirm) {
+      const ok = await onBeforeConfirm();
+      if (!ok) {
+        setError("Kunde inte spara gästuppgifter. Försök igen.");
+        setProcessing(false);
+        return;
+      }
+    }
 
     try {
       if (paymentMethod === "card") {
@@ -243,7 +260,7 @@ function ConfirmButton({
       setError(err instanceof Error ? err.message : "Betalningen misslyckades.");
       setProcessing(false);
     }
-  }, [stripe, elements, paymentMethod, paymentType, clientSecret, onSuccess, returnUrl]);
+  }, [stripe, elements, paymentMethod, paymentType, clientSecret, onSuccess, returnUrl, onBeforeConfirm]);
 
   // Payment Request for Google Pay / Apple Pay
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
@@ -358,9 +375,19 @@ function ConfirmButton({
   );
 }
 
+// ── Field error slide ─────────────────────────────────────
+
+function FieldError({ error }: { error?: string }) {
+  return (
+    <div className={`co__field-slide${error ? " co__field-slide--visible" : ""}`}>
+      <div className="co__field-error">{error ?? "\u00A0"}</div>
+    </div>
+  );
+}
+
 // ── Main Checkout ──────────────────────────────────────────
 
-export function CheckoutClient({ product, checkIn, checkOut, guests, nights, tenantId, bookingTerms }: CheckoutProps) {
+export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests, nights, bookingTerms, header, ratePlanId }: CheckoutProps) {
   const router = useRouter();
   const [activeStep, setActiveStep] = useState<StepId>(1);
   const [visibleStep, setVisibleStep] = useState<StepId>(1); // which body is expanded (lags activeStep for stagger)
@@ -369,33 +396,126 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
   const [hasTransitioned, setHasTransitioned] = useState(false); // enables content animation after first step change
   const staggerTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Orchestrated step transition: close old → wait → open new
+  // Orchestrated step transition: collapse old while expanding new
   const transitionToStep = useCallback((nextStep: StepId) => {
     if (staggerTimerRef.current) clearTimeout(staggerTimerRef.current);
 
     if (!hasTransitioned) setHasTransitioned(true);
-    const prevStep = activeStep;
-    setLeavingStep(prevStep);
+    setLeavingStep(activeStep);
     setActiveStep(nextStep);
-    // Phase 1: collapse old content (let CSS run ~200ms)
-    setVisibleStep(0 as StepId); // nothing expanded
+    // Open new step immediately — old collapses at the same time via CSS
+    setVisibleStep(nextStep);
 
     staggerTimerRef.current = setTimeout(() => {
-      // Phase 2: expand new content
-      setVisibleStep(nextStep);
       setLeavingStep(null);
-    }, 200);
-  }, [activeStep]);
+    }, 300);
+  }, [activeStep, hasTransitioned]);
 
   const [paymentType, setPaymentType] = useState<PaymentType>("full");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [cardInfo, setCardInfo] = useState<CardInfo | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  // ── Contact info (step 1) ───────────────────────────────────
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactCountry, setContactCountry] = useState("SE");
+  const [contactFirstName, setContactFirstName] = useState("");
+  const [contactLastName, setContactLastName] = useState("");
+  const [contactAddress, setContactAddress] = useState("");
+  const [contactPostalCode, setContactPostalCode] = useState("");
+  const [contactCity, setContactCity] = useState("");
+  const [contactTouched, setContactTouched] = useState<Record<string, boolean>>({});
+  const addressInputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+
+  const guestName = `${contactFirstName} ${contactLastName}`.trim();
+  const guestEmail = contactEmail;
+  const guestPhone = ""; // Phone not collected in this flow
+
+  const [piError, setPiError] = useState<string | null>(null);
   const [priceBreakdownOpen, setPriceBreakdownOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
   const [klarnaInfoOpen, setKlarnaInfoOpen] = useState(false);
   const [paymentReady, setPaymentReady] = useState(false);
   const [availableWallets, setAvailableWallets] = useState<{ gpay: boolean; applepay: boolean }>({ gpay: false, applepay: false });
+
+  // ── Google Places Autocomplete ──────────────────────────────
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!apiKey || !addressInputRef.current) return;
+    if (autocompleteRef.current) return; // Already initialized
+
+    // Load Google Maps script if not already loaded
+    const scriptId = "google-maps-places";
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement("script");
+      script.id = scriptId;
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+      script.async = true;
+      script.onload = () => initAutocomplete();
+      document.head.appendChild(script);
+    } else if (window.google?.maps?.places) {
+      initAutocomplete();
+    }
+
+    function initAutocomplete() {
+      if (!addressInputRef.current || !window.google?.maps?.places) return;
+      const ac = new window.google.maps.places.Autocomplete(addressInputRef.current, {
+        types: ["address"],
+        componentRestrictions: { country: contactCountry.toLowerCase() },
+        fields: ["address_components", "formatted_address"],
+      });
+      autocompleteRef.current = ac;
+      ac.addListener("place_changed", () => {
+        const place = ac.getPlace();
+        if (!place.address_components) return;
+
+        let street = "";
+        let streetNumber = "";
+        let postalCode = "";
+        let city = "";
+
+        for (const comp of place.address_components) {
+          const t = comp.types[0];
+          if (t === "route") street = comp.long_name;
+          if (t === "street_number") streetNumber = comp.long_name;
+          if (t === "postal_code") postalCode = comp.long_name;
+          if (t === "postal_town" || t === "locality") city = comp.long_name;
+        }
+
+        setContactAddress(streetNumber ? `${street} ${streetNumber}` : street);
+        if (postalCode) setContactPostalCode(postalCode);
+        if (city) setContactCity(city);
+      });
+    }
+  }, [contactCountry]);
+
+  // Update autocomplete country restriction when country changes
+  useEffect(() => {
+    if (autocompleteRef.current) {
+      autocompleteRef.current.setComponentRestrictions({
+        country: contactCountry.toLowerCase(),
+      });
+    }
+  }, [contactCountry]);
+
+  // ── Contact validation helpers ────────────────────────────────
+  const contactErrors: Record<string, string> = {};
+  if (contactTouched.email && !contactEmail) contactErrors.email = "E-post krävs";
+  else if (contactTouched.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) contactErrors.email = "Ogiltig e-postadress";
+  if (contactTouched.firstName && !contactFirstName.trim()) contactErrors.firstName = "Förnamn krävs";
+  if (contactTouched.lastName && !contactLastName.trim()) contactErrors.lastName = "Efternamn krävs";
+  if (contactTouched.address && !contactAddress.trim()) contactErrors.address = "Adress krävs";
+  if (contactTouched.postalCode && !contactPostalCode.trim()) contactErrors.postalCode = "Postnummer krävs";
+  if (contactTouched.city && !contactCity.trim()) contactErrors.city = "Stad krävs";
+
+  const contactValid =
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail) &&
+    contactFirstName.trim().length > 0 &&
+    contactLastName.trim().length > 0 &&
+    contactAddress.trim().length > 0 &&
+    contactPostalCode.trim().length > 0 &&
+    contactCity.trim().length > 0;
 
   // Detect available wallets on mount via Stripe PaymentRequest
   useEffect(() => {
@@ -425,40 +545,41 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
     return true;
   });
 
-  const formatDate = (d: string | null) => {
-    if (!d) return "—";
-    return format(parseISO(d), "d MMMM yyyy", { locale: sv });
-  };
-
-  // Create PaymentIntent when entering step 2
+  // Create Order + PaymentIntent after step 2 (payment type choice) is completed
+  // Step 1 = contact, Step 2 = payment type, Step 3 = payment method, Step 4 = review
   useEffect(() => {
-    if (activeStep !== 2 || clientSecret || !product) return;
+    if (!clientSecret && orderId) return;
+    if (clientSecret || !product || !checkIn || !checkOut) return;
+    if (!completedSteps.has(2 as StepId)) return;
 
+    setPiError(null);
     fetch("/api/checkout/payment-intent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tenantId,
-        amount: product.price,
-        currency: product.currency,
+        productSlug,
+        checkIn,
+        checkOut,
+        guests,
+        ratePlanId: ratePlanId ?? null,
         paymentType,
-        metadata: {
-          checkIn: checkIn ?? "",
-          checkOut: checkOut ?? "",
-          guests: String(guests),
-        },
       }),
     })
       .then((res) => res.json())
       .then((data) => {
+        if (data.error) {
+          setPiError(data.message ?? "Kunde inte skapa betalning.");
+          return;
+        }
         if (data.clientSecret) setClientSecret(data.clientSecret);
+        if (data.orderId) setOrderId(data.orderId);
       })
-      .catch(console.error);
-  }, [activeStep, clientSecret, product, tenantId, paymentType, checkIn, checkOut, guests]);
+      .catch(() => setPiError("Nätverksfel — försök igen."));
+  }, [completedSteps, clientSecret, orderId, product, productSlug, checkIn, checkOut, guests, ratePlanId, paymentType]);
 
   const handleNext = (step: StepId) => {
     setCompletedSteps((prev) => new Set(prev).add(step));
-    if (step < 3) transitionToStep((step + 1) as StepId);
+    if (step < 4) transitionToStep((step + 1) as StepId);
   };
 
   const handleEdit = (step: StepId) => {
@@ -466,17 +587,36 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
   };
 
   const handlePaymentSuccess = () => {
-    router.push(`/checkout/success?checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`);
+    if (orderId) {
+      router.push(`/checkout/success?orderId=${orderId}`);
+    }
+  };
+
+  // Submit guest info before payment confirmation
+  const submitGuestInfo = async (): Promise<boolean> => {
+    if (!orderId || !guestName || !guestEmail) return false;
+    try {
+      const res = await fetch("/api/checkout/update-guest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, guestName, guestEmail, guestPhone: guestPhone || undefined }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
   };
 
   const getStepSummary = (stepId: StepId): React.ReactNode | null => {
     if (!completedSteps.has(stepId)) return null;
     switch (stepId) {
       case 1:
+        return contactEmail ? `${contactFirstName} ${contactLastName} · ${contactEmail}` : null;
+      case 2:
         return paymentType === "full"
           ? `Betala ${product ? `${formatPriceDisplay(product.price, product.currency)} kr` : "—"} nu`
           : "Betala över tid med Klarna";
-      case 2: {
+      case 3: {
         if (paymentMethod === "card" && cardInfo) {
           const brandSvg = BRAND_SVGS[cardInfo.brand] ?? null;
           const brandLabel = cardInfo.brand.charAt(0).toUpperCase() + cardInfo.brand.slice(1);
@@ -502,15 +642,149 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
   };
 
   const STEP_TITLES: Record<StepId, string> = {
-    1: "Välj hur du vill betala",
-    2: "Lägg till betalningsmetod",
-    3: "Granska din bokning",
+    1: "Kontaktuppgifter",
+    2: "Välj hur du vill betala",
+    3: "Lägg till betalningsmetod",
+    4: "Granska din bokning",
   };
 
+
+  const markTouched = (field: string) => setContactTouched((p) => ({ ...p, [field]: true }));
+
+
+  const COUNTRIES = [
+    { code: "SE", name: "Sverige" }, { code: "NO", name: "Norge" }, { code: "DK", name: "Danmark" },
+    { code: "FI", name: "Finland" }, { code: "DE", name: "Tyskland" }, { code: "GB", name: "Storbritannien" },
+    { code: "NL", name: "Nederländerna" }, { code: "FR", name: "Frankrike" }, { code: "ES", name: "Spanien" },
+    { code: "IT", name: "Italien" }, { code: "AT", name: "Österrike" }, { code: "CH", name: "Schweiz" },
+    { code: "PL", name: "Polen" }, { code: "BE", name: "Belgien" }, { code: "PT", name: "Portugal" },
+    { code: "US", name: "USA" }, { code: "CA", name: "Kanada" },
+  ];
 
   const renderStepContent = (stepId: StepId) => {
     switch (stepId) {
       case 1:
+        return (
+          <>
+            <div className="co__contact-form">
+              {/* Email */}
+              <div className="co__contact-field">
+                <label className="co__card-label">E-postadress</label>
+                <input
+                  type="email"
+                  className={`co__guest-input${contactErrors.email ? " co__guest-input--error" : ""}`}
+                  placeholder="din@email.se"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  onBlur={() => markTouched("email")}
+                  autoComplete="email"
+                />
+                <FieldError error={contactErrors.email} />
+              </div>
+
+              {/* Country */}
+              <div className="co__contact-field">
+                <label className="co__card-label">Land</label>
+                <div className="co__select-wrap">
+                  <select
+                    className="co__guest-select"
+                    value={contactCountry}
+                    onChange={(e) => setContactCountry(e.target.value)}
+                  >
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>{c.name}</option>
+                    ))}
+                  </select>
+                  <span className="material-symbols-rounded co__select-chevron">expand_more</span>
+                </div>
+              </div>
+
+              {/* First + Last name */}
+              <div className="co__contact-row">
+                <div className="co__contact-field">
+                  <label className="co__card-label">Förnamn</label>
+                  <input
+                    type="text"
+                    className={`co__guest-input${contactErrors.firstName ? " co__guest-input--error" : ""}`}
+                    placeholder="Anna"
+                    value={contactFirstName}
+                    onChange={(e) => setContactFirstName(e.target.value)}
+                    onBlur={() => markTouched("firstName")}
+                    autoComplete="given-name"
+                  />
+                  <FieldError error={contactErrors.firstName} />
+                </div>
+                <div className="co__contact-field">
+                  <label className="co__card-label">Efternamn</label>
+                  <input
+                    type="text"
+                    className={`co__guest-input${contactErrors.lastName ? " co__guest-input--error" : ""}`}
+                    placeholder="Andersson"
+                    value={contactLastName}
+                    onChange={(e) => setContactLastName(e.target.value)}
+                    onBlur={() => markTouched("lastName")}
+                    autoComplete="family-name"
+                  />
+                  <FieldError error={contactErrors.lastName} />
+                </div>
+              </div>
+
+              {/* Address with Google autocomplete */}
+              <div className="co__contact-field">
+                <label className="co__card-label">Adress</label>
+                <div className="co__address-wrap">
+                  <input
+                    ref={addressInputRef}
+                    type="text"
+                    className={`co__guest-input co__guest-input--address${contactErrors.address ? " co__guest-input--error" : ""}`}
+                    placeholder="Sök din adress..."
+                    value={contactAddress}
+                    onChange={(e) => setContactAddress(e.target.value)}
+                    onBlur={() => markTouched("address")}
+                    autoComplete="street-address"
+                  />
+                  <span className="co__address-icon material-symbols-rounded">search</span>
+                </div>
+                <FieldError error={contactErrors.address} />
+              </div>
+
+              {/* Postal code + City */}
+              <div className="co__contact-row">
+                <div className="co__contact-field">
+                  <label className="co__card-label">Postnummer</label>
+                  <input
+                    type="text"
+                    className={`co__guest-input${contactErrors.postalCode ? " co__guest-input--error" : ""}`}
+                    placeholder="123 45"
+                    value={contactPostalCode}
+                    onChange={(e) => setContactPostalCode(e.target.value)}
+                    onBlur={() => markTouched("postalCode")}
+                    autoComplete="postal-code"
+                  />
+                  <FieldError error={contactErrors.postalCode} />
+                </div>
+                <div className="co__contact-field">
+                  <label className="co__card-label">Stad</label>
+                  <input
+                    type="text"
+                    className={`co__guest-input${contactErrors.city ? " co__guest-input--error" : ""}`}
+                    placeholder="Stockholm"
+                    value={contactCity}
+                    onChange={(e) => setContactCity(e.target.value)}
+                    onBlur={() => markTouched("city")}
+                    autoComplete="address-level2"
+                  />
+                  <FieldError error={contactErrors.city} />
+                </div>
+              </div>
+            </div>
+            <div className="co__step-footer">
+              <button type="button" className="co__next-btn" disabled={!contactValid} onClick={() => handleNext(1)}>Nästa</button>
+            </div>
+          </>
+        );
+
+      case 2:
         return (
           <>
             <div className="co__methods">
@@ -547,13 +821,37 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
               })}
             </div>
             <div className="co__step-footer">
-              <button type="button" className="co__next-btn" onClick={() => handleNext(1)}>Nästa</button>
+              <button type="button" className="co__next-btn" onClick={() => handleNext(2)}>Nästa</button>
             </div>
           </>
         );
 
-      case 2:
-        return (
+      case 3:
+        return paymentType === "klarna" ? (
+          <>
+            <div className="co__klarna-step2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://res.cloudinary.com/dmgmoisae/image/upload/v1774386014/klarna_black.d9f77175f9bc7a0600aef2215118c7f5_gnatss.svg"
+                alt="Klarna"
+                className="co__klarna-step2-logo"
+              />
+              <p className="co__klarna-step2-legal">
+                Genom att fortsätta godkänner du{" "}
+                <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/user" target="_blank" rel="noopener noreferrer">Klarnas köpvillkor</a>
+                {" "}och bekräftar att du har läst{" "}
+                <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/privacy" target="_blank" rel="noopener noreferrer">Klarnas sekretessmeddelande</a>
+                {" "}och{" "}
+                <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/cookie_purchase" target="_blank" rel="noopener noreferrer">Klarnas cookie-meddelande</a>.
+              </p>
+            </div>
+            <div className="co__step-footer">
+              <button type="button" className="co__next-btn" onClick={() => handleNext(3)}>
+                Nästa
+              </button>
+            </div>
+          </>
+        ) : (
           <>
             {clientSecret ? (
               <Elements stripe={stripePromise} options={{ clientSecret }}>
@@ -573,14 +871,14 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
               </div>
             )}
             <div className="co__step-footer">
-              <button type="button" className="co__next-btn" onClick={() => handleNext(2)}>
+              <button type="button" className="co__next-btn" onClick={() => handleNext(3)}>
                 Nästa
               </button>
             </div>
           </>
         );
 
-      case 3:
+      case 4:
         return (
           <>
             <p className="co__terms">
@@ -591,10 +889,17 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
             </p>
             {clientSecret ? (
               <Elements stripe={stripePromise} options={{ clientSecret }}>
-                <ConfirmButton paymentMethod={paymentMethod} paymentType={paymentType} disabled={false} onSuccess={handlePaymentSuccess} clientSecret={clientSecret} />
+                <ConfirmButton
+                  paymentMethod={paymentMethod}
+                  paymentType={paymentType}
+                  disabled={false}
+                  onSuccess={handlePaymentSuccess}
+                  clientSecret={clientSecret}
+                  onBeforeConfirm={submitGuestInfo}
+                />
               </Elements>
             ) : (
-              <button type="button" className="co__confirm-btn" onClick={handlePaymentSuccess}>
+              <button type="button" className="co__confirm-btn" disabled>
                 Bekräfta och betala
               </button>
             )}
@@ -604,6 +909,27 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
   };
 
   return (
+    <>
+    {/* ── Checkout header ──────────────────────────── */}
+    <header className="co-header">
+      <div className="co-header__inner">
+        <a href="/" className="co-header__logo">
+          {header.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={header.logoUrl} alt="Logo" style={{ width: header.logoWidth, height: "auto" }} />
+          ) : (
+            <div className="co-header__logo-placeholder" style={{ width: header.logoWidth }} />
+          )}
+        </a>
+        <span
+          className="material-symbols-rounded"
+          style={{ fontSize: 23, color: "#1a1a1a", fontVariationSettings: "'wght' 300" }}
+        >
+          shopping_bag
+        </span>
+      </div>
+    </header>
+
     <div className="co">
       {/* Column 1: Back button */}
       <div className="co__back-col">
@@ -617,7 +943,7 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
         <h1 className="co__title">Bekräfta och betala</h1>
 
         <div className="co__steps">
-          {([1, 2, 3] as StepId[]).map((stepId) => {
+          {([1, 2, 3, 4] as StepId[]).map((stepId) => {
             const isActive = activeStep === stepId;
             const isBodyOpen = visibleStep === stepId;
             const isLeaving = leavingStep === stepId;
@@ -702,17 +1028,11 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
           {/* Prisuppgifter */}
           {product && nights != null && nights > 0 && (() => {
             const nightlyPrice = Math.round(product.price / nights);
-            const taxRate = 0.12;
-            const taxAmount = Math.round(product.price * taxRate);
             return (
               <>
                 <div className="co__summary-price-row">
-                  <span>{nights} nätter x {formatPriceDisplay(nightlyPrice, product.currency)} kr {product.currency}</span>
-                  <span>{formatPriceDisplay(product.price, product.currency)} kr {product.currency}</span>
-                </div>
-                <div className="co__summary-price-row">
-                  <span>Skatter</span>
-                  <span>{formatPriceDisplay(taxAmount, product.currency)} kr {product.currency}</span>
+                  <span>{nights} nätter x {formatPriceDisplay(nightlyPrice, product.currency)} kr</span>
+                  <span>{formatPriceDisplay(product.price, product.currency)} kr</span>
                 </div>
               </>
             );
@@ -722,8 +1042,8 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
 
           {/* Totalt */}
           <div className="co__summary-row co__summary-row--total">
-            <span>Totalt</span>
-            <span>{product ? `${formatPriceDisplay(product.price, product.currency)} kr ${product.currency}` : "—"}</span>
+            <span>Totalt <span style={{ fontWeight: 400, fontSize: "0.75rem", color: "#888" }}>(inkl. moms)</span></span>
+            <span>{product ? `${formatPriceDisplay(product.price, product.currency)} kr` : "—"}</span>
           </div>
 
           {/* Prisspecifikation */}
@@ -740,9 +1060,6 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
       {/* Prisspecifikation modal */}
       {product && nights != null && nights > 0 && (() => {
         const nightlyPrice = Math.round(product.price / nights);
-        const taxRate = 0.12;
-        const taxAmount = Math.round(product.price * taxRate);
-        const total = product.price + taxAmount;
         return (
           <CheckoutModal
             open={priceBreakdownOpen}
@@ -752,19 +1069,15 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
             <div className="co__breakdown">
               <div className="co__breakdown-row">
                 <span>{nights} nätter · {checkIn && checkOut ? `${format(parseISO(checkIn), "d", { locale: sv })}–${format(parseISO(checkOut), "d MMM", { locale: sv })}` : ""}</span>
-                <span>{formatPriceDisplay(product.price, product.currency)} kr {product.currency}</span>
-              </div>
-              <div className="co__breakdown-row">
-                <span>Skatter</span>
-                <span>{formatPriceDisplay(taxAmount, product.currency)} kr {product.currency}</span>
+                <span>{formatPriceDisplay(product.price, product.currency)} kr</span>
               </div>
               <div className="co__breakdown-divider" />
               <div className="co__breakdown-row co__breakdown-row--total">
                 <div>
-                  <div>Totalt</div>
+                  <div>Totalt <span style={{ fontWeight: 400, fontSize: "0.75rem" }}>(inkl. moms)</span></div>
                   <div className="co__breakdown-currency">{product.currency}</div>
                 </div>
-                <span>{formatPriceDisplay(total, product.currency)} kr {product.currency}</span>
+                <span>{formatPriceDisplay(product.price, product.currency)} kr</span>
               </div>
             </div>
           </CheckoutModal>
@@ -809,5 +1122,6 @@ export function CheckoutClient({ product, checkIn, checkOut, guests, nights, ten
         </div>
       </CheckoutModal>
     </div>
+    </>
   );
 }

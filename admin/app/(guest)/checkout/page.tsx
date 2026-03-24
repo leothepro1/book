@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { resolveTenantFromHost } from "../_lib/tenant/resolveTenantFromHost";
+import { getTenantConfig } from "../_lib/tenant/getTenantConfig";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveProduct } from "@/app/_lib/products/resolve";
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
@@ -88,6 +89,11 @@ export default async function CheckoutPage({
     select: { content: true },
   });
 
+  // Fetch tenant config for header (logo)
+  const config = await getTenantConfig(tenant.id);
+  const logoUrl = (config.theme?.header?.logoUrl as string) ?? null;
+  const logoWidth = (config.theme?.header?.logoWidth as number) ?? 120;
+
   return (
     <CheckoutClient
       product={{
@@ -97,12 +103,17 @@ export default async function CheckoutPage({
         currency,
         ratePlanName,
       }}
+      productSlug={productSlug}
       checkIn={checkIn}
       checkOut={checkOut}
       guests={guests}
       nights={nights}
-      tenantId={tenant.id}
       bookingTerms={bookingTerms?.content ?? null}
+      header={{
+        logoUrl,
+        logoWidth,
+      }}
+      ratePlanId={ratePlanId}
     />
   );
 }

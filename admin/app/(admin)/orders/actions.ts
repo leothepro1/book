@@ -3,6 +3,7 @@
 import { prisma } from "@/app/_lib/db/prisma";
 import { getAuth, requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
 import { adjustInventoryInTx } from "@/app/_lib/products/inventory";
+import { canTransition } from "@/app/_lib/orders/types";
 import type { OrderStatus } from "@prisma/client";
 
 // ── Types ──────────────────────────────────────────────────────
@@ -198,7 +199,7 @@ export async function fulfillOrder(
   });
 
   if (!order) return { ok: false, error: "Ordern hittades inte" };
-  if (order.status !== "PAID") {
+  if (!canTransition(order.status, "FULFILLED")) {
     return { ok: false, error: `Ordern kan inte levereras (status: ${order.status})` };
   }
 
@@ -243,7 +244,7 @@ export async function cancelOrder(
   });
 
   if (!order) return { ok: false, error: "Ordern hittades inte" };
-  if (order.status !== "PENDING") {
+  if (!canTransition(order.status, "CANCELLED")) {
     return { ok: false, error: `Ordern kan inte avbokas (status: ${order.status})` };
   }
 

@@ -14,15 +14,20 @@ import { z } from "zod";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { CreateBookingParamsSchema } from "@/app/_lib/integrations/types";
-import { randomBytes } from "crypto";
+import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
+import { validateStayDates } from "@/app/_lib/validation/dates";
+import { checkRateLimit } from "@/app/_lib/rate-limit/checkout";
+import { log } from "@/app/_lib/logger";
+import { randomBytes, createHash } from "crypto";
 
-const inputSchema = z
-  .object({
-    tenantId: z.string().min(1),
-  })
-  .merge(CreateBookingParamsSchema);
+const inputSchema = CreateBookingParamsSchema;
 
 export async function POST(req: Request) {
+  // ── Rate limit ──────────────────────────────────────────────
+  if (!(await checkRateLimit("bk", 20, 60 * 60 * 1000))) {
+    return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
+  }
+
   let body: z.infer<typeof inputSchema>;
   try {
     const raw = await req.json();
@@ -34,43 +39,51 @@ export async function POST(req: Request) {
     );
   }
 
-  const tenantId = body.tenantId;
-
-  // ── Date validation ───────────────────────────────────────────
-  const checkIn = new Date(body.checkIn);
-  const checkOut = new Date(body.checkOut);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-
-  if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
-    return NextResponse.json(
-      { error: "INVALID_PARAMS", message: "Ogiltigt datumformat" },
-      { status: 400 },
-    );
-  }
-  if (checkIn < now) {
-    return NextResponse.json(
-      { error: "INVALID_PARAMS", message: "Incheckning kan inte vara i det förflutna" },
-      { status: 400 },
-    );
-  }
-  if (checkOut <= checkIn) {
-    return NextResponse.json(
-      { error: "INVALID_PARAMS", message: "Utcheckning måste vara efter incheckning" },
-      { status: 400 },
-    );
-  }
-
-  const nights = Math.round((checkOut.getTime() - checkIn.getTime()) / 86400000);
-
-  // ── Tenant verification ───────────────────────────────────────
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { id: true, name: true },
-  });
+  // ── Resolve tenant from host — never from request body ────────
+  const tenant = await resolveTenantFromHost();
   if (!tenant) {
     return NextResponse.json({ error: "TENANT_NOT_FOUND" }, { status: 404 });
   }
+  const tenantId = tenant.id;
+
+  // ── Date validation ───────────────────────────────────────────
+  const dateCheck = validateStayDates(body.checkIn, body.checkOut);
+  if (!dateCheck.valid) {
+    return NextResponse.json(
+      { error: "INVALID_PARAMS", message: dateCheck.error },
+      { status: 400 },
+    );
+  }
+  const { checkIn, checkOut } = dateCheck;
+  const nights = dateCheck.nights;
+
+  // ── Idempotency lock — prevent concurrent duplicate bookings ──
+  const idempotencyKey = createHash("sha256")
+    .update(`${tenantId}-${body.categoryId}-${body.checkIn}-${body.checkOut}-${body.guestInfo.email}`)
+    .digest("hex");
+
+  try {
+    await prisma.pendingBookingLock.create({
+      data: { key: idempotencyKey, expiresAt: new Date(Date.now() + 60_000) },
+    });
+  } catch (e: unknown) {
+    if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "P2002") {
+      return NextResponse.json(
+        { error: "DUPLICATE_BOOKING", message: "En bokning för dessa datum pågår redan. Försök igen om en stund." },
+        { status: 409 },
+      );
+    }
+    throw e;
+  }
+
+  try {
+    return await processBooking();
+  } finally {
+    // Always release the lock
+    await prisma.pendingBookingLock.delete({ where: { key: idempotencyKey } }).catch(() => {});
+  }
+
+  async function processBooking() {
 
   let adapter;
   try {
@@ -216,7 +229,7 @@ export async function POST(req: Request) {
     const { sendEmailEvent } = await import("@/app/_lib/email/send");
     await sendEmailEvent(tenantId, "BOOKING_CONFIRMED", body.guestInfo.email, {
       guestName: `${body.guestInfo.firstName} ${body.guestInfo.lastName}`,
-      hotelName: tenant.name,
+      hotelName: tenant!.name,
       checkIn: body.checkIn,
       checkOut: body.checkOut,
       roomType: body.categoryId,
@@ -224,9 +237,14 @@ export async function POST(req: Request) {
       loginUrl: "",
     });
   } catch (err) {
-    console.error("[bookings] Failed to send confirmation email:", err);
+    log("error", "booking.confirmation_email_failed", { tenantId, error: String(err) });
     // Email failure NEVER aborts booking
   }
+
+  log("info", "booking.created", {
+    tenantId, bookingId: booking.id, categoryId: body.categoryId,
+    checkIn: body.checkIn, checkOut: body.checkOut,
+  });
 
   return NextResponse.json({
     confirmationNumber: confirmation.confirmationNumber,
@@ -235,4 +253,6 @@ export async function POST(req: Request) {
     totalAmount: serverTotalAmount,
     currency: serverCurrency,
   });
+
+  } // end processBooking
 }

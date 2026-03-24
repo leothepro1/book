@@ -15,6 +15,7 @@ import { z } from "zod";
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import type { AvailabilityEntry, Restriction } from "@/app/_lib/integrations/types";
 import { prisma } from "@/app/_lib/db/prisma";
+import { validateStayDates } from "@/app/_lib/validation/dates";
 
 const paramsSchema = z.object({
   tenantId: z.string().min(1, "tenantId krävs"),
@@ -44,26 +45,16 @@ export async function GET(req: Request) {
   }
 
   const { tenantId, guests, types } = parsed.data;
-  const checkIn = new Date(parsed.data.checkIn);
-  const checkOut = new Date(parsed.data.checkOut);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
 
-  // Validate date logic
-  if (checkIn < now) {
+  // Validate dates via shared utility
+  const dateCheck = validateStayDates(parsed.data.checkIn, parsed.data.checkOut);
+  if (!dateCheck.valid) {
     return NextResponse.json(
-      { error: "INVALID_PARAMS", fields: [{ field: "checkIn", message: "Incheckning kan inte vara i det förflutna" }] },
+      { error: "INVALID_PARAMS", fields: [{ field: "checkIn", message: dateCheck.error }] },
       { status: 400, headers: { "Cache-Control": "no-store" } },
     );
   }
-  if (checkOut <= checkIn) {
-    return NextResponse.json(
-      { error: "INVALID_PARAMS", fields: [{ field: "checkOut", message: "Utcheckning måste vara efter incheckning" }] },
-      { status: 400, headers: { "Cache-Control": "no-store" } },
-    );
-  }
-
-  const nights = Math.round((checkOut.getTime() - checkIn.getTime()) / 86400000);
+  const { checkIn, checkOut, nights } = dateCheck;
   const typeFilter = types ? types.split(",").filter(Boolean) : undefined;
 
   // typeId filter: collection-based → look up PMS source IDs

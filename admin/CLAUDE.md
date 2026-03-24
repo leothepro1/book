@@ -37,10 +37,12 @@ pages or layouts. Everything is platform-defined and architecturally constrained
 - Product catalog with collections (DONE — full CRUD, variants, inventory, pricing)
 - Product templates (category detail pages)
 - Theme templates (full-page theme presets)
-- **Stripe + cart + checkout (NEXT — see "Commerce engine" section below)**
-- Order management (bookings, cancellations, modifications)
+- Stripe Connect + checkout + orders (DONE — unified architecture)
+- Cart system with server-side validation (DONE)
+- Order management with admin UI (DONE)
+- Email notifications: booking confirmed, order confirmed (DONE)
 - Analytics dashboard (revenue, occupancy, conversion rates)
-- Email notifications (booking confirmed, payment received, etc.)
+- Mews PMS adapter (infrastructure ready, API integration TODO)
 
 Every feature ships at Shopify quality or not at all.
 
@@ -958,187 +960,186 @@ Products are manually curated into sections by admins via the visual editor.
 
 ---
 
-## Commerce engine — Stripe, cart, checkout, orders (NEXT MILESTONE)
+## Commerce engine — checkout, orders, payments
 
-This section documents the full commerce stack we are building. The mental
-model is always: **"What would Shopify do?"**
+Unified checkout architecture. One Order lifecycle, one webhook handler,
+one state machine — regardless of payment method.
 
-### Scope
+### Core principle: Order-first
 
-Connect the existing product catalog to a complete purchase flow:
-  Product page → Add to cart → Cart → Checkout → Payment → Order → Analytics
+An Order is ALWAYS created before any Stripe API call. The Order is the
+source of truth. Stripe is an implementation detail under the Order.
+Product type (accommodation vs standard) affects fulfillment logic — not
+checkout architecture.
 
-### What exists today
+### Two checkout flows, one Order model
 
-- Product catalog: full CRUD, variants, options, inventory, pricing ✅
-- Collections: many-to-many grouping with sort order ✅
-- Inventory ledger: append-only with reservation flow ✅
-- Price history: append-only audit trail ✅
-- Guest renderers: display-only product cards/heroes ✅
+Both flows create an Order FIRST, then create the Stripe object:
 
-### What needs to be built
+**1. Checkout Session flow (cart/shop)**
+  URL: /shop → /shop/checkout/success
+  API: POST /api/checkout/create
+  Creates: Order + Stripe Checkout Session (hosted by Stripe)
+  Used for: STANDARD products via cart (add-to-cart → cart → pay)
+  Payment: Redirect to Stripe-hosted page
+  Webhook: checkout.session.completed → PENDING→PAID
 
-#### 1. Stripe integration (payment processing)
+**2. Elements flow (accommodation)**
+  URL: /checkout → /checkout/success
+  API: POST /api/checkout/payment-intent
+  Creates: Order + Stripe PaymentIntent (clientSecret for Elements)
+  Used for: PMS_ACCOMMODATION products (search → select → pay)
+  Payment: Embedded Stripe Elements in page
+  Webhook: payment_intent.succeeded → PENDING→PAID
+  Guest info: Collected in step 3, saved via POST /api/checkout/update-guest
 
-Shopify model: each tenant connects their own Stripe account.
+### Order state machine
 
-  **Stripe Connect (Standard)** — tenants onboard their own Stripe account.
-  Platform takes no cut (or configurable application fee later).
+```
+PENDING → PAID → FULFILLED
+    ↓        ↓
+CANCELLED  CANCELLED → (requires refund)
+              ↓
+           REFUNDED
+```
 
-  Per tenant:
-    stripeAccountId — connected Stripe account ID (acct_xxx)
-    stripeOnboardingComplete — boolean
-    stripeLivemode — boolean (test vs live)
+`canTransition(from, to)` in `_lib/orders/types.ts` is the ONLY guard.
+It is called before EVERY status mutation — in webhook handlers and
+admin actions. Never write `order.status !== "PENDING"` inline.
 
-  Payment methods: Stripe Checkout Session or Payment Intents.
-  Webhooks: checkout.session.completed, payment_intent.succeeded/failed,
-            charge.refunded, charge.dispute.created.
+### Data models
 
-  **Stripe product sync is NOT needed.** Products live in our DB.
-  Stripe is payment-only — we create Checkout Sessions / Payment Intents
-  with line items from our product catalog.
+**Order** — every purchase, regardless of type
+  id, tenantId, orderNumber (sequential #1001+), status, paymentMethod
+  (STRIPE_CHECKOUT | STRIPE_ELEMENTS), guestEmail, guestName, guestPhone
+  subtotalAmount, taxRate (basis points), taxAmount, totalAmount, currency
+  stripeCheckoutSessionId, stripePaymentIntentId, metadata (JSON)
+  Timestamps: paidAt, fulfilledAt, cancelledAt, refundedAt
 
-#### 2. Cart (client-side + server-validated)
+**OrderLineItem** — snapshot frozen at purchase time
+  title, variantTitle, sku, imageUrl — NEVER join back to Product
 
-Shopify model: cart is a lightweight object, server-validated at checkout.
+**OrderEvent** — append-only audit log (Shopify timeline)
+  Types: CREATED, PAID, FULFILLED, CANCELLED, REFUNDED, NOTE_ADDED,
+         EMAIL_SENT, INVENTORY_RESERVED/CONSUMED/RELEASED,
+         STRIPE_WEBHOOK_RECEIVED, PAYMENT_FAILED, GUEST_INFO_UPDATED,
+         RECONCILED
 
-  Cart stored client-side (localStorage or cookie), validated server-side
-  before checkout. Cart is NOT a DB model — it's ephemeral until checkout.
+**OrderNumberSequence** — atomic per-tenant counter via raw SQL
+  INSERT ... ON CONFLICT ... DO UPDATE ... RETURNING (race-safe)
 
-  CartItem shape:
-    productId, variantId (nullable if no variants), quantity,
-    price (snapshot at add time — re-validated at checkout)
+**StripeWebhookEvent** — event-level dedup (stripeEventId PK)
+  Cleaned up after 30 days by cron.
 
-  Cart operations:
-    addToCart, removeFromCart, updateQuantity, clearCart
-    validateCart (server) — checks stock, price freshness, product status
+### Stripe Connect
 
-  Cart UI:
-    Slide-out drawer (Shopify-style) or dedicated cart page
-    Line items with thumbnail, title, variant info, quantity, price
-    Subtotal, taxes, total
+Each tenant connects their own Stripe account (Standard Connect).
+Key fields on Tenant: stripeAccountId, stripeOnboardingComplete,
+stripeLivemode, stripeConnectedAt.
 
-#### 3. Checkout flow
+- `getStripe()` in `_lib/stripe/client.ts` — singleton, ONLY entry point
+- `_lib/stripe/connect.ts` — onboarding, status check, disconnect
+- `_lib/stripe/verify-account.ts` — cached charges_enabled check (60s TTL)
+- Connect params: `{ stripeAccount: tenant.stripeAccountId }` on all Stripe calls
 
-Shopify model: collect info → review → pay → confirm.
+### Webhook handler (api/webhooks/stripe/route.ts)
 
-  Step 1: Guest info (name, email, phone — link to GuestData type from PMS)
-  Step 2: Review order (line items, totals, policies)
-  Step 3: Payment (Stripe Checkout Session redirect OR embedded Payment Element)
-  Step 4: Confirmation page (order summary, confirmation number, email sent)
+Handles all Stripe events in one handler:
+  checkout.session.completed — Checkout Session paid
+  checkout.session.expired — session timed out
+  payment_intent.succeeded — Elements payment confirmed
+  payment_intent.payment_failed — Elements payment failed (logged, not cancelled)
+  charge.refunded — refund processed
 
-  Checkout creates an Order record BEFORE payment (status: PENDING).
-  Stripe webhook updates order to PAID on success, FAILED on failure.
+Security layers:
+1. Signature verification (stripe.webhooks.constructEvent, default 300s tolerance)
+2. Connect account verification (event.account → prisma lookup before trusting metadata)
+3. Event-level dedup (StripeWebhookEvent unique INSERT)
+4. Order-level idempotency (canTransition guard)
 
-  **Inventory reservation at checkout start:**
-    reserve() → creates InventoryChange with reason RESERVATION
-    On payment success → consume (PURCHASE)
-    On timeout/failure → release (RESERVATION_RELEASED)
-    Reservation TTL: ~15 minutes (configurable per tenant)
+### Reconciliation (api/cron/reconcile-stripe/route.ts)
 
-#### 4. Order model (new Prisma models needed)
+Runs every 15 minutes. Finds PENDING orders older than 30 minutes,
+checks actual status on Stripe, heals missed webhooks.
+Covers: PI succeeded but webhook missed, session expired but webhook missed.
 
-  **Order** — the purchase record
-    id, tenantId, orderNumber (sequential, tenant-scoped, e.g. #1001)
-    status: PENDING → PAID → FULFILLED → CANCELLED → REFUNDED
-    email, guestName, guestPhone (denormalized for fast display)
-    subtotal, taxTotal, total, currency
-    stripePaymentIntentId, stripeCheckoutSessionId
-    paidAt, fulfilledAt, cancelledAt, refundedAt
-    metadata (JSON — extensible)
-    createdAt, updatedAt
+### Cart system
 
-  **OrderLineItem** — each product/variant in the order
-    id, orderId, productId, variantId (nullable)
-    title (snapshot), variantTitle (snapshot), sku (snapshot)
-    quantity, unitPrice, totalPrice, currency
-    imageUrl (snapshot)
+Client-side localStorage, server-validated at checkout.
+Key: `bf_cart_{tenantId}`. NOT a DB model.
+`validateCart()` re-computes prices via `effectivePrice()` — never trusts client.
 
-  **OrderEvent** — append-only audit log (Shopify timeline model)
-    id, orderId, type (CREATED, PAID, FULFILLED, CANCELLED, REFUNDED,
-                       NOTE_ADDED, EMAIL_SENT, INVENTORY_RESERVED,
-                       INVENTORY_CONSUMED, INVENTORY_RELEASED)
-    message, metadata (JSON), actorUserId, createdAt
+### Security hardening
 
-  **Key principle: snapshot product data on OrderLineItem.**
-  Product title, price, image at time of purchase are frozen on the line item.
-  If the product is later edited or deleted, the order record is unaffected.
-  This is how Shopify does it — orders are immutable purchase receipts.
+- tenantId NEVER in request bodies — resolved from host header via
+  `resolveTenantFromHost()` in all checkout/booking API routes
+- Amount NEVER from client — derived server-side from product/PMS
+- Amount bounds: min 1000 (10 SEK), max 10,000,000 (100K SEK)
+- Currency allowlist: SEK, EUR, NOK, DKK — z.enum(), not z.string()
+- Date validation: `validateStayDates()` in `_lib/validation/dates.ts`
+  (shared across all routes — min 1 night, max 365, not in past)
+- Rate limiting: in-memory sliding window per IP (X-Forwarded-For first IP)
+  PI: 10/hr, checkout-create: 10/hr, bookings: 20/hr, update-guest: 5/10min
+- Connect: `verifyChargesEnabled()` with 60s cache before every Stripe call
+- PMS booking idempotency: `PendingBookingLock` table (SHA-256 of
+  tenant+category+dates+email), 60s TTL, cleaned by cron
 
-#### 5. Product detail pages
+### Tax
 
-  Individual product pages for variant selection and add-to-cart.
-  URL: /{tenantSlug}/products/{productSlug}
+`getTaxRate()` in `_lib/orders/tax.ts` returns 0 (stub).
+Both checkout routes call it. Order stores `taxRate` (basis points)
+and `taxAmount`. UI shows "inkl. moms" until tax engine is implemented.
 
-  Shows: title, description, media gallery, option selectors (dropdowns/swatches),
-  variant price, inventory status, add-to-cart button.
+### Key files
 
-  Collection pages: /{tenantSlug}/collections/{collectionSlug}
-  Grid of products in the collection with links to product detail pages.
+- Checkout page: `app/(guest)/checkout/page.tsx` + `CheckoutClient.tsx`
+- Success page: `app/(guest)/checkout/success/page.tsx`
+- Payment intent: `app/api/checkout/payment-intent/route.ts`
+- Checkout create: `app/api/checkout/create/route.ts`
+- Guest info: `app/api/checkout/update-guest/route.ts`
+- Webhook: `app/api/webhooks/stripe/route.ts`
+- Reconciliation: `app/api/cron/reconcile-stripe/route.ts`
+- Expire reservations: `app/api/cron/expire-reservations/route.ts`
+- Stripe client: `app/_lib/stripe/client.ts`
+- Stripe Connect: `app/_lib/stripe/connect.ts`
+- Account verify: `app/_lib/stripe/verify-account.ts`
+- Order types: `app/_lib/orders/types.ts`
+- Order sequence: `app/_lib/orders/sequence.ts`
+- Tax stub: `app/_lib/orders/tax.ts`
+- Cart client: `app/_lib/cart/client.ts`
+- Cart validate: `app/_lib/cart/validate.ts`
+- Date validation: `app/_lib/validation/dates.ts`
+- Rate limiting: `app/_lib/rate-limit/checkout.ts`
+- Logger: `app/_lib/logger.ts`
+- Booking create: `app/api/bookings/create/route.ts`
+- Availability: `app/api/availability/route.ts`
+- Admin orders: `app/(admin)/orders/`
+- Payments settings: `app/(admin)/settings/payments/`
 
-#### 6. Analytics and reporting
+### Cron jobs (vercel.json)
 
-Shopify model: sales dashboard with product-level breakdowns.
-
-  **Per-product metrics:**
-    Total revenue, total units sold, total orders containing product
-    Revenue by variant, units by variant
-    Average order value for orders containing product
-    Conversion rate (views → add-to-cart → purchase)
-
-  **Per-collection metrics:**
-    Total revenue from products in collection
-    Best/worst performing products in collection
-
-  **Global metrics:**
-    Total revenue (by day/week/month), total orders, average order value
-    Top products by revenue, top products by units sold
-    Orders by status (pending, paid, fulfilled, cancelled, refunded)
-
-  **Implementation:** Query OrderLineItem joined with Product/Variant.
-  No separate analytics tables needed initially — aggregate from orders.
-  Add materialized views or summary tables when scale demands it.
-
-#### 7. Email notifications (order lifecycle)
-
-  order_confirmed — sent immediately after payment succeeds
-  order_fulfilled — sent when tenant marks order as fulfilled
-  order_cancelled — sent on cancellation
-  order_refunded — sent on refund
-  shipping_notification — optional, if physical goods
-
-  Uses existing Resend infrastructure + email template system.
-
-### Architectural decisions
-
-1. **Stripe is payment-only** — no product sync to Stripe. Our DB is the
-   source of truth for products, prices, and inventory.
-2. **Cart is client-side** — no Cart DB model. Server validates at checkout.
-3. **Orders snapshot product data** — line items freeze title, price, image.
-   Orders are immutable receipts.
-4. **Inventory reserved at checkout, consumed on payment.** Reservation has
-   a TTL. Uses existing InventoryChange ledger with RESERVATION/PURCHASE reasons.
-5. **Sequential order numbers per tenant** — human-friendly (#1001, #1002).
-   Use DB sequence or atomic counter, NOT UUID for display.
-6. **Webhook-driven payment status** — never poll Stripe. Webhook updates
-   order status. Idempotent via stripePaymentIntentId.
-7. **Multi-tenant Stripe Connect** — each tenant has their own Stripe account.
-   Platform creates Checkout Sessions on behalf of connected account.
-8. **Analytics from order data** — no separate analytics pipeline initially.
-   Query orders + line items with date filters and aggregations.
+- `/api/cron/expire-reservations` — every 5 min
+  Releases expired inventory reservations, booking locks, webhook events (>30d)
+- `/api/cron/reconcile-stripe` — every 15 min
+  Heals stuck PENDING orders by checking Stripe status
 
 ### Commerce invariants — never violate these
 
-1. Product prices in smallest currency unit (ören/cents) — never floats
-2. effectivePrice() is the ONLY price resolution function
-3. Order line items snapshot all product data at purchase time
-4. Inventory changes are append-only — never UPDATE, always INSERT
-5. Stripe webhooks are idempotent — check order status before transitioning
-6. Cart validated server-side before creating checkout — never trust client prices
-7. Order numbers are sequential per tenant — never gaps in production
-8. All payment operations tenant-scoped via Stripe Connect
-9. No Stripe secret keys in client code — server actions only
-10. Reservation TTL enforced — unreleased reservations auto-expire
+1. Order is created BEFORE any Stripe API call — always
+2. canTransition() is the ONLY guard for status mutations — no inline checks
+3. tenantId is NEVER in a request body — resolved from host header
+4. Payment amount is NEVER from the client — derived server-side
+5. Product prices in smallest currency unit (ören/cents) — never floats
+6. effectivePrice() is the ONLY price resolution function
+7. Order line items snapshot all product data at purchase time
+8. Inventory changes are append-only — never UPDATE, always INSERT
+9. Stripe webhooks are idempotent — event dedup + canTransition guard
+10. Cart validated server-side before checkout — never trust client prices
+11. Order numbers are sequential per tenant — atomic DB counter
+12. All Stripe calls use Connect params when tenant has stripeAccountId
+13. No Stripe secret keys in client code — only NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+14. Reservation TTL enforced — cron releases expired reservations
+15. Structured logging (JSON) on all payment lifecycle events
 
 ---
 

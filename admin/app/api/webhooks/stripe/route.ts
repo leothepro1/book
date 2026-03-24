@@ -18,6 +18,8 @@ import { prisma } from "@/app/_lib/db/prisma";
 import { env } from "@/app/_lib/env";
 import { getStripe } from "@/app/_lib/stripe/client";
 import { adjustInventoryInTx } from "@/app/_lib/products/inventory";
+import { canTransition } from "@/app/_lib/orders/types";
+import { log } from "@/app/_lib/logger";
 import type Stripe from "stripe";
 
 export async function POST(req: Request) {
@@ -38,15 +40,33 @@ export async function POST(req: Request) {
       env.STRIPE_WEBHOOK_SECRET,
     );
   } catch (err) {
-    console.error("[stripe-webhook] Signature verification failed:", err);
+    log("error", "webhook.signature_failed", { error: String(err) });
     return new NextResponse("Invalid signature", { status: 400 });
+  }
+
+  // ── Resolve tenant — verify Connect account matches ──────────
+  const obj = event.data.object as { metadata?: Record<string, string> };
+  let tenantId: string;
+
+  if (event.account) {
+    // Connect webhook — verify the connected account is ours
+    const connectTenant = await prisma.tenant.findFirst({
+      where: { stripeAccountId: event.account },
+      select: { id: true },
+    });
+    if (!connectTenant) {
+      log("warn", "webhook.unknown_connect_account", { stripeAccount: event.account });
+      return new NextResponse("Unknown account", { status: 400 });
+    }
+    tenantId = connectTenant.id;
+  } else {
+    // Platform webhook — trust metadata
+    tenantId = obj.metadata?.tenantId ?? "unknown";
   }
 
   // ── Event-level dedup ─────────────────────────────────────────
   // Atomic INSERT — if the event was already processed, the unique
   // constraint on stripeEventId prevents a second insert.
-  const obj = event.data.object as { metadata?: Record<string, string> };
-  const tenantId = obj.metadata?.tenantId ?? "unknown";
 
   try {
     await prisma.stripeWebhookEvent.create({
@@ -84,12 +104,20 @@ export async function POST(req: Request) {
         await handleChargeRefunded(event.data.object as Stripe.Charge);
         break;
 
+      case "payment_intent.succeeded":
+        await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
+        break;
+
+      case "payment_intent.payment_failed":
+        await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
+        break;
+
       default:
         // Unhandled event type — acknowledge receipt
         break;
     }
   } catch (err) {
-    console.error(`[stripe-webhook] Error processing ${event.type}:`, err);
+    log("error", "webhook.processing_failed", { eventType: event.type, eventId: event.id, error: String(err) });
     // Return 200 anyway — Stripe retries on 5xx, and we've already
     // recorded the event in StripeWebhookEvent so it won't be re-processed
     return NextResponse.json({ ok: false, error: "Processing error (acknowledged)" });
@@ -107,12 +135,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   });
 
   if (!order) {
-    console.warn(`[stripe-webhook] No order found for session ${session.id}`);
+    log("warn", "webhook.order_not_found", { sessionId: session.id });
     return;
   }
 
-  // Order-level idempotency — already processed
-  if (order.status !== "PENDING") return;
+  // Order-level idempotency — canTransition guards invalid/duplicate transitions
+  if (!canTransition(order.status, "PAID")) return;
 
   const paymentIntentId =
     typeof session.payment_intent === "string"
@@ -210,8 +238,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       },
     );
   } catch (err) {
-    console.error(`[stripe-webhook] Failed to send confirmation email for order #${order.orderNumber}:`, err);
-    // Email failure must NEVER abort the webhook response
+    log("error", "webhook.email_failed", { orderId: order.id, orderNumber: order.orderNumber, error: String(err) });
   }
 }
 
@@ -223,7 +250,7 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
   });
 
   if (!order) return;
-  if (order.status !== "PENDING") return;
+  if (!canTransition(order.status, "CANCELLED")) return;
 
   await prisma.$transaction(async (tx) => {
     await tx.order.update({
@@ -298,7 +325,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   });
 
   if (!order) return;
-  if (order.status === "REFUNDED") return;
+  if (!canTransition(order.status, "REFUNDED")) return;
 
   await prisma.$transaction(async (tx) => {
     await tx.order.update({
@@ -334,5 +361,111 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
         },
       ],
     });
+  });
+}
+
+// ── payment_intent.succeeded ───────────────────────────────────
+// Handles the Elements flow (accommodation checkout).
+// The Checkout Session flow uses checkout.session.completed instead.
+
+async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
+  const orderId = pi.metadata?.orderId;
+  if (!orderId) {
+    // PaymentIntent without orderId — not from our system or legacy flow
+    return;
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { lineItems: true },
+  });
+
+  if (!order) {
+    log("warn", "webhook.order_not_found", { orderId });
+    return;
+  }
+
+  if (!canTransition(order.status, "PAID")) return;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.order.update({
+      where: { id: order.id },
+      data: {
+        status: "PAID",
+        paidAt: new Date(),
+        stripePaymentIntentId: pi.id,
+        guestEmail: order.guestEmail || (pi.receipt_email ?? ""),
+      },
+    });
+
+    await tx.orderEvent.createMany({
+      data: [
+        {
+          orderId: order.id,
+          type: "STRIPE_WEBHOOK_RECEIVED",
+          message: `payment_intent.succeeded (${pi.id})`,
+          metadata: { paymentIntentId: pi.id },
+        },
+        {
+          orderId: order.id,
+          type: "PAID",
+          message: `Betalning mottagen — ${pi.amount / 100} ${pi.currency.toUpperCase()}`,
+        },
+      ],
+    });
+  });
+
+  // Send confirmation email (non-blocking)
+  try {
+    if (order.guestEmail) {
+      const { sendEmailEvent } = await import("@/app/_lib/email/send");
+      const { formatPriceDisplay } = await import("@/app/_lib/products/pricing");
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: order.tenantId },
+        select: { name: true },
+      });
+
+      await sendEmailEvent(
+        order.tenantId,
+        "ORDER_CONFIRMED" as Parameters<typeof sendEmailEvent>[1],
+        order.guestEmail,
+        {
+          guestName: order.guestName,
+          orderNumber: String(order.orderNumber),
+          orderTotal: `${formatPriceDisplay(order.totalAmount, order.currency)} kr`,
+          currency: order.currency,
+          tenantName: tenant?.name ?? "",
+        },
+      );
+    }
+  } catch (err) {
+    log("error", "webhook.email_failed", { orderId: order.id, orderNumber: order.orderNumber, error: String(err) });
+  }
+}
+
+// ── payment_intent.payment_failed ──────────────────────────────
+// Log the failure but do NOT cancel — guest may retry.
+
+async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
+  const orderId = pi.metadata?.orderId;
+  if (!orderId) return;
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { id: true, status: true, orderNumber: true },
+  });
+
+  if (!order || order.status !== "PENDING") return;
+
+  await prisma.orderEvent.create({
+    data: {
+      orderId: order.id,
+      type: "PAYMENT_FAILED",
+      message: `Betalningsförsök misslyckades — ${pi.last_payment_error?.message ?? "okänt fel"}`,
+      metadata: {
+        paymentIntentId: pi.id,
+        errorCode: pi.last_payment_error?.code ?? null,
+      },
+    },
   });
 }

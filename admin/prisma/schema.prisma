@@ -26,6 +26,12 @@ enum OrderStatus {
   REFUNDED      // full refund issued
 }
 
+/// How payment was collected. Determines webhook handling path.
+enum PaymentMethod {
+  STRIPE_CHECKOUT   // Stripe-hosted Checkout Session (cart/shop flow)
+  STRIPE_ELEMENTS   // Embedded Stripe Elements (accommodation flow)
+}
+
 enum OrderEventType {
   CREATED
   PAID
@@ -38,6 +44,20 @@ enum OrderEventType {
   INVENTORY_CONSUMED
   INVENTORY_RELEASED
   STRIPE_WEBHOOK_RECEIVED
+  PAYMENT_FAILED
+  GUEST_INFO_UPDATED
+  RECONCILED
+}
+
+/// Idempotency lock for PMS booking creation.
+/// Prevents duplicate concurrent bookings for the same dates/guest.
+/// Cleaned up by the expire-reservations cron.
+model PendingBookingLock {
+  key        String   @id
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 // ============================================================================
@@ -1208,22 +1228,27 @@ model Order {
   /// Sequential per tenant — human-friendly order number (e.g. #1001)
   orderNumber             Int
 
-  status                  OrderStatus @default(PENDING)
+  status                  OrderStatus    @default(PENDING)
+  paymentMethod           PaymentMethod  @default(STRIPE_CHECKOUT)
 
-  // Guest info — denormalized for fast display
-  guestEmail              String
-  guestName               String
+  // Guest info — denormalized for fast display (nullable for Elements flow where collected later)
+  guestEmail              String         @default("")
+  guestName               String         @default("")
   guestPhone              String?
 
   // Money — always integer (ören/cents), never float
   subtotalAmount          Int           // before tax
   taxAmount               Int           @default(0)
+  taxRate                 Int           @default(0)  // basis points, e.g. 2500 = 25%
   totalAmount             Int           // what guest paid
   currency                String        @default("SEK")
 
   // Stripe references
   stripeCheckoutSessionId String?       @unique
   stripePaymentIntentId   String?       @unique
+
+  /// Flexible metadata — accommodation dates, PMS refs, etc.
+  metadata                Json?
 
   // Timestamps
   paidAt                  DateTime?

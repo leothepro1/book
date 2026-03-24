@@ -2,6 +2,42 @@
 
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
 
+/* ── Checkout header ─────────────────────────────── */
+
+.co-header {
+  background: #fff;
+  border-bottom: 1px solid #EBEBEB;
+}
+
+.co-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 14px 24px;
+}
+
+@media (max-width: 900px) {
+  .co-header__inner {
+    padding: 12px 16px;
+  }
+}
+
+.co-header__logo {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.co-header__logo-placeholder {
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  background: #fafafa;
+}
+
+
 /* ── Font stack ────────────────────────────────── */
 
 .co, .co *, .co *::before, .co *::after {
@@ -50,7 +86,7 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: #f7f7f7;
+  background: #f2f2f2;
   border: none;
   cursor: pointer;
   display: flex;
@@ -96,11 +132,8 @@
 .co__step {
   border: 1px solid #ddd;
   border-radius: 12px;
-  will-change: border-color, box-shadow, transform;
-  transition: border-color 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-              box-shadow 0.5s cubic-bezier(0.22, 1, 0.36, 1),
-              transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-  transform: translateY(0);
+  transition: border-color 0.3s ease-out,
+              box-shadow 0.3s ease-out;
 }
 
 .co__step--active {
@@ -108,21 +141,17 @@
   box-shadow: 0px 0px 0px 1px rgba(0,0,0,0.02),
               0px 2px 6px 0px rgba(0,0,0,0.04),
               0px 4px 8px 0px rgba(0,0,0,0.10);
-  transform: translateY(-1px);
 }
 
 .co__step--active .co__step-header {
   padding-bottom: 4px;
 }
 
-/* Leaving-active: card is losing focus — fade shadow faster than expand */
 .co__step--leaving {
   border-color: #ddd;
   box-shadow: none;
-  transform: translateY(0);
-  transition: border-color 0.25s ease-out,
-              box-shadow 0.25s ease-out,
-              transform 0.3s ease-out;
+  transition: border-color 0.2s ease-out,
+              box-shadow 0.2s ease-out;
 }
 
 .co__step-header {
@@ -157,27 +186,27 @@
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
-  transition: grid-template-rows 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-              opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: grid-template-rows 0.3s ease-out,
+              opacity 0.2s ease-out;
 }
 
 .co__step-summary--visible {
   grid-template-rows: 1fr;
   opacity: 1;
-  transition: grid-template-rows 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.15s,
-              opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.2s;
+  transition: grid-template-rows 0.3s ease-out 0.08s,
+              opacity 0.25s ease-out 0.12s;
 }
 
 .co__step-summary-inner {
   overflow: hidden;
   min-height: 0;
   padding-top: 0;
-  transition: padding-top 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: padding-top 0.3s ease-out;
 }
 
 .co__step-summary--visible .co__step-summary-inner {
   padding-top: 4px;
-  transition-delay: 0.15s;
+  transition-delay: 0.08s;
 }
 
 .co__step-summary-card,
@@ -203,25 +232,21 @@
   border-radius: 10px;
   flex-shrink: 0;
   margin-left: 16px;
-  padding: 8px 17px;
-  font-size: 12px;
+  padding: 9px 17px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1em;
   text-decoration: none;
   opacity: 0;
-  transform: scale(0.92);
-  transition: opacity 0.25s ease-out,
-              transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+  transition: opacity 0.2s ease-out,
               background 0.15s;
   pointer-events: none;
 }
 
 .co__step-edit--visible {
   opacity: 1;
-  transform: scale(1);
   pointer-events: auto;
-  transition: opacity 0.25s cubic-bezier(0.22, 1, 0.36, 1) 0.25s,
-              transform 0.3s cubic-bezier(0.22, 1, 0.36, 1) 0.25s,
+  transition: opacity 0.2s ease-out 0.15s,
               background 0.15s;
 }
 
@@ -246,38 +271,24 @@
   background: var(--text, #1a1a1a);
   color: var(--background, #fff);
   cursor: pointer;
-  transition: opacity 0.15s, transform 0.15s;
+  transition: opacity 0.15s;
 }
 
 .co__next-btn:hover {
   opacity: 0.88;
 }
 
-.co__next-btn:active {
-  transform: scale(0.97);
-}
-
 /* ── Step body — orchestrated morph ──────────────── */
-
-/*
- * Two-layer animation:
- *   1. Grid-template-rows: 0fr → 1fr (height morph)
- *   2. Inner content opacity (separate, staggered)
- *
- * Close: content fades out first (150ms), then height collapses (300ms)
- * Open:  height expands first (400ms spring), content fades in after 120ms
- */
 
 .co__step-body {
   display: grid;
   grid-template-rows: 0fr;
-  will-change: grid-template-rows;
-  transition: grid-template-rows 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: grid-template-rows 0.25s ease-out;
 }
 
 .co__step-body--open {
   grid-template-rows: 1fr;
-  transition: grid-template-rows 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.08s;
+  transition: grid-template-rows 0.35s ease-out;
 }
 
 .co__step-inner {
@@ -290,22 +301,17 @@
 }
 
 /*
- * Content enter/exit: driven by a data attribute so that
- * initial render (no transition yet) shows content immediately,
- * while subsequent step changes get the staggered fade + slide.
+ * Content fade: only activates after first step change (data-animate).
+ * Initial render shows content immediately.
  */
 .co__step-content[data-animate] {
   opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 0.15s ease-out,
-              transform 0.15s ease-out;
+  transition: opacity 0.15s ease-out;
 }
 
 .co__step-body--open .co__step-content[data-animate] {
   opacity: 1;
-  transform: translateY(0);
-  transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.16s,
-              transform 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.12s;
+  transition: opacity 0.25s ease-out 0.1s;
 }
 
 .co__step-desc {
@@ -509,7 +515,7 @@
   border-radius: 50%;
   background: #1a1a1a;
   transform: translate(-50%, -50%) scale(0);
-  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.2s ease-out;
 }
 
 .co__method--active .co__method-radio-dot {
@@ -531,16 +537,16 @@
 }
 
 .co__method-desc {
-  font-size: 13px;
-  font-weight: 400;
-  color: color-mix(in srgb, var(--text, #000) 55%, transparent);
-  line-height: 1.5;
+    color: #6a6a6a;
+    font-size: .82rem;
+    font-weight: 400;
+    line-height: 1.5;
 }
 
 .co__method-more {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text, #1a1a1a);
+  font-size: .82rem;
+  font-weight: 500;
+  color: #6a6a6a;
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
@@ -574,6 +580,41 @@
   margin: 0;
 }
 
+/* ── Klarna step 2 ─────────────────────────────── */
+
+.co__klarna-step2 {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 0 8px;
+}
+
+.co__klarna-step2-logo {
+  width: auto;
+  height: 15px;
+  place-self: start;
+}
+
+.co__klarna-step2-legal {
+  color: #6a6a6a;
+  text-align: left;
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.co__klarna-step2-legal a {
+  color: #6a6a6a;
+  text-underline-offset: 2px;
+  font-weight: 500;
+  text-decoration: underline;
+}
+
+.co__klarna-step2-legal a:hover {
+  opacity: 0.7;
+}
+
 .co__method-cards {
   display: flex;
   align-items: center;
@@ -584,25 +625,24 @@
 .co__method-body {
   display: grid;
   grid-template-rows: 0fr;
-  will-change: grid-template-rows;
-  transition: grid-template-rows 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: grid-template-rows 0.25s ease-out;
 }
 
 .co__method-body--open {
   grid-template-rows: 1fr;
-  transition: grid-template-rows 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: grid-template-rows 0.3s ease-out;
 }
 
 .co__method-inner {
   overflow: hidden;
   min-height: 0;
   opacity: 0;
-  transition: opacity 0.12s ease-out;
+  transition: opacity 0.15s ease-out;
 }
 
 .co__method-body--open .co__method-inner {
   opacity: 1;
-  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1) 0.1s;
+  transition: opacity 0.2s ease-out 0.08s;
 }
 
 .co__method-redirect {
@@ -750,6 +790,195 @@
   line-height: 1.5;
 }
 
+
+/* ── Guest info form (Step 3) ─────────────────── */
+
+.co__guest-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.co__guest-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 400;
+  border: 1.5px solid #DFDFDF;
+  border-radius: 8px;
+  background: #fff;
+  color: #1a1a1a;
+  outline: none;
+  font-family: inherit;
+  transition: 0.15s;
+}
+
+.co__guest-input:focus {
+  border-color: #005BD3;
+  outline: 1px solid #005BD3;
+}
+
+.co__guest-input::placeholder {
+  color: #999;
+}
+
+/* ── Contact form (Step 1) ────────────────────── */
+
+.co__contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.co__contact-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.co__contact-field > .co__card-label {
+  margin-bottom: 4px;
+}
+
+.co__contact-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 500px) {
+  .co__contact-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.co__select-wrap {
+  position: relative;
+}
+
+.co__select-chevron {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 20px;
+  color: #666;
+  pointer-events: none;
+}
+
+.co__guest-select {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 400;
+  border: 1.5px solid #DFDFDF;
+  border-radius: 8px;
+  background: #fff;
+  color: #1a1a1a;
+  outline: none;
+  font-family: inherit;
+  appearance: none;
+  padding-right: 40px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+
+.co__guest-select:focus {
+  border-color: #005BD3;
+  outline: 1px solid #005BD3;
+}
+
+.co__guest-input--error {
+   border-color: #DD1D1D;
+  outline: 1px solid#DD1D1D;
+}
+
+.co__guest-input--error:focus {
+  border-color: #DD1D1D;
+  outline: 1px solid#DD1D1D;
+}
+
+/* Error slide — same pattern as email-sender__slide */
+.co__field-slide {
+  overflow: hidden;
+  transition: max-height 0.35s ease-out,
+              opacity 0.3s ease-out,
+              margin-top 0.35s ease-out;
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+}
+
+.co__field-slide--visible {
+  max-height: 40px;
+  opacity: 1;
+  margin-top: 6px;
+}
+
+.co__field-error {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #DA2F35;
+  line-height: 1.3;
+}
+
+.co__field-error-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* Address input with search icon */
+.co__address-wrap {
+  position: relative;
+}
+
+.co__guest-input--address {
+  padding-right: 40px;
+}
+
+.co__address-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 20px;
+  color: #999;
+  pointer-events: none;
+}
+
+/* Google Places dropdown override */
+.pac-container {
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  font-family: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  margin-top: 4px;
+  z-index: 9999;
+}
+
+.pac-item {
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  border-top: 1px solid #f0f0f0;
+}
+
+.pac-item:first-child {
+  border-top: none;
+}
+
+.pac-item:hover {
+  background: #f7f7f7;
+}
+
+.pac-item-query {
+  font-weight: 500;
+  color: #1a1a1a;
+}
 
 .co__terms {
   font-size: 12px;

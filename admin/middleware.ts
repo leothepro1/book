@@ -121,30 +121,23 @@ interface LocaleResolution {
 function resolveLocaleFromPath(request: NextRequest): LocaleResolution {
   const pathname = request.nextUrl.pathname;
 
-  // Match /{locale}/p/[token]/... — locale prefix before all guest routes
-  // Also matches /{locale}/check-in, /{locale}/check-out
-  const match = pathname.match(/^\/([a-z]{2})(\/p\/[^/]+.*)$/);
-  if (!match) {
-    return { locale: PRIMARY_LOCALE, token: null, rewriteUrl: null };
+  // Match /{locale}/p/[token]/... — locale prefix before token-based guest routes
+  const tokenMatch = pathname.match(/^\/([a-z]{2})(\/p\/[^/]+.*)$/);
+  if (tokenMatch && LOCALE_CODES.has(tokenMatch[1])) {
+    const restPath = tokenMatch[2];
+    const token = restPath.match(/^\/p\/([^/]+)/)?.[1] ?? null;
+    return { locale: tokenMatch[1], token, rewriteUrl: new URL(restPath, request.url) };
   }
 
-  const possibleLocale = match[1];
-  const restPath = match[2]; // e.g. /p/abc123/stays
-
-  if (!LOCALE_CODES.has(possibleLocale)) {
-    // Not a locale code — could be a route like /home, /editor
-    return { locale: PRIMARY_LOCALE, token: null, rewriteUrl: null };
+  // Match /{locale}/checkout, /{locale}/stays, /{locale}/shop/...
+  // Subdomain-based routes — no token needed
+  const guestMatch = pathname.match(/^\/([a-z]{2})(\/(checkout|stays|shop)(\/.*)?$)/);
+  if (guestMatch && LOCALE_CODES.has(guestMatch[1])) {
+    const restPath = guestMatch[2];
+    return { locale: guestMatch[1], token: null, rewriteUrl: new URL(restPath, request.url) };
   }
 
-  // Extract token from the rest path for published-state validation
-  const tokenMatch = restPath.match(/^\/p\/([^/]+)/);
-  const token = tokenMatch?.[1] ?? null;
-
-  // Rewrite URL to strip the locale prefix
-  // /de/p/abc123/stays → /p/abc123/stays
-  const rewriteUrl = new URL(restPath, request.url);
-
-  return { locale: possibleLocale, token, rewriteUrl };
+  return { locale: PRIMARY_LOCALE, token: null, rewriteUrl: null };
 }
 
 // ── Apply locale to response ─────────────────────────────────
@@ -255,6 +248,7 @@ export const config = {
     '/(api(?!/webhooks))(.*)',
     // Guest portal paths — needed for locale detection
     '/p/(.*)',
+    '/checkout(.*)',
     '/shop/(.*)',
     '/stays(.*)',
     '/check-in(.*)',
@@ -262,7 +256,10 @@ export const config = {
     '/login(.*)',
     '/no-booking(.*)',
     '/portal/(.*)',
-    // Locale-prefixed guest routes: /{locale}/p/...
+    // Locale-prefixed guest routes: /{locale}/p/..., /{locale}/checkout, etc.
     '/:path((?:[a-z]{2})/p/.*)',
+    '/:path((?:[a-z]{2})/checkout.*)',
+    '/:path((?:[a-z]{2})/stays.*)',
+    '/:path((?:[a-z]{2})/shop.*)',
   ],
 };

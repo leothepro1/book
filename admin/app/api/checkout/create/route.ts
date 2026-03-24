@@ -9,10 +9,14 @@ import { nextOrderNumber } from "@/app/_lib/orders/sequence";
 import { reserveInventoryForTenant } from "@/app/_lib/products/inventory";
 import { guestInfoSchema } from "@/app/_lib/orders/types";
 import type { CartItem } from "@/app/_lib/cart/types";
+import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
+import { getTaxRate } from "@/app/_lib/orders/tax";
+import { log } from "@/app/_lib/logger";
+import { verifyChargesEnabled } from "@/app/_lib/stripe/verify-account";
+import { checkRateLimit } from "@/app/_lib/rate-limit/checkout";
 import { headers } from "next/headers";
 
 const checkoutInputSchema = z.object({
-  tenantId: z.string().min(1),
   items: z.array(
     z.object({
       id: z.string(),
@@ -23,7 +27,7 @@ const checkoutInputSchema = z.object({
       variantTitle: z.string().nullable(),
       imageUrl: z.string().nullable(),
       unitAmount: z.number().int(),
-      currency: z.string(),
+      currency: z.enum(["SEK", "EUR", "NOK", "DKK"]),
       addedAt: z.string(),
     }),
   ).min(1, "Varukorgen är tom"),
@@ -31,6 +35,11 @@ const checkoutInputSchema = z.object({
 });
 
 export async function POST(req: Request) {
+  // ── Rate limit ──────────────────────────────────────────────
+  if (!(await checkRateLimit("co", 10, 60 * 60 * 1000))) {
+    return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
+  }
+
   let body: z.infer<typeof checkoutInputSchema>;
   try {
     const raw = await req.json();
@@ -42,9 +51,16 @@ export async function POST(req: Request) {
     );
   }
 
-  const { tenantId, items } = body;
+  const { items } = body;
 
-  // Verify tenant exists and has Stripe connected
+  // Resolve tenant from host header — never from request body
+  const resolvedTenant = await resolveTenantFromHost();
+  if (!resolvedTenant) {
+    return NextResponse.json({ error: "TENANT_NOT_FOUND" }, { status: 404 });
+  }
+  const tenantId = resolvedTenant.id;
+
+  // Verify tenant has Stripe connected
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: {
@@ -65,11 +81,17 @@ export async function POST(req: Request) {
 
   if (!tenant.stripeOnboardingComplete || !tenant.stripeAccountId) {
     return NextResponse.json(
-      {
-        error: "STRIPE_NOT_CONFIGURED",
-        message: "Betalning är inte konfigurerad för detta hotell.",
-      },
+      { error: "STRIPE_NOT_CONFIGURED", message: "Betalning är inte konfigurerad för detta hotell." },
       { status: 503 },
+    );
+  }
+
+  // ── Verify Connect account can accept charges (cached 60s) ──
+  const chargesOk = await verifyChargesEnabled(tenant.stripeAccountId);
+  if (!chargesOk) {
+    return NextResponse.json(
+      { error: "STRIPE_NOT_ACTIVE", message: "Betalning är inte aktiverad för detta hotell. Kontakta hotellet direkt." },
+      { status: 400 },
     );
   }
 
@@ -87,7 +109,9 @@ export async function POST(req: Request) {
     (sum, item) => sum + item.validatedUnitAmount * item.quantity,
     0,
   );
-  const taxAmount = 0; // Tax handled by Stripe or future tax engine
+  // TODO: derive taxRate from product.taxCategory once tax engine is implemented
+  const taxRate = getTaxRate("STANDARD", "SE");
+  const taxAmount = taxRate > 0 ? Math.round(subtotalAmount * taxRate / 10000) : 0;
   const totalAmount = subtotalAmount + taxAmount;
   const currency = validation.validatedItems[0]?.currency ?? "SEK";
 
@@ -106,6 +130,7 @@ export async function POST(req: Request) {
         guestName: body.guestInfo?.name ?? "",
         guestPhone: body.guestInfo?.phone,
         subtotalAmount,
+        taxRate,
         taxAmount,
         totalAmount,
         currency,

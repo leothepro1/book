@@ -50,6 +50,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/google.maps": "^3.58.1",
     "@types/mapbox__mapbox-gl-geocoder": "^5.1.1",
     "@types/mapbox-gl": "^3.4.1",
     "@types/node": "^20.19.35",
