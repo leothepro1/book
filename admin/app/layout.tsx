@@ -1,10 +1,18 @@
 import "./globals.css";
 import type { ReactNode } from "react";
 import { ClerkProvider } from '@clerk/nextjs';
+import Script from "next/script";
+
+const IS_DEV = process.env.NODE_ENV === "development";
+
+function AuthProvider({ children }: { children: ReactNode }) {
+  if (IS_DEV) return <>{children}</>;
+  return <ClerkProvider>{children}</ClerkProvider>;
+}
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <ClerkProvider>
+    <AuthProvider>
       <html lang="sv">
         <head>
           <link
@@ -15,11 +23,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             rel="stylesheet"
             href="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.css"
           />
+          <link rel="preload" href="/animations/loading.lottie" as="fetch" crossOrigin="anonymous" />
         </head>
         <body>
           {children}
+          <Script
+            src="https://unpkg.com/@lottiefiles/dotlottie-wc@0.7.1/dist/dotlottie-wc.js"
+            type="module"
+            strategy="beforeInteractive"
+          />
         </body>
       </html>
-    </ClerkProvider>
+    </AuthProvider>
   );
 }

@@ -500,6 +500,7 @@ const PAGE_TO_PREVIEW_ROUTE: Record<PageId, string> = {
   "help-center": "/p/[token]/help-center",
   support: "/p/[token]/support",
   product: "/preview/product",
+  checkout: "/preview/checkout",
 };
 
 /**

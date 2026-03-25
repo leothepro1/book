@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
+import { Loading } from "@/app/_components/Loading";
 import "./checkout-modal.css";
 
 interface CheckoutModalProps {
@@ -8,11 +9,13 @@ interface CheckoutModalProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  /** Show loading animation in body area while content is not ready. */
+  loading?: boolean;
 }
 
 const EXIT_DURATION = 250;
 
-export function CheckoutModal({ open, onClose, title, children }: CheckoutModalProps) {
+export function CheckoutModal({ open, onClose, title, children, loading = false }: CheckoutModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -24,9 +27,9 @@ export function CheckoutModal({ open, onClose, title, children }: CheckoutModalP
       // RAF to ensure DOM is painted before adding visible class
       requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)));
     } else if (mounted) {
+      // Instant close — no exit transition
       setVisible(false);
-      const timer = setTimeout(() => setMounted(false), EXIT_DURATION);
-      return () => clearTimeout(timer);
+      setMounted(false);
     }
   }, [open, mounted]);
 
@@ -65,7 +68,13 @@ export function CheckoutModal({ open, onClose, title, children }: CheckoutModalP
           </button>
         </div>
         <div className="com__body">
-          {children}
+          {loading ? (
+            <div className="com__loading">
+              <Loading size={40} />
+            </div>
+          ) : (
+            children
+          )}
         </div>
       </div>
     </div>

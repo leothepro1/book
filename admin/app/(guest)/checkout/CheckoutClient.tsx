@@ -9,6 +9,7 @@ import { Elements, CardNumberElement, CardExpiryElement, CardCvcElement, Payment
 import type { PaymentRequest } from "@stripe/stripe-js";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { CheckoutModal } from "./CheckoutModal";
+import { LoadingScreen } from "@/app/_components/Loading";
 import "./checkout.css";
 
 const stripePromise = loadStripe(
@@ -34,6 +35,12 @@ interface CheckoutProps {
     logoWidth: number;
   };
   ratePlanId: string | null;
+  /** Payment methods enabled for this tenant (from server) */
+  availableMethods?: string[];
+  /** Whether wallet detection should run */
+  walletsEnabled?: boolean;
+  /** Whether Klarna is available as payment type */
+  klarnaEnabled?: boolean;
 }
 
 type StepId = 1 | 2 | 3 | 4;
@@ -87,6 +94,38 @@ const ALL_PAYMENT_METHODS: Array<{ id: PaymentMethod; title: string; svg: string
     svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-label="Apple Pay" role="img" focusable="false" style="display: block; height: 32px; width: 32px;"><path d="M17.05 12.536c-.024-2.426 1.98-3.59 2.07-3.648-1.126-1.648-2.88-1.874-3.504-1.898-1.492-.152-2.912.88-3.67.88-.756 0-1.926-.858-3.166-.834-1.63.024-3.132.948-3.972 2.41-1.692 2.94-.432 7.296 1.216 9.684.806 1.166 1.768 2.476 3.032 2.43 1.216-.048 1.676-.788 3.148-.788 1.472 0 1.884.788 3.168.764 1.308-.024 2.142-1.188 2.94-2.358.928-1.352 1.308-2.662 1.332-2.73-.028-.012-2.556-.98-2.58-3.888z" fill="#1a1a1a"/></svg>`,
   },
 ];
+
+// ── Klarna auto-advance — renders legal text then advances ──
+
+function KlarnaAutoAdvance({ onAdvance }: { onAdvance: () => void }) {
+  const advancedRef = useRef(false);
+  useEffect(() => {
+    if (advancedRef.current) return;
+    advancedRef.current = true;
+    // Micro-delay so the step morphs open briefly, then auto-advances
+    const t = setTimeout(onAdvance, 80);
+    return () => clearTimeout(t);
+  }, [onAdvance]);
+
+  return (
+    <div className="co__klarna-step2">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="https://res.cloudinary.com/dmgmoisae/image/upload/v1774386014/klarna_black.d9f77175f9bc7a0600aef2215118c7f5_gnatss.svg"
+        alt="Klarna"
+        className="co__klarna-step2-logo"
+      />
+      <p className="co__klarna-step2-legal">
+        Genom att fortsätta godkänner du{" "}
+        <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/user" target="_blank" rel="noopener noreferrer">Klarnas köpvillkor</a>
+        {" "}och bekräftar att du har läst{" "}
+        <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/privacy" target="_blank" rel="noopener noreferrer">Klarnas sekretessmeddelande</a>
+        {" "}och{" "}
+        <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/cookie_purchase" target="_blank" rel="noopener noreferrer">Klarnas cookie-meddelande</a>.
+      </p>
+    </div>
+  );
+}
 
 // ── Card Inputs with floating labels ────────────────────────
 
@@ -457,7 +496,7 @@ function FieldError({ error }: { error?: string }) {
 
 // ── Main Checkout ──────────────────────────────────────────
 
-export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests, nights, bookingTerms, header, ratePlanId }: CheckoutProps) {
+export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests, nights, bookingTerms, header, ratePlanId, availableMethods, walletsEnabled = true, klarnaEnabled = true }: CheckoutProps) {
   const router = useRouter();
   const [activeStep, setActiveStep] = useState<StepId>(1);
   const [visibleStep, setVisibleStep] = useState<StepId>(1); // which body is expanded (lags activeStep for stagger)
@@ -478,7 +517,7 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
 
     staggerTimerRef.current = setTimeout(() => {
       setLeavingStep(null);
-    }, 300);
+    }, 200);
   }, [activeStep, hasTransitioned]);
 
   const [paymentType, setPaymentType] = useState<PaymentType>("full");
@@ -514,6 +553,10 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
   const [klarnaInfoOpen, setKlarnaInfoOpen] = useState(false);
   const [paymentReady, setPaymentReady] = useState(false);
   const [availableWallets, setAvailableWallets] = useState<{ gpay: boolean; applepay: boolean }>({ gpay: false, applepay: false });
+  const [ready, setReady] = useState(false);
+
+  // Mark ready after hydration — product data is already in props
+  useEffect(() => { setReady(true); }, []);
 
   // ── Google Places Autocomplete ──────────────────────────────
   useEffect(() => {
@@ -602,7 +645,7 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
 
   // Detect available wallets on mount via Stripe PaymentRequest
   useEffect(() => {
-    if (!stripePromise) return;
+    if (!walletsEnabled || !stripePromise) return;
     stripePromise.then((stripe) => {
       if (!stripe) return;
       const pr = stripe.paymentRequest({
@@ -619,10 +662,16 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
         }
       });
     });
-  }, []);
+  }, [walletsEnabled]);
 
-  // Filter payment methods based on wallet availability
+  // Filter payment methods based on wallet availability + tenant config
   const paymentMethods = ALL_PAYMENT_METHODS.filter((m) => {
+    // If tenant has configured available methods, respect that
+    if (availableMethods && !availableMethods.includes(m.id)) {
+      // Map wallet IDs: CheckoutClient uses "gpay"/"applepay", registry uses "google_pay"/"apple_pay"
+      const registryId = m.id === "gpay" ? "google_pay" : m.id === "applepay" ? "apple_pay" : m.id;
+      if (!availableMethods.includes(registryId)) return false;
+    }
     if (m.id === "gpay") return availableWallets.gpay;
     if (m.id === "applepay") return availableWallets.applepay;
     return true;
@@ -661,6 +710,13 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
   }, [completedSteps, clientSecret, orderId, product, productSlug, checkIn, checkOut, guests, ratePlanId, paymentType]);
 
   const handleNext = (step: StepId) => {
+    // When completing step 2 with Klarna, skip step 3 entirely —
+    // mark both 2 and 3 as completed, jump straight to step 4
+    if (step === 2 && paymentType === "klarna") {
+      setCompletedSteps((prev) => { const next = new Set(prev); next.add(2 as StepId); next.add(3 as StepId); return next; });
+      transitionToStep(4 as StepId);
+      return;
+    }
     setCompletedSteps((prev) => new Set(prev).add(step));
     if (step < 4) transitionToStep((step + 1) as StepId);
   };
@@ -700,6 +756,26 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
           ? `Betala ${product ? `${formatPriceDisplay(product.price, product.currency)} kr` : "—"} nu`
           : "Betala över tid med Klarna";
       case 3: {
+        if (paymentType === "klarna") {
+          return (
+            <div className="co__klarna-step2" style={{ marginTop: 4 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://res.cloudinary.com/dmgmoisae/image/upload/v1774386014/klarna_black.d9f77175f9bc7a0600aef2215118c7f5_gnatss.svg"
+                alt="Klarna"
+                className="co__klarna-step2-logo"
+              />
+              <p className="co__klarna-step2-legal">
+                Genom att fortsätta godkänner du{" "}
+                <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/user" target="_blank" rel="noopener noreferrer">Klarnas köpvillkor</a>
+                {" "}och bekräftar att du har läst{" "}
+                <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/privacy" target="_blank" rel="noopener noreferrer">Klarnas sekretessmeddelande</a>
+                {" "}och{" "}
+                <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/cookie_purchase" target="_blank" rel="noopener noreferrer">Klarnas cookie-meddelande</a>.
+              </p>
+            </div>
+          );
+        }
         if (paymentMethod === "card" && cardInfo) {
           const brandSvg = BRAND_SVGS[cardInfo.brand] ?? null;
           const brandLabel = cardInfo.brand.charAt(0).toUpperCase() + cardInfo.brand.slice(1);
@@ -905,7 +981,7 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
             <div className="co__methods">
               {([
                 { id: "full" as PaymentType, title: `Betala ${product ? `${formatPriceDisplay(product.price, product.currency)} kr` : "—"} nu` },
-                { id: "klarna" as PaymentType, title: "Betala över tid med Klarna", desc: "Välj ett flexibelt betalningsalternativ som fungerar för dig." },
+                ...(klarnaEnabled ? [{ id: "klarna" as PaymentType, title: "Betala över tid med Klarna", desc: "Välj ett flexibelt betalningsalternativ som fungerar för dig." }] : []),
               ]).map((opt) => {
                 const isActive = paymentType === opt.id;
                 return (
@@ -913,7 +989,7 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
                     <button
                       type="button"
                       className="co__method-header"
-                      onClick={() => { setPaymentType(opt.id); setClientSecret(null); }}
+                      onClick={() => { setPaymentType(opt.id); setClientSecret(null); setCompletedSteps((prev) => { const next = new Set(prev); next.delete(3 as StepId); next.delete(4 as StepId); return next; }); }}
                     >
                       <span className="co__method-info">
                         <span className="co__method-title">{opt.title}</span>
@@ -942,31 +1018,7 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
         );
 
       case 3:
-        return paymentType === "klarna" ? (
-          <>
-            <div className="co__klarna-step2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="https://res.cloudinary.com/dmgmoisae/image/upload/v1774386014/klarna_black.d9f77175f9bc7a0600aef2215118c7f5_gnatss.svg"
-                alt="Klarna"
-                className="co__klarna-step2-logo"
-              />
-              <p className="co__klarna-step2-legal">
-                Genom att fortsätta godkänner du{" "}
-                <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/user" target="_blank" rel="noopener noreferrer">Klarnas köpvillkor</a>
-                {" "}och bekräftar att du har läst{" "}
-                <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/privacy" target="_blank" rel="noopener noreferrer">Klarnas sekretessmeddelande</a>
-                {" "}och{" "}
-                <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/cookie_purchase" target="_blank" rel="noopener noreferrer">Klarnas cookie-meddelande</a>.
-              </p>
-            </div>
-            <div className="co__step-footer">
-              <button type="button" className="co__next-btn" onClick={() => handleNext(3)}>
-                Nästa
-              </button>
-            </div>
-          </>
-        ) : (
+        return paymentType === "klarna" ? null : (
           <>
             {clientSecret ? (
               <Elements stripe={stripePromise} options={{ clientSecret }}>
@@ -1024,6 +1076,10 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
         );
     }
   };
+
+  if (!ready) {
+    return <LoadingScreen fixed />;
+  }
 
   return (
     <>
@@ -1086,14 +1142,17 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
                       </div>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className={`co__step-edit${isCompleted ? " co__step-edit--visible" : ""}`}
-                    onClick={() => handleEdit(stepId)}
-                    tabIndex={isCompleted ? 0 : -1}
-                  >
-                    Ändra
-                  </button>
+                  {/* Hide edit button on step 3 when Klarna — step is auto-completed, not editable */}
+                  {!(stepId === 3 && paymentType === "klarna") && (
+                    <button
+                      type="button"
+                      className={`co__step-edit${isCompleted ? " co__step-edit--visible" : ""}`}
+                      onClick={() => handleEdit(stepId)}
+                      tabIndex={isCompleted ? 0 : -1}
+                    >
+                      Ändra
+                    </button>
+                  )}
                 </div>
 
                 <div className={`co__step-body${isBodyOpen ? " co__step-body--open" : ""}`}>
@@ -1145,24 +1204,43 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
 
           {/* Prisuppgifter */}
           {product && nights != null && nights > 0 && (() => {
-            const nightlyPrice = Math.round(product.price / nights);
+            const subtotal = product.price;
+            const taxAmount = Math.round(subtotal * 0.25);
+            const total = subtotal + taxAmount;
+            const nightlyPrice = Math.round(subtotal / nights);
             return (
               <>
-                <div className="co__summary-price-row">
-                  <span>{nights} nätter x {formatPriceDisplay(nightlyPrice, product.currency)} kr</span>
-                  <span>{formatPriceDisplay(product.price, product.currency)} kr</span>
+                <div className="co__summary-prices">
+                  <div className="co__summary-price-row">
+                    <span>{nights} nätter x {formatPriceDisplay(nightlyPrice, product.currency)} kr</span>
+                    <span>{formatPriceDisplay(subtotal, product.currency)} kr</span>
+                  </div>
+                  <div className="co__summary-price-row">
+                    <span>Skatter</span>
+                    <span>{formatPriceDisplay(taxAmount, product.currency)} kr</span>
+                  </div>
+                </div>
+
+                <div className="co__summary-divider" />
+
+                <div className="co__summary-row co__summary-row--total">
+                  <span>Totalt</span>
+                  <span>{formatPriceDisplay(total, product.currency)} kr</span>
                 </div>
               </>
             );
           })()}
 
-          <div className="co__summary-divider" />
-
-          {/* Totalt */}
-          <div className="co__summary-row co__summary-row--total">
-            <span>Totalt <span style={{ fontWeight: 400, fontSize: "0.75rem", color: "#888" }}>(inkl. moms)</span></span>
-            <span>{product ? `${formatPriceDisplay(product.price, product.currency)} kr` : "—"}</span>
-          </div>
+          {/* Fallback totalt when no product/nights */}
+          {(!product || nights == null || nights <= 0) && (
+            <>
+              <div className="co__summary-divider" />
+              <div className="co__summary-row co__summary-row--total">
+                <span>Totalt</span>
+                <span>—</span>
+              </div>
+            </>
+          )}
 
           {/* Prisspecifikation */}
           <button
@@ -1177,7 +1255,9 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
 
       {/* Prisspecifikation modal */}
       {product && nights != null && nights > 0 && (() => {
-        const nightlyPrice = Math.round(product.price / nights);
+        const subtotal = product.price;
+        const taxAmount = Math.round(subtotal * 0.25);
+        const total = subtotal + taxAmount;
         return (
           <CheckoutModal
             open={priceBreakdownOpen}
@@ -1187,15 +1267,19 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
             <div className="co__breakdown">
               <div className="co__breakdown-row">
                 <span>{nights} nätter · {checkIn && checkOut ? `${format(parseISO(checkIn), "d", { locale: sv })}–${format(parseISO(checkOut), "d MMM", { locale: sv })}` : ""}</span>
-                <span>{formatPriceDisplay(product.price, product.currency)} kr</span>
+                <span>{formatPriceDisplay(subtotal, product.currency)} kr</span>
+              </div>
+              <div className="co__breakdown-row">
+                <span>Skatter</span>
+                <span>{formatPriceDisplay(taxAmount, product.currency)} kr</span>
               </div>
               <div className="co__breakdown-divider" />
               <div className="co__breakdown-row co__breakdown-row--total">
                 <div>
-                  <div>Totalt <span style={{ fontWeight: 400, fontSize: "0.75rem" }}>(inkl. moms)</span></div>
+                  <div>Totalt</div>
                   <div className="co__breakdown-currency">{product.currency}</div>
                 </div>
-                <span>{formatPriceDisplay(product.price, product.currency)} kr</span>
+                <span>{formatPriceDisplay(total, product.currency)} kr</span>
               </div>
             </div>
           </CheckoutModal>

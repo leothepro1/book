@@ -109,7 +109,7 @@ export async function sendEmailEvent(
   eventType: EmailEventType,
   to: string,
   variables: Record<string, string>,
-  options?: { testMode?: boolean },
+  options?: { testMode?: boolean; giftCardId?: string },
 ): Promise<EmailSendResult> {
   // 1. Check unsubscribe — must be first, before any template work
   const unsubscribed = await prisma.emailUnsubscribe.findUnique({
@@ -119,7 +119,12 @@ export async function sendEmailEvent(
   if (unsubscribed) return { status: "skipped_unsubscribed" };
 
   // 2. Check rate limit — skip silently if exceeded
-  const allowed = await checkEmailRateLimit(tenantId, to, eventType);
+  // GIFT_CARD_SENT uses giftCardId as key so the same recipient can
+  // receive multiple different gift cards without being rate-limited.
+  const rateLimitKey = eventType === "GIFT_CARD_SENT" && options?.giftCardId
+    ? `gc:${options.giftCardId}`
+    : to;
+  const allowed = await checkEmailRateLimit(tenantId, rateLimitKey, eventType);
   if (!allowed) {
     console.warn(
       `[email] Rate limit reached: ${eventType} to ${to} for tenant ${tenantId}`,
@@ -173,7 +178,7 @@ export async function sendEmailEvent(
         data: { status: "SENT", resendId: `dev_${Date.now()}` },
       });
 
-      await recordEmailSend(tenantId, to, eventType);
+      await recordEmailSend(tenantId, rateLimitKey, eventType);
       return { status: "sent" };
     }
 

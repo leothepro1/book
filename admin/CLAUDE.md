@@ -560,6 +560,55 @@ never bypass accessors, never hardcode page IDs in shared code.
 
 ---
 
+## Component reuse — ZERO TOLERANCE for recreation
+
+**If a component exists, use it. Do not build a new version.**
+
+This is the single most important rule in the codebase. Before writing
+ANY UI element, search the codebase for existing implementations.
+"Inspired by" or "similar to" is not acceptable — use the EXACT component.
+
+### Mandatory reuse checklist — check EVERY time
+
+Before building any of these, STOP and find the existing implementation:
+
+**Color picker:**
+  Editor uses `sf-color-row` + `sf-color-swatch` + `sf-input--color-hex`
+  (defined in base.css, used in app/(editor)/editor/fields/FieldColor.tsx)
+  NEVER create a custom color picker. NEVER use design-color-* classes
+  outside of /design.
+
+**Image upload / media picker:**
+  Editor uses `MediaLibraryModal` + `img-upload` pattern
+  (app/(admin)/_components/MediaLibrary + app/(editor)/editor/fields/FieldImage.tsx)
+  Shows "Ladda upp bild" → opens MediaLibrary modal → returns asset URL.
+  NEVER use raw <input type="file"> or custom upload widgets.
+
+**Modals:**
+  Admin uses `.am-overlay` + `.am-modal` (slide up, instant close)
+  Guest uses `.com__overlay` + `.com__modal` (same animation)
+  Editor uses `.settings-panel` for side panels
+  NEVER create new modal CSS — use existing patterns.
+
+**Toggles:** `.admin-toggle` + `.admin-toggle-on` + `.admin-toggle-thumb`
+**Buttons:** `.admin-btn`, `.settings-btn--connect`, `.settings-btn--outline`, etc.
+**Inputs:** `.sf-input`, `.email-sender__input`, `.admin-input--sm`
+**Dropdowns:** `.admin-dropdown` family
+**Labels:** `.admin-label`, `.design-field-label`, `.gc-modal-field__label`
+**Loading:** `<Loading />` and `<LoadingScreen />` from app/_components/Loading
+
+### The rule
+
+When the user says "same as X" or "like in /editor" or "use our existing":
+1. FIND the exact component file
+2. READ it completely
+3. IMPORT and USE it directly — or copy the exact JSX + class names
+4. Do NOT approximate, simplify, or "improve" it
+
+Violation of this rule wastes time and breaks visual consistency.
+
+---
+
 ## CSS reuse — MANDATORY
 
 **Every CSS property must reuse existing design tokens and patterns.**

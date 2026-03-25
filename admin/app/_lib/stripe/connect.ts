@@ -8,9 +8,11 @@
 
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/app/_lib/db/prisma";
 import { env } from "@/app/_lib/env";
 import { getStripe } from "./client";
+import { DEFAULT_PAYMENT_METHOD_CONFIG } from "@/app/_lib/payments/defaults";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -116,6 +118,10 @@ export async function refreshOnboardingStatus(
         ...(isComplete && !tenant.stripeConnectedAt
           ? { stripeConnectedAt: new Date() }
           : {}),
+        // Seed default payment method config on first-time completion
+        ...(isComplete && !tenant.stripeOnboardingComplete
+          ? { paymentMethodConfig: DEFAULT_PAYMENT_METHOD_CONFIG }
+          : {}),
       },
     });
   }
@@ -188,6 +194,7 @@ export async function disconnectStripe(
       stripeOnboardingComplete: false,
       stripeLivemode: false,
       stripeConnectedAt: null,
+      paymentMethodConfig: Prisma.DbNull,
     },
   });
 

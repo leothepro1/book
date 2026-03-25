@@ -127,11 +127,11 @@
 }
 
 .products-row--selected {
-  background: #f0f4ff;
+  background: #fff;
 }
 
 .products-row--selected:hover {
-  background: #e8eeff;
+  background: #f7f7f7;
 }
 
 /* ── Columns (matched to column headers) ── */
@@ -223,7 +223,7 @@
     color: #303030;
      border-top: 1px solid var(--admin-border);
     z-index: 5;
-    background: #f3f3f3;
+    background: #f7f7f7;
     border-radius: 0;
     align-items: center;
     gap: 16px;
@@ -260,3 +260,4 @@
 .products-stock--untracked {
   color: var(--admin-text-tertiary);
 }
+

@@ -1,0 +1,103 @@
+/* ═══════════════════════════════════════════════════════
+   Global Loading — single animation, multiple contexts
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Inline (default) ────────────────────────────────── */
+
+.loading--inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  line-height: 0;
+}
+
+/* ── Button — sits inside a <button>, replaces label ── */
+
+.loading--button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+/* ── Section — centered in a content area ────────────── */
+
+.loading--section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 0;
+  width: 100%;
+}
+
+/* ── Page — full viewport centered ───────────────────── */
+
+.loading--page {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+/* ── Overlay — dark backdrop + centered ──────────────── */
+
+.loading--overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(2px);
+  z-index: 200;
+}
+
+/* ═══════════════════════════════════════════════════════
+   LoadingScreen — full-cover transition overlay
+   ═══════════════════════════════════════════════════════ */
+
+.loading-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  z-index: 50;
+}
+
+.loading-screen--fixed {
+  position: fixed;
+  z-index: 150;
+}
+
+.loading-screen__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.loading-screen__spinner {
+  width: 32px;
+  height: 32px;
+  border: 2.5px solid #e0e0e0;
+  border-top-color: #333;
+  border-radius: 50%;
+  animation: loading-screen-spin 0.7s linear infinite;
+}
+
+@keyframes loading-screen-spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-screen__label {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: #888;
+  letter-spacing: 0.01em;
+}

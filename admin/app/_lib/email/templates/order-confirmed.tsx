@@ -1,4 +1,4 @@
-import { Text, Section } from "@react-email/components";
+import { Text, Section, Link } from "@react-email/components";
 import * as React from "react";
 import { EmailLayout, h1Style } from "./_layout";
 
@@ -43,6 +43,28 @@ const totalRow: React.CSSProperties = {
   marginTop: "8px",
 };
 
+const ctaButton: React.CSSProperties = {
+  backgroundColor: "#1a1a1a",
+  borderRadius: "6px",
+  color: "#ffffff",
+  display: "inline-block",
+  fontSize: "14px",
+  fontWeight: 600,
+  padding: "12px 24px",
+  textDecoration: "none",
+  textAlign: "center" as const,
+  marginTop: "8px",
+};
+
+const secondaryLink: React.CSSProperties = {
+  fontSize: "13px",
+  color: "#666666",
+  textDecoration: "underline",
+  display: "block",
+  marginTop: "12px",
+  textAlign: "center" as const,
+};
+
 const closing: React.CSSProperties = {
   fontSize: "16px",
   lineHeight: "26px",
@@ -51,8 +73,9 @@ const closing: React.CSSProperties = {
 };
 
 export default function OrderConfirmed(props: OrderConfirmedProps) {
-  const { guestName, orderNumber, orderTotal, tenantName, branding } = props;
+  const { guestName, orderNumber, orderTotal, tenantName, orderStatusUrl, portalUrl, branding } = props;
   const hotelName = tenantName || "hotellet";
+  const btnStyle = { ...ctaButton, ...(branding?.accentColor ? { backgroundColor: branding.accentColor } : {}) };
 
   return (
     <EmailLayout hotelName={hotelName} branding={branding}>
@@ -69,6 +92,16 @@ export default function OrderConfirmed(props: OrderConfirmedProps) {
           <span style={detailLabel}>Totalt</span> {orderTotal}
         </Text>
       </Section>
+      {orderStatusUrl && (
+        <Link href={orderStatusUrl} style={btnStyle} data-branding="cta">
+          Se din order →
+        </Link>
+      )}
+      {portalUrl && (
+        <Link href={portalUrl} style={secondaryLink}>
+          Logga in på ditt konto
+        </Link>
+      )}
       <Text style={closing}>
         Tack för ditt köp. Har du frågor, kontakta oss så hjälper vi dig.
       </Text>

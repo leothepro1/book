@@ -136,7 +136,7 @@
   display: flex;
   flex-direction: column;
   padding: 0;
-  gap: var(--space-4);
+  gap: 10px;
   overflow-y: auto;
   background: #fff;
   height: max-content;
@@ -153,12 +153,12 @@
 /* Org header */
 
 .settings-nav__org {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 16px;
-  border-bottom: 1px solid #ebebeb;
-  background: #F3F3F4;
+    background: #f7f7f7;
+    border-bottom: 1px solid #ebebeb;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 16px 10px 16px;
+    display: flex;
 }
 
 .settings-nav__org-avatar {
@@ -262,7 +262,6 @@
   color: #303030;
   cursor: pointer;
   text-align: left;
-  transition: background var(--duration-fast), color var(--duration-fast);
 }
 
 .settings-nav__item:hover {
@@ -275,6 +274,11 @@
   color: var(--admin-text);
   font-weight: var(--font-weight-semibold);
 }
+
+.settings-nav__item--active .material-symbols-rounded {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24 !important;
+}
+
 .settings-nav__item--active:hover {
   background: #F3F3F4;
   color: var(--admin-text);

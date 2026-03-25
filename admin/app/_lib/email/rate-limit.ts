@@ -30,6 +30,7 @@ const RATE_LIMITS: Record<EmailEventType, RateLimitConfig> = {
   SUPPORT_REPLY:       { maxCount: 20, windowMs: 24 * 60 * 60 * 1000 },
   GUEST_OTP:           { maxCount: 3,  windowMs: 15 * 60 * 1000 },
   ORDER_CONFIRMED:     { maxCount: 1,  windowMs: 24 * 60 * 60 * 1000 },
+  GIFT_CARD_SENT:      { maxCount: 1,  windowMs: 7 * 24 * 60 * 60 * 1000 }, // 1 per 7 days per key
 };
 
 /**

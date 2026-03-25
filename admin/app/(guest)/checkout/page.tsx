@@ -5,6 +5,8 @@ import { prisma } from "@/app/_lib/db/prisma";
 import { resolveProduct } from "@/app/_lib/products/resolve";
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { CheckoutClient } from "./CheckoutClient";
+import { resolvePaymentMethods } from "@/app/_lib/payments/resolve";
+import type { PaymentMethodConfig } from "@/app/_lib/payments/types";
 
 export const dynamic = "force-dynamic";
 
@@ -94,6 +96,15 @@ export default async function CheckoutPage({
   const logoUrl = (config.theme?.header?.logoUrl as string) ?? null;
   const logoWidth = (config.theme?.header?.logoWidth as number) ?? 120;
 
+  // Resolve payment methods from tenant config
+  const tenantPayments = await prisma.tenant.findUnique({
+    where: { id: tenant.id },
+    select: { paymentMethodConfig: true },
+  });
+  const resolvedMethods = resolvePaymentMethods(
+    tenantPayments?.paymentMethodConfig as PaymentMethodConfig | null,
+  );
+
   return (
     <CheckoutClient
       product={{
@@ -114,6 +125,9 @@ export default async function CheckoutPage({
         logoWidth,
       }}
       ratePlanId={ratePlanId}
+      availableMethods={resolvedMethods.availableMethods}
+      walletsEnabled={resolvedMethods.walletsEnabled}
+      klarnaEnabled={resolvedMethods.klarnaEnabled}
     />
   );
 }

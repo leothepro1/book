@@ -1856,7 +1856,7 @@
 /* ── Segmented control ── */
 
 .sf-segmented {
-    background: #F1F1F1;
+    background: #f2f2f2;
     height:max-content;
     border-radius: 8px;
     gap: 0px;

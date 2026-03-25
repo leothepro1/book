@@ -19,6 +19,7 @@ const NAV_ITEMS = [
 const PRODUCT_ITEMS = [
   { href: '/collections', label: 'Produktserier' },
   { href: '/inventory', label: 'Lager' },
+  { href: '/gift-cards', label: 'Presentkort' },
 ];
 
 const CONTENT_ITEMS = [
@@ -58,7 +59,7 @@ export function Sidebar() {
       className={`fixed left-0 top-0 h-screen transition-all duration-300 ease-in-out z-30 flex flex-col ${
         isCollapsed ? 'w-16' : 'w-[270px]'
       }`}
-      style={{ background: '#EBEBEB' }}
+      style={{ background: '#f3f3f4', borderRight: '1px solid var(--admin-border)' }}
     >
       {/* Profile row */}
       <SidebarUserRow isCollapsed={isCollapsed} />
@@ -75,7 +76,7 @@ export function Sidebar() {
               onClick={(e) => guardedClick(e, item.href)}
               className={`flex items-center gap-3 px-[10px] py-[8px] rounded-lg ${
                 active
-                  ? 'bg-[#FAFAFA] text-[#303030]'
+                  ? 'bg-[#e3e3e3] text-[#303030]'
                   : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
               }`}
             >
@@ -90,7 +91,7 @@ export function Sidebar() {
               >
                 {item.icon}
               </span>
-              <span className={`text-[13px] tracking-[-0.15px] font-[550] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
                 isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
               }`}>
                 {item.label}
@@ -106,7 +107,7 @@ export function Sidebar() {
             onClick={(e) => guardedClick(e, '/products')}
             className={`flex items-center gap-3 px-[10px] py-[8px] rounded-lg ${
               isProductsLinkActive
-                ? 'bg-[#FAFAFA] text-[#303030]'
+                ? 'bg-[#e3e3e3] text-[#303030]'
                 : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
             }`}
           >
@@ -121,7 +122,7 @@ export function Sidebar() {
             >
               sell
             </span>
-            <span className={`text-[13px] tracking-[-0.15px] font-[550] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+            <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
             }`}>
               Produkter
@@ -143,9 +144,9 @@ export function Sidebar() {
                     key={sub.href}
                     href={sub.href}
                     onClick={(e) => guardedClick(e, sub.href)}
-                    className={`relative block py-[6px] rounded-lg text-[13px] font-[550] ${
+                    className={`relative block py-[6px] rounded-lg text-[13px] font-[500] ${
                       subActive
-                        ? 'bg-[#FAFAFA] text-[#303030]'
+                        ? 'bg-[#e3e3e3] text-[#303030]'
                         : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
                     }`}
                     style={{ paddingLeft: 36 }}
@@ -191,7 +192,7 @@ export function Sidebar() {
             >
               wall_art
             </span>
-            <span className={`text-[13px] tracking-[-0.15px] font-[550] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+            <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
             }`}>
               Innehåll
@@ -214,9 +215,9 @@ export function Sidebar() {
                     key={sub.href}
                     href={sub.href}
                     onClick={(e) => guardedClick(e, sub.href)}
-                    className={`relative block py-[6px] rounded-lg text-[13px] font-[550] ${
+                    className={`relative block py-[6px] rounded-lg text-[13px] font-[500] ${
                       subActive
-                        ? 'bg-[#FAFAFA] text-[#303030]'
+                        ? 'bg-[#e3e3e3] text-[#303030]'
                         : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
                     }`}
                     style={{ paddingLeft: 36 }}
@@ -254,7 +255,7 @@ export function Sidebar() {
               onClick={(e) => guardedClick(e, item.href)}
               className={`flex items-center gap-3 px-[10px] py-[8px] rounded-lg ${
                 active
-                  ? 'bg-[#FAFAFA] text-[#303030]'
+                  ? 'bg-[#e3e3e3] text-[#303030]'
                   : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
               }`}
             >
@@ -269,7 +270,7 @@ export function Sidebar() {
               >
                 {item.icon}
               </span>
-              <span className={`text-[13px] tracking-[-0.15px] font-[550] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
                 isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
               }`}>
                 {item.label}
@@ -293,7 +294,7 @@ export function Sidebar() {
             >
               settings
             </span>
-            <span className={`text-[13px] tracking-[-0.15px] font-[550] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+            <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
             }`}>
               Inställningar

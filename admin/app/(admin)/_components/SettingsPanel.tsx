@@ -7,7 +7,6 @@ import { IntegrationsContent } from '@/app/(admin)/settings/integrations/Integra
 import { OrganisationContent } from '@/app/(admin)/settings/organisation/OrganisationContent';
 import { UsersContent } from '@/app/(admin)/settings/users/UsersContent';
 import { PoliciesContent } from '@/app/(admin)/settings/policies/PoliciesContent';
-import { CheckinContent } from '@/app/(admin)/settings/checkin/CheckinContent';
 import { LanguagesContent } from '@/app/(admin)/settings/languages/LanguagesContent';
 import { EmailContent } from '@/app/(admin)/settings/email/EmailContent';
 import { PaymentsContent } from '@/app/(admin)/settings/payments/PaymentsContent';
@@ -41,18 +40,11 @@ const NAV_ITEMS: { items: SettingsNavItem[]; divider?: boolean }[] = [
       { id: 'users', label: 'Användare', icon: 'face', adminOnly: true },
       { id: 'billing', label: 'Fakturering', icon: 'contract', adminOnly: true },
       { id: 'payments', label: 'Betalningar', icon: 'payments', adminOnly: true },
-    ],
-    divider: true,
-  },
-  {
-    items: [
       { id: 'general', label: 'Allmänt', icon: 'storefront' },
       { id: 'integrations', label: 'Integrationer', icon: 'linked_services', adminOnly: true },
       { id: 'domains', label: 'Domäner', icon: 'travel_explore', adminOnly: true },
-      { id: 'notifications', label: 'Aviseringar', icon: 'notifications' },
       { id: 'languages', label: 'Språk', icon: 'translate' },
-      { id: 'email', label: 'E-post', icon: 'mail', adminOnly: true },
-      { id: 'checkin-checkout', label: 'In- och utcheckning', icon: 'room_service' },
+      { id: 'email', label: 'Aviseringar', icon: 'notifications', adminOnly: true },
       { id: 'policies', label: 'Policyer', icon: 'docs' },
     ],
   },
@@ -285,8 +277,6 @@ export function SettingsPanel() {
                 <EmailContent key={resetKey} onSubTitleChange={setSubTitleWithFresh} onHeaderExtraChange={setHeaderExtra} />
               ) : activeItem === 'payments' ? (
                 <PaymentsContent key={resetKey} onSubTitleChange={setSubTitle} />
-              ) : activeItem === 'checkin-checkout' ? (
-                <CheckinContent key={resetKey} onSubTitleChange={setSubTitle} onHeaderExtraChange={setHeaderExtra} onNavigate={(tab) => { setActiveTab(tab); setSubTitle(null); setResetKey((k) => k + 1); }} />
               ) : (
                 <div key={resetKey} style={{ padding: 0 }}>
                   <p style={{ color: 'var(--admin-text-secondary)', fontSize: 13 }}>

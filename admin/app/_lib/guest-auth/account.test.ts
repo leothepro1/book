@@ -9,6 +9,10 @@ vi.mock("@/app/_lib/db/prisma", () => ({
   },
 }));
 
+vi.mock("@/app/_lib/logger", () => ({
+  log: vi.fn(),
+}));
+
 const { upsertGuestAccount } = await import("./account");
 const { prisma } = await import("@/app/_lib/db/prisma");
 const mockPrisma = prisma as unknown as {

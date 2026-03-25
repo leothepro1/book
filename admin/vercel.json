@@ -5,6 +5,7 @@
   "outputDirectory": ".next",
   "crons": [
     { "path": "/api/cron/expire-reservations", "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/reconcile-stripe", "schedule": "*/15 * * * *" }
+    { "path": "/api/cron/reconcile-payments", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/deliver-gift-cards", "schedule": "*/5 * * * *" }
   ]
 }

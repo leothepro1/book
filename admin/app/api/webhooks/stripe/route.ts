@@ -1,8 +1,16 @@
 export const dynamic = "force-dynamic";
 
 /**
- * Stripe Webhook Handler
- * ══════════════════════
+ * Stripe Webhook Handler (Legacy)
+ * ════════════════════════════════
+ *
+ * NOTE: This handler exists for backwards compatibility with orders
+ * created before the PaymentAdapter layer was introduced.
+ * New providers use /api/webhooks/payments/[provider] instead.
+ * This handler will be migrated to use handlePaymentWebhook()
+ * once all Stripe-specific side effects are ported to webhook.ts.
+ *
+ * Original description:
  *
  * Handles payment lifecycle events from Stripe.
  * Patterns:
@@ -21,6 +29,8 @@ import { adjustInventoryInTx } from "@/app/_lib/products/inventory";
 import { canTransition } from "@/app/_lib/orders/types";
 import { log } from "@/app/_lib/logger";
 import type Stripe from "stripe";
+import { upsertGuestAccountFromOrder } from "@/app/_lib/guest-auth/account";
+import { createGiftCard } from "@/app/_lib/gift-cards/create";
 
 export async function POST(req: Request) {
   const stripe = getStripe();
@@ -176,6 +186,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       ],
     });
 
+    // Update PaymentSession status — updateMany to silently skip if no session exists
+    await tx.paymentSession.updateMany({
+      where: { orderId: order.id },
+      data: { status: "RESOLVED", resolvedAt: new Date() },
+    });
+
     // Consume inventory reservations — mark consumed AND create ledger entries
     const reservations = await tx.inventoryReservation.findMany({
       where: { sessionId: order.id, consumed: false },
@@ -216,14 +232,34 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     }
   });
 
+  // Auto-create guest account from order (non-blocking)
+  if (order.guestEmail) {
+    try {
+      await upsertGuestAccountFromOrder(
+        order.tenantId,
+        order.id,
+        order.guestEmail,
+        order.guestName || undefined,
+        order.guestPhone || undefined,
+      );
+    } catch (err) {
+      log("warn", "webhook.guest_account_failed", { orderId: order.id, error: String(err) });
+    }
+  }
+
   // Send order confirmation email (non-blocking)
   try {
     const { sendEmailEvent } = await import("@/app/_lib/email/send");
     const { formatPriceDisplay } = await import("@/app/_lib/products/pricing");
     const tenant = await prisma.tenant.findUnique({
       where: { id: order.tenantId },
-      select: { name: true },
+      select: { name: true, portalSlug: true },
     });
+
+    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "bedfront.com";
+    const portalBase = tenant?.portalSlug
+      ? `https://${tenant.portalSlug}.${baseDomain}`
+      : null;
 
     await sendEmailEvent(
       order.tenantId,
@@ -235,6 +271,10 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         orderTotal: `${formatPriceDisplay(order.totalAmount, order.currency)} kr`,
         currency: order.currency,
         tenantName: tenant?.name ?? "",
+        orderStatusUrl: order.statusToken && portalBase
+          ? `${portalBase}/order-status/${order.statusToken}`
+          : "",
+        portalUrl: portalBase ? `${portalBase}/login` : "",
       },
     );
   } catch (err) {
@@ -306,6 +346,12 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
           : []),
       ],
     });
+
+    // Update PaymentSession status — updateMany to silently skip if no session exists
+    await tx.paymentSession.updateMany({
+      where: { orderId: order.id },
+      data: { status: "REJECTED", resolvedAt: new Date() },
+    });
   });
 }
 
@@ -365,8 +411,8 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
 }
 
 // ── payment_intent.succeeded ───────────────────────────────────
-// Handles the Elements flow (accommodation checkout).
-// The Checkout Session flow uses checkout.session.completed instead.
+// Handles both ACCOMMODATION (Elements checkout) and PURCHASE (gift cards).
+// Branches on pi.metadata.orderType to determine fulfillment logic.
 
 async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
   const orderId = pi.metadata?.orderId;
@@ -387,6 +433,9 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
 
   if (!canTransition(order.status, "PAID")) return;
 
+  const orderType = pi.metadata?.orderType ?? "ACCOMMODATION";
+
+  // ── Shared: mark as PAID ────────────────────────────────────
   await prisma.$transaction(async (tx) => {
     await tx.order.update({
       where: { id: order.id },
@@ -413,28 +462,109 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
         },
       ],
     });
+
+    // Update PaymentSession status — updateMany to silently skip if no session exists
+    await tx.paymentSession.updateMany({
+      where: { orderId: order.id },
+      data: { status: "RESOLVED", resolvedAt: new Date() },
+    });
   });
 
-  // Send confirmation email (non-blocking)
+  // ── PURCHASE: create gift card + mark fulfilled ─────────────
+  if (orderType === "PURCHASE") {
+    try {
+      const giftCard = await createGiftCard({
+        orderId: order.id,
+        tenantId: order.tenantId,
+        designId: pi.metadata?.designId || null,
+        amount: parseInt(pi.metadata?.amount ?? "0", 10),
+        recipientEmail: pi.metadata?.recipientEmail ?? order.guestEmail,
+        recipientName: pi.metadata?.recipientName ?? "",
+        senderName: pi.metadata?.senderName ?? order.guestName,
+        message: pi.metadata?.message ?? "",
+        scheduledAt: pi.metadata?.scheduledAt
+          ? new Date(pi.metadata.scheduledAt)
+          : new Date(),
+      });
+
+      // Mark order as FULFILLED — gift card is the deliverable
+      if (canTransition("PAID", "FULFILLED")) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { status: "FULFILLED", fulfilledAt: new Date() },
+        });
+        await prisma.orderEvent.create({
+          data: {
+            orderId: order.id,
+            type: "FULFILLED",
+            message: `Presentkort ${giftCard.code} skapat — ${giftCard.initialAmount / 100} kr`,
+            metadata: { giftCardId: giftCard.id, code: giftCard.code },
+          },
+        });
+      }
+
+      log("info", "webhook.gift_card_fulfilled", {
+        orderId: order.id,
+        giftCardId: giftCard.id,
+        code: giftCard.code,
+        amount: giftCard.initialAmount,
+        tenantId: order.tenantId,
+      });
+    } catch (err) {
+      // Gift card creation failed — order stays PAID, manual intervention needed
+      log("error", "webhook.gift_card_creation_failed", {
+        orderId: order.id,
+        tenantId: order.tenantId,
+        error: String(err),
+      });
+    }
+  }
+
+  // ── Shared: auto-create guest account (non-blocking) ────────
+  const effectiveEmail = order.guestEmail || (pi.receipt_email ?? "");
+  if (effectiveEmail) {
+    try {
+      await upsertGuestAccountFromOrder(
+        order.tenantId,
+        order.id,
+        effectiveEmail,
+        order.guestName || undefined,
+        order.guestPhone || undefined,
+      );
+    } catch (err) {
+      log("warn", "webhook.guest_account_failed", { orderId: order.id, error: String(err) });
+    }
+  }
+
+  // ── Shared: send confirmation email (non-blocking) ──────────
   try {
-    if (order.guestEmail) {
+    if (effectiveEmail) {
       const { sendEmailEvent } = await import("@/app/_lib/email/send");
       const { formatPriceDisplay } = await import("@/app/_lib/products/pricing");
       const tenant = await prisma.tenant.findUnique({
         where: { id: order.tenantId },
-        select: { name: true },
+        select: { name: true, portalSlug: true },
       });
+
+      const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "bedfront.com";
+      const portalBase = tenant?.portalSlug
+        ? `https://${tenant.portalSlug}.${baseDomain}`
+        : null;
 
       await sendEmailEvent(
         order.tenantId,
         "ORDER_CONFIRMED" as Parameters<typeof sendEmailEvent>[1],
-        order.guestEmail,
+        effectiveEmail,
         {
           guestName: order.guestName,
           orderNumber: String(order.orderNumber),
           orderTotal: `${formatPriceDisplay(order.totalAmount, order.currency)} kr`,
           currency: order.currency,
           tenantName: tenant?.name ?? "",
+          orderStatusUrl: order.statusToken && portalBase
+            ? `${portalBase}/order-status/${order.statusToken}`
+            : "",
+          portalUrl: portalBase ? `${portalBase}/login` : "",
         },
       );
     }
@@ -457,15 +587,23 @@ async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
 
   if (!order || order.status !== "PENDING") return;
 
-  await prisma.orderEvent.create({
-    data: {
-      orderId: order.id,
-      type: "PAYMENT_FAILED",
-      message: `Betalningsförsök misslyckades — ${pi.last_payment_error?.message ?? "okänt fel"}`,
-      metadata: {
-        paymentIntentId: pi.id,
-        errorCode: pi.last_payment_error?.code ?? null,
+  await prisma.$transaction(async (tx) => {
+    await tx.orderEvent.create({
+      data: {
+        orderId: order.id,
+        type: "PAYMENT_FAILED",
+        message: `Betalningsförsök misslyckades — ${pi.last_payment_error?.message ?? "okänt fel"}`,
+        metadata: {
+          paymentIntentId: pi.id,
+          errorCode: pi.last_payment_error?.code ?? null,
+        },
       },
-    },
+    });
+
+    // Update PaymentSession status — updateMany to silently skip if no session exists
+    await tx.paymentSession.updateMany({
+      where: { orderId: order.id },
+      data: { status: "REJECTED", resolvedAt: new Date() },
+    });
   });
 }

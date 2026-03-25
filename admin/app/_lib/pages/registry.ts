@@ -253,6 +253,88 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
     editorVisible: true,
   },
   {
+    id: "checkout",
+    label: "Kassa",
+    icon: "shopping_cart",
+    layout: { header: false, body: "fixed", footer: false },
+    editorMode: "settings",
+    availableLayouts: [{ id: "default", label: "Standard" }],
+    defaultLayout: "default",
+    editorVisible: true,
+    pageSettings: {
+      fields: [
+        // ── Sidhuvud ──────────────────────────────────────
+        {
+          key: "logoUrl",
+          type: "image",
+          label: "Logotyp",
+          group: "Sidhuvud",
+        },
+        {
+          key: "logoAlignment",
+          type: "segmented",
+          label: "Logotypens justering",
+          group: "Sidhuvud",
+          options: [
+            { value: "left", label: "Vänster" },
+            { value: "center", label: "Mitten" },
+            { value: "right", label: "Höger" },
+          ],
+        },
+        // ── Allmänt ────────────────────────────────────────
+        {
+          key: "backgroundColor",
+          type: "color",
+          label: "Bakgrundsfärg",
+          description: "Bakgrunden för kassaformuläret.",
+          group: "Allmänt",
+        },
+        // ── Färger ────────────────────────────────────────
+        {
+          key: "accentColor",
+          type: "color",
+          label: "Accentfärg",
+          group: "Färger",
+        },
+        {
+          key: "buttonColor",
+          type: "color",
+          label: "Knappar",
+          group: "Färger",
+        },
+        {
+          key: "errorColor",
+          type: "color",
+          label: "Felfärg",
+          group: "Färger",
+        },
+        // ── Typografi ─────────────────────────────────────
+        {
+          key: "headingFont",
+          type: "fontPicker" as any,
+          label: "Rubriker",
+          group: "Typografi",
+        },
+        {
+          key: "bodyFont",
+          type: "fontPicker" as any,
+          label: "Brödtext",
+          group: "Typografi",
+        },
+      ],
+      defaults: {
+        logoUrl: "",
+        logoAlignment: "center",
+        backgroundColor: "#FFFFFF",
+        accentColor: "#121212",
+        buttonColor: "#121212",
+        errorColor: "#c13515",
+        headingFont: "inter",
+        bodyFont: "inter",
+      },
+    },
+  },
+  {
     id: "help-center",
     label: "Hjälpcenter",
     icon: "help",

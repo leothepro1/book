@@ -20,13 +20,6 @@
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--text, var(--foreground));
-  font-family: "Source Sans 3", "DM Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  color: #1a1a1a;
-  font-weight: 600;
-}
 
 
 /* Lottie (SVG): tvinga alla fills/strokes att följa wrapperns color (t.ex. var(--text)) */

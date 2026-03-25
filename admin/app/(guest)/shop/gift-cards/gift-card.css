@@ -1,0 +1,799 @@
+/* ═══════════════════════════════════════════════════════
+   Gift Card Purchase Flow — .gc- prefix (BEM)
+   Guest-facing: uses --text, --background, no admin tokens
+   Mobile-first: 375px base, scales up
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Page shell ──────────────────────────────────────── */
+
+.gc-page {
+  min-height: 100dvh;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0;
+}
+
+.gc-container {
+  width: 100%;
+  max-width: 520px;
+}
+
+/* ── Header ──────────────────────────────────────────── */
+
+.gc-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.gc-header__title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 4px;
+  letter-spacing: -0.02em;
+}
+
+.gc-header__subtitle {
+  font-size: 14px;
+  font-weight: 400;
+  color: #888;
+  margin: 0;
+}
+
+/* ── Progress indicator ──────────────────────────────── */
+
+.gc-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.gc-progress__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ddd;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.gc-progress__dot--active {
+  background: #1a1a1a;
+  transform: scale(1.25);
+}
+
+.gc-progress__dot--done {
+  background: #1a1a1a;
+}
+
+/* ── Step card ───────────────────────────────────────── */
+
+.gc-card {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #ebebeb;
+  padding: 28px 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* ── Step title ──────────────────────────────────────── */
+
+.gc-step-title {
+    color: #1a1a1a;
+    margin: 0 0 12px;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+/* ── Design grid ─────────────────────────────────────── */
+
+.gc-designs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.gc-design {
+  position: relative;
+  border-radius: 12px;
+  border: 2px solid #ebebeb;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  background: #fff;
+}
+
+.gc-design:hover {
+  border-color: #ccc;
+}
+
+.gc-design--selected {
+  border-color: #1a1a1a;
+  box-shadow: 0 0 0 1px #1a1a1a;
+}
+
+.gc-design__image {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+}
+
+.gc-design__name {
+  display: none;
+}
+
+.gc-design__check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.12s, transform 0.12s;
+}
+
+.gc-design--selected .gc-design__check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* ── Amount pills ────────────────────────────────────── */
+
+.gc-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.gc-amount-pill {
+  padding: 10px 20px;
+  border: 1.5px solid #ebebeb;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+  white-space: nowrap;
+}
+
+.gc-amount-pill:hover {
+  border-color: #ccc;
+}
+
+.gc-amount-pill--selected {
+  border-color: #1a1a1a;
+  background: #1a1a1a;
+  color: #fff;
+}
+
+/* ── Custom amount input ─────────────────────────────── */
+
+.gc-custom-amount {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gc-custom-amount__input {
+  flex: 1;
+  height: 46px;
+  padding: 0 14px;
+  border: 1.5px solid #ddd;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #1a1a1a;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.12s;
+  -moz-appearance: textfield;
+}
+
+.gc-custom-amount__input::-webkit-outer-spin-button,
+.gc-custom-amount__input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.gc-custom-amount__input:focus {
+  border-color: #1a1a1a;
+}
+
+.gc-custom-amount__suffix {
+  font-size: 14px;
+  font-weight: 500;
+  color: #888;
+  flex-shrink: 0;
+}
+
+.gc-custom-amount__hint {
+  font-size: 12px;
+  color: #999;
+  margin-top: 6px;
+}
+
+/* Suffix inside floating label input */
+.gc-float-suffix {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 15px;
+  font-weight: 400;
+  color: #717171;
+  pointer-events: none;
+}
+
+.gc-custom-amount__field {
+  padding-right: 44px !important;
+  -moz-appearance: textfield;
+}
+
+.gc-custom-amount__field::placeholder {
+  color: #b0b0b0 !important;
+  font-weight: 400;
+  font-size: 14px;
+}
+
+.gc-custom-amount__field::-webkit-outer-spin-button,
+.gc-custom-amount__field::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* ── Message textarea (no floating label) ────────────── */
+
+.gc-message-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 14px 16px;
+  font-size: 15px;
+  font-weight: 400;
+  color: #1a1a1a;
+  border: 1px solid #d7d7d7;
+  border-radius: 8px;
+  background: #fff;
+  outline: none;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.15s;
+}
+
+.gc-message-textarea:focus {
+  border-color: #1a1a1a;
+  border-width: 2px;
+  padding: 13px 15px;
+}
+
+.gc-message-textarea::placeholder {
+  color: #b0b0b0;
+}
+
+/* ── Date input with display overlay ──────────────────── */
+
+.gc-date-input {
+  color: transparent !important;
+  cursor: pointer;
+}
+
+.gc-date-input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.gc-date-display {
+    color: #1a1a1a;
+    pointer-events: none;
+    font-size: 15px;
+    font-weight: 400;
+    position: absolute;
+    bottom: 8px;
+    left: 17px;
+    line-height: 1.1em;
+}
+
+/* ── Form fields ─────────────────────────────────────── */
+
+.gc-field {
+  margin-bottom: 16px;
+}
+
+.gc-field__label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 6px;
+}
+
+.gc-field__input {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  border: 1.5px solid #ddd;
+  border-radius: 10px;
+  font-size: 15px;
+  color: #1a1a1a;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.12s;
+}
+
+.gc-field__input:focus {
+  border-color: #1a1a1a;
+}
+
+.gc-field__textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 12px 14px;
+  border: 1.5px solid #ddd;
+  border-radius: 10px;
+  font-size: 15px;
+  color: #1a1a1a;
+  background: #fff;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 0.12s;
+}
+
+.gc-field__textarea:focus {
+  border-color: #1a1a1a;
+}
+
+.gc-field__counter {
+  font-size: 11px;
+  color: #999;
+  text-align: right;
+  margin-top: 4px;
+}
+
+.gc-field__error {
+  font-size: 12px;
+  color: #c13515;
+  margin-top: 4px;
+}
+
+/* ── Segmented control ───────────────────────────────── */
+
+.gc-segmented {
+  display: flex;
+  background: #f2f2f2;
+  border-radius: 10px;
+  padding: 3px;
+  margin-bottom: 16px;
+}
+
+.gc-segmented__option {
+  flex: 1;
+  padding: 10px 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.gc-segmented__option--active {
+  background: #fff;
+  color: #1a1a1a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Summary ─────────────────────────────────────────── */
+
+.gc-summary {
+  border-top: 1px solid #ebebeb;
+  padding-top: 20px;
+  margin-top: 20px;
+}
+
+.gc-summary__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.gc-summary__row:last-child {
+  margin-bottom: 0;
+}
+
+.gc-summary__thumb {
+  width: 56px;
+  height: 42px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.gc-summary__label {
+  font-size: 12px;
+  color: #888;
+}
+
+.gc-summary__value {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a1a;
+}
+
+.gc-summary__message {
+  font-size: 13px;
+  color: #666;
+  font-style: italic;
+  margin-top: 2px;
+}
+
+/* ── Actions ─────────────────────────────────────────── */
+
+.gc-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.gc-btn {
+  flex: 1;
+  height: 48px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.12s;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.gc-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.gc-btn--primary {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+.gc-btn--primary:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.gc-btn--back {
+  background: #f2f2f2;
+  color: #1a1a1a;
+  flex: 0 0 auto;
+  width: 48px;
+}
+
+.gc-btn--back:hover:not(:disabled) {
+  background: #e8e8e8;
+}
+
+/* ── Stripe Elements ─────────────────────────────────── */
+
+.gc-stripe {
+  margin-bottom: 16px;
+}
+
+.gc-stripe-error {
+  font-size: 13px;
+  color: #c13515;
+  margin-top: 8px;
+}
+
+/* ── Delivery info text ──────────────────────────────── */
+
+.gc-delivery-info {
+  font-size: 13px;
+  color: #888;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Confirmation page ───────────────────────────────── */
+
+.gc-confirm {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.gc-confirm__icon {
+  font-size: 48px;
+  color: #16a34a;
+  margin-bottom: 16px;
+  font-variation-settings: "FILL" 1;
+}
+
+.gc-confirm__title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 8px;
+}
+
+.gc-confirm__subtitle {
+  font-size: 14px;
+  color: #888;
+  margin: 0 0 28px;
+  line-height: 1.5;
+}
+
+.gc-confirm__details {
+  text-align: left;
+  border-top: 1px solid #ebebeb;
+  padding-top: 20px;
+}
+
+.gc-confirm__row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 14px;
+}
+
+.gc-confirm__row-label {
+  color: #888;
+}
+
+.gc-confirm__row-value {
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+/* ── Error state ─────────────────────────────────────── */
+
+.gc-error-page {
+  text-align: center;
+  padding: 32px 0;
+}
+
+.gc-error-page__icon {
+  font-size: 48px;
+  color: #c13515;
+  margin-bottom: 16px;
+}
+
+.gc-error-page__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 8px;
+}
+
+.gc-error-page__text {
+  font-size: 14px;
+  color: #888;
+  margin: 0 0 24px;
+}
+
+/* ── Listing page (multiple products) ────────────────── */
+
+.gc-listing {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.gc-listing__card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #ebebeb;
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+
+.gc-listing__card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.gc-listing__preview {
+  aspect-ratio: 520 / 331;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.gc-listing__preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gc-listing__info {
+  padding: 16px;
+}
+
+.gc-listing__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 4px;
+}
+
+.gc-listing__price {
+  font-size: 14px;
+  color: #888;
+  margin: 0;
+}
+
+/* ── Product description (below purchase card) ───────── */
+
+.gc-product-desc {
+  margin-top: 24px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #555;
+}
+
+.gc-product-desc h2,
+.gc-product-desc h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 20px 0 8px;
+}
+
+.gc-product-desc p {
+  margin: 0 0 12px;
+}
+
+.gc-product-desc ul,
+.gc-product-desc ol {
+  padding-left: 20px;
+  margin: 0 0 12px;
+}
+
+/* ── Purchase layout (2-column) ──────────────────────── */
+
+.gc-purchase-layout {
+  display: flex;
+  gap: 0;
+  min-height: 100dvh;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.gc-purchase-left {
+  flex: 1;
+  padding: 48px 80px 80px 32px;
+  max-width: 600px;
+}
+
+.gc-purchase-right {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: end;
+  min-height: 100dvh;
+}
+
+.gc-purchase-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 32px;
+  letter-spacing: -0.02em;
+}
+
+.gc-purchase-section {
+  margin-bottom: 28px;
+}
+
+/* ── Sticky preview card ─────────────────────────────── */
+
+.gc-purchase-preview {
+  width: 80%;
+  max-width: 470px;
+  aspect-ratio: 520 / 331;
+  border-radius: 20px;
+  position: sticky;
+  top: 52%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.gc-purchase-preview__logo {
+  max-width: 50%;
+  max-height: 30%;
+  object-fit: contain;
+}
+
+.gc-purchase-preview__amount {
+  margin-top: 12px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Payment overlay ─────────────────────────────────── */
+
+.gc-payment-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gc-payment-modal {
+  background: #fff;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 480px;
+  padding: 28px 24px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+
+/* ── Mobile responsive ───────────────────────────────── */
+
+@media (max-width: 768px) {
+  .gc-purchase-layout {
+    flex-direction: column-reverse;
+  }
+
+  .gc-purchase-left {
+    padding: 24px 16px 80px;
+    max-width: none;
+  }
+
+  .gc-purchase-right {
+    min-height: auto;
+    padding: 24px 16px 0;
+  }
+
+  .gc-purchase-preview {
+    position: static;
+    transform: none;
+    width: 100%;
+    max-width: none;
+  }
+}
+
+/* ── Design card preview (purchase page) ─────────────── */
+
+.gc-design__preview {
+  position: relative;
+}

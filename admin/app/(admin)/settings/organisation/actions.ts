@@ -55,35 +55,58 @@ export async function getOrganisationData(): Promise<OrganisationDataResponse> {
 
   const { tenant, clerkOrgId } = tenantData;
 
-  // Clerk org data — always fetched from Clerk API
-  const { clerkClient } = await import("@clerk/nextjs/server");
-  const client = await clerkClient();
-  const org = await client.organizations.getOrganization({ organizationId: clerkOrgId });
-  const clerk: ClerkOrgData = {
-    name: org.name,
-    slug: org.slug ?? tenant.slug,
-    logoUrl: org.imageUrl,
-    membersCount: org.membersCount ?? 0,
-    createdAt: new Date(org.createdAt).toISOString(),
-  };
+  // Clerk org data — fetched from Clerk API (skip in dev)
+  const IS_DEV = process.env.NODE_ENV === "development";
 
-  // Members — always fetched from Clerk API
+  let clerk: ClerkOrgData;
   let members: OrgMember[] = [];
-  try {
-    const memberships = await client.organizations.getOrganizationMembershipList({
-      organizationId: clerkOrgId,
-    });
-    members = memberships.data.map((m) => ({
-      id: m.publicUserData?.userId ?? "",
-      firstName: m.publicUserData?.firstName ?? null,
-      lastName: m.publicUserData?.lastName ?? null,
-      email: m.publicUserData?.identifier ?? "",
-      imageUrl: m.publicUserData?.imageUrl ?? "",
-      role: m.role === "org:admin" ? "Admin" : m.role === "org:member" ? "Medlem" : "Ägare",
-      joinedAt: new Date(m.createdAt).toISOString(),
-    }));
-  } catch {
-    // If member fetch fails, return empty — don't crash
+
+  if (IS_DEV) {
+    // Dev mode: Clerk API not available — use tenant data as fallback
+    clerk = {
+      name: tenant.name,
+      slug: tenant.slug,
+      logoUrl: "",
+      membersCount: 1,
+      createdAt: new Date().toISOString(),
+    };
+    members = [{
+      id: "dev_user",
+      firstName: "Dev",
+      lastName: "User",
+      email: "dev@localhost",
+      imageUrl: "",
+      role: "Admin",
+      joinedAt: new Date().toISOString(),
+    }];
+  } else {
+    const { clerkClient } = await import("@clerk/nextjs/server");
+    const client = await clerkClient();
+    const org = await client.organizations.getOrganization({ organizationId: clerkOrgId });
+    clerk = {
+      name: org.name,
+      slug: org.slug ?? tenant.slug,
+      logoUrl: org.imageUrl,
+      membersCount: org.membersCount ?? 0,
+      createdAt: new Date(org.createdAt).toISOString(),
+    };
+
+    try {
+      const memberships = await client.organizations.getOrganizationMembershipList({
+        organizationId: clerkOrgId,
+      });
+      members = memberships.data.map((m) => ({
+        id: m.publicUserData?.userId ?? "",
+        firstName: m.publicUserData?.firstName ?? null,
+        lastName: m.publicUserData?.lastName ?? null,
+        email: m.publicUserData?.identifier ?? "",
+        imageUrl: m.publicUserData?.imageUrl ?? "",
+        role: m.role === "org:admin" ? "Admin" : m.role === "org:member" ? "Medlem" : "Ägare",
+        joinedAt: new Date(m.createdAt).toISOString(),
+      }));
+    } catch {
+      // If member fetch fails, return empty — don't crash
+    }
   }
 
   const tenantOrg: TenantOrgData = {

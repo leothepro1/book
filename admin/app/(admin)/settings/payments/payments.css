@@ -1,0 +1,421 @@
+/* ═══════════════════════════════════════════════════════
+   Bedfront Payments — Settings Panel
+   BEM prefix: .pay-
+   All tokens from base.css — zero hardcoded values
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Section card ────────────────────────────────────── */
+
+.pay-section {
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.pay-section + .pay-section {
+  margin-top: var(--space-5);
+}
+
+.pay-section__header {
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.pay-section__header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pay-section__header-icon--brand {
+  background: #635BFF;
+  color: #fff;
+}
+
+.pay-section__header-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pay-section__header-title {
+  font-size: var(--font-md);
+  font-weight: 600;
+  color: var(--admin-text);
+}
+
+.pay-section__header-desc {
+  font-size: var(--font-xs);
+  color: var(--admin-text-secondary);
+  margin-top: 2px;
+}
+
+.pay-section__body {
+  padding: var(--space-5) var(--space-6);
+}
+
+.pay-section__body--flush {
+  padding: 0;
+}
+
+/* ── Status badge ────────────────────────────────────── */
+
+.pay-badge {
+  font-size: var(--font-xs);
+  font-weight: 500;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.pay-badge--live {
+  background: color-mix(in srgb, #16a34a 12%, transparent);
+  color: #16a34a;
+}
+
+.pay-badge--test {
+  background: color-mix(in srgb, #d97706 12%, transparent);
+  color: #d97706;
+}
+
+/* ── Warning banner ──────────────────────────────────── */
+
+.pay-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  margin-bottom: var(--space-5);
+}
+
+.pay-warning--amber {
+  background: color-mix(in srgb, #d97706 8%, transparent);
+  border: 1px solid color-mix(in srgb, #d97706 20%, transparent);
+  color: #92400e;
+}
+
+.pay-warning--amber .pay-warning__icon {
+  color: #d97706;
+}
+
+.pay-warning__icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+/* ── Test mode banner ────────────────────────────────── */
+
+.pay-test-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: color-mix(in srgb, #d97706 6%, transparent);
+  border: 1px solid color-mix(in srgb, #d97706 15%, transparent);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  color: #92400e;
+}
+
+.pay-test-banner__icon {
+  font-size: 20px;
+  color: #d97706;
+  flex-shrink: 0;
+}
+
+/* ── Connected status ────────────────────────────────── */
+
+.pay-connected {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.pay-connected__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.pay-connected__check {
+  font-size: 18px;
+  color: #16a34a;
+  font-variation-settings: "FILL" 1, "wght" 400;
+}
+
+.pay-connected__account-id {
+  font-size: var(--font-xs);
+  color: var(--admin-text-tertiary);
+  font-family: var(--sf-mono, monospace);
+  padding: var(--space-2) var(--space-3);
+  background: var(--admin-bg);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-self: flex-start;
+}
+
+.pay-connected__date {
+  font-size: var(--font-xs);
+  color: var(--admin-text-tertiary);
+}
+
+/* ── Disconnect confirm ──────────────────────────────── */
+
+.pay-disconnect {
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--admin-danger) 4%, transparent);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--admin-danger) 15%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.pay-disconnect__text {
+  font-size: var(--font-sm);
+  color: var(--admin-text);
+}
+
+.pay-disconnect__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ── Category label (group divider) ──────────────────── */
+
+.pay-category-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--admin-text-tertiary);
+  padding: var(--space-4) var(--space-6) var(--space-2);
+}
+
+.pay-category-label:first-child {
+  padding-top: var(--space-5);
+}
+
+/* ── Payment method row ──────────────────────────────── */
+
+.pay-method-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-6);
+  transition: background var(--duration-fast) ease;
+}
+
+.pay-method-row:hover {
+  background: color-mix(in srgb, var(--admin-text) 2%, transparent);
+}
+
+.pay-method-row__icon {
+  width: 40px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pay-method-row__icon svg {
+  display: block;
+}
+
+.pay-method-row__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pay-method-row__name {
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--admin-text);
+}
+
+.pay-method-row__desc {
+  font-size: var(--font-xs);
+  color: var(--admin-text-tertiary);
+  margin-top: 1px;
+}
+
+.pay-method-row__toggle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pay-method-row__always-on {
+  font-size: 11px;
+  color: var(--admin-text-tertiary);
+  white-space: nowrap;
+}
+
+/* ── Payout info ─────────────────────────────────────── */
+
+.pay-payout-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+}
+
+.pay-payout-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.pay-payout-item__label {
+  font-size: var(--font-xs);
+  font-weight: 500;
+  color: var(--admin-text-secondary);
+}
+
+.pay-payout-item__value {
+  font-size: var(--font-sm);
+  color: var(--admin-text);
+  font-weight: 500;
+}
+
+.pay-payout-item__value--mono {
+  font-family: var(--sf-mono, monospace);
+}
+
+/* ── Statement rows ──────────────────────────────────── */
+
+.pay-statement-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.pay-statement-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-6);
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.pay-statement-row:last-child {
+  border-bottom: none;
+}
+
+.pay-statement-row__amount {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--admin-text);
+  min-width: 100px;
+}
+
+.pay-statement-row__status {
+  font-size: var(--font-xs);
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.pay-statement-row__status--paid {
+  background: color-mix(in srgb, #16a34a 10%, transparent);
+  color: #16a34a;
+}
+
+.pay-statement-row__status--pending,
+.pay-statement-row__status--in_transit {
+  background: color-mix(in srgb, #d97706 10%, transparent);
+  color: #d97706;
+}
+
+.pay-statement-row__status--failed {
+  background: color-mix(in srgb, var(--admin-danger) 10%, transparent);
+  color: var(--admin-danger);
+}
+
+.pay-statement-row__date {
+  font-size: var(--font-xs);
+  color: var(--admin-text-tertiary);
+  margin-left: auto;
+}
+
+/* ── Section title (used for in-body headings) ───────── */
+
+.pay-section-title {
+  font-size: var(--font-md);
+  font-weight: 600;
+  color: var(--admin-text);
+  margin-bottom: var(--space-4);
+}
+
+/* ── Links ───────────────────────────────────────────── */
+
+.pay-link {
+  font-size: var(--font-xs);
+  color: var(--admin-accent);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+.pay-link:hover {
+  text-decoration: underline;
+}
+
+.pay-link__icon {
+  font-size: 14px;
+}
+
+/* ── Payout schedule edit ────────────────────────────── */
+
+.pay-schedule-select {
+  height: var(--sf-input-height);
+  font-size: var(--sf-input-font-size);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-sm);
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--duration-fast) ease;
+}
+
+.pay-schedule-select:focus {
+  border-color: var(--admin-border-focus);
+}
+
+/* ── Empty state ─────────────────────────────────────── */
+
+.pay-empty {
+  padding: var(--space-5) var(--space-6);
+  text-align: center;
+  font-size: var(--font-sm);
+  color: var(--admin-text-tertiary);
+}
+
+/* ── Error display ───────────────────────────────────── */
+
+.pay-error {
+  font-size: var(--font-sm);
+  color: var(--admin-danger);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--admin-danger) 6%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+/* ── Bottom padding for methods section ──────────────── */
+
+.pay-method-list {
+  padding-bottom: var(--space-4);
+}

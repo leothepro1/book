@@ -41,6 +41,7 @@ const envSchema = z.object({
   // Stripe — server-only (never NEXT_PUBLIC_)
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_CONNECT_WEBHOOK_SECRET: z.string().optional(), // For Connect (direct charge) webhooks
 
   /** Clerk org ID for dev mode mock auth. Must NOT be set in production. */
   DEV_ORG_ID: z.string().optional(),
@@ -175,6 +176,8 @@ export const env = {
   get STRIPE_WEBHOOK_SECRET() {
     return required("STRIPE_WEBHOOK_SECRET", parsed.STRIPE_WEBHOOK_SECRET);
   },
+  /** Optional — only needed when Connect (direct charge) webhooks are configured */
+  STRIPE_CONNECT_WEBHOOK_SECRET: parsed.STRIPE_CONNECT_WEBHOOK_SECRET ?? null,
 
   // Truly optional
   MEDIA_CLEANUP_SECRET: parsed.MEDIA_CLEANUP_SECRET,

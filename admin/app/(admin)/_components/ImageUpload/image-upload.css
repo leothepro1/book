@@ -4,22 +4,21 @@
 /* ── Empty state ── */
 .img-upload-empty {
   width: 100%;
-  min-height: 96px;
   border: 1.5px dashed var(--admin-border);
-  border-radius: 12px;
-  background: var(--admin-surface-muted);
+  border-radius: 8px;
+  background: #f2f2f2;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0px;
-  padding: 40px;
+  padding: 20px;
   transition: background 0.15s ease;
   box-sizing: border-box;
 }
 .img-upload-empty:hover {
-  background: #F6F7F5;
+  background: #f0f0f0;
 }
 .img-upload--wide .img-upload-empty { min-height: 130px; }
 

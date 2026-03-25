@@ -156,6 +156,39 @@ export default async function CheckoutSuccessPage({
           En bekräftelse har skickats till {order.guestEmail}
         </p>
       )}
+
+      {/* Account CTA — guest account auto-created by webhook */}
+      {order.guestEmail && !isPending && (
+        <div style={{
+          marginTop: "2rem",
+          padding: "1.5rem",
+          border: "1px solid #e5e5e5",
+          borderRadius: 12,
+          textAlign: "center",
+        }}>
+          <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: "0 0 0.5rem" }}>
+            Ditt konto är redo
+          </h2>
+          <p style={{ fontSize: "0.8125rem", color: "#666", margin: "0 0 1rem" }}>
+            Vi har skapat ett konto åt dig. Logga in för att se alla dina beställningar och hantera dina uppgifter.
+          </p>
+          <a
+            href="/login"
+            style={{
+              display: "inline-block",
+              padding: "10px 24px",
+              fontSize: "0.875rem",
+              fontWeight: 600,
+              color: "#fff",
+              backgroundColor: "#1a1a1a",
+              borderRadius: 8,
+              textDecoration: "none",
+            }}
+          >
+            Gå till mitt konto →
+          </a>
+        </div>
+      )}
     </div>
   );
 }

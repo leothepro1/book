@@ -16,6 +16,8 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getStripe } from "@/app/_lib/stripe/client";
+import { initiateOrderPayment } from "@/app/_lib/payments/providers";
+import { getPlatformFeeBps } from "@/app/_lib/payments/platform-fee";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { resolveProduct } from "@/app/_lib/products/resolve";
@@ -26,6 +28,8 @@ import { log } from "@/app/_lib/logger";
 import { validateStayDates } from "@/app/_lib/validation/dates";
 import { verifyChargesEnabled } from "@/app/_lib/stripe/verify-account";
 import { checkRateLimit } from "@/app/_lib/rate-limit/checkout";
+import { resolvePaymentMethods } from "@/app/_lib/payments/resolve";
+import type { PaymentMethodConfig } from "@/app/_lib/payments/types";
 
 const SUPPORTED_CURRENCIES = ["SEK", "EUR", "NOK", "DKK"] as const;
 const MIN_AMOUNT = 1000;   // 10 SEK — below this, price data is wrong
@@ -142,7 +146,7 @@ export async function POST(req: Request) {
   // ── Verify Stripe Connect account is active ─────────────────
   const tenantStripe = await prisma.tenant.findUnique({
     where: { id: tenant.id },
-    select: { stripeAccountId: true, stripeOnboardingComplete: true },
+    select: { stripeAccountId: true, stripeOnboardingComplete: true, paymentMethodConfig: true, subscriptionPlan: true, platformFeeBps: true },
   });
 
   if (tenantStripe?.stripeAccountId) {
@@ -212,50 +216,59 @@ export async function POST(req: Request) {
     return newOrder;
   });
 
-  // ── Create Stripe PaymentIntent ─────────────────────────────
-  const stripe = getStripe();
+  // ── Calculate platform fee ────────────────────────────────────
+  const feeBps = tenantStripe
+    ? getPlatformFeeBps(tenantStripe.subscriptionPlan, tenantStripe.platformFeeBps)
+    : 500; // fallback to BASIC if tenant query failed
 
-  const paymentMethodTypes: string[] =
-    paymentType === "klarna" ? ["klarna"] : ["card", "paypal"];
+  // Snapshot fee on order for audit
+  await prisma.order.update({
+    where: { id: order.id },
+    data: { platformFeeBps: feeBps },
+  });
 
-  const connectParams =
-    tenantStripe?.stripeAccountId && tenantStripe.stripeOnboardingComplete
-      ? { stripeAccount: tenantStripe.stripeAccountId }
-      : undefined;
-
+  // ── Initiate payment via provider adapter ────────────────────
   try {
-    const paymentIntent = await stripe.paymentIntents.create(
-      {
-        amount: totalPrice,
-        currency: currency.toLowerCase(),
-        payment_method_types: paymentMethodTypes,
-        metadata: {
-          tenantId: tenant.id,
-          orderId: order.id,
-          orderNumber: String(orderNumber),
-          productSlug,
-        },
+    const init = await initiateOrderPayment({
+      order: {
+        id: order.id,
+        tenantId: tenant.id,
+        totalAmount: totalPrice + taxAmount,
+        currency,
       },
-      connectParams,
-    );
-
-    // Link PaymentIntent to Order
-    await prisma.order.update({
-      where: { id: order.id },
-      data: { stripePaymentIntentId: paymentIntent.id },
+      guest: { email: "", name: "" }, // Collected later via update-guest
+      locale: "sv-SE",
+      returnUrl: `${req.headers.get("x-forwarded-proto") ?? "http"}://${req.headers.get("host") ?? "localhost:3000"}/checkout/success`,
+      platformFeeBps: feeBps,
+      metadata: {
+        orderNumber: String(orderNumber),
+        productSlug,
+        orderType: "ACCOMMODATION",
+      },
     });
 
-    log("info", "checkout.payment_intent_created", {
-      tenantId: tenant.id, orderId: order.id, orderNumber,
-      amount: totalPrice + taxAmount, currency, paymentIntentId: paymentIntent.id,
+    if (init.mode !== "embedded") {
+      throw new Error("Expected embedded payment mode");
+    }
+
+    log("info", "checkout.payment_initiated", {
+      tenantId: tenant.id,
+      orderId: order.id,
+      orderNumber,
+      amount: totalPrice + taxAmount,
+      currency,
     });
 
     return NextResponse.json({
-      clientSecret: paymentIntent.client_secret,
+      clientSecret: init.clientSecret,
       orderId: order.id,
     });
   } catch (err) {
-    log("error", "checkout.stripe_pi_failed", { tenantId: tenant.id, orderId: order.id, error: String(err) });
+    log("error", "checkout.payment_failed", {
+      tenantId: tenant.id,
+      orderId: order.id,
+      error: String(err),
+    });
 
     // Clean up: cancel the orphaned order
     await prisma.order.update({
@@ -266,7 +279,7 @@ export async function POST(req: Request) {
       data: {
         orderId: order.id,
         type: "CANCELLED",
-        message: "Stripe PaymentIntent creation failed — order cancelled",
+        message: "Payment initiation failed — order cancelled",
       },
     });
 

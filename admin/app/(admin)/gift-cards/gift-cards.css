@@ -1,0 +1,588 @@
+/* ── Gift Cards admin page ── */
+
+.container:has(.gc-admin-page) {
+  max-width: none;
+  padding: 0;
+  height: 100vh;
+  overflow: visible;
+}
+
+.gc-admin-page .admin-header {
+  border-bottom: none;
+  justify-content: space-between;
+  align-items: center;
+  height: auto;
+  padding: 16px;
+  display: flex;
+}
+
+.gc-admin-page .admin-content {
+  background: #fff;
+  border-radius: .75rem;
+  overflow: hidden;
+  margin: 0 16px;
+  padding: 0;
+  box-shadow: 0 .3125rem .3125rem -.15625rem #00000008, 0 .1875rem .1875rem -.09375rem #00000005, 0 .125rem .125rem -.0625rem #00000005, 0 .0625rem .0625rem -.03125rem #00000008, 0 .03125rem .03125rem #0000000a, 0 0 0 .0625rem #0000000f;
+  height: max-content;
+  min-height: auto !important;
+  max-height: max-content;
+}
+
+.gc-admin-page {
+  overflow: visible !important;
+  height: auto !important;
+}
+
+.gc-admin-page .admin-editor {
+  overflow: visible !important;
+  height: auto !important;
+  padding: 0 0 80px;
+}
+
+/* ── Empty state ── */
+
+.gc-admin-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 48px 24px 52px;
+}
+
+.gc-admin-empty__image {
+  width: 190px;
+  height: max-content;
+  margin-bottom: 0px;
+  margin-top: -30px;
+  opacity: 1;
+}
+
+.gc-admin-empty__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--admin-text);
+  margin: 0 0 8px;
+}
+
+.gc-admin-empty__desc {
+  font-size: 13px;
+  color: var(--admin-text-secondary);
+  line-height: 1.35;
+  max-width: 320px;
+  margin: 0 0 17px;
+}
+
+.gc-admin-empty__btn {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: none;
+  background: #0072f5;
+  color: var(--admin-surface);
+  cursor: pointer;
+  transition: opacity var(--duration-fast);
+}
+
+.gc-admin-empty__btn:hover {
+  opacity: 0.88;
+}
+
+/* ── Card empty state (inside configure cards) ── */
+
+.gc-card-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  text-align: left;
+  padding: 0;
+}
+
+.gc-card-empty__desc {
+  font-size: 13px;
+  color: #616161;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.gc-card-empty__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: none;
+  background: var(--dark-primary);
+  color: #fff;
+  cursor: pointer;
+  transition: opacity var(--duration-fast);
+}
+
+.gc-card-empty__btn:hover {
+  opacity: 0.85;
+}
+
+/* ── Amount input with suffix ── */
+
+.gc-amount-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.gc-amount-input__field {
+  padding-right: 32px !important;
+  -moz-appearance: textfield;
+}
+
+.gc-amount-input__field::-webkit-outer-spin-button,
+.gc-amount-input__field::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.gc-amount-input__suffix {
+  position: absolute;
+  right: 10px;
+  font-size: 13px;
+  font-weight: 400;
+  color: #616161;
+  pointer-events: none;
+}
+
+/* ── Gift card list (main /gift-cards page) ── */
+
+.gc-list-col--name {
+  flex: 3;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.gc-list-col--status {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.gc-list-col--designs {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--admin-text-secondary);
+}
+
+.gc-list-col--amount {
+  flex: 1.5;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--admin-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── "Lägg till" link in card header ── */
+
+.gc-add-link {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--admin-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.gc-add-link:hover {
+  text-decoration: underline;
+}
+
+/* ══════════════════════════════════════════════════════
+   Admin Modal — .am- prefix
+   Same animation as checkout modal (slide up, instant close)
+   Reusable across all admin pages
+   ══════════════════════════════════════════════════════ */
+
+.am-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0);
+  transition: background 0.25s ease;
+}
+
+.am-overlay--visible {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.am-modal {
+  background: var(--admin-surface);
+  border-radius: 16px;
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: translateY(24px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.am-overlay--visible .am-modal {
+  transform: translateY(0);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.am-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: #F3F3F4;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.am-modal__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--admin-text);
+  margin: 0;
+}
+
+.am-modal__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--admin-text-secondary);
+  transition: background 0.15s;
+}
+
+.am-modal__close:hover {
+  background: #e3e3e3;
+}
+
+.am-modal__body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.am-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--admin-border);
+}
+
+/* ── Modal form fields ── */
+
+.gc-modal-field {
+  margin-bottom: 20px;
+}
+
+.gc-modal-field:last-child {
+  margin-bottom: 0;
+}
+
+.gc-modal-field__label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--admin-text);
+  margin-bottom: 8px;
+}
+
+/* ── Background mode selector (3-col grid) ── */
+
+.gc-bg-modes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.gc-bg-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.gc-bg-mode:active {
+  transform: scale(0.96);
+}
+
+.gc-bg-mode__icon {
+  width: 100%;
+  aspect-ratio: 5 / 3;
+  border-radius: 12px;
+  border: 1.5px solid var(--admin-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: border-color 0.12s;
+  background: var(--admin-bg);
+}
+
+.gc-bg-mode--active .gc-bg-mode__icon {
+  border-color: var(--admin-text);
+  outline: 1px solid var(--admin-text);
+}
+
+.gc-bg-mode__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--admin-text-secondary);
+  transition: color 0.12s;
+}
+
+.gc-bg-mode--active .gc-bg-mode__label {
+  color: var(--admin-text);
+  font-weight: 600;
+}
+
+/* ── Gradient direction ── */
+
+.gc-bg-dir {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.gc-bg-dir__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1.5px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--admin-text-secondary);
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+
+.gc-bg-dir__btn--active {
+  border-color: var(--admin-text);
+  color: var(--admin-text);
+  font-weight: 600;
+}
+
+/* ═══ DnD Design Grid ═══ */
+
+.gc-dnd-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.gc-dnd-item {
+  position: relative;
+  opacity: 1;
+  line-height: 0;
+  height: max-content;
+}
+
+.gc-dnd-item__card {
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: rgba(0, 0, 0, 0.05) 0px 0px 0px 1px;
+}
+
+.gc-dnd-item__overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 8px 8px 0;
+  opacity: 0;
+  transition: opacity var(--duration-fast), background var(--duration-fast);
+  pointer-events: none;
+}
+
+.gc-dnd-item:hover .gc-dnd-item__overlay {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.gc-dnd-item__handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: grab;
+  padding: 0;
+}
+
+.gc-dnd-item__handle:active {
+  cursor: grabbing;
+}
+
+.gc-dnd-item__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* ── Gift Card Preview ── */
+
+.gc-preview {
+  width: 100%;
+  background: #f0f0f0;
+}
+
+/* ── Add card (dashed) ── */
+
+.gc-dnd-add {
+  padding: 0;
+  border-radius: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.gc-dnd-add__inner {
+  width: 100%;
+  aspect-ratio: 520 / 331;
+  border: 1.5px dashed var(--admin-border);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--admin-text-tertiary);
+  transition: border-color var(--duration-fast), color var(--duration-fast);
+}
+
+.gc-dnd-add:hover .gc-dnd-add__inner {
+  border-color: #0072F5;
+  color: #0072F5;
+}
+
+/* ═══ Stats table ═══ */
+
+.gc-stats-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: #fafafa;
+  border-bottom: 1px solid var(--admin-border);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--admin-text);
+}
+
+.gc-stats-col--code { width: 190px; flex-shrink: 0; }
+.gc-stats-col--recipient { flex: 1; min-width: 0;     overflow: hidden;}
+.gc-stats-col--amount { flex: 1; min-width: 0; }
+.gc-stats-col--balance { flex: 1; min-width: 0; }
+.gc-stats-col--status { flex: 1; min-width: 0; }
+.gc-stats-col--delivery { flex: 1; min-width: 0; }
+
+.gc-stats-empty {
+  padding: 48px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--admin-text-tertiary);
+}
+
+.gc-stats-empty p {
+  margin: 0;
+}
+
+.gc-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--admin-border);
+  font-size: 13px;
+  color: var(--admin-text);
+}
+
+.gc-stats-row:last-child {
+  border-bottom: none;
+}
+
+.gc-stats-row:hover {
+  background: #f7f7f7;
+}
+
+.gc-stats-code {
+  font-family: var(--sf-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.gc-stats-name {
+  display: block;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--admin-text);
+}
+
+.gc-stats-email {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  color: #616161;
+  margin-top: 1px;
+}
+
+.gc-stats-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.gc-stats-badge--active {
+  background: #AFFEBF;
+  color: #223A5A;
+}
+
+.gc-stats-badge--pending {
+  background: #D5EBFF;
+  color: #223A5A;
+}
+
+.gc-stats-badge--redeemed {
+  background: var(--admin-bg);
+  color: var(--admin-text-tertiary);
+}

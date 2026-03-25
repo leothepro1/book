@@ -26,10 +26,45 @@ enum OrderStatus {
   REFUNDED      // full refund issued
 }
 
-/// How payment was collected. Determines webhook handling path.
+/// What type of purchase this order represents.
+enum OrderType {
+  ACCOMMODATION  // PMS booking (hotel room, cabin, camping)
+  PURCHASE       // Standard product purchase (shop, gift card, etc.)
+}
+
+enum SubscriptionPlan {
+  BASIC
+  GROW
+  PRO
+}
+
+enum PaymentSessionStatus {
+  INITIATED    // adapter.initiatePayment() called, awaiting customer action
+  PENDING      // provider confirmed receipt, async processing
+  RESOLVED     // payment succeeded
+  REJECTED     // payment failed
+  REFUNDED     // full or partial refund completed
+}
+
+/// How payment was collected. One value per provider+mode combination.
+/// Add new values here when registering a new PaymentAdapter.
 enum PaymentMethod {
-  STRIPE_CHECKOUT   // Stripe-hosted Checkout Session (cart/shop flow)
-  STRIPE_ELEMENTS   // Embedded Stripe Elements (accommodation flow)
+  STRIPE_CHECKOUT   // @deprecated — use BEDFRONT_PAYMENTS_CHECKOUT
+  STRIPE_ELEMENTS   // @deprecated — use BEDFRONT_PAYMENTS_ELEMENTS
+  BEDFRONT_PAYMENTS_CHECKOUT  // Stripe Checkout Session via Bedfront Payments
+  BEDFRONT_PAYMENTS_ELEMENTS  // Stripe Elements via Bedfront Payments
+  SWEDBANK_PAY      // Swedbank Pay (redirect flow)
+  NETS              // Nets Easy (redirect flow)
+  INVOICE           // Manual invoice
+}
+
+/// Lifecycle status of a gift card.
+enum GiftCardStatus {
+  PENDING    // order paid but delivery not yet executed
+  ACTIVE     // ready to send or already sent, not fully redeemed
+  REDEEMED   // fully redeemed (balance = 0)
+  EXPIRED    // past expiration date (phase 2)
+  CANCELLED  // revoked by tenant or refund
 }
 
 enum OrderEventType {
@@ -139,6 +174,11 @@ model Tenant {
   stripeOnboardingComplete Boolean   @default(false)
   stripeLivemode           Boolean   @default(false)
   stripeConnectedAt        DateTime?
+  paymentMethodConfig      Json?     // PaymentMethodConfig — which methods tenant has enabled
+
+  // Subscription & platform fee
+  subscriptionPlan         SubscriptionPlan @default(BASIC)
+  platformFeeBps           Int?             // basis points override per tenant, null = use plan default
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -160,7 +200,11 @@ model Tenant {
   guestAccounts      GuestAccount[]
   products           Product[]
   productCollections ProductCollection[]
-  orders             Order[]
+  orders              Order[]
+  giftCardProducts    GiftCardProduct[]
+  giftCards           GiftCard[]
+  paymentSessions     PaymentSession[]
+  paymentConfig       TenantPaymentConfig?
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -519,6 +563,7 @@ enum EmailEventType {
   SUPPORT_REPLY
   GUEST_OTP
   ORDER_CONFIRMED
+  GIFT_CARD_SENT
 }
 
 enum TranslationNamespace {
@@ -715,14 +760,24 @@ model EmailRateLimit {
 /// Created lazily during booking sync when a valid guest email exists.
 /// Used for OTP-based guest portal authentication.
 model GuestAccount {
-  id        String   @id @default(cuid())
-  tenantId  String
-  email     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  tenantId    String
+  email       String
+  name        String?   // @deprecated — use firstName/lastName. Kept for backwards compat.
+  phone       String?   // Populated from first order/booking
+  firstName   String?
+  lastName    String?
+  address1    String?
+  address2    String?
+  city        String?
+  postalCode  String?
+  country     String?   @default("SE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   bookings Booking[]
+  orders   Order[]
   otpCodes GuestOtpCode[]
 
   @@unique([tenantId, email])
@@ -1229,12 +1284,17 @@ model Order {
   orderNumber             Int
 
   status                  OrderStatus    @default(PENDING)
+  orderType               OrderType      @default(ACCOMMODATION)
   paymentMethod           PaymentMethod  @default(STRIPE_CHECKOUT)
 
   // Guest info — denormalized for fast display (nullable for Elements flow where collected later)
   guestEmail              String         @default("")
   guestName               String         @default("")
   guestPhone              String?
+
+  // Guest account link — auto-created on payment
+  guestAccountId          String?
+  guestAccount            GuestAccount?  @relation(fields: [guestAccountId], references: [id], onDelete: SetNull)
 
   // Money — always integer (ören/cents), never float
   subtotalAmount          Int           // before tax
@@ -1243,9 +1303,17 @@ model Order {
   totalAmount             Int           // what guest paid
   currency                String        @default("SEK")
 
-  // Stripe references
+  // @deprecated — use PaymentSession.externalSessionId for lookups.
+  // Kept for backwards compatibility with existing orders.
   stripeCheckoutSessionId String?       @unique
   stripePaymentIntentId   String?       @unique
+
+  /// Platform fee charged on this order, snapshot at payment time
+  platformFeeBps          Int?
+
+  /// Public token for unauthenticated order status lookup.
+  /// Safe to share in emails. Reveals only status and summary.
+  statusToken             String?       @unique @default(cuid())
 
   /// Flexible metadata — accommodation dates, PMS refs, etc.
   metadata                Json?
@@ -1261,11 +1329,14 @@ model Order {
   // Relations
   lineItems               OrderLineItem[]
   events                  OrderEvent[]
+  giftCard                GiftCard?
+  paymentSession          PaymentSession?
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
   @@index([guestEmail])
+  @@index([guestAccountId])
 }
 
 model OrderLineItem {
@@ -1322,4 +1393,144 @@ model OrderNumberSequence {
   tenantId    String   @id
   lastNumber  Int      @default(1000)
   updatedAt   DateTime @updatedAt
+}
+
+// ============================================================================
+// GIFT CARDS
+// ============================================================================
+
+/// Per-tenant gift card configuration. One per tenant.
+/// Controls whether gift cards are enabled and amount limits.
+model GiftCardProduct {
+  id         String   @id @default(cuid())
+  tenantId   String
+  title       String   @default("Presentkort")
+  description String   @default("")
+  slug        String   @default("")
+  status      String   @default("DRAFT")  // ACTIVE or DRAFT
+  enabled    Boolean  @default(false)
+  minAmount  Int      @default(50000)    // 500 kr in ören
+  maxAmount  Int      @default(1000000)  // 10 000 kr in ören
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  designs  GiftCardDesign[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+}
+
+/// Visual design template for gift cards. Tenant picks from these.
+model GiftCardDesign {
+  id         String   @id @default(cuid())
+  tenantId   String
+  productId  String
+  name       String   // display name in admin, max 80 chars
+  imageUrl   String   // Cloudinary URL (background image when bgMode=image)
+  config     Json?    // { logoUrl, bgMode, bgColor, bgGradientColor2, bgGradientDir }
+  renderedImageUrl String?  // Pre-rendered PNG on Cloudinary (for email)
+  sortOrder  Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  product    GiftCardProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  giftCards  GiftCard[]
+
+  @@index([tenantId])   // admin list: all designs for a tenant
+  @@index([productId])  // product detail: designs for this gift card product
+}
+
+/// The actual gift card. Created when Order transitions PENDING → PAID.
+/// Never created before payment is confirmed.
+model GiftCard {
+  id              String         @id @default(cuid())
+  tenantId        String
+  orderId         String         @unique  // one gift card per order
+  code            String         // format: XXXX-XXXX-XXXX-XXXX
+  designId        String?        // nullable — design can be deleted
+  initialAmount   Int            // amount at issuance, in ören, immutable
+  balance         Int            // current balance, in ören
+  status          GiftCardStatus @default(PENDING)
+  recipientEmail  String
+  recipientName   String
+  senderName      String
+  message         String?        // optional personal message, max 500 chars
+  scheduledAt     DateTime       // when email should be sent (now() for immediate)
+  sentAt          DateTime?      // set when email actually sent
+  expiresAt       DateTime?      // nullable, set per tenant policy (phase 2)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order       Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  design      GiftCardDesign?   @relation(fields: [designId], references: [id], onDelete: SetNull)
+  redemptions GiftCardRedemption[]
+
+  @@unique([tenantId, code])                    // code lookup for redemption
+  @@index([tenantId])                           // admin list: all gift cards for tenant
+  @@index([orderId])                            // order detail: gift card for this order
+  @@index([tenantId, status, scheduledAt])      // cron: unsent cards ready for delivery
+}
+
+/// Append-only ledger of gift card redemptions (phase 2).
+/// Created now to avoid future migration that alters GiftCard.
+model GiftCardRedemption {
+  id          String   @id @default(cuid())
+  tenantId    String
+  giftCardId  String
+  orderId     String?  // FK to Order when redeemed at checkout
+  amount      Int      // redeemed amount in ören
+  createdAt   DateTime @default(now())
+  // No updatedAt — append-only, never mutated
+
+  giftCard GiftCard @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+
+  @@index([giftCardId])  // gift card detail: all redemptions
+  @@index([tenantId])    // admin: all redemptions for tenant
+}
+
+// ============================================================================
+// PAYMENT PROVIDER ABSTRACTION
+// ============================================================================
+
+/// Tracks the lifecycle of a single payment attempt for an Order.
+/// One Order has at most one active PaymentSession.
+/// The provider adapter creates and updates this record.
+model PaymentSession {
+  id                String               @id @default(cuid())
+  orderId           String               @unique
+  tenantId          String
+  providerKey       String               // "bedfront_payments" | "swedbank_pay" etc.
+  status            PaymentSessionStatus  @default(INITIATED)
+  externalSessionId String?              // provider's own ID (e.g. Stripe PI id)
+  externalRefundId  String?
+  amount            Int                  // smallest currency unit (ören)
+  currency          String
+  initiatedAt       DateTime             @default(now())
+  resolvedAt        DateTime?
+  rawInitResponse   Json?                // full provider response for audit
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([providerKey, status])
+  @@index([tenantId, status])
+}
+
+/// Which payment provider a tenant uses. One active provider per tenant.
+/// Defaults to "bedfront_payments" (Stripe) if not configured.
+model TenantPaymentConfig {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  providerKey     String   @default("bedfront_payments")
+  isActive        Boolean  @default(true)
+  configuredAt    DateTime @default(now())
+  configuredBy    String?  // Clerk userId
+
+  /// AES-256-GCM encrypted credentials. Use credentials.ts to read/write.
+  credentials     String?
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }

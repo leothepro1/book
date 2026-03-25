@@ -70,6 +70,18 @@ export type CreateOrderInput = z.infer<typeof createOrderInput>;
 
 // ── Status transition helpers ──────────────────────────────────
 
+/**
+ * Valid state transitions for orders.
+ *
+ * PENDING → PAID:       Payment provider webhook reports "resolved"
+ * PENDING → CANCELLED:  Session expired, PI cancelled, or inventory rejected
+ * PAID → FULFILLED:     Admin action (shipped/delivered/gift card created)
+ * PAID → CANCELLED:     Admin-initiated cancel of paid order.
+ *                        Caller MUST call adapter.refund() before transitioning.
+ *                        Refund is NOT automatic — same model as Shopify.
+ * PAID → REFUNDED:      charge.refunded webhook from payment provider
+ * FULFILLED → REFUNDED: Post-fulfillment refund (return, complaint)
+ */
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   PENDING: ["PAID", "CANCELLED"],
   PAID: ["FULFILLED", "CANCELLED", "REFUNDED"],

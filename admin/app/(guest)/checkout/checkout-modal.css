@@ -12,29 +12,26 @@
 }
 
 .com__overlay--visible {
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .com__modal {
-  opacity: 0;
   background: #fff;
   border-radius: 16px;
   flex-direction: column;
   width: 90%;
   max-width: 480px;
   max-height: 85vh;
-  transition: opacity .25s, transform .25s cubic-bezier(.4, 0, 1, 1);
   display: flex;
   overflow: hidden;
-  transform: translateY(16px) scale(.97);
+  transform: translateY(24px);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 1, 1);
 }
 
 .com__overlay--visible .com__modal {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-  transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1),
-              transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  transform: translateY(0);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .com__header {
@@ -73,4 +70,11 @@
 .com__body {
   padding: 24px;
   overflow-y: auto;
+}
+
+.com__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
 }

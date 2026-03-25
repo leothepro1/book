@@ -35,7 +35,8 @@ export type PageId =
   | "login"
   | "help-center"
   | "support"
-  | "product";
+  | "product"
+  | "checkout";
 
 // ═══════════════════════════════════════════════════════════════
 // EDITOR MODE

@@ -21,14 +21,37 @@ function splitBookings(all: NormalizedBooking[]) {
 
 /**
  * Session-driven stays page.
- * Mirrors /p/[token]/stays/page.tsx but loads data from guest session.
+ * If guest has bookings: shows booking list.
+ * If guest has no bookings but has orders: redirects to orders.
+ * If guest has neither: shows empty state.
  */
 export default async function SessionStaysPage() {
   const ctx = await resolveGuestContext();
   if (!ctx) redirect("/login");
-  if (!ctx.primaryBooking) redirect("/no-booking");
 
-  const bookingStatus = getBookingStatus(ctx.primaryBooking);
+  // No bookings — show orders if available, or empty state
+  if (ctx.bookings.length === 0) {
+    if (ctx.orders.length > 0) {
+      redirect("/portal/orders");
+    }
+    return (
+      <GuestPageShell config={ctx.config}>
+        <div style={{ maxWidth: 640, margin: "0 auto", padding: "clamp(2rem, 5vw, 3rem) 1rem", textAlign: "center" }}>
+          <h1 style={{ fontSize: "clamp(1.25rem, 1rem + 1vw, 1.75rem)", fontWeight: 600, color: "var(--text)", marginBottom: "0.75rem" }}>
+            Mina vistelser
+          </h1>
+          <p style={{ fontSize: "0.9375rem", color: "var(--text)", opacity: 0.6 }}>
+            Du har inga vistelser ännu.
+          </p>
+        </div>
+      </GuestPageShell>
+    );
+  }
+
+  const bookingStatus = ctx.primaryBooking
+    ? getBookingStatus(ctx.primaryBooking)
+    : "confirmed";
+
   const { currentBookings, previousBookings } = splitBookings(ctx.bookings);
 
   return (
@@ -40,7 +63,7 @@ export default async function SessionStaysPage() {
         <ThemeRenderer
           templateKey="stays"
           config={ctx.config}
-          booking={ctx.primaryBooking}
+          booking={ctx.primaryBooking ?? ctx.bookings[0]}
           bookingStatus={bookingStatus}
         />
       </BookingsProvider>

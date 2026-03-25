@@ -3,7 +3,6 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/app/_lib/db/prisma";
-import { getStripe } from "@/app/_lib/stripe/client";
 import { validateCart } from "@/app/_lib/cart/validate";
 import { nextOrderNumber } from "@/app/_lib/orders/sequence";
 import { reserveInventoryForTenant } from "@/app/_lib/products/inventory";
@@ -12,9 +11,9 @@ import type { CartItem } from "@/app/_lib/cart/types";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { getTaxRate } from "@/app/_lib/orders/tax";
 import { log } from "@/app/_lib/logger";
-import { verifyChargesEnabled } from "@/app/_lib/stripe/verify-account";
 import { checkRateLimit } from "@/app/_lib/rate-limit/checkout";
-import { headers } from "next/headers";
+import { getPlatformFeeBps } from "@/app/_lib/payments/platform-fee";
+import { initiateOrderPayment } from "@/app/_lib/payments/providers/initiate";
 
 const checkoutInputSchema = z.object({
   items: z.array(
@@ -45,10 +44,7 @@ export async function POST(req: Request) {
     const raw = await req.json();
     body = checkoutInputSchema.parse(raw);
   } catch {
-    return NextResponse.json(
-      { error: "Ogiltig begäran" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Ogiltig begäran" }, { status: 400 });
   }
 
   const { items } = body;
@@ -60,7 +56,6 @@ export async function POST(req: Request) {
   }
   const tenantId = resolvedTenant.id;
 
-  // Verify tenant has Stripe connected
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: {
@@ -69,33 +64,23 @@ export async function POST(req: Request) {
       stripeOnboardingComplete: true,
       portalSlug: true,
       name: true,
+      subscriptionPlan: true,
+      platformFeeBps: true,
     },
   });
 
   if (!tenant) {
-    return NextResponse.json(
-      { error: "Organisationen hittades inte" },
-      { status: 404 },
-    );
+    return NextResponse.json({ error: "Organisationen hittades inte" }, { status: 404 });
   }
 
   if (!tenant.stripeOnboardingComplete || !tenant.stripeAccountId) {
     return NextResponse.json(
-      { error: "STRIPE_NOT_CONFIGURED", message: "Betalning är inte konfigurerad för detta hotell." },
+      { error: "STRIPE_NOT_CONFIGURED", message: "Betalning är inte konfigurerad." },
       { status: 503 },
     );
   }
 
-  // ── Verify Connect account can accept charges (cached 60s) ──
-  const chargesOk = await verifyChargesEnabled(tenant.stripeAccountId);
-  if (!chargesOk) {
-    return NextResponse.json(
-      { error: "STRIPE_NOT_ACTIVE", message: "Betalning är inte aktiverad för detta hotell. Kontakta hotellet direkt." },
-      { status: 400 },
-    );
-  }
-
-  // Validate cart server-side — re-compute prices
+  // Validate cart server-side
   const validation = await validateCart(tenantId, items as CartItem[]);
   if (!validation.valid) {
     return NextResponse.json(
@@ -104,24 +89,21 @@ export async function POST(req: Request) {
     );
   }
 
-  // Calculate totals using server-validated prices
+  // Calculate totals
   const subtotalAmount = validation.validatedItems.reduce(
     (sum, item) => sum + item.validatedUnitAmount * item.quantity,
     0,
   );
-  // TODO: derive taxRate from product.taxCategory once tax engine is implemented
   const taxRate = getTaxRate("STANDARD", "SE");
   const taxAmount = taxRate > 0 ? Math.round(subtotalAmount * taxRate / 10000) : 0;
   const totalAmount = subtotalAmount + taxAmount;
   const currency = validation.validatedItems[0]?.currency ?? "SEK";
 
-  // Get sequential order number
   const orderNumber = await nextOrderNumber(tenantId);
 
-  // Create order in a transaction
+  // Create order
   const order = await prisma.$transaction(async (tx) => {
-    // Create order with line items
-    const newOrder = await tx.order.create({
+    return tx.order.create({
       data: {
         tenantId,
         orderNumber,
@@ -149,19 +131,13 @@ export async function POST(req: Request) {
           })),
         },
         events: {
-          create: {
-            type: "CREATED",
-            message: `Order #${orderNumber} skapad`,
-            metadata: {},
-          },
+          create: { type: "CREATED", message: `Order #${orderNumber} skapad`, metadata: {} },
         },
       },
     });
-
-    return newOrder;
   });
 
-  // Reserve inventory for each line item
+  // Reserve inventory
   for (const item of validation.validatedItems) {
     if (item.quantity > 0) {
       try {
@@ -174,56 +150,96 @@ export async function POST(req: Request) {
           ttlMinutes: 30,
         });
       } catch {
-        // Reservation failure shouldn't block checkout —
-        // the product may not track inventory
+        // Non-blocking
       }
     }
   }
 
-  // Create Stripe Checkout Session on tenant's connected account
-  // Build base URL from tenant subdomain (production) or host header (dev)
-  const h = await headers();
-  const host = h.get("host") ?? "localhost:3000";
+  // Calculate platform fee
+  const feeBps = getPlatformFeeBps(tenant.subscriptionPlan, tenant.platformFeeBps);
+  await prisma.order.update({
+    where: { id: order.id },
+    data: { platformFeeBps: feeBps },
+  });
+
+  // Build URLs from request host
+  const host = req.headers.get("host") ?? "localhost:3000";
   const isDev = host.startsWith("localhost") || host.startsWith("127.0.0.1");
   const protocol = isDev ? "http" : "https";
   const baseUrl = isDev
     ? `${protocol}://${host}`
     : `${protocol}://${tenant.portalSlug}.bedfront.com`;
 
-  const stripe = getStripe();
-  const session = await stripe.checkout.sessions.create(
-    {
-      mode: "payment",
-      line_items: validation.validatedItems.map((item) => ({
-        price_data: {
-          currency: item.currency.toLowerCase(),
-          product_data: {
-            name: item.title,
-            ...(item.variantTitle ? { description: item.variantTitle } : {}),
-            ...(item.imageUrl ? { images: [item.imageUrl] } : {}),
-          },
-          unit_amount: item.validatedUnitAmount,
-        },
-        quantity: item.quantity,
-      })),
-      customer_email: body.guestInfo?.email || undefined,
-      success_url: `${baseUrl}/shop/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/shop/checkout/cancel`,
+  // Initiate payment via adapter — checkoutMode: "session" triggers redirect mode
+  try {
+    const init = await initiateOrderPayment({
+      order: {
+        id: order.id,
+        tenantId,
+        totalAmount,
+        currency,
+      },
+      guest: {
+        email: body.guestInfo?.email ?? "",
+        name: body.guestInfo?.name ?? "",
+      },
+      locale: "sv-SE",
+      returnUrl: `${baseUrl}/shop/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${baseUrl}/shop/checkout/cancel`,
+      platformFeeBps: feeBps,
       metadata: {
+        checkoutMode: "session",
+        orderId: order.id,
+        tenantId,
+        orderNumber: String(orderNumber),
+        orderType: "PURCHASE",
+        productName: validation.validatedItems[0]?.title ?? "Beställning",
+      },
+    });
+
+    if (init.mode === "redirect") {
+      if ("providerSessionId" in init && init.providerSessionId) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { stripeCheckoutSessionId: init.providerSessionId },
+        });
+      }
+
+      log("info", "checkout.session_initiated", {
         tenantId,
         orderId: order.id,
-        orderNumber: String(orderNumber),
+        orderNumber,
+        amount: totalAmount,
+        currency,
+        feeBps,
+      });
+
+      return NextResponse.json({ url: init.redirectUrl });
+    }
+
+    return NextResponse.json({ clientSecret: init.clientSecret, orderId: order.id });
+  } catch (err) {
+    log("error", "checkout.session_failed", {
+      tenantId,
+      orderId: order.id,
+      error: String(err),
+    });
+
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: "CANCELLED", cancelledAt: new Date() },
+    });
+    await prisma.orderEvent.create({
+      data: {
+        orderId: order.id,
+        type: "CANCELLED",
+        message: "Payment session creation failed — order cancelled",
       },
-      expires_at: Math.floor(Date.now() / 1000) + 30 * 60, // 30 minutes
-    },
-    { stripeAccount: tenant.stripeAccountId },
-  );
+    });
 
-  // Update order with Stripe session ID
-  await prisma.order.update({
-    where: { id: order.id },
-    data: { stripeCheckoutSessionId: session.id },
-  });
-
-  return NextResponse.json({ url: session.url });
+    return NextResponse.json(
+      { error: "PAYMENT_FAILED", message: err instanceof Error ? err.message : "Betalning misslyckades" },
+      { status: 503 },
+    );
+  }
 }

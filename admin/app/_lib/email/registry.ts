@@ -25,7 +25,8 @@ export type EmailEventType =
   | "MAGIC_LINK"
   | "SUPPORT_REPLY"
   | "GUEST_OTP"
-  | "ORDER_CONFIRMED";
+  | "ORDER_CONFIRMED"
+  | "GIFT_CARD_SENT";
 
 export interface EmailEventDefinition {
   type: EmailEventType;
@@ -130,6 +131,24 @@ export const EMAIL_EVENT_REGISTRY: readonly EmailEventDefinition[] = [
     defaultSubject: "Tack för din beställning #{{orderNumber}}",
     defaultPreviewText:
       "Hej {{guestName}}, din beställning #{{orderNumber}} är bekräftad.",
+  },
+  {
+    type: "GIFT_CARD_SENT",
+    label: "Presentkort skickat",
+    description: "Skickas till mottagaren när ett presentkort levereras.",
+    variables: [
+      "recipientName",
+      "senderName",
+      "message",
+      "amount",
+      "code",
+      "hotelName",
+      "portalUrl",
+      "giftCardImageUrl",
+    ],
+    defaultSubject: "{{senderName}} har skickat ett presentkort till dig",
+    defaultPreviewText:
+      "Du har fått ett presentkort på {{amount}} kr från {{hotelName}}",
   },
 ] as const;
 
