@@ -32,7 +32,6 @@ export default async function PortalOrderDetailPage({
 
   const { orderId } = await params;
 
-  // Security: verify the guest owns this order
   const order = await prisma.order.findFirst({
     where: {
       id: orderId,
@@ -43,14 +42,16 @@ export default async function PortalOrderDetailPage({
 
   if (!order) notFound();
 
-  const statusLabel = STATUS_LABELS[order.status] ?? order.status;
-  const statusColor = STATUS_COLORS[order.status] ?? "#6b7280";
+  const status = order.status as string;
+  const statusLabel = STATUS_LABELS[status] ?? status;
+  const statusColor = STATUS_COLORS[status] ?? "#6b7280";
   const meta = order.metadata as Record<string, unknown> | null;
+  const checkIn = meta?.checkIn ? String(meta.checkIn) : null;
+  const checkOut = meta?.checkOut ? String(meta.checkOut) : null;
 
   return (
     <GuestPageShell config={ctx.config}>
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "clamp(2rem, 5vw, 3rem) 1rem" }}>
-        {/* Back link */}
         <a
           href="/portal/orders"
           style={{ fontSize: "0.8125rem", color: "var(--text)", opacity: 0.6, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "0.25rem", marginBottom: "1.5rem" }}
@@ -58,7 +59,6 @@ export default async function PortalOrderDetailPage({
           ← Mina beställningar
         </a>
 
-        {/* Header */}
         <div style={{ marginBottom: "1.5rem" }}>
           <h1 style={{ fontSize: "clamp(1.25rem, 1rem + 1vw, 1.75rem)", fontWeight: 600, margin: "0 0 0.5rem", color: "var(--text)" }}>
             Order #{order.orderNumber}
@@ -81,8 +81,7 @@ export default async function PortalOrderDetailPage({
           </div>
         </div>
 
-        {/* Pending message */}
-        {order.status === "PENDING" && (
+        {status === "PENDING" ? (
           <div style={{
             padding: "1rem 1.25rem",
             borderRadius: 12,
@@ -93,9 +92,8 @@ export default async function PortalOrderDetailPage({
           }}>
             Vi verifierar din betalning. Du får en bekräftelse via e-post strax.
           </div>
-        )}
+        ) : null}
 
-        {/* Line items */}
         <div style={{ border: "1px solid color-mix(in srgb, var(--text) 12%, transparent)", borderRadius: 12, overflow: "hidden", marginBottom: "1.5rem" }}>
           {order.lineItems.map((item) => (
             <div
@@ -108,21 +106,21 @@ export default async function PortalOrderDetailPage({
                 borderBottom: "1px solid color-mix(in srgb, var(--text) 6%, transparent)",
               }}
             >
-              {item.imageUrl && (
+              {item.imageUrl ? (
                 <img
                   src={item.imageUrl}
                   alt={item.title}
                   style={{ width: 48, height: 48, borderRadius: 8, objectFit: "cover" }}
                 />
-              )}
+              ) : null}
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text)" }}>{item.title}</div>
-                {item.variantTitle && (
+                {item.variantTitle ? (
                   <div style={{ fontSize: "0.75rem", color: "var(--text)", opacity: 0.6 }}>{item.variantTitle}</div>
-                )}
-                {item.quantity > 1 && (
+                ) : null}
+                {item.quantity > 1 ? (
                   <div style={{ fontSize: "0.75rem", color: "var(--text)", opacity: 0.5 }}>Antal: {item.quantity}</div>
-                )}
+                ) : null}
               </div>
               <div style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text)" }}>
                 {formatPriceDisplay(item.totalAmount, item.currency)} kr
@@ -142,8 +140,7 @@ export default async function PortalOrderDetailPage({
           </div>
         </div>
 
-        {/* Metadata (dates, etc.) */}
-        {meta?.checkIn && meta?.checkOut && (
+        {checkIn && checkOut ? (
           <div style={{
             display: "flex", gap: "2rem", fontSize: "0.8125rem",
             padding: "1rem 1.25rem",
@@ -152,21 +149,20 @@ export default async function PortalOrderDetailPage({
           }}>
             <div>
               <div style={{ fontSize: "0.6875rem", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text)", opacity: 0.5 }}>Incheckning</div>
-              <div style={{ fontWeight: 500, color: "var(--text)" }}>{String(meta.checkIn)}</div>
+              <div style={{ fontWeight: 500, color: "var(--text)" }}>{checkIn}</div>
             </div>
             <div>
               <div style={{ fontSize: "0.6875rem", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text)", opacity: 0.5 }}>Utcheckning</div>
-              <div style={{ fontWeight: 500, color: "var(--text)" }}>{String(meta.checkOut)}</div>
+              <div style={{ fontWeight: 500, color: "var(--text)" }}>{checkOut}</div>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Confirmation */}
-        {(order.status === "PAID" || order.status === "FULFILLED") && (
+        {status === "PAID" || status === "FULFILLED" ? (
           <p style={{ fontSize: "0.875rem", color: "var(--text)", opacity: 0.6, textAlign: "center" }}>
-            {order.guestEmail && `Bekräftelse skickad till ${order.guestEmail}`}
+            {order.guestEmail ? `Bekräftelse skickad till ${order.guestEmail}` : null}
           </p>
-        )}
+        ) : null}
       </div>
     </GuestPageShell>
   );

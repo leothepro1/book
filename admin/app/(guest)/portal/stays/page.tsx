@@ -50,7 +50,7 @@ export default async function SessionStaysPage() {
 
   const bookingStatus = ctx.primaryBooking
     ? getBookingStatus(ctx.primaryBooking)
-    : "confirmed";
+    : "upcoming";
 
   const { currentBookings, previousBookings } = splitBookings(ctx.bookings);
 
