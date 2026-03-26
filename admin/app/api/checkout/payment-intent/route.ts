@@ -42,6 +42,7 @@ const inputSchema = z.object({
   guests: z.number().int().min(1).max(99),
   ratePlanId: z.string().max(200).nullable().optional(),
   paymentType: z.enum(["full", "klarna"]),
+  gclid: z.string().max(200).optional(),
 });
 
 export async function POST(req: Request) {
@@ -190,6 +191,7 @@ export async function POST(req: Request) {
           productSlug,
           productType: product.productType,
           pmsSourceId: product.pmsSourceId ?? null,
+          ...(body.gclid ? { gclid: body.gclid } : {}),
         },
         lineItems: {
           create: {

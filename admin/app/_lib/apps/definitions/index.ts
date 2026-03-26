@@ -1,0 +1,13 @@
+/**
+ * Auto-registers all app definitions on import.
+ * Adding a new app = one line here only.
+ * Import this file instead of individual definitions.
+ */
+
+import "./google-ads";
+import "./meta-ads";
+import "./mailchimp";
+import "./email-marketing";
+import "./channel-manager";
+import "./revenue-analytics";
+import "./guest-crm";

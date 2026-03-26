@@ -8,11 +8,11 @@ import { useNavigationGuard } from './NavigationGuard';
 import { SidebarUserRow } from './SidebarUserRow';
 import { useSettings } from './SettingsContext';
 import { useRole } from './RoleContext';
+import type { SidebarApp } from '@/app/_lib/apps/actions';
 
 const NAV_ITEMS = [
   { href: '/home', label: 'Startsida', icon: 'storefront' },
-  { href: '/orders', label: 'Beställningar', icon: 'shopping_bag' },
-  { href: '/dashboard/guests', label: 'Gäster', icon: 'group' },
+  { href: '/orders', label: 'Ordrar', icon: 'inbox' },
   { href: '/dashboard/analytics', label: 'Analys', icon: 'leaderboard' },
 ];
 
@@ -35,7 +35,7 @@ const CONNECTOR_SVG = `data:image/svg+xml,%3Csvg%20width%3D'21'%20height%3D'28'%
 // preserveAspectRatio="none" ensures the rect stretches to fill any height
 const LINE_SVG = `data:image/svg+xml,%3Csvg%20width%3D'21'%20height%3D'28'%20viewBox%3D'0%200%2021%2028'%20preserveAspectRatio%3D'none'%20fill%3D'none'%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%3E%3Crect%20x%3D'9'%20width%3D'1.5'%20height%3D'28'%20fill%3D'%23B5B5B5'%2F%3E%3C%2Fsvg%3E`;
 
-export function Sidebar() {
+export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
   const { isCollapsed, setIsCollapsed } = useSidebar();
   const pathname = usePathname();
   const { navigate, isGuarded } = useNavigationGuard();
@@ -65,7 +65,7 @@ export function Sidebar() {
       <SidebarUserRow isCollapsed={isCollapsed} />
 
       {/* Navigation */}
-      <nav className="p-3 flex-1 overflow-y-auto flex flex-col gap-[2px]">
+      <nav className="p-3 flex-1 overflow-y-auto flex flex-col" style={{ gap: 6 }}>
         {/* Top nav items */}
         {NAV_ITEMS.filter((_, i) => i < 2).map((item) => {
           const active = isActive(item.href);
@@ -74,11 +74,12 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               onClick={(e) => guardedClick(e, item.href)}
-              className={`flex items-center gap-3 px-[10px] py-[8px] rounded-lg ${
+              className={`flex items-center gap-3 ${
                 active
                   ? 'bg-[#e3e3e3] text-[#303030]'
                   : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
               }`}
+              style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
             >
               <span
                 className="material-symbols-rounded flex-shrink-0"
@@ -105,11 +106,12 @@ export function Sidebar() {
           <Link
             href="/products"
             onClick={(e) => guardedClick(e, '/products')}
-            className={`flex items-center gap-3 px-[10px] py-[8px] rounded-lg ${
+            className={`flex items-center gap-3 ${
               isProductsLinkActive
                 ? 'bg-[#e3e3e3] text-[#303030]'
                 : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
             }`}
+            style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
           >
             <span
               className="material-symbols-rounded flex-shrink-0"
@@ -144,12 +146,12 @@ export function Sidebar() {
                     key={sub.href}
                     href={sub.href}
                     onClick={(e) => guardedClick(e, sub.href)}
-                    className={`relative block py-[6px] rounded-lg text-[13px] font-[500] ${
+                    className={`relative block text-[13px] font-[500] ${
                       subActive
                         ? 'bg-[#e3e3e3] text-[#303030]'
-                        : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
+                        : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
                     }`}
-                    style={{ paddingLeft: 36 }}
+                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8 }}
                   >
                     {subActive ? (
                       <img
@@ -174,12 +176,81 @@ export function Sidebar() {
           </div>
         </div>
 
+        {/* Kunder — standalone link */}
+        {(() => {
+          const active = isActive('/dashboard/guests');
+          return (
+            <Link
+              href="/dashboard/guests"
+              onClick={(e) => guardedClick(e, '/dashboard/guests')}
+              className={`flex items-center gap-3 ${
+                active
+                  ? 'bg-[#e3e3e3] text-[#303030]'
+                  : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
+              }`}
+              style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
+            >
+              <span
+                className="material-symbols-rounded flex-shrink-0"
+                style={{
+                  fontSize: 18,
+                  fontVariationSettings: active
+                    ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
+                    : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
+                }}
+              >
+                group
+              </span>
+              <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+                isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+              }`}>
+                Kunder
+              </span>
+            </Link>
+          );
+        })()}
+
+        {/* Boenden — standalone link */}
+        {(() => {
+          const active = isActive('/properties');
+          return (
+            <Link
+              href="/properties"
+              onClick={(e) => guardedClick(e, '/properties')}
+              className={`flex items-center gap-3 ${
+                active
+                  ? 'bg-[#e3e3e3] text-[#303030]'
+                  : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
+              }`}
+              style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
+            >
+              <span
+                className="material-symbols-rounded flex-shrink-0"
+                style={{
+                  fontSize: 18,
+                  fontVariationSettings: active
+                    ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
+                    : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
+                }}
+              >
+                villa
+              </span>
+              <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+                isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+              }`}>
+                Boenden
+              </span>
+            </Link>
+          );
+        })()}
+
         {/* Innehåll — accordion with sub-items */}
         <div>
           <Link
             href={CONTENT_ITEMS[0].href}
             onClick={(e) => guardedClick(e, CONTENT_ITEMS[0].href)}
-            className="flex items-center gap-3 px-[10px] py-[8px] rounded-lg text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]"
+            className="flex items-center gap-3 text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]"
+            style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
           >
             <span
               className="material-symbols-rounded flex-shrink-0"
@@ -190,7 +261,7 @@ export function Sidebar() {
                   : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
               }}
             >
-              wall_art
+              database
             </span>
             <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
@@ -215,12 +286,12 @@ export function Sidebar() {
                     key={sub.href}
                     href={sub.href}
                     onClick={(e) => guardedClick(e, sub.href)}
-                    className={`relative block py-[6px] rounded-lg text-[13px] font-[500] ${
+                    className={`relative block text-[13px] font-[500] ${
                       subActive
                         ? 'bg-[#e3e3e3] text-[#303030]'
-                        : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
+                        : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
                     }`}
-                    style={{ paddingLeft: 36 }}
+                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8 }}
                   >
                     {subActive ? (
                       <img
@@ -245,6 +316,40 @@ export function Sidebar() {
           </div>
         </div>
 
+        {/* Ekonomi — standalone link */}
+        {(() => {
+          const active = isActive('/finance');
+          return (
+            <Link
+              href="/finance"
+              onClick={(e) => guardedClick(e, '/finance')}
+              className={`flex items-center gap-3 ${
+                active
+                  ? 'bg-[#e3e3e3] text-[#303030]'
+                  : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
+              }`}
+              style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
+            >
+              <span
+                className="material-symbols-rounded flex-shrink-0"
+                style={{
+                  fontSize: 18,
+                  fontVariationSettings: active
+                    ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
+                    : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
+                }}
+              >
+                wallet
+              </span>
+              <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+                isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+              }`}>
+                Ekonomi
+              </span>
+            </Link>
+          );
+        })()}
+
         {/* Bottom nav items (Analys) */}
         {NAV_ITEMS.filter((_, i) => i >= 2).map((item) => {
           const active = isActive(item.href);
@@ -253,11 +358,12 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               onClick={(e) => guardedClick(e, item.href)}
-              className={`flex items-center gap-3 px-[10px] py-[8px] rounded-lg ${
+              className={`flex items-center gap-3 ${
                 active
                   ? 'bg-[#e3e3e3] text-[#303030]'
                   : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
               }`}
+              style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
             >
               <span
                 className="material-symbols-rounded flex-shrink-0"
@@ -279,11 +385,60 @@ export function Sidebar() {
           );
         })}
 
-        {/* Inställningar — only visible to org:admin */}
-        {isAdmin && (
+        {/* Appar — installed ACTIVE apps + "Lägg till" */}
+        {!isCollapsed && (
+          <div style={{ marginTop: 'var(--space-2)' }}>
+            <div className="admin-group-label" style={{ padding: '0 8px', marginBottom: 2 }}>
+              Appar
+            </div>
+            {sidebarApps.map((app) => (
+              <Link
+                key={app.appId}
+                href={`/apps/${app.appId}`}
+                onClick={(e) => guardedClick(e, `/apps/${app.appId}`)}
+                className="flex items-center gap-3 text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]"
+                style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontSize: 'var(--font-sm)' }}
+              >
+                <span
+                  className="material-symbols-rounded flex-shrink-0"
+                  style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
+                >
+                  {app.icon}
+                </span>
+                <span className="text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden">
+                  {app.name}
+                </span>
+              </Link>
+            ))}
+            <a
+              href="/apps"
+              target="_blank"
+              rel="noopener"
+              className="flex items-center gap-3 text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]"
+              style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontSize: 'var(--font-sm)' }}
+            >
+              <span
+                className="material-symbols-rounded flex-shrink-0"
+                style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
+              >
+                add_circle
+              </span>
+              <span className="text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden">
+                Lägg till
+              </span>
+            </a>
+          </div>
+        )}
+
+      </nav>
+
+      {/* Inställningar — pinned above footer */}
+      {isAdmin && (
+        <div style={{ padding: '0 12px 16px' }}>
           <button
             onClick={() => openSettings()}
-            className="w-full flex items-center gap-3 px-[10px] py-[8px] rounded-lg text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030] cursor-pointer"
+            className="w-full flex items-center gap-3 text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030] cursor-pointer"
+            style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
           >
             <span
               className="material-symbols-rounded flex-shrink-0"
@@ -300,8 +455,8 @@ export function Sidebar() {
               Inställningar
             </span>
           </button>
-        )}
-      </nav>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="p-3 flex-shrink-0 border-t border-[#E6E5E3]">

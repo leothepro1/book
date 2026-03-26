@@ -241,6 +241,23 @@ export async function POST(req: Request) {
     // Email failure NEVER aborts booking
   }
 
+  // Emit platform event for app webhooks (non-blocking)
+  import("@/app/_lib/apps/webhooks").then(({ emitPlatformEvent }) =>
+    emitPlatformEvent({
+      type: "booking.confirmed",
+      tenantId,
+      payload: {
+        bookingId: booking.id,
+        guestEmail: body.guestInfo.email,
+        guestName: `${body.guestInfo.firstName} ${body.guestInfo.lastName}`,
+        checkIn: body.checkIn,
+        checkOut: body.checkOut,
+        categoryId: body.categoryId,
+        confirmationNumber: confirmation.confirmationNumber,
+      },
+    }),
+  ).catch((err) => log("error", "booking.app_event_emit_failed", { bookingId: booking.id, error: String(err) }));
+
   log("info", "booking.created", {
     tenantId, bookingId: booking.id, categoryId: body.categoryId,
     checkIn: body.checkIn, checkOut: body.checkOut,

@@ -6,6 +6,10 @@
   "crons": [
     { "path": "/api/cron/expire-reservations", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/reconcile-payments", "schedule": "*/15 * * * *" },
-    { "path": "/api/cron/deliver-gift-cards", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/deliver-gift-cards", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/app-health-checks", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/retry-app-webhooks", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/close-billing-periods", "schedule": "15 0 * * *" },
+    { "path": "/api/cron/email-marketing-sync", "schedule": "0 3 * * *" }
   ]
 }

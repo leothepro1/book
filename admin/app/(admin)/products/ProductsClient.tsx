@@ -78,8 +78,10 @@ function getCategoryLabel(p: ProductListItem): string {
 
 export default function ProductsClient({
   onAddRef,
+  basePath = "/products",
 }: {
   onAddRef: React.MutableRefObject<(() => void) | null>;
+  basePath?: string;
 }) {
   const router = useRouter();
   const [products, setProducts] = useState<ProductListItem[]>([]);
@@ -108,7 +110,7 @@ export default function ProductsClient({
 
   // Wire up add button
   useEffect(() => {
-    onAddRef.current = () => router.push("/products/new");
+    onAddRef.current = () => router.push(`${basePath}/new`);
     return () => { onAddRef.current = null; };
   }, [onAddRef, router]);
 
@@ -178,7 +180,7 @@ export default function ProductsClient({
         <button
           className="settings-btn--connect"
           style={{ fontSize: 14, padding: "8px 20px" }}
-          onClick={() => router.push("/products/new")}
+          onClick={() => router.push(`${basePath}/new`)}
         >
           Skapa produkt
         </button>
@@ -291,7 +293,7 @@ export default function ProductsClient({
           <div
             key={product.id}
             className={`products-row${checked ? " products-row--selected" : ""}`}
-            onClick={() => router.push(`/products/${product.id}`)}
+            onClick={() => router.push(`${basePath}/${product.id}`)}
           >
             <button
               type="button"

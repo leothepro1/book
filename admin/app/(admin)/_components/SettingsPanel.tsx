@@ -10,6 +10,7 @@ import { PoliciesContent } from '@/app/(admin)/settings/policies/PoliciesContent
 import { LanguagesContent } from '@/app/(admin)/settings/languages/LanguagesContent';
 import { EmailContent } from '@/app/(admin)/settings/email/EmailContent';
 import { PaymentsContent } from '@/app/(admin)/settings/payments/PaymentsContent';
+import { BillingContent } from '@/app/(admin)/settings/billing/BillingContent';
 import { useRole } from './RoleContext';
 import { useNavigationGuard } from './NavigationGuard';
 
@@ -277,6 +278,8 @@ export function SettingsPanel() {
                 <EmailContent key={resetKey} onSubTitleChange={setSubTitleWithFresh} onHeaderExtraChange={setHeaderExtra} />
               ) : activeItem === 'payments' ? (
                 <PaymentsContent key={resetKey} onSubTitleChange={setSubTitle} />
+              ) : activeItem === 'billing' ? (
+                <BillingContent key={resetKey} onSubTitleChange={setSubTitle} />
               ) : (
                 <div key={resetKey} style={{ padding: 0 }}>
                   <p style={{ color: 'var(--admin-text-secondary)', fontSize: 13 }}>

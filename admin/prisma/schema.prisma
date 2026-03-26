@@ -205,6 +205,8 @@ model Tenant {
   giftCards           GiftCard[]
   paymentSessions     PaymentSession[]
   paymentConfig       TenantPaymentConfig?
+  apps                TenantApp[]
+  billingSettings     TenantBillingSettings?
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -1533,4 +1535,321 @@ model TenantPaymentConfig {
   credentials     String?
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================================
+// APP STORE (Shopify-style installable apps)
+// ============================================================================
+
+/// Status of an installed app for a tenant.
+enum AppStatus {
+  PENDING_SETUP   // installed but setup wizard not complete
+  ACTIVE          // fully configured and running
+  ERROR           // configuration error, needs attention
+  PAUSED          // manually paused by tenant
+  UNINSTALLED     // soft delete — kept for billing history
+}
+
+/// Lifecycle event types for app audit trail.
+enum AppEventType {
+  INSTALLED
+  SETUP_STARTED
+  SETUP_COMPLETED
+  ACTIVATED
+  PAUSED
+  ERROR_OCCURRED
+  ERROR_RESOLVED
+  UNINSTALLED
+  SETTINGS_UPDATED
+  TIER_CHANGED
+}
+
+/// Per-tenant app installation. App definitions live in code (registry.ts),
+/// this table stores only installation state and tenant-specific settings.
+/// UNINSTALLED rows are kept for billing history — never hard-deleted.
+model TenantApp {
+  id            String      @id @default(cuid())
+  tenantId      String
+  appId         String      // references AppDefinition.id in registry
+  status        AppStatus
+  installedAt   DateTime    @default(now())
+  activatedAt   DateTime?
+  errorMessage  String?
+  pricingTier   String?     // "free" | "grow" | "pro"
+  settings      Json        @default("{}")  // app-specific config
+
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  events        TenantAppEvent[]
+  wizard        TenantAppWizard?
+  health        TenantAppHealth?
+  healthHistory TenantAppHealthHistory[]
+  webhookDeliveries AppWebhookDelivery[]
+  emailSyncs    EmailMarketingSync[]
+  segmentMemberships EmailSegmentMembership[]
+  attributions  EmailAttribution[]
+
+  @@unique([tenantId, appId])
+  @@index([tenantId, status])
+}
+
+/// Append-only audit trail for app lifecycle events.
+/// Never UPDATE, never DELETE — immutable log.
+model TenantAppEvent {
+  id        String       @id @default(cuid())
+  appId     String
+  tenantId  String
+  type      AppEventType
+  message   String?
+  metadata  Json         @default("{}")
+  createdAt DateTime     @default(now())
+
+  tenantApp TenantApp    @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+
+  @@index([tenantId, appId])
+  @@index([tenantId, createdAt])
+}
+
+/// Wizard state for app install flow. Tracks progress through
+/// manifest-driven setup steps. One wizard per app per tenant.
+/// Survives browser close — user can resume where they left off.
+model TenantAppWizard {
+  id              String      @id @default(cuid())
+  tenantId        String
+  appId           String
+  currentStepId   String
+  completedSteps  Json        @default("[]")
+  stepData        Json        @default("{}")
+  termsAccepted   Boolean     @default(false)
+  termsAcceptedAt DateTime?
+  planSelected    String?
+  startedAt       DateTime    @default(now())
+  completedAt     DateTime?
+  abandonedAt     DateTime?
+
+  tenantApp       TenantApp   @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+
+  @@unique([tenantId, appId])
+  @@index([tenantId])
+}
+
+// ============================================================================
+// APP HEALTH MONITORING
+// ============================================================================
+
+/// Current health state for an installed app. One per tenant per app.
+/// Updated by checkAppHealth() — the ONLY function that writes here.
+/// consecutiveFailures tracks unhealthy streak. At 3 → TenantApp.status = ERROR.
+model TenantAppHealth {
+  id                   String    @id @default(cuid())
+  tenantId             String
+  appId                String
+  status               String    @default("UNCHECKED")
+  latencyMs            Int?
+  message              String?
+  detail               String?
+  consecutiveFailures  Int       @default(0)
+  lastCheckedAt        DateTime?
+  nextCheckAt          DateTime?
+
+  tenantApp            TenantApp @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+
+  @@unique([tenantId, appId])
+  @@index([tenantId])
+  @@index([nextCheckAt])
+}
+
+/// Append-only health check history. One row per check execution.
+/// Never UPDATE, never DELETE. Used for uptime chart (30-day view).
+model TenantAppHealthHistory {
+  id         String   @id @default(cuid())
+  tenantId   String
+  appId      String
+  status     String
+  latencyMs  Int?
+  message    String?
+  checkedAt  DateTime @default(now())
+
+  tenantApp  TenantApp @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+
+  @@index([tenantId, appId, checkedAt])
+  @@index([checkedAt])
+}
+
+// ============================================================================
+// APP WEBHOOKS (Platform event distribution to installed apps)
+// ============================================================================
+
+/// Append-only log of every platform event emitted.
+/// Never UPDATE, never DELETE. Source of truth for "what happened".
+model PlatformEventLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  eventType   String   // "order.paid", "booking.confirmed", etc.
+  payload     Json     // event-specific data
+  emittedAt   DateTime @default(now())
+
+  deliveries  AppWebhookDelivery[]
+
+  @@index([tenantId, emittedAt])
+  @@index([tenantId, eventType])
+}
+
+/// Tracks delivery of a platform event to a specific app's handler route.
+/// One row per event per subscribed app. Retry logic uses exponential backoff.
+/// Status transitions: PENDING→DELIVERED, PENDING→FAILED, FAILED→DELIVERED,
+///   FAILED→FAILED (increment attempts), FAILED→EXHAUSTED. No other transitions.
+model AppWebhookDelivery {
+  id              String    @id @default(cuid())
+  tenantId        String
+  appId           String
+  eventId         String
+  eventType       String
+  status          String    @default("PENDING") // PENDING | DELIVERED | FAILED | EXHAUSTED
+  attempts        Int       @default(0)
+  lastAttemptAt   DateTime?
+  nextRetryAt     DateTime?
+  responseStatus  Int?      // HTTP status from handler
+  responseTimeMs  Int?      // handler latency
+  errorMessage    String?
+  exhaustedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  event           PlatformEventLog @relation(fields: [eventId], references: [id])
+  tenantApp       TenantApp        @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+
+  @@unique([eventId, appId])
+  @@index([tenantId, appId, createdAt])
+  @@index([status, nextRetryAt])
+  @@index([tenantId, appId, status])
+}
+
+// ============================================================================
+// APP BILLING (Per-tenant app usage billing)
+// ============================================================================
+
+/// Per-tenant billing configuration. Controls whether billing is active
+/// and stores the Stripe customer ID for Bedfront's platform billing
+/// (separate from tenant's own Stripe Connect account).
+model TenantBillingSettings {
+  id                String    @id @default(cuid())
+  tenantId          String    @unique
+  billingEnabled    Boolean   @default(false) // false = no real charges, just tracking
+  stripeCustomerId  String?   // cus_xxx on Bedfront's platform Stripe account
+  billingEmail      String?   // override email for invoices
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+/// Monthly billing period. One per tenant per month.
+/// Periods are created lazily on first line item.
+/// closePeriod() sets status from OPEN to PENDING (ready for invoice)
+/// or VOID (if totalAmount === 0).
+model TenantBillingPeriod {
+  id              String    @id @default(cuid())
+  tenantId        String
+  periodStart     DateTime  // first day of month 00:00 UTC
+  periodEnd       DateTime  // last day of month 23:59:59 UTC
+  status          String    @default("OPEN") // OPEN | PENDING | INVOICED | VOID
+  totalAmount     Int       @default(0) // sum of line items in ören
+  currency        String    @default("SEK")
+  stripeInvoiceId String?   // inv_xxx from Stripe — set by generateInvoice()
+  closedAt        DateTime?
+  invoicedAt      DateTime?
+
+  lineItems       BillingLineItem[]
+
+  @@unique([tenantId, periodStart])
+  @@index([tenantId, status])
+  @@index([status, periodEnd])
+}
+
+/// Individual billing line item within a period.
+/// Append-only — never UPDATE, never DELETE. Create new ones for adjustments.
+/// Each line represents a charge or credit for an app in a specific period.
+model BillingLineItem {
+  id          String    @id @default(cuid())
+  periodId    String
+  tenantId    String
+  appId       String     // references AppDefinition.id
+  appName     String     // snapshot at creation time — never joins back
+  description String     // Swedish: "Google Ads — Grow (15/31 dagar)"
+  tier        String     // "free" | "grow" | "pro"
+  amount      Int        // in ören (always >= 0). 0 for free tier.
+  isProrated  Boolean    @default(false)
+  daysInPeriod Int?      // total days in the billing period (for proration display)
+  daysCharged  Int?      // days charged in this line item
+  createdAt   DateTime   @default(now())
+
+  period      TenantBillingPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@index([periodId])
+  @@index([tenantId, appId])
+  @@index([tenantId, createdAt])
+}
+
+// ============================================================================
+// EMAIL MARKETING SYNC
+// ============================================================================
+
+enum EmailSyncStatus {
+  SYNCED
+  PENDING
+  FAILED
+  UNSUBSCRIBED
+}
+
+/// Tracks sync state per contact per provider app per tenant.
+/// Upserted on every sync — never creates duplicates.
+model EmailMarketingSync {
+  id              String          @id @default(cuid())
+  tenantId        String
+  appId           String
+  email           String
+  status          EmailSyncStatus
+  lastSyncedAt    DateTime        @default(now())
+  errorMessage    String?
+  contactData     Json
+
+  tenantApp       TenantApp       @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+
+  @@unique([tenantId, appId, email])
+  @@index([tenantId, appId])
+  @@index([tenantId, status])
+}
+
+/// Revenue attribution from email marketing campaigns.
+/// Created when order has utm_source matching a marketing provider.
+model EmailAttribution {
+  id           String   @id @default(cuid())
+  tenantId     String
+  appId        String
+  orderId      String?
+  bookingId    String?
+  campaignId   String?
+  revenue      Int
+  attributedAt DateTime @default(now())
+
+  tenantApp    TenantApp @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+
+  @@index([tenantId, appId])
+  @@index([tenantId, attributedAt])
+  @@index([orderId])
+}
+
+/// Segment membership tracking per contact.
+model EmailSegmentMembership {
+  id        String    @id @default(cuid())
+  tenantId  String
+  appId     String
+  segmentId String
+  email     String
+  addedAt   DateTime  @default(now())
+  removedAt DateTime?
+
+  tenantApp TenantApp @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+
+  @@unique([tenantId, appId, segmentId, email])
+  @@index([tenantId, appId, segmentId])
 }

@@ -91,7 +91,7 @@ type ExistingProduct = {
   tags?: Array<{ tag: { id: string; name: string } }>;
 };
 
-export default function ProductForm({ product }: { product?: ExistingProduct }) {
+export default function ProductForm({ product, basePath = "/products" }: { product?: ExistingProduct; basePath?: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isSaving, setIsSaving] = useState(false);
@@ -407,7 +407,7 @@ export default function ProductForm({ product }: { product?: ExistingProduct }) 
         setSavedAt(true);
         setTimeout(() => setSavedAt(false), 1500);
         if (!isEdit) {
-          router.push(`/products/${result.data.id}`);
+          router.push(`${basePath}/${result.data.id}`);
         } else {
           router.refresh();
         }
@@ -461,7 +461,7 @@ export default function ProductForm({ product }: { product?: ExistingProduct }) 
             <button
               type="button"
               className="menus-breadcrumb__icon"
-              onClick={() => router.push("/products")}
+              onClick={() => router.push(basePath)}
               aria-label="Tillbaka till produkter"
             >
               <span className="material-symbols-rounded" style={{ fontSize: 22 }}>sell</span>

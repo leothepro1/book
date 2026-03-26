@@ -37,6 +37,17 @@ const envSchema = z.object({
   CLOUDINARY_API_SECRET: z.string().optional(),
   ACCESS_PASS_PEPPER: z.string().optional(),
   MEDIA_CLEANUP_SECRET: z.string().optional(),
+  INTERNAL_API_SECRET: z.string().optional(),
+
+  // Google OAuth (for Google Ads app)
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REDIRECT_URI: z.string().optional(),
+
+  // Meta OAuth (for Meta Ads app)
+  META_APP_ID: z.string().optional(),
+  META_APP_SECRET: z.string().optional(),
+  META_REDIRECT_URI: z.string().optional(),
 
   // Stripe — server-only (never NEXT_PUBLIC_)
   STRIPE_SECRET_KEY: z.string().optional(),
@@ -181,6 +192,27 @@ export const env = {
 
   // Truly optional
   MEDIA_CLEANUP_SECRET: parsed.MEDIA_CLEANUP_SECRET,
+  get INTERNAL_API_SECRET() {
+    return required("INTERNAL_API_SECRET", parsed.INTERNAL_API_SECRET);
+  },
+  get GOOGLE_CLIENT_ID() {
+    return required("GOOGLE_CLIENT_ID", parsed.GOOGLE_CLIENT_ID);
+  },
+  get GOOGLE_CLIENT_SECRET() {
+    return required("GOOGLE_CLIENT_SECRET", parsed.GOOGLE_CLIENT_SECRET);
+  },
+  get GOOGLE_REDIRECT_URI() {
+    return required("GOOGLE_REDIRECT_URI", parsed.GOOGLE_REDIRECT_URI);
+  },
+  get META_APP_ID() {
+    return required("META_APP_ID", parsed.META_APP_ID);
+  },
+  get META_APP_SECRET() {
+    return required("META_APP_SECRET", parsed.META_APP_SECRET);
+  },
+  get META_REDIRECT_URI() {
+    return required("META_REDIRECT_URI", parsed.META_REDIRECT_URI);
+  },
   DEV_ORG_ID: parsed.DEV_ORG_ID,
   DEV_OWNER_USER_ID: parsed.DEV_OWNER_USER_ID,
 } as const;

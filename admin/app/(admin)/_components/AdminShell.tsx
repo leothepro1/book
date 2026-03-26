@@ -6,6 +6,7 @@ import { NavigationGuardProvider, UnsavedChangesModal } from './NavigationGuard'
 import { SettingsProvider, useSettings } from './SettingsContext';
 import { RoleProvider } from './RoleContext';
 import { Sidebar } from './Sidebar';
+import type { SidebarApp } from '@/app/_lib/apps/actions';
 import { SettingsPanel } from './SettingsPanel';
 
 function LayoutContent({ children }: { children: ReactNode }) {
@@ -22,7 +23,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
   );
 }
 
-function ShellInner({ children }: { children: ReactNode }) {
+function ShellInner({ sidebarApps, children }: { sidebarApps: SidebarApp[]; children: ReactNode }) {
   const { isOpen } = useSettings();
 
   return (
@@ -30,7 +31,7 @@ function ShellInner({ children }: { children: ReactNode }) {
       <div className={`admin-shell flex min-h-screen ${isOpen ? 'admin-shell--pushed' : ''}`}
         style={{ background: 'var(--admin-bg)' }}
       >
-        <Sidebar />
+        <Sidebar sidebarApps={sidebarApps} />
         <LayoutContent>{children}</LayoutContent>
       </div>
       <SettingsPanel />
@@ -38,13 +39,13 @@ function ShellInner({ children }: { children: ReactNode }) {
   );
 }
 
-export function AdminShell({ orgRole, children }: { orgRole: string | null; children: ReactNode }) {
+export function AdminShell({ orgRole, sidebarApps = [], children }: { orgRole: string | null; sidebarApps?: SidebarApp[]; children: ReactNode }) {
   return (
     <RoleProvider orgRole={orgRole}>
       <SidebarProvider>
         <NavigationGuardProvider>
           <SettingsProvider>
-            <ShellInner>{children}</ShellInner>
+            <ShellInner sidebarApps={sidebarApps}>{children}</ShellInner>
             <UnsavedChangesModal />
           </SettingsProvider>
         </NavigationGuardProvider>

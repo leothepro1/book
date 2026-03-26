@@ -31,6 +31,7 @@ const checkoutInputSchema = z.object({
     }),
   ).min(1, "Varukorgen är tom"),
   guestInfo: guestInfoSchema.optional(),
+  gclid: z.string().max(200).optional(),
 });
 
 export async function POST(req: Request) {
@@ -130,6 +131,7 @@ export async function POST(req: Request) {
             currency: item.currency,
           })),
         },
+        metadata: body.gclid ? { gclid: body.gclid } : undefined,
         events: {
           create: { type: "CREATED", message: `Order #${orderNumber} skapad`, metadata: {} },
         },

@@ -232,6 +232,26 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     }
   });
 
+  // Emit platform event for app webhooks (non-blocking, fire-and-forget)
+  const orderMeta = (order.metadata ?? {}) as Record<string, unknown>;
+  import("@/app/_lib/apps/webhooks").then(({ emitPlatformEvent }) =>
+    emitPlatformEvent({
+      type: "order.paid",
+      tenantId: order.tenantId,
+      payload: {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        totalAmount: order.totalAmount,
+        currency: order.currency,
+        guestEmail: order.guestEmail,
+        guestName: order.guestName,
+        orderType: order.orderType,
+        paidAt: new Date().toISOString(),
+        ...(orderMeta.gclid ? { gclid: orderMeta.gclid } : {}),
+      },
+    }),
+  ).catch((err) => log("error", "webhook.app_event_emit_failed", { orderId: order.id, error: String(err) }));
+
   // Auto-create guest account from order (non-blocking)
   if (order.guestEmail) {
     try {
@@ -408,6 +428,21 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
       ],
     });
   });
+
+  // Emit platform event for app webhooks (non-blocking)
+  import("@/app/_lib/apps/webhooks").then(({ emitPlatformEvent }) =>
+    emitPlatformEvent({
+      type: "order.refunded",
+      tenantId: order.tenantId,
+      payload: {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        refundedAmount: charge.amount_refunded,
+        currency: charge.currency.toUpperCase(),
+        guestEmail: order.guestEmail,
+      },
+    }),
+  ).catch((err) => log("error", "webhook.app_event_emit_failed", { orderId: order.id, error: String(err) }));
 }
 
 // ── payment_intent.succeeded ───────────────────────────────────
@@ -469,6 +504,26 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
       data: { status: "RESOLVED", resolvedAt: new Date() },
     });
   });
+
+  // Emit platform event for app webhooks (non-blocking, fire-and-forget)
+  const piOrderMeta = (order.metadata ?? {}) as Record<string, unknown>;
+  import("@/app/_lib/apps/webhooks").then(({ emitPlatformEvent }) =>
+    emitPlatformEvent({
+      type: "order.paid",
+      tenantId: order.tenantId,
+      payload: {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        totalAmount: order.totalAmount,
+        currency: order.currency,
+        guestEmail: order.guestEmail,
+        guestName: order.guestName,
+        orderType,
+        paidAt: new Date().toISOString(),
+        ...(piOrderMeta.gclid ? { gclid: piOrderMeta.gclid } : {}),
+      },
+    }),
+  ).catch((err) => log("error", "webhook.app_event_emit_failed", { orderId: order.id, error: String(err) }));
 
   // ── PURCHASE: create gift card + mark fulfilled ─────────────
   if (orderType === "PURCHASE") {
