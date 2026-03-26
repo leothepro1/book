@@ -3,12 +3,13 @@ import type { AppDefinition } from "../types";
 
 const googleAds: AppDefinition = {
   id: "google-ads",
-  name: "Google Ads",
+  name: "Google & Youtube",
   tagline: "Synka bokningar med Google Ads-konverteringar",
   description:
     "Koppla din bokningsmotor till Google Ads för automatisk konverteringsspårning. " +
     "Se vilka annonser som genererar bokningar och optimera din annonsbudget baserat på faktisk intäkt.",
   icon: "ads_click",
+  iconUrl: "https://cdn.shopify.com/app-store/listing_images/a78e004f44cded1b6998e7a6e081a230/icon/COng2Lf0lu8CEAE=.png",
   category: "marketing",
   developer: "bedfront",
   pricing: [
@@ -16,18 +17,7 @@ const googleAds: AppDefinition = {
       tier: "free",
       pricePerMonth: 0,
       features: [
-        "Grundläggande konverteringsspårning",
-        "Bokningsbekräftelse som konvertering",
-      ],
-    },
-    {
-      tier: "grow",
-      pricePerMonth: 29900,
-      features: [
-        "Allt i Gratis",
-        "Intäktsbaserad optimering",
-        "Dynamisk remarketing",
-        "Offline-konverteringar",
+        "När du kör en kampanj debiteras annonskostnaden ditt Google Ads-konto direkt. Du anger en daglig kampanjbudget.",
       ],
     },
   ],
@@ -49,9 +39,11 @@ const googleAds: AppDefinition = {
     { icon: "enhanced_encryption", title: "Förbättrad matchning", description: "SHA-256-krypterad e-post ger ~70% matchrate mot ~40% utan." },
   ],
   screenshots: [
-    { url: "https://res.cloudinary.com/bedfront/image/upload/apps/google-ads/wizard.png", alt: "Google Ads installationsguide" },
-    { url: "https://res.cloudinary.com/bedfront/image/upload/apps/google-ads/dashboard.png", alt: "Konverteringsöversikt" },
-    { url: "https://res.cloudinary.com/bedfront/image/upload/apps/google-ads/settings.png", alt: "Inställningar" },
+    { url: "https://cdn.shopify.com/app-store/listing_images/a78e004f44cded1b6998e7a6e081a230/promotional_image/CPzrq9WawYIDEAE=.jpeg?height=720&quality=90&width=1280", alt: "Google & Youtube kampanjöversikt" },
+    { url: "https://cdn.shopify.com/app-store/listing_images/a78e004f44cded1b6998e7a6e081a230/desktop_screenshot/CJqPt9WawYIDEAE=.jpeg?height=360&quality=90&width=640", alt: "Konverteringsspårning" },
+    { url: "https://cdn.shopify.com/app-store/listing_images/a78e004f44cded1b6998e7a6e081a230/desktop_screenshot/CKrLwdWawYIDEAE=.jpeg?height=360&quality=90&width=640", alt: "Kampanjhantering" },
+    { url: "https://cdn.shopify.com/app-store/listing_images/a78e004f44cded1b6998e7a6e081a230/desktop_screenshot/CPW6zNWawYIDEAE=.jpeg?height=900&quality=90&width=1600", alt: "Resultatöversikt" },
+    { url: "https://cdn.shopify.com/app-store/listing_images/a78e004f44cded1b6998e7a6e081a230/desktop_screenshot/COej1tWawYIDEAE=.jpeg?height=900&quality=90&width=1600", alt: "Detaljerad statistik" },
   ],
   longDescription:
     "## Automatisk konverteringsspårning\n\n" +

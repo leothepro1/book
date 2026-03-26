@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { EditorIcon } from "@/app/_components/EditorIcon";
+import { installApp } from "@/app/_lib/apps/actions";
 import type { AppDefinition, AppCategory, SetupStatus, AppStatus, HealthStatus } from "@/app/_lib/apps/types";
 import type { AppHealthSummary } from "@/app/_lib/apps/health";
 import "./apps.css";
+import "./[appId]/app-listing.css";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -25,6 +28,7 @@ type Props = {
   installed: InstalledApp[];
   setup: SetupStatus;
   healthStates: AppHealthSummary[];
+  initialAppId?: string;
 };
 
 // ── Category tabs ────────────────────────────────────────────────
@@ -39,6 +43,11 @@ const CATEGORIES: Array<{ key: AppCategory | "all"; label: string }> = [
   { key: "operations", label: "Drift" },
   { key: "finance", label: "Ekonomi" },
 ];
+
+const CATEGORY_LABELS: Record<string, string> = {
+  marketing: "Marknadsföring", sales: "Försäljning", analytics: "Analys",
+  channels: "Kanaler", crm: "CRM", operations: "Drift", finance: "Ekonomi",
+};
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -65,7 +74,6 @@ function getStatusBadgeWithHealth(
   healthStatus: HealthStatus | undefined,
 ): { label: string; className: string } | null {
   if (!status) return null;
-  // Override badge for ACTIVE apps with health issues
   if (status === "ACTIVE" && healthStatus === "UNHEALTHY") {
     return { label: "Anslutningsfel", className: "app-card__status--error" };
   }
@@ -84,20 +92,260 @@ function getCtaProps(
   if (status === "PENDING_SETUP") return { label: "Slutför inställning", className: "admin-btn admin-btn--accent admin-btn--sm", disabled: false };
   if (status === "ERROR") return { label: "Åtgärda", className: "admin-btn admin-btn--danger admin-btn--sm", disabled: false };
   if (status === "PAUSED") return { label: "Aktivera", className: "admin-btn admin-btn--accent admin-btn--sm", disabled: false };
-  // Not installed
   const blocked = appRequiresSetup && !setupReady;
   return { label: "Installera", className: "admin-btn admin-btn--accent admin-btn--sm", disabled: blocked };
 }
 
-// ── Component ────────────────────────────────────────────────────
+function renderMarkdown(md: string): string {
+  return md
+    .replace(/## (.+)/g, '<h2>$1</h2>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/^(?!<[hul])(.+)$/gm, '<p>$1</p>')
+    .replace(/<p><\/p>/g, '')
+    .replace(/<p>(<[hul])/g, '$1')
+    .replace(/(<\/[hul][l2]?>)<\/p>/g, '$1');
+}
 
-export function AppsClient({ apps, installed, setup, healthStates }: Props) {
+// ── App Modal ────────────────────────────────────────────────────
+
+function AppModal({
+  app,
+  visible,
+  onClose,
+  status,
+  setupReady,
+}: {
+  app: AppDefinition;
+  visible: boolean;
+  onClose: () => void;
+  status: AppStatus | null;
+  setupReady: boolean;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const [selectedTier, setSelectedTier] = useState(app.pricing[0]?.tier ?? "free");
+
+  useEffect(() => {
+    setCarouselIndex(0);
+    setSelectedTier(app.pricing[0]?.tier ?? "free");
+  }, [app.id, app.pricing]);
+
+  // ESC to close
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const handleInstall = () => {
+    startTransition(async () => {
+      const result = await installApp(app.id);
+      if (result.ok) router.push(`/apps/${app.id}/setup`);
+    });
+  };
+
+  const currentPricing = app.pricing.find((p) => p.tier === selectedTier) ?? app.pricing[0];
+  const hasScreenshots = app.screenshots.length > 0;
+
+  // CTA logic
+  let ctaLabel = isPending ? "Installerar..." : "Installera";
+  let ctaAction = handleInstall;
+  let ctaDisabled = isPending || (app.requiredSetup.length > 0 && !setupReady);
+  let ctaClassName = "admin-btn admin-btn--accent";
+
+  if (status === "ACTIVE") {
+    ctaLabel = "Hantera"; ctaAction = () => router.push(`/apps/${app.id}`); ctaClassName = "admin-btn admin-btn--outline"; ctaDisabled = false;
+  } else if (status === "PENDING_SETUP") {
+    ctaLabel = "Slutför inställning"; ctaAction = () => router.push(`/apps/${app.id}/setup`); ctaClassName = "admin-btn admin-btn--accent"; ctaDisabled = false;
+  } else if (status === "ERROR") {
+    ctaLabel = "Åtgärda"; ctaAction = () => router.push(`/apps/${app.id}`); ctaClassName = "admin-btn admin-btn--danger"; ctaDisabled = false;
+  } else if (status === "PAUSED") {
+    ctaLabel = "Aktivera"; ctaAction = () => router.push(`/apps/${app.id}`); ctaClassName = "admin-btn admin-btn--accent"; ctaDisabled = false;
+  }
+
+  return (
+    <div className={`app-modal__overlay${visible ? " app-modal__overlay--visible" : ""}`} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="app-modal__inner">
+        <div className="app-modal">
+          <div className="app-modal__body">
+            <div className="app-modal__layout">
+            {/* Left column — content */}
+            <div className="app-modal__content">
+              {/* Screenshot carousel */}
+              {hasScreenshots && (
+                <div className="app-carousel">
+                  <div className="app-carousel__viewport">
+                    <div className="app-carousel__track" style={{ transform: `translateX(-${carouselIndex * 100}%)` }}>
+                      {app.screenshots.map((s, i) => (
+                        <div key={i} className="app-carousel__slide">
+                          <img
+                            src={s.url.includes("cloudinary") ? `${s.url}/c_fill,w_1200,h_750,g_auto,q_auto,f_auto` : s.url}
+                            alt={s.alt}
+                            className="app-carousel__img"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {app.screenshots.length > 1 && (
+                    <div className="app-carousel__thumbs">
+                      {app.screenshots.map((s, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          className={`app-carousel__thumb${i === carouselIndex ? " app-carousel__thumb--active" : ""}`}
+                          onClick={() => setCarouselIndex(i)}
+                        >
+                          <img
+                            src={s.url.includes("cloudinary") ? `${s.url}/c_fill,w_120,h_75,g_auto,q_auto,f_auto` : s.url}
+                            alt={s.alt}
+                            className="app-carousel__thumb-img"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Description */}
+              {app.longDescription && (
+                <div
+                  className="app-listing__prose"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(app.longDescription) }}
+                />
+              )}
+
+            </div>
+
+            {/* Right column — sidebar */}
+            <div className="app-modal__sidebar">
+              {/* App header */}
+              <div className="app-listing__header">
+                <div className="app-listing__icon">
+                  {app.iconUrl
+                    ? <img src={app.iconUrl} alt="" className="app-modal__icon-img" />
+                    : <span className="material-symbols-rounded" style={{ fontSize: 32 }}>{app.icon}</span>
+                  }
+                </div>
+                <div className="app-listing__header-info">
+                  <h3 className="app-modal__name">{app.name}</h3>
+                  <p className="app-modal__developer">Skapad av {app.developer === "bedfront" ? "Bedfront" : app.developer}</p>
+                </div>
+              </div>
+
+              {/* CTA */}
+              <div className="app-modal__cta">
+                <button className={status ? "admin-btn admin-btn--outline" : "admin-btn admin-btn--accent"} onClick={status ? () => router.push(`/apps/${app.id}`) : handleInstall} disabled={!status && ctaDisabled} type="button">
+                  {status ? "Öppna" : (isPending ? "Installerar..." : "Installera")}
+                </button>
+              </div>
+            </div>
+            </div>
+
+            {/* Pricing section — full width */}
+            {app.pricing.length > 0 && (
+              <div className="app-modal__pricing">
+                <h3 className="app-modal__pricing-title">Priser</h3>
+                <div className={`app-modal__pricing-grid${app.pricing.length >= 3 ? " app-modal__pricing-grid--three" : ""}`}>
+                  {app.pricing.map((p) => (
+                    <div key={p.tier} className="app-modal__pricing-card">
+                      <div className="app-modal__pricing-tier">
+                        {p.tier === "free" ? "Gratis" : p.tier === "grow" ? "Grow" : "Pro"}
+                      </div>
+                      {p.features.map((f, i) => (
+                        <p key={i} className="app-modal__pricing-feature">{f}</p>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="app-modal__close-col">
+          <button className="app-modal__close" onClick={onClose} type="button">
+            <EditorIcon name="close" size={24} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ───────────────────────────────────────────────
+
+export function AppsClient({ apps, installed, setup, healthStates, initialAppId }: Props) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<AppCategory | "all">("all");
+  const [selectedApp, setSelectedApp] = useState<AppDefinition | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const closingRef = useRef(false);
+  const fromInitialRef = useRef(!!initialAppId);
 
   // Build lookups
   const installMap = new Map(installed.map((a) => [a.appId, a]));
   const healthMap = new Map(healthStates.map((h) => [h.appId, h.status]));
+  const setupReady = setup.isReadyForApps;
+
+  // Initialize from prop (direct visit to /apps/[appId])
+  useEffect(() => {
+    if (initialAppId) {
+      const app = apps.find((a) => a.id === initialAppId);
+      if (app) setSelectedApp(app);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Animate modal in when selectedApp changes
+  useEffect(() => {
+    if (selectedApp && !modalVisible && !closingRef.current) {
+      requestAnimationFrame(() => setModalVisible(true));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedApp]);
+
+  // Handle browser back/forward
+  useEffect(() => {
+    const onPopState = () => {
+      if (selectedApp && !closingRef.current) {
+        closingRef.current = true;
+        setModalVisible(false);
+        setTimeout(() => {
+          setSelectedApp(null);
+          closingRef.current = false;
+        }, 350);
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [selectedApp]);
+
+  const openModal = useCallback((app: AppDefinition) => {
+    fromInitialRef.current = false;
+    setSelectedApp(app);
+    window.history.pushState(null, "", `/apps/${app.id}`);
+  }, []);
+
+  const closeModal = useCallback(() => {
+    closingRef.current = true;
+    setModalVisible(false);
+    setTimeout(() => {
+      setSelectedApp(null);
+      closingRef.current = false;
+    }, 350);
+    if (fromInitialRef.current) {
+      window.history.replaceState(null, "", "/apps");
+      fromInitialRef.current = false;
+    } else {
+      window.history.back();
+    }
+  }, []);
 
   // Filter
   const filtered = apps.filter((app) => {
@@ -108,8 +356,6 @@ export function AppsClient({ apps, installed, setup, healthStates }: Props) {
     }
     return true;
   });
-
-  const setupReady = setup.isReadyForApps;
 
   return (
     <div className="admin-page admin-page--no-preview">
@@ -188,12 +434,20 @@ export function AppsClient({ apps, installed, setup, healthStates }: Props) {
                 const cta = getCtaProps(status, setupReady, appRequiresSetup);
 
                 return (
-                  <Link key={app.id} href={`/apps/${app.id}`} className="app-card" style={{ textDecoration: "none", color: "inherit" }}>
+                  <div
+                    key={app.id}
+                    className="app-card"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openModal(app)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openModal(app); } }}
+                  >
                     <div className="app-card__top">
                       <div className="app-card__icon-wrap">
-                        <span className="material-symbols-rounded" style={{ fontSize: 24 }}>
-                          {app.icon}
-                        </span>
+                        {app.iconUrl
+                          ? <img src={app.iconUrl} alt="" className="app-card__icon-img" />
+                          : <span className="material-symbols-rounded" style={{ fontSize: 24 }}>{app.icon}</span>
+                        }
                       </div>
                       <div className="app-card__info">
                         <h3 className="app-card__name">{app.name}</h3>
@@ -231,13 +485,24 @@ export function AppsClient({ apps, installed, setup, healthStates }: Props) {
                         {cta.label}
                       </span>
                     </div>
-                  </Link>
+                  </div>
                 );
               })}
             </div>
           )}
         </div>
       </div>
+
+      {/* App modal */}
+      {selectedApp && (
+        <AppModal
+          app={selectedApp}
+          visible={modalVisible}
+          onClose={closeModal}
+          status={(installMap.get(selectedApp.id)?.status ?? null) as AppStatus | null}
+          setupReady={setupReady}
+        />
+      )}
     </div>
   );
 }

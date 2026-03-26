@@ -173,7 +173,7 @@
   gap: var(--space-3);
   transition: transform var(--duration-normal) var(--ease-default),
               box-shadow var(--duration-normal) var(--ease-default);
-  cursor: default;
+  cursor: pointer;
 }
 
 .app-card:hover {
@@ -318,4 +318,244 @@
 
 .app-card__cta[disabled]:active {
   transform: none;
+}
+
+/* ── App Store Modal ── */
+
+.app-modal__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+  background: rgba(0, 0, 0, 0);
+  opacity: 0;
+  transition: background var(--duration-normal) ease,
+              opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.app-modal__overlay--visible {
+  background: #00000059;
+  backdrop-filter: blur(4px);
+  opacity: 1;
+  pointer-events: auto;
+  transition: background var(--duration-normal) ease,
+              opacity 0.25s ease;
+}
+
+.app-modal__inner {
+  position: relative;
+  width: calc(1250px + 40px + var(--space-4));
+  max-width: calc(100vw - 48px);
+  margin: var(--space-8) auto;
+}
+
+.app-modal__close-col {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+}
+
+.app-modal__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: #fff;
+  backdrop-filter: blur(8px);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  color: #444;
+  transition: background var(--duration-fast);
+  box-shadow: 0px 0px 0px 0.5px #404f6d0f, 0px 2px 4px 0px #182c5923, 0px 6px 12px 0px #182c5912;
+}
+
+.app-modal__close:hover {
+  background: #f5f5f5;
+}
+
+.app-modal {
+  width: calc(100% - 40px - var(--space-4));
+  background: var(--admin-surface);
+  border-radius: 24px;
+  box-shadow: var(--shadow-modal);
+}
+
+.app-modal__body {
+  padding: 0;
+}
+
+.app-modal__layout {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr;
+  gap: 32px;
+  padding: 24px 24px 0 24px;
+}
+
+.app-modal__content {
+  min-width: 0;
+}
+
+.app-modal__sidebar {
+  align-self: start;
+}
+
+.app-modal__sidebar .app-listing__header {
+  align-items: center;
+  gap: 13px;
+  margin-bottom: var(--space-6);
+}
+
+.app-modal__cta {
+  margin-top: var(--space-6);
+}
+
+/* ── Pricing section ── */
+
+.app-modal__pricing {
+  margin-top: var(--space-8);
+  padding: 24px;
+  background: #f3f3f4;
+}
+
+.app-modal__pricing-title {
+  font-size: 25px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--admin-text);
+  margin: 0 0 var(--space-5);
+}
+
+.app-modal__pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+.app-modal__pricing-grid--three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.app-modal__pricing-card {
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  border: none;
+  background: var(--admin-surface);
+  box-shadow: 0px 4px 8px 1px rgba(0, 0, 0, 0.07), 0px 2px 4px 1px rgba(0, 0, 0, 0.07), 0px 1px 2px 1px rgba(0, 0, 0, 0.07);
+}
+
+.app-modal__pricing-tier {
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--admin-text);
+  margin-bottom: var(--space-3);
+}
+
+.app-modal__pricing-feature {
+  font-size: var(--font-sm);
+  color: var(--admin-text-secondary);
+  line-height: var(--line-height-relaxed);
+  margin: 0;
+}
+
+.app-modal__name {
+  font-size: var(--font-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--admin-text);
+  margin: 0 0 var(--space-1);
+}
+
+.app-modal__developer {
+  font-size: var(--font-sm);
+  color: var(--admin-text-secondary);
+  margin: 0;
+}
+
+.app-modal__status-row {
+  margin-bottom: var(--space-4);
+}
+
+/* ── Carousel overrides for modal ── */
+
+.app-modal .app-carousel__img {
+  aspect-ratio: 5 / 3;
+  object-fit: cover;
+  width: 100%;
+  display: block;
+  border: 1px solid #D6D3D1;
+  background: transparent;
+  border-radius: 0.75rem;
+}
+
+/* ── Carousel thumbnails ── */
+
+.app-carousel__thumbs {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.app-carousel__thumb {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color var(--duration-fast);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.app-carousel__thumb--active {
+  outline-color: var(--admin-accent);
+}
+
+.app-carousel__thumb:hover:not(.app-carousel__thumb--active) {
+  outline-color: var(--admin-border-focus);
+}
+
+.app-carousel__thumb-img {
+  display: block;
+  width: 64px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.app-card__icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+}
+
+.app-modal__icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
+  border: 1px solid #DEDBDA;
+}
+
+.app-highlights--modal {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (max-width: 768px) {
+  .app-modal__inner {
+    max-width: calc(100vw - 16px);
+  }
+
+  .app-modal__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .app-highlights--modal {
+    grid-template-columns: 1fr;
+  }
 }

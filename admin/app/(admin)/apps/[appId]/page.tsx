@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
-import { getAppDetail, getAppEvents, getWebhookDeliveries } from "@/app/_lib/apps/actions";
-import { getAppHealth, getAppHealthHistory } from "@/app/_lib/apps/health";
+import { getAppDetail, getAppEvents, getWebhookDeliveries, getInstalledApps } from "@/app/_lib/apps/actions";
+import { getAppHealth, getAppHealthHistory, getHealthForApps } from "@/app/_lib/apps/health";
 import { getAppBillingInfo } from "@/app/_lib/apps/billing";
-import { getApp } from "@/app/_lib/apps/registry";
+import { getApp, getAllApps } from "@/app/_lib/apps/registry";
+import { getSetupStatus } from "@/app/_lib/apps/setup";
+import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { AppDetailClient } from "./AppDetailClient";
-import { AppListingClient } from "./AppListingClient";
+import { AppsClient } from "../AppsClient";
 
 // Force registration
 import "@/app/_lib/apps/definitions/google-ads";
@@ -30,14 +32,14 @@ export default async function AppPage({
   const appDef = getApp(appId);
   if (!appDef) redirect("/apps");
 
-  // Check if app is installed — if so, show manage page
+  // Check if app is installed
   const detail = await getAppDetail(appId);
 
   if (detail && detail.status === "PENDING_SETUP") {
     redirect(`/apps/${appId}/setup`);
   }
 
-  // Installed app → manage page
+  // Installed app → full management page
   if (detail) {
     const hasWebhooks = appDef.webhooks.length > 0;
     const hasPaidTiers = appDef.pricing.some((p) => p.pricePerMonth > 0);
@@ -63,6 +65,18 @@ export default async function AppPage({
     );
   }
 
-  // Not installed → listing page
-  return <AppListingClient app={appDef} />;
+  // Not installed → render grid page with modal pre-opened
+  const tenantData = await getCurrentTenant();
+  const tenantId = tenantData?.tenant.id;
+
+  const [apps, installed, setup, healthStates] = await Promise.all([
+    Promise.resolve(getAllApps()),
+    getInstalledApps(),
+    tenantId ? getSetupStatus(tenantId) : Promise.resolve({ pms: { complete: false }, payments: { complete: false }, isReadyForApps: false }),
+    getHealthForApps(),
+  ]);
+
+  const serializedInstalled = JSON.parse(JSON.stringify(installed));
+
+  return <AppsClient apps={apps} installed={serializedInstalled} setup={setup} healthStates={healthStates} initialAppId={appId} />;
 }

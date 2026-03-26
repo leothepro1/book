@@ -202,6 +202,7 @@ export const AppDefinitionSchema = z.object({
   tagline: z.string().min(1),
   description: z.string().min(1),
   icon: z.string().min(1),
+  iconUrl: z.string().url().optional(),
   category: AppCategorySchema,
   developer: z.enum(["bedfront", "partner"]),
   pricing: z.array(AppPricingSchema),
