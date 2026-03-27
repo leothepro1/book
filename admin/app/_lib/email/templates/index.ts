@@ -20,6 +20,11 @@ import SupportReply from "./support-reply";
 import GuestOtp from "./guest-otp";
 import OrderConfirmed from "./order-confirmed";
 import GiftCardSent from "./gift-card-sent";
+import PaymentFailed from "./payment-failed";
+import AbandonedCheckout from "./abandoned-checkout";
+import PreArrivalReminder from "./pre-arrival-reminder";
+import PostStayFeedback from "./post-stay-feedback";
+import MarketingOptInConfirm from "./marketing-opt-in-confirm";
 import type { EmailEventType } from "../registry";
 import type { EmailBranding } from "../branding";
 
@@ -44,6 +49,11 @@ const TEMPLATE_MAP: Record<EmailEventType, TemplateRenderer> = {
   GUEST_OTP: (v, b) => render(React.createElement(GuestOtp as any, { ...v, branding: b })),
   ORDER_CONFIRMED: (v, b) => render(React.createElement(OrderConfirmed as any, { ...v, branding: b })),
   GIFT_CARD_SENT: (v, b) => render(React.createElement(GiftCardSent as any, { ...v, branding: b })),
+  PAYMENT_FAILED: (v, b) => render(React.createElement(PaymentFailed as any, { ...v, branding: b })),
+  ABANDONED_CHECKOUT: (v, b) => render(React.createElement(AbandonedCheckout as any, { ...v, branding: b })),
+  PRE_ARRIVAL_REMINDER: (v, b) => render(React.createElement(PreArrivalReminder as any, { ...v, branding: b })),
+  POST_STAY_FEEDBACK: (v, b) => render(React.createElement(PostStayFeedback as any, { ...v, branding: b })),
+  MARKETING_OPT_IN_CONFIRM: (v, b) => render(React.createElement(MarketingOptInConfirm as any, { ...v, branding: b })),
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

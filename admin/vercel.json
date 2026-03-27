@@ -12,6 +12,9 @@
     { "path": "/api/cron/close-billing-periods", "schedule": "15 0 * * *" },
     { "path": "/api/cron/email-marketing-sync", "schedule": "0 3 * * *" },
     { "path": "/api/cron/retry-emails", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/abandoned-checkout", "schedule": "0 * * * *" },
+    { "path": "/api/cron/pre-arrival-reminder", "schedule": "0 8 * * *" },
+    { "path": "/api/cron/post-stay-feedback", "schedule": "0 10 * * *" },
     { "path": "/api/cron/cleanup-idempotency-keys", "schedule": "0 * * * *" }
   ]
 }

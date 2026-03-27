@@ -645,6 +645,11 @@ enum EmailEventType {
   GUEST_OTP
   ORDER_CONFIRMED
   GIFT_CARD_SENT
+  PAYMENT_FAILED
+  ABANDONED_CHECKOUT
+  PRE_ARRIVAL_REMINDER
+  POST_STAY_FEEDBACK
+  MARKETING_OPT_IN_CONFIRM
 }
 
 enum TranslationNamespace {
@@ -709,6 +714,9 @@ model EmailTemplate {
   /// Null = use platform default HTML (from react-email components)
   html        String?        @db.Text
 
+  /// Per-tenant toggle — only respected for events with canDisable: true
+  enabled     Boolean        @default(true)
+
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
@@ -737,6 +745,8 @@ model EmailSendLog {
   nextRetryAt   DateTime?
   failureReason String?
   variables     Json?           // template variables for retry replay
+  orderId       String?         // link to order for dedup (abandoned checkout, payment failed)
+  bookingId     String?         // link to booking for dedup (pre-arrival, post-stay)
   sentAt        DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
@@ -747,6 +757,8 @@ model EmailSendLog {
   @@index([toEmail])
   @@index([tenantId, eventType])
   @@index([status, nextRetryAt])
+  @@index([orderId, eventType])
+  @@index([bookingId, eventType])
 }
 
 // ============================================================================

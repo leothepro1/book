@@ -373,3 +373,44 @@ export async function sendTestEmail(
     return { ok: false, error: `Kunde inte skicka: ${message}` };
   }
 }
+
+// ── Email event enabled/disabled settings ──────────────────────
+
+export async function getEmailSettings(): Promise<Record<string, boolean>> {
+  const ctx = await getCurrentTenant();
+  if (!ctx) return {};
+
+  const rows = await prisma.emailTemplate.findMany({
+    where: { tenantId: ctx.tenant.id },
+    select: { eventType: true, enabled: true },
+  });
+
+  const map: Record<string, boolean> = {};
+  for (const def of EMAIL_EVENT_REGISTRY) {
+    map[def.type] = true; // default enabled
+  }
+  for (const row of rows) {
+    map[row.eventType] = row.enabled;
+  }
+  return map;
+}
+
+export async function toggleEmailEvent(
+  eventType: string,
+  enabled: boolean,
+): Promise<{ success: boolean; error?: string }> {
+  const ctx = await getCurrentTenant();
+  if (!ctx) return { success: false, error: "Inte inloggad" };
+
+  const def = EMAIL_EVENT_REGISTRY.find((e) => e.type === eventType);
+  if (!def) return { success: false, error: "Okänd händelsetyp" };
+  if (!def.canDisable) return { success: false, error: "Kan inte inaktiveras" };
+
+  await prisma.emailTemplate.upsert({
+    where: { tenantId_eventType: { tenantId: ctx.tenant.id, eventType: eventType as EmailEventType } },
+    create: { tenantId: ctx.tenant.id, eventType: eventType as EmailEventType, enabled },
+    update: { enabled },
+  });
+
+  return { success: true };
+}

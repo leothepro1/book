@@ -689,13 +689,25 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
 // ── payment_intent.payment_failed ──────────────────────────────
 // Log the failure but do NOT cancel — guest may retry.
 
+function mapDeclineCodeToSwedish(code?: string | null): string {
+  switch (code) {
+    case "insufficient_funds": return "Otillräckligt saldo på kortet";
+    case "card_declined": case "do_not_honor": case "generic_decline": return "Kortet nekades av din bank";
+    case "lost_card": case "stolen_card": return "Kortet nekades av din bank";
+    case "expired_card": return "Kortet har gått ut";
+    case "incorrect_cvc": return "Fel CVC-kod";
+    case "processing_error": return "Tekniskt fel vid betalning";
+    default: return "Betalningen kunde inte genomföras";
+  }
+}
+
 async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
   const orderId = pi.metadata?.orderId;
   if (!orderId) return;
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { id: true, status: true, orderNumber: true },
+    select: { id: true, tenantId: true, status: true, orderNumber: true, guestEmail: true, guestName: true },
   });
 
   if (!order || order.status !== "PENDING") return;
@@ -719,4 +731,31 @@ async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
       data: { status: "REJECTED", resolvedAt: new Date() },
     });
   });
+
+  // Send PAYMENT_FAILED email (non-blocking)
+  if (order.guestEmail) {
+    try {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: order.tenantId },
+        select: { name: true, portalSlug: true },
+      });
+      const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "bedfront.com";
+      const portalBase = tenant?.portalSlug ? `https://${tenant.portalSlug}.${baseDomain}` : "";
+      const { sendEmailEvent: sendPaymentFailedEmail } = await import("@/app/_lib/email/send");
+      await sendPaymentFailedEmail(
+        order.tenantId,
+        "PAYMENT_FAILED" as Parameters<typeof sendPaymentFailedEmail>[1],
+        order.guestEmail,
+        {
+          guestName: order.guestName || "Gäst",
+          hotelName: tenant?.name ?? "",
+          orderNumber: String(order.orderNumber),
+          failureReason: mapDeclineCodeToSwedish(pi.last_payment_error?.decline_code),
+          retryUrl: `${portalBase}/checkout?retry=${order.id}`,
+        },
+      );
+    } catch (err) {
+      log("error", "webhook.payment_failed_email_error", { orderId: order.id, error: String(err) });
+    }
+  }
 }

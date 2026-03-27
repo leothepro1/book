@@ -43,6 +43,7 @@ export type EmailSendResult =
   | { status: "sent" }
   | { status: "rate_limited" }
   | { status: "skipped_unsubscribed" }
+  | { status: "event_disabled" }
   | { status: "failed"; error: unknown };
 
 // ── getResolvedTemplate ─────────────────────────────────────────
@@ -130,6 +131,16 @@ export async function sendEmailEvent(
     select: { id: true },
   });
   if (unsubscribed) return { status: "skipped_unsubscribed" };
+
+  // 1b. Check if event is disabled for this tenant (only for canDisable events)
+  const registryEntry = getEventDefinition(eventType);
+  if (registryEntry.canDisable) {
+    const setting = await prisma.emailTemplate.findUnique({
+      where: { tenantId_eventType: { tenantId, eventType } },
+      select: { enabled: true },
+    });
+    if (setting && !setting.enabled) return { status: "event_disabled" };
+  }
 
   // 2. Check rate limit — skip silently if exceeded
   // GIFT_CARD_SENT uses giftCardId as key so the same recipient can

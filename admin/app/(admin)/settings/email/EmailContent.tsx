@@ -17,6 +17,8 @@ import {
   getTenantSenderInfo,
   getTenantEmailBranding,
   renderEmailPreviewWithBranding,
+  getEmailSettings,
+  toggleEmailEvent,
 } from "./actions";
 import type { EmailTemplateRow, EmailTemplateDetail, TenantSenderInfo, TenantEmailBranding } from "./actions";
 import {
@@ -78,28 +80,23 @@ function normalizeHex(hex: string): string {
   return hex;
 }
 
-const GUEST_NOTIFICATION_CATEGORIES = [
-  {
-    label: "Bekräftelser",
-    items: [
-      { id: "BOOKING_CONFIRMED", title: "Bokningsbekräftelse", desc: "Skickas när en bokning registreras" },
-      { id: "MAGIC_LINK", title: "Inloggningslänk", desc: "Skickas när en gäst begär en ny inloggningslänk" },
-    ],
-  },
-  {
-    label: "Vistelse",
-    items: [
-      { id: "CHECK_IN_CONFIRMED", title: "Incheckningsbekräftelse", desc: "Skickas när en gäst checkar in" },
-      { id: "CHECK_OUT_CONFIRMED", title: "Utcheckningsbekräftelse", desc: "Skickas när en gäst checkar ut" },
-    ],
-  },
-  {
-    label: "Support",
-    items: [
-      { id: "SUPPORT_REPLY", title: "Supportmeddelande", desc: "Skickas när ni svarar på ett gästärende" },
-    ],
-  },
+import { EMAIL_EVENT_REGISTRY, type EmailCategory } from "@/app/_lib/email/registry";
+
+const CATEGORY_ORDER: { key: EmailCategory; label: string }[] = [
+  { key: "bokningar", label: "Bokningar" },
+  { key: "vistelse", label: "Vistelse" },
+  { key: "ordrar", label: "Ordrar" },
+  { key: "konto", label: "Konto" },
+  { key: "support", label: "Support" },
+  { key: "presentkort", label: "Presentkort" },
 ];
+
+const GUEST_NOTIFICATION_CATEGORIES = CATEGORY_ORDER.map((cat) => ({
+  label: cat.label,
+  items: EMAIL_EVENT_REGISTRY
+    .filter((e) => e.category === cat.key)
+    .map((e) => ({ id: e.type, title: e.label, desc: e.description, canDisable: e.canDisable })),
+})).filter((cat) => cat.items.length > 0);
 
 const ALL_TEMPLATE_IDS = GUEST_NOTIFICATION_CATEGORIES.flatMap((c) => c.items);
 
@@ -381,6 +378,100 @@ function EmailCustomizeView({
         accept="image"
         title="Välj logotyp"
       />
+    </div>
+  );
+}
+
+// ── Guest Notifications View (extracted for state isolation) ─────
+
+function GuestNotificationsView({
+  cardStyle,
+  goToTemplatePreview,
+  setPreviewing,
+}: {
+  cardStyle: React.CSSProperties;
+  goToTemplatePreview: (item: { id: string; title: string }) => void;
+  setPreviewing: (d: EmailTemplateDetail) => void;
+}) {
+  const [settings, setSettings] = useState<Record<string, boolean>>({});
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    getEmailSettings().then((s) => { setSettings(s); setLoaded(true); });
+  }, []);
+
+  const handleToggle = async (eventType: string, current: boolean) => {
+    // Optimistic
+    setSettings((prev) => ({ ...prev, [eventType]: !current }));
+    const result = await toggleEmailEvent(eventType, !current);
+    if (!result.success) {
+      // Revert
+      setSettings((prev) => ({ ...prev, [eventType]: current }));
+    }
+  };
+
+  if (!loaded) return null;
+
+  return (
+    <div className="email-root">
+      <div style={cardStyle}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {GUEST_NOTIFICATION_CATEGORIES.map((cat) => (
+            <div key={cat.label} className="email-cat">
+              <div className="email-cat__header">{cat.label}</div>
+              {cat.items.map((item, ii) => {
+                const enabled = settings[item.id] ?? true;
+                return (
+                  <div key={item.id}>
+                    {ii > 0 && <div className="email-nav__divider" />}
+                    <div className="email-cat__item" style={{ cursor: "default" }}>
+                      <button
+                        className="email-nav__text"
+                        style={{ flex: 1, border: "none", background: "none", cursor: "pointer", textAlign: "left", padding: 0 }}
+                        onClick={async () => {
+                          const detail = await getEmailTemplateDetail(item.id);
+                          if (detail) {
+                            setPreviewing(detail);
+                            goToTemplatePreview(item);
+                          }
+                        }}
+                      >
+                        <div className="email-nav__label" style={{ opacity: enabled ? 1 : 0.5 }}>{item.title}</div>
+                        <div className="email-nav__desc">{item.desc}</div>
+                      </button>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                        {item.canDisable ? (
+                          <button
+                            className={`admin-toggle ${enabled ? "admin-toggle-on" : ""}`}
+                            onClick={() => handleToggle(item.id, enabled)}
+                            aria-label={enabled ? "Inaktivera" : "Aktivera"}
+                          >
+                            <span className="admin-toggle-thumb" />
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: 11, color: "var(--admin-text-tertiary)", whiteSpace: "nowrap" }}>Alltid på</span>
+                        )}
+                        <button
+                          style={{ border: "none", background: "none", cursor: "pointer", color: "var(--admin-text-tertiary)", flexShrink: 0 }}
+                          onClick={async () => {
+                            const detail = await getEmailTemplateDetail(item.id);
+                            if (detail) {
+                              setPreviewing(detail);
+                              goToTemplatePreview(item);
+                            }
+                          }}
+                        >
+                          <EditorIcon name="chevron_right" size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -959,40 +1050,11 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
   // ── Guest notifications view ─────────────────────────────────
 
   if (view === "guest-notifications") {
-    return (
-      <div className="email-root">
-        <div style={cardStyle}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {GUEST_NOTIFICATION_CATEGORIES.map((cat) => (
-              <div key={cat.label} className="email-cat">
-                <div className="email-cat__header">{cat.label}</div>
-                {cat.items.map((item, ii) => (
-                  <div key={item.id}>
-                    {ii > 0 && <div className="email-nav__divider" />}
-                    <button
-                      className="email-cat__item"
-                      onClick={async () => {
-                        const detail = await getEmailTemplateDetail(item.id);
-                        if (detail) {
-                          setPreviewing(detail);
-                          goToTemplatePreview(item);
-                        }
-                      }}
-                    >
-                      <div className="email-nav__text">
-                        <div className="email-nav__label">{item.title}</div>
-                        <div className="email-nav__desc">{item.desc}</div>
-                      </div>
-                      <EditorIcon name="chevron_right" size={18} style={{ color: "var(--admin-text-tertiary)", flexShrink: 0 }} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    return <GuestNotificationsView
+      cardStyle={cardStyle}
+      goToTemplatePreview={goToTemplatePreview}
+      setPreviewing={setPreviewing}
+    />;
   }
 
   // ── List view ─────────────────────────────────────────────────

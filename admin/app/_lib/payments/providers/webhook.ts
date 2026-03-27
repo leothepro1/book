@@ -295,6 +295,33 @@ export async function handlePaymentWebhook(
       providerKey,
       reason: outcome.reason,
     });
+
+    // Send PAYMENT_FAILED email (non-blocking)
+    if (order.guestEmail) {
+      try {
+        const { sendEmailEvent: sendFailedEmail } = await import("@/app/_lib/email/send");
+        const tenant = await prisma.tenant.findUnique({
+          where: { id: order.tenantId },
+          select: { name: true, portalSlug: true },
+        });
+        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "bedfront.com";
+        const portalBase = tenant?.portalSlug ? `https://${tenant.portalSlug}.${baseDomain}` : "";
+        await sendFailedEmail(
+          order.tenantId,
+          "PAYMENT_FAILED" as Parameters<typeof sendFailedEmail>[1],
+          order.guestEmail,
+          {
+            guestName: order.guestName || "Gäst",
+            hotelName: tenant?.name ?? "",
+            orderNumber: String(order.orderNumber),
+            failureReason: outcome.reason ?? "Betalningen kunde inte genomföras",
+            retryUrl: `${portalBase}/checkout?retry=${order.id}`,
+          },
+        );
+      } catch (err) {
+        log("error", "webhook.payment_failed_email_error", { orderId: order.id, error: String(err) });
+      }
+    }
     // Do NOT cancel the Order — guest may retry
   }
 

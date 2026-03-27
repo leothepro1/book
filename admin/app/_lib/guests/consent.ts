@@ -62,5 +62,39 @@ export async function updateEmailConsent(
     tenantId, guestAccountId, state, source: options.source ?? "manual",
   });
 
+  // Send double opt-in confirmation email if CONFIRMED_OPT_IN level
+  if (state === "SUBSCRIBED" && options.optInLevel === "CONFIRMED_OPT_IN") {
+    try {
+      const guest = await prisma.guestAccount.findUnique({
+        where: { id: guestAccountId },
+        select: { email: true, firstName: true },
+      });
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { name: true, portalSlug: true },
+      });
+      if (guest && tenant) {
+        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "bedfront.com";
+        const portalBase = tenant.portalSlug ? `https://${tenant.portalSlug}.${baseDomain}` : "";
+        const { sendEmailEvent } = await import("@/app/_lib/email/send");
+        await sendEmailEvent(
+          tenantId,
+          "MARKETING_OPT_IN_CONFIRM" as Parameters<typeof sendEmailEvent>[1],
+          guest.email,
+          {
+            guestName: guest.firstName ?? guest.email,
+            hotelName: tenant.name,
+            confirmUrl: `${portalBase}/portal/account`,
+            unsubscribeUrl: `${portalBase}/unsubscribe`,
+          },
+        );
+      }
+    } catch (err) {
+      log("error", "guest.consent.opt_in_email_failed", {
+        tenantId, guestAccountId, error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   return { success: true };
 }

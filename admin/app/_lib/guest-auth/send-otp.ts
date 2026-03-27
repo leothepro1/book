@@ -67,6 +67,8 @@ export async function sendOtp(
       return { sent: false, reason: "rate_limited" };
     case "skipped_unsubscribed":
       return { sent: false, reason: "unsubscribed" };
+    case "event_disabled":
+      return { sent: false, reason: "event_disabled" };
     case "failed":
       console.error(
         `[guest-otp] Failed to send OTP email for account=${guestAccount.id}`,
