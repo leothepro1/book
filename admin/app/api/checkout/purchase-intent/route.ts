@@ -25,6 +25,7 @@ import { getPlatformFeeBps } from "@/app/_lib/payments/platform-fee";
 import { log } from "@/app/_lib/logger";
 import { verifyChargesEnabled } from "@/app/_lib/stripe/verify-account";
 import { checkRateLimit } from "@/app/_lib/rate-limit/checkout";
+import { claimIdempotencyKey, completeIdempotencyKey, failIdempotencyKey } from "@/app/_lib/checkout/idempotency";
 
 // ── Validation ──────────────────────────────────────────────────
 
@@ -78,11 +79,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "TENANT_NOT_FOUND" }, { status: 404 });
   }
 
+  // ── Idempotency key ────────────────────────────────────────
+  const idempotencyKey = req.headers.get("x-idempotency-key");
+  if (!idempotencyKey) {
+    return NextResponse.json({ error: "MISSING_IDEMPOTENCY_KEY", message: "x-idempotency-key header required" }, { status: 400 });
+  }
+
+  const claim = await claimIdempotencyKey(tenant.id, idempotencyKey, "purchase-intent");
+  if (!claim.claimed) {
+    if (claim.status === "COMPLETED") {
+      return NextResponse.json(claim.responsePayload);
+    }
+    return NextResponse.json(
+      { error: "DUPLICATE_REQUEST", message: "Duplicate request in progress, retry after 2 seconds" },
+      { status: 409 },
+    );
+  }
+
   // ── Parse + validate input ──────────────────────────────────
   let body: z.infer<typeof inputSchema>;
   try {
     body = inputSchema.parse(await req.json());
   } catch {
+    await failIdempotencyKey(tenant.id, idempotencyKey, "purchase-intent");
     return NextResponse.json({ error: "INVALID_PARAMS" }, { status: 400 });
   }
 
@@ -250,10 +269,9 @@ export async function POST(req: Request) {
       type: "gift_card",
     });
 
-    return NextResponse.json({
-      clientSecret: init.clientSecret,
-      orderId: order.id,
-    });
+    const successPayload = { clientSecret: init.clientSecret, orderId: order.id };
+    await completeIdempotencyKey(tenant.id, idempotencyKey, "purchase-intent", successPayload);
+    return NextResponse.json(successPayload);
   } catch (err) {
     log("error", "purchase.payment_failed", {
       tenantId: tenant.id,
@@ -274,6 +292,7 @@ export async function POST(req: Request) {
       },
     });
 
+    await failIdempotencyKey(tenant.id, idempotencyKey, "purchase-intent");
     return NextResponse.json(
       { error: "PAYMENT_FAILED", message: err instanceof Error ? err.message : "Betalning misslyckades" },
       { status: 503 },

@@ -215,6 +215,13 @@ export const AppDefinitionSchema = z.object({
   healthCheck: HealthCheckConfigSchema.optional(),
   wizardComponent: z.enum(["google-ads", "meta-ads", "mailchimp"]).optional(),
 
+  // Hero content — displayed below header, above screenshots
+  heroHeading: z.string().optional(),
+  heroDescription: z.string().optional(),
+
+  // Human-readable permission labels — shown in listing UI
+  permissionLabels: z.array(z.string()).optional(),
+
   // Rich listing content
   highlights: z.array(AppHighlightSchema).default([]),
   screenshots: z.array(AppScreenshotSchema).default([]),

@@ -11,6 +11,7 @@
 
 import { prisma } from "@/app/_lib/db/prisma";
 import type { Prisma } from "@prisma/client";
+import { resilientFetch } from "@/app/_lib/http/fetch";
 import { log } from "@/app/_lib/logger";
 import { getApp } from "./registry";
 import { decryptAppSettings } from "./settings-crypto";
@@ -181,10 +182,8 @@ export async function deliverEvent(
   let errorMessage: string | null = null;
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), DELIVERY_TIMEOUT_MS);
-
-    const res = await fetch(url, {
+    const res = await resilientFetch(url, {
+      service: "app-webhook", timeout: DELIVERY_TIMEOUT_MS,
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -194,10 +193,8 @@ export async function deliverEvent(
         event: { type: eventType, tenantId, payload },
         settings: appSettings,
       }),
-      signal: controller.signal,
     });
 
-    clearTimeout(timeout);
     responseStatus = res.status;
 
     if (!res.ok) {

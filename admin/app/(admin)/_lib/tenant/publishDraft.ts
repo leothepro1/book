@@ -3,7 +3,7 @@
 import { prisma } from "@/app/_lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { getCurrentTenant } from "./getCurrentTenant";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { scanTranslatableStrings } from "@/app/_lib/translations/scanner";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 
@@ -78,6 +78,7 @@ export async function publishDraft(): Promise<{ success: boolean; error?: string
     }
 
     revalidatePath("/(guest)", "layout");
+    revalidateTag(`tenant-config:${tenant.id}`, { expire: 0 });
 
     // Run translation orphan cleanup (non-critical, outside transaction)
     try {
@@ -190,6 +191,7 @@ export async function rollbackSettings(): Promise<{ success: boolean; error?: st
     });
 
     revalidatePath("/(guest)", "layout");
+    revalidateTag(`tenant-config:${tenant.id}`, { expire: 0 });
     return { success: true };
   } catch (error) {
     console.error("rollbackSettings error:", error);

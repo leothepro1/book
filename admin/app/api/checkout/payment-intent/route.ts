@@ -28,6 +28,7 @@ import { log } from "@/app/_lib/logger";
 import { validateStayDates } from "@/app/_lib/validation/dates";
 import { verifyChargesEnabled } from "@/app/_lib/stripe/verify-account";
 import { checkRateLimit } from "@/app/_lib/rate-limit/checkout";
+import { claimIdempotencyKey, completeIdempotencyKey, failIdempotencyKey } from "@/app/_lib/checkout/idempotency";
 import { resolvePaymentMethods } from "@/app/_lib/payments/resolve";
 import type { PaymentMethodConfig } from "@/app/_lib/payments/types";
 
@@ -57,11 +58,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "TENANT_NOT_FOUND" }, { status: 404 });
   }
 
+  // ── Idempotency key ────────────────────────────────────────
+  const idempotencyKey = req.headers.get("x-idempotency-key");
+  if (!idempotencyKey) {
+    return NextResponse.json({ error: "MISSING_IDEMPOTENCY_KEY", message: "x-idempotency-key header required" }, { status: 400 });
+  }
+
+  const claim = await claimIdempotencyKey(tenant.id, idempotencyKey, "payment-intent");
+  if (!claim.claimed) {
+    if (claim.status === "COMPLETED") {
+      return NextResponse.json(claim.responsePayload);
+    }
+    return NextResponse.json(
+      { error: "DUPLICATE_REQUEST", message: "Duplicate request in progress, retry after 2 seconds" },
+      { status: 409 },
+    );
+  }
+
   // ── Parse + validate input ──────────────────────────────────
   let body: z.infer<typeof inputSchema>;
   try {
     body = inputSchema.parse(await req.json());
   } catch {
+    await failIdempotencyKey(tenant.id, idempotencyKey, "payment-intent");
     return NextResponse.json({ error: "INVALID_PARAMS" }, { status: 400 });
   }
 
@@ -261,10 +280,9 @@ export async function POST(req: Request) {
       currency,
     });
 
-    return NextResponse.json({
-      clientSecret: init.clientSecret,
-      orderId: order.id,
-    });
+    const successPayload = { clientSecret: init.clientSecret, orderId: order.id };
+    await completeIdempotencyKey(tenant.id, idempotencyKey, "payment-intent", successPayload);
+    return NextResponse.json(successPayload);
   } catch (err) {
     log("error", "checkout.payment_failed", {
       tenantId: tenant.id,
@@ -285,6 +303,7 @@ export async function POST(req: Request) {
       },
     });
 
+    await failIdempotencyKey(tenant.id, idempotencyKey, "payment-intent");
     return NextResponse.json(
       { error: "PAYMENT_FAILED", message: err instanceof Error ? err.message : "Betalning misslyckades" },
       { status: 503 },

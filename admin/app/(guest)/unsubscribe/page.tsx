@@ -9,6 +9,8 @@
  * matching Gmail's List-Unsubscribe-Post behavior).
  */
 
+export const dynamic = "force-dynamic";
+
 import { prisma } from "@/app/_lib/db/prisma";
 import { verifyUnsubscribeToken } from "@/app/_lib/email/unsubscribe-token";
 

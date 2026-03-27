@@ -12,6 +12,7 @@
 import { env } from "@/app/_lib/env";
 import { prisma } from "@/app/_lib/db/prisma";
 import { encryptCredentials, decryptCredentials } from "@/app/_lib/integrations/crypto";
+import { resilientFetch } from "@/app/_lib/http/fetch";
 import { log } from "@/app/_lib/logger";
 import type { Prisma } from "@prisma/client";
 
@@ -87,7 +88,9 @@ export async function exchangeCodeForToken(code: string): Promise<string> {
     code,
   });
 
-  const res = await fetch(`${META_TOKEN_URL}?${params.toString()}`);
+  const res = await resilientFetch(`${META_TOKEN_URL}?${params.toString()}`, {
+    service: "meta-ads", timeout: 8_000,
+  });
 
   if (!res.ok) {
     const text = await res.text();
@@ -114,7 +117,9 @@ export async function exchangeForLongLivedToken(shortLivedToken: string): Promis
     fb_exchange_token: shortLivedToken,
   });
 
-  const res = await fetch(`${META_TOKEN_URL}?${params.toString()}`);
+  const res = await resilientFetch(`${META_TOKEN_URL}?${params.toString()}`, {
+    service: "meta-ads", timeout: 8_000,
+  });
 
   if (!res.ok) {
     const text = await res.text();

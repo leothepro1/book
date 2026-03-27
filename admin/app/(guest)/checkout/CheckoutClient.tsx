@@ -677,17 +677,26 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
     return true;
   });
 
+  // Idempotency key — stable per component mount (one checkout session)
+  const checkoutIdempotencyKey = useRef<string>(crypto.randomUUID());
+  const piIsLoading = useRef(false);
+
   // Create Order + PaymentIntent after step 2 (payment type choice) is completed
   // Step 1 = contact, Step 2 = payment type, Step 3 = payment method, Step 4 = review
   useEffect(() => {
     if (!clientSecret && orderId) return;
     if (clientSecret || !product || !checkIn || !checkOut) return;
     if (!completedSteps.has(2 as StepId)) return;
+    if (piIsLoading.current) return;
 
+    piIsLoading.current = true;
     setPiError(null);
     fetch("/api/checkout/payment-intent", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-idempotency-key": checkoutIdempotencyKey.current,
+      },
       body: JSON.stringify({
         productSlug,
         checkIn,
@@ -706,7 +715,8 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
         if (data.clientSecret) setClientSecret(data.clientSecret);
         if (data.orderId) setOrderId(data.orderId);
       })
-      .catch(() => setPiError("Nätverksfel — försök igen."));
+      .catch(() => setPiError("Nätverksfel — försök igen."))
+      .finally(() => { piIsLoading.current = false; });
   }, [completedSteps, clientSecret, orderId, product, productSlug, checkIn, checkOut, guests, ratePlanId, paymentType]);
 
   const handleNext = (step: StepId) => {

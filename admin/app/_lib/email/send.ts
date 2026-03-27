@@ -10,6 +10,7 @@
  */
 
 import { prisma } from "@/app/_lib/db/prisma";
+import { log } from "@/app/_lib/logger";
 import { resendClient } from "./client";
 import { getEventDefinition } from "./registry";
 import { renderTemplate, injectPreviewText } from "./template-utils";
@@ -23,6 +24,18 @@ import type { EmailEventType } from "./registry";
 import type { ResolvedEmailTemplate } from "./types";
 
 const IS_DEV = process.env.NODE_ENV === "development";
+const MAX_ATTEMPTS = 5;
+
+// ── Backoff ─────────────────────────────────────────────────────
+
+/**
+ * Exponential backoff with cap: 5min → 15min → 1h → 4h → 24h
+ */
+function getNextRetryAt(attempts: number): Date {
+  const delays = [5, 15, 60, 240, 1440]; // minutes
+  const delayMinutes = delays[Math.min(attempts, delays.length - 1)];
+  return new Date(Date.now() + delayMinutes * 60 * 1000);
+}
 
 // ── Result type ─────────────────────────────────────────────────
 
@@ -99,7 +112,7 @@ async function getResolvedTemplate(
  *   3. Create send log entry (QUEUED)
  *   4. Resolve template + render
  *   5. Send via Resend with List-Unsubscribe headers
- *   6. Update log entry (SENT or FAILED)
+ *   6. Update log entry (SENT or FAILED with retry)
  *   7. Record send for rate limiting
  *
  * Returns an EmailSendResult indicating what happened.
@@ -132,12 +145,49 @@ export async function sendEmailEvent(
     return { status: "rate_limited" };
   }
 
-  // 3. Create send log entry
+  // 3. Create send log entry — store variables for retry replay
   const logEntry = await prisma.emailSendLog.create({
-    data: { tenantId, eventType, toEmail: to, status: "QUEUED" },
+    data: {
+      tenantId,
+      eventType,
+      toEmail: to,
+      status: "QUEUED",
+      variables: variables as unknown as import("@prisma/client").Prisma.InputJsonValue,
+    },
   });
 
-  // 3. Resolve template + render
+  return attemptSend(logEntry.id, tenantId, eventType, to, variables, rateLimitKey, options);
+}
+
+// ── retrySendFromLog (used by cron) ─────────────────────────────
+
+/**
+ * Retry a previously failed email using data stored on the log entry.
+ * Called exclusively by the retry-emails cron job.
+ */
+export async function retrySendFromLog(logId: string): Promise<EmailSendResult> {
+  const entry = await prisma.emailSendLog.findUniqueOrThrow({
+    where: { id: logId },
+    select: { id: true, tenantId: true, eventType: true, toEmail: true, variables: true, attempts: true },
+  });
+
+  const variables = (entry.variables as Record<string, string>) ?? {};
+
+  return attemptSend(entry.id, entry.tenantId, entry.eventType, entry.toEmail, variables, entry.toEmail);
+}
+
+// ── attemptSend (internal) ──────────────────────────────────────
+
+async function attemptSend(
+  logId: string,
+  tenantId: string,
+  eventType: EmailEventType,
+  to: string,
+  variables: Record<string, string>,
+  rateLimitKey: string,
+  options?: { testMode?: boolean; giftCardId?: string },
+): Promise<EmailSendResult> {
+  // Resolve template + render
   const resolved = await getResolvedTemplate(tenantId, eventType, variables);
 
   const renderedSubject = options?.testMode
@@ -147,7 +197,7 @@ export async function sendEmailEvent(
   const renderedHtml = renderTemplate(resolved.html, variables);
   const finalHtml = injectPreviewText(renderedHtml, renderedPreviewText);
 
-  // 4. Build unsubscribe URL + headers
+  // Build unsubscribe URL + headers
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const unsubscribeToken = generateUnsubscribeToken(tenantId, to);
   const unsubscribeUrl =
@@ -155,12 +205,9 @@ export async function sendEmailEvent(
     `tenant=${tenantId}&email=${encodeURIComponent(to)}&` +
     `token=${unsubscribeToken}`;
 
-  // 5. Send via Resend (or log in dev mode)
+  // Send via Resend (or log in dev mode)
   try {
     if (IS_DEV) {
-      // Dev mode: log to console instead of sending via Resend.
-      // The full pipeline runs (template resolution, branding, variables)
-      // so the UI and data layer behave identically to production.
       console.log(
         `\n[email-dev] ════════════════════════════════════════`,
         `\n  Event:   ${eventType}`,
@@ -172,10 +219,16 @@ export async function sendEmailEvent(
         `\n════════════════════════════════════════════════════\n`,
       );
 
-      // Update log as SENT so the UI reflects success
       await prisma.emailSendLog.update({
-        where: { id: logEntry.id },
-        data: { status: "SENT", resendId: `dev_${Date.now()}` },
+        where: { id: logId },
+        data: {
+          status: "SENT",
+          resendId: `dev_${Date.now()}`,
+          attempts: { increment: 1 },
+          lastAttemptAt: new Date(),
+          nextRetryAt: null,
+          failureReason: null,
+        },
       });
 
       await recordEmailSend(tenantId, rateLimitKey, eventType);
@@ -194,34 +247,74 @@ export async function sendEmailEvent(
     });
 
     if (error) {
-      await prisma.emailSendLog.update({
-        where: { id: logEntry.id },
-        data: { status: "FAILED", error: error.message },
-      });
-      throw new Error(`[email] Resend delivery failed: ${error.message}`);
+      throw new Error(error.message);
     }
 
-    // 6. Update log on success
+    // Success — update log
     await prisma.emailSendLog.update({
-      where: { id: logEntry.id },
+      where: { id: logId },
       data: {
         status: "SENT",
         resendId: data?.id ?? null,
+        attempts: { increment: 1 },
+        lastAttemptAt: new Date(),
+        nextRetryAt: null,
+        failureReason: null,
       },
     });
 
-    // 7. Record send for rate limiting
     await recordEmailSend(tenantId, to, eventType);
-
     return { status: "sent" };
   } catch (err) {
-    // Ensure log is updated even on unexpected errors
-    if (err instanceof Error && !err.message.startsWith("[email] Resend")) {
+    const reason = err instanceof Error ? err.message : String(err);
+
+    // Read current attempts to decide status
+    const current = await prisma.emailSendLog.findUnique({
+      where: { id: logId },
+      select: { attempts: true },
+    });
+    const newAttempts = (current?.attempts ?? 0) + 1;
+
+    if (newAttempts >= MAX_ATTEMPTS) {
       await prisma.emailSendLog.update({
-        where: { id: logEntry.id },
-        data: { status: "FAILED", error: err.message },
-      }).catch(() => {}); // don't mask the original error
+        where: { id: logId },
+        data: {
+          status: "PERMANENTLY_FAILED",
+          attempts: newAttempts,
+          lastAttemptAt: new Date(),
+          nextRetryAt: null,
+          failureReason: reason,
+        },
+      });
+      log("error", "email.permanently_failed", {
+        emailLogId: logId,
+        tenantId,
+        eventType,
+        attempts: newAttempts,
+        failureReason: reason,
+      });
+    } else {
+      const nextRetryAt = getNextRetryAt(newAttempts);
+      await prisma.emailSendLog.update({
+        where: { id: logId },
+        data: {
+          status: "FAILED",
+          attempts: newAttempts,
+          lastAttemptAt: new Date(),
+          nextRetryAt,
+          failureReason: reason,
+        },
+      });
+      log("error", "email.send.failed", {
+        emailLogId: logId,
+        tenantId,
+        eventType,
+        attempts: newAttempts,
+        failureReason: reason,
+        nextRetryAt: nextRetryAt.toISOString(),
+      });
     }
+
     return { status: "failed", error: err };
   }
 }

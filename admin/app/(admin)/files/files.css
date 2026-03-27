@@ -9,12 +9,12 @@
 /* ── Files page layout overrides ── */
 
 .files-page .admin-header {
-  border-bottom: none;
-  justify-content: space-between;
-  align-items: center;
-  height: auto;
-  padding: 16px;
-  display: flex;
+    border-bottom: none;
+    justify-content: space-between;
+    align-items: center;
+    height: auto;
+    padding: 16px 16px 10px 16px;
+    display: flex;
 }
 
 .files-page .admin-content {
@@ -361,7 +361,7 @@
   border: none;
   border-radius: 8px;
   overflow: hidden;
-  background: #e1e1e1;
+  background: #e0e0e0;
 }
 
 .files-pagination__btn {

@@ -3,7 +3,8 @@ import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFr
 import { prisma } from "@/app/_lib/db/prisma";
 import { GiftCardPurchaseClient } from "./GiftCardPurchaseClient";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
+export const dynamicParams = true;
 
 /**
  * Gift Card Product Page

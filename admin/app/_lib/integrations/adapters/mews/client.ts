@@ -13,6 +13,7 @@
 import type { MewsCredentials } from "./credentials";
 import { getMewsBaseUrl } from "./credentials";
 import { consumeRateLimit } from "./rate-limiter";
+import { resilientFetch } from "@/app/_lib/http/fetch";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 5_000;
@@ -61,16 +62,12 @@ export class MewsClient {
       // Database-backed rate limit check
       await consumeRateLimit(this.credentials.accessToken);
 
-      // Request with timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
       try {
-        const response = await fetch(url, {
+        const response = await resilientFetch(url, {
+          service: "mews", timeout: TIMEOUT_MS,
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(fullBody),
-          signal: controller.signal,
         });
 
         if (response.ok) {
@@ -122,7 +119,7 @@ export class MewsClient {
           true,
         );
       } finally {
-        clearTimeout(timeoutId);
+        // resilientFetch handles timeout cleanup internally
       }
     }
 

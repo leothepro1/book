@@ -1,7 +1,5 @@
 import "./error.css";
 
-export const dynamic = "force-dynamic";
-
 const MESSAGES: Record<string, { title: string; body: string }> = {
   invalid: {
     title: "Ogiltig länk",

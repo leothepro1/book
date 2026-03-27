@@ -14,7 +14,7 @@
  *   4. Payment — Stripe Elements, confirm, redirect to /confirmation
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   Elements,
@@ -168,6 +168,7 @@ export function GiftCardPurchaseClient({ product }: { product: GiftCardProductDa
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [piError, setPiError] = useState<string | null>(null);
   const [piLoading, setPiLoading] = useState(false);
+  const purchaseIdempotencyKey = useRef<string>(crypto.randomUUID());
 
   useEffect(() => { setReady(true); }, []);
 
@@ -210,7 +211,10 @@ export function GiftCardPurchaseClient({ product }: { product: GiftCardProductDa
     try {
       const res = await fetch("/api/checkout/purchase-intent", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-idempotency-key": purchaseIdempotencyKey.current,
+        },
         body: JSON.stringify({
           designId: selectedDesign,
           amount,

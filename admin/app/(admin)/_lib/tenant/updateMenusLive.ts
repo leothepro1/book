@@ -23,7 +23,7 @@
 import { prisma } from "@/app/_lib/db/prisma";
 import { getCurrentTenant } from "./getCurrentTenant";
 import { getAuth } from "../auth/devAuth";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import type { InputJsonValue } from "@prisma/client/runtime/library";
 import type { MenuConfig } from "@/app/(guest)/_lib/tenant/types";
 
@@ -127,6 +127,7 @@ export async function updateMenusLive(
     }
 
     revalidatePath("/(guest)", "layout");
+    revalidateTag(`tenant-config:${tenant.id}`, { expire: 0 });
 
     return { success: true };
   } catch (error) {

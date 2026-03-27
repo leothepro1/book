@@ -9,6 +9,7 @@
 
 import { createHash } from "node:crypto";
 import { getValidAccessToken } from "./oauth";
+import { resilientFetch } from "@/app/_lib/http/fetch";
 import { log } from "@/app/_lib/logger";
 
 const GOOGLE_ADS_API = "https://googleads.googleapis.com/v17";
@@ -110,7 +111,8 @@ export async function uploadConversion(
     const cleanCustomerId = customerId.replace(/-/g, "");
     const url = `${GOOGLE_ADS_API}/customers/${cleanCustomerId}:uploadClickConversions`;
 
-    const res = await fetch(url, {
+    const res = await resilientFetch(url, {
+      service: "google-ads", timeout: 8_000,
       method: "POST",
       headers: {
         authorization: `Bearer ${accessToken}`,
@@ -203,7 +205,8 @@ export async function uploadConversionAdjustment(
     const cleanCustomerId = customerId.replace(/-/g, "");
     const url = `${GOOGLE_ADS_API}/customers/${cleanCustomerId}:uploadConversionAdjustments`;
 
-    const res = await fetch(url, {
+    const res = await resilientFetch(url, {
+      service: "google-ads", timeout: 8_000,
       method: "POST",
       headers: {
         authorization: `Bearer ${accessToken}`,

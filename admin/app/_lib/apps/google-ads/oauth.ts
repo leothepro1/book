@@ -11,6 +11,7 @@
 import { env } from "@/app/_lib/env";
 import { prisma } from "@/app/_lib/db/prisma";
 import { encryptCredentials, decryptCredentials } from "@/app/_lib/integrations/crypto";
+import { resilientFetch } from "@/app/_lib/http/fetch";
 import { log } from "@/app/_lib/logger";
 import type { Prisma } from "@prisma/client";
 
@@ -86,7 +87,8 @@ export function decryptState(state: string): { tenantId: string; nonce: string }
  * Throws if no refresh_token in response.
  */
 export async function exchangeCodeForTokens(code: string): Promise<GoogleTokens> {
-  const res = await fetch(GOOGLE_TOKEN_URL, {
+  const res = await resilientFetch(GOOGLE_TOKEN_URL, {
+    service: "google-ads", timeout: 8_000,
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -123,7 +125,8 @@ export async function exchangeCodeForTokens(code: string): Promise<GoogleTokens>
  * Refresh an expired access token using the refresh token.
  */
 export async function refreshAccessToken(refreshToken: string): Promise<GoogleTokens> {
-  const res = await fetch(GOOGLE_TOKEN_URL, {
+  const res = await resilientFetch(GOOGLE_TOKEN_URL, {
+    service: "google-ads", timeout: 8_000,
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -261,7 +264,8 @@ export async function revokeAccess(tenantId: string): Promise<void> {
         oauthData.encryptedData as string,
         oauthData.encryptedIv as string,
       );
-      await fetch(`${GOOGLE_REVOKE_URL}?token=${tokens.refreshToken}`, {
+      await resilientFetch(`${GOOGLE_REVOKE_URL}?token=${tokens.refreshToken}`, {
+        service: "google-ads", timeout: 8_000,
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
       });

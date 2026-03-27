@@ -5,7 +5,8 @@ import { resolveProduct } from "@/app/_lib/products/resolve";
 import { ProductDetail } from "./ProductDetail";
 import { PmsProductPage } from "@/app/(guest)/_components/products/PmsProductPage";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
+export const dynamicParams = true;
 
 export default async function ProductPage({
   params,

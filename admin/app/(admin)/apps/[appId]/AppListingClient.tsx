@@ -83,6 +83,18 @@ export function AppListingClient({ app }: { app: AppDefinition }) {
                 </div>
               </div>
 
+              {/* Hero heading + description */}
+              {(app.heroHeading || app.heroDescription) && (
+                <div className="app-listing__hero">
+                  {app.heroHeading && (
+                    <h2 className="app-listing__hero-heading">{app.heroHeading}</h2>
+                  )}
+                  {app.heroDescription && (
+                    <p className="app-listing__hero-desc">{app.heroDescription}</p>
+                  )}
+                </div>
+              )}
+
               {/* Screenshot carousel */}
               {hasScreenshots && (
                 <div className="app-carousel">

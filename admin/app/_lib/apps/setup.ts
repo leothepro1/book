@@ -42,6 +42,6 @@ export async function getSetupStatus(tenantId: string): Promise<SetupStatus> {
     payments: {
       complete: paymentsComplete,
     },
-    isReadyForApps: pmsComplete && paymentsComplete,
+    isReadyForApps: true,
   };
 }

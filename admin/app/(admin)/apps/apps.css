@@ -394,6 +394,7 @@
   grid-template-columns: 1.8fr 1fr;
   gap: 32px;
   padding: 24px 24px 0 24px;
+  align-items: start;
 }
 
 .app-modal__content {
@@ -401,7 +402,37 @@
 }
 
 .app-modal__sidebar {
-  align-self: start;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* height set by JS to match carousel height — CTA aligns to bottom edge */
+}
+
+.app-modal__sidebar-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+
+  /* Thin scrollbar — only visible when content overflows */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--admin-text) 18%, transparent) transparent;
+}
+
+.app-modal__sidebar-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.app-modal__sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-modal__sidebar-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--admin-text) 18%, transparent);
+  border-radius: var(--radius-full);
+}
+
+.app-modal__sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--admin-text) 30%, transparent);
 }
 
 .app-modal__sidebar .app-listing__header {
@@ -411,7 +442,116 @@
 }
 
 .app-modal__cta {
-  margin-top: var(--space-6);
+  flex-shrink: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--admin-border);
+  margin-top: auto;
+}
+
+.app-modal__cta-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  color: #fff;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    0 4px 12px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition:
+    transform 140ms var(--ease-default),
+    box-shadow 140ms var(--ease-default),
+    opacity 140ms var(--ease-default);
+}
+
+.app-modal__cta-btn:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.14),
+    0 8px 20px rgba(0, 0, 0, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.app-modal__cta-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.10),
+    inset 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.app-modal__cta-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.app-modal__cta-btn--secondary {
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  border: 1px solid var(--admin-border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.app-modal__cta-btn--secondary:hover {
+  background: var(--admin-surface-raised);
+  border-color: var(--admin-border-focus);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+/* ── Permissions ── */
+
+.app-modal__permissions {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--admin-border);
+}
+
+.app-modal__permissions-title {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--admin-text);
+  margin: 0 0 var(--space-1);
+}
+
+.app-modal__permissions-subtitle {
+  font-size: var(--font-xs);
+  color: var(--admin-text-tertiary);
+  margin: 0 0 var(--space-3);
+}
+
+.app-modal__permissions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.app-modal__permissions-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--font-sm);
+  color: var(--admin-text-secondary);
+  line-height: 1.4;
+}
+
+.app-modal__permissions-check {
+  font-size: 16px;
+  color: var(--admin-accent);
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 /* ── Pricing section ── */

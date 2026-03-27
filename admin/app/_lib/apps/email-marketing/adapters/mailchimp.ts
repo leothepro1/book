@@ -8,6 +8,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { resilientFetch } from "@/app/_lib/http/fetch";
 import type { EmailMarketingAdapter, EmailContact, EmailList } from "../types";
 
 export class RateLimitError extends Error {
@@ -38,7 +39,7 @@ class MailchimpAdapter implements EmailMarketingAdapter {
     const hash = this.getMemberHash(contact.email);
     const url = `${this.getBaseUrl(apiKey)}/lists/${listId}/members/${hash}`;
 
-    const res = await fetch(url, {
+    const res = await resilientFetch(url, { service: "mailchimp", timeout: 10_000,
       method: "PUT",
       headers: {
         authorization: this.getAuthHeader(apiKey),
@@ -75,7 +76,7 @@ class MailchimpAdapter implements EmailMarketingAdapter {
     const hash = this.getMemberHash(email);
     const url = `${this.getBaseUrl(apiKey)}/lists/${listId}/members/${hash}`;
 
-    await fetch(url, {
+    await resilientFetch(url, { service: "mailchimp", timeout: 10_000,
       method: "DELETE",
       headers: { authorization: this.getAuthHeader(apiKey) },
     });
@@ -84,7 +85,7 @@ class MailchimpAdapter implements EmailMarketingAdapter {
   async getLists(apiKey: string): Promise<EmailList[]> {
     const url = `${this.getBaseUrl(apiKey)}/lists?count=100&fields=lists.id,lists.name,lists.stats.member_count`;
 
-    const res = await fetch(url, {
+    const res = await resilientFetch(url, { service: "mailchimp", timeout: 10_000,
       headers: { authorization: this.getAuthHeader(apiKey) },
     });
 
@@ -103,7 +104,7 @@ class MailchimpAdapter implements EmailMarketingAdapter {
     const hash = this.getMemberHash(email);
     const url = `${this.getBaseUrl(apiKey)}/lists/${listId}/members/${hash}/tags`;
 
-    const res = await fetch(url, {
+    const res = await resilientFetch(url, { service: "mailchimp", timeout: 10_000,
       method: "POST",
       headers: {
         authorization: this.getAuthHeader(apiKey),
@@ -122,7 +123,7 @@ class MailchimpAdapter implements EmailMarketingAdapter {
     const hash = this.getMemberHash(email);
     const url = `${this.getBaseUrl(apiKey)}/lists/${listId}/members/${hash}/tags`;
 
-    const res = await fetch(url, {
+    const res = await resilientFetch(url, { service: "mailchimp", timeout: 10_000,
       method: "POST",
       headers: {
         authorization: this.getAuthHeader(apiKey),
@@ -140,7 +141,7 @@ class MailchimpAdapter implements EmailMarketingAdapter {
     const hash = this.getMemberHash(email);
     const url = `${this.getBaseUrl(apiKey)}/lists/${listId}/members/${hash}/events`;
 
-    await fetch(url, {
+    await resilientFetch(url, { service: "mailchimp", timeout: 10_000,
       method: "POST",
       headers: {
         authorization: this.getAuthHeader(apiKey),
@@ -157,7 +158,8 @@ class MailchimpAdapter implements EmailMarketingAdapter {
 
   async validateCredentials(apiKey: string): Promise<{ valid: boolean; accountName?: string; error?: string }> {
     try {
-      const res = await fetch(`${this.getBaseUrl(apiKey)}/`, {
+      const res = await resilientFetch(`${this.getBaseUrl(apiKey)}/`, {
+        service: "mailchimp", timeout: 10_000,
         headers: { authorization: this.getAuthHeader(apiKey) },
       });
 

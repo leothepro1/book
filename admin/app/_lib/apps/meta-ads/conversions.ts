@@ -10,6 +10,7 @@
 
 import { createHash } from "node:crypto";
 import { getValidAccessToken } from "./oauth";
+import { resilientFetch } from "@/app/_lib/http/fetch";
 import { log } from "@/app/_lib/logger";
 
 const META_GRAPH = "https://graph.facebook.com/v19.0";
@@ -138,7 +139,8 @@ export async function sendConversionEvent(
   }
 
   try {
-    const res = await fetch(`${META_GRAPH}/${pixelId}/events`, {
+    const res = await resilientFetch(`${META_GRAPH}/${pixelId}/events`, {
+      service: "meta-ads", timeout: 8_000,
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),

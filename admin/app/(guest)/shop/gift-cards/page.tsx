@@ -5,7 +5,7 @@ import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import Link from "next/link";
 import "./gift-card.css";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 /**
  * Gift Card Listing Page

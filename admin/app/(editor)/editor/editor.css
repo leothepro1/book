@@ -4525,7 +4525,7 @@ border-radius: 8px;
 
 .cs-section-label {
   display: block;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 400;
   color: var(--admin-text);
   margin-bottom: 2px;
@@ -4540,8 +4540,10 @@ border-radius: 8px;
 
 .sp-typo-field {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 25px;
+  flex-direction: row;
 }
 
 
@@ -4550,13 +4552,15 @@ border-radius: 8px;
 
 .sp-font-selector {
   cursor: pointer;
+  height: 32px;
   border-radius: 8px;
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  font-size: 13px;
+  max-width: 150px;
+  font-size: 12px;
   font-weight: 400;
-  padding: 8px 12px;
+  padding: 8px 7px;
   transition: background 0.15s, border-color 0.15s;
   display: flex;
   color: var(--admin-text);
@@ -4571,8 +4575,8 @@ border-radius: 8px;
 
 .sp-font-selector__name {
     color: var(--admin-text);
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: 400;
     line-height: 1em;
 }
 
@@ -4973,30 +4977,35 @@ border-radius: 8px;
 /* ── Color token field ── */
 
 .cs-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+    flex-direction: row;
+    gap: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
 }
 
 
 
 .cs-field__label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 400;
   color: #303030;
 }
 
 .cs-field__color-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 7px 7px 10px;
-  border: 1px solid var(--admin-border);
-  border-radius: 8px;
-  background: #fff;
-  cursor: pointer;
-  transition: border-color 0.15s;
+    cursor: pointer;
+    height: 32px;
+    max-width: 155px;
+    align-items: center;
+    width: 100%;
+    display: flex;
+    border: 1px solid var(--admin-border);
+    background: rgb(255, 255, 255);
+    border-radius: 8px;
+    gap: 8px;
+    padding: 7px 7px 7px 10px;
+    transition: border-color 0.15s;
 }
 
 .cs-field__color-row:hover {
@@ -5009,7 +5018,7 @@ border-radius: 8px;
 }
 
 .cs-field__hex-display {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--admin-text);
   text-transform: uppercase;
   pointer-events: none;
@@ -5021,8 +5030,8 @@ border-radius: 8px;
   border: none;
   border-radius: 500px;
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   transition: box-shadow 0.12s;
   box-shadow: rgba(0, 0, 0, 0.04) 0px 0px 0px 1px, rgba(0, 0, 0, 0.06) 0px 2px 4px;
 }

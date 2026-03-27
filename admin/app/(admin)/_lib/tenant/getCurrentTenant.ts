@@ -22,6 +22,12 @@ export async function getCurrentTenant() {
 
   if (!tenant) return null;
 
+  // Dynamic import — prevents @sentry/nextjs from being bundled into
+  // the server action client proxy (causes Turbopack module error)
+  import("@/app/_lib/observability/sentry").then(({ setSentryTenantContext }) =>
+    setSentryTenantContext(tenant.id, tenant.portalSlug ?? undefined),
+  ).catch(() => {});
+
   return {
     tenant,
     clerkUserId: userId,

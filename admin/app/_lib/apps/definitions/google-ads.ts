@@ -26,6 +26,16 @@ const googleAds: AppDefinition = {
   permissions: ["orders:read", "analytics:read"],
   webhooks: ["order.paid", "order.refunded"],
   wizardComponent: "google-ads",
+  permissionLabels: [
+    "Synkar produkter och erbjudanden",
+    "Spårar bokningar och konverteringar",
+    "Samlar data för annonsering och remarketing",
+    "Installerar Google Ads & Analytics-taggar",
+  ],
+  heroHeading: "Spåra och nå fler gäster via Google",
+  heroDescription:
+    "Få full koll på bokningar med avancerad spårning, samtidigt som du når fler gäster via Google och YouTube. " +
+    "Optimera kampanjer och öka direktbokningar med datadrivna insikter.",
   termsUrl: "https://bedfront.com/legal/google-ads-terms",
   healthCheck: {
     endpoint: "/api/apps/google-ads/health",

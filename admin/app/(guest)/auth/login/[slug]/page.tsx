@@ -3,7 +3,8 @@ import { prisma } from "@/app/_lib/db/prisma";
 import { notFound } from "next/navigation";
 import LoginForm from "./LoginForm";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
+export const dynamicParams = true;
 
 export default async function MagicLinkLoginPage({
   params,

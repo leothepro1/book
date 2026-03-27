@@ -98,6 +98,28 @@
   color: var(--admin-text-tertiary);
 }
 
+/* ── Hero ── */
+
+.app-listing__hero {
+  margin-bottom: var(--space-6);
+}
+
+.app-listing__hero-heading {
+  font-size: var(--font-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--admin-text);
+  margin: 0 0 var(--space-2);
+  line-height: 1.3;
+}
+
+.app-listing__hero-desc {
+  font-size: var(--font-sm);
+  color: var(--admin-text-secondary);
+  margin: 0;
+  line-height: var(--line-height-relaxed);
+  max-width: 600px;
+}
+
 /* ── Screenshot carousel ── */
 
 .app-carousel {

@@ -5,7 +5,8 @@ import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFr
 import { formatPriceDisplay, getVariantPriceRange } from "@/app/_lib/products/pricing";
 import "./collection-page.css";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
+export const dynamicParams = true;
 
 export default async function CollectionPage({
   params,

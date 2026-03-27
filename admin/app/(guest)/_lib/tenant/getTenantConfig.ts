@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/app/_lib/db/prisma";
 import type { TenantConfig } from "./types";
 import { migrateToV2Pages } from "@/app/_lib/pages/migrate";
@@ -24,6 +25,38 @@ export async function getTenantConfig(
   const useDraft = options?.preferDraft || false;
   const locale = options?.locale;
 
+  // Draft requests bypass cache — only live guest config is cached
+  const config = useDraft
+    ? await fetchTenantConfig(tenantIdOrSlug, useDraft)
+    : await getCachedTenantConfig(tenantIdOrSlug);
+
+  // Apply translations if a non-primary locale is requested
+  if (locale && locale !== config._primaryLocale) {
+    return applyLocaleTranslations(config, locale);
+  }
+
+  return config;
+}
+
+// ── Cached fetch (live config only) ──────────────────────────────
+
+function getCachedTenantConfig(tenantIdOrSlug: string): Promise<TenantConfig> {
+  return unstable_cache(
+    () => fetchTenantConfig(tenantIdOrSlug, false),
+    ["tenant-config", tenantIdOrSlug],
+    {
+      revalidate: 300,
+      tags: [`tenant-config:${tenantIdOrSlug}`],
+    },
+  )();
+}
+
+// ── Core fetch logic ─────────────────────────────────────────────
+
+async function fetchTenantConfig(
+  tenantIdOrSlug: string,
+  useDraft: boolean,
+): Promise<TenantConfig> {
   const tenant = await prisma.tenant.findFirst({
     where: {
       OR: [{ id: tenantIdOrSlug }, { slug: tenantIdOrSlug }],
@@ -57,31 +90,45 @@ export async function getTenantConfig(
   });
   config._publishedLocales = publishedLocaleRows.map((r) => r.locale);
 
-  // Apply translations if a non-primary locale is requested
+  // Set primary/current locale
   const tenantPrimaryLocale = await getTenantPrimaryLocale(tenant.id);
   config._primaryLocale = tenantPrimaryLocale;
-  config._currentLocale = locale ?? tenantPrimaryLocale;
-
-  if (locale && locale !== tenantPrimaryLocale) {
-    // Verify locale is published for this tenant
-    const localeRow = await prisma.tenantLocale.findUnique({
-      where: { tenantId_locale: { tenantId: tenant.id, locale } },
-      select: { published: true },
-    });
-
-    if (!localeRow?.published) {
-      console.warn(`[getTenantConfig] Locale "${locale}" not published for tenant ${tenant.id} — falling back to primary`);
-      return config;
-    }
-
-    const translationMap = await loadTranslationMap(tenant.id, locale, tenantPrimaryLocale);
-    if (translationMap.size > 0) {
-      config = applyTranslationsToConfig(config, translationMap, locale, tenantPrimaryLocale);
-    }
-  }
+  config._currentLocale = tenantPrimaryLocale;
 
   return config;
 }
+
+// ── Translation application (always fresh, never cached) ─────────
+
+async function applyLocaleTranslations(
+  config: TenantConfig,
+  locale: string,
+): Promise<TenantConfig> {
+  const tenantId = config.tenantId;
+  const primaryLocale = config._primaryLocale ?? PRIMARY_LOCALE;
+
+  // Verify locale is published for this tenant
+  const localeRow = await prisma.tenantLocale.findUnique({
+    where: { tenantId_locale: { tenantId, locale } },
+    select: { published: true },
+  });
+
+  if (!localeRow?.published) {
+    console.warn(`[getTenantConfig] Locale "${locale}" not published for tenant ${tenantId} — falling back to primary`);
+    return config;
+  }
+
+  const translationMap = await loadTranslationMap(tenantId, locale, primaryLocale);
+  if (translationMap.size > 0) {
+    const translated = applyTranslationsToConfig(config, translationMap, locale, primaryLocale);
+    translated._currentLocale = locale;
+    return translated;
+  }
+
+  return { ...config, _currentLocale: locale };
+}
+
+// ── Helpers ──────────────────────────────────────────────────────
 
 /**
  * Load all translations for a tenant in one query.

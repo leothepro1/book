@@ -128,11 +128,30 @@ function AppModal({
   const [isPending, startTransition] = useTransition();
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [selectedTier, setSelectedTier] = useState(app.pricing[0]?.tier ?? "free");
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setCarouselIndex(0);
     setSelectedTier(app.pricing[0]?.tier ?? "free");
   }, [app.id, app.pricing]);
+
+  // Sync sidebar max-height with carousel slide height
+  useEffect(() => {
+    const carousel = carouselRef.current;
+    const sidebar = sidebarRef.current;
+    if (!carousel || !sidebar) return;
+
+    const sync = () => {
+      const h = carousel.getBoundingClientRect().height;
+      if (h > 0) sidebar.style.height = `${h}px`;
+    };
+
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(carousel);
+    return () => ro.disconnect();
+  }, [app.id, visible]);
 
   // ESC to close
   useEffect(() => {
@@ -177,7 +196,7 @@ function AppModal({
             <div className="app-modal__content">
               {/* Screenshot carousel */}
               {hasScreenshots && (
-                <div className="app-carousel">
+                <div className="app-carousel" ref={carouselRef}>
                   <div className="app-carousel__viewport">
                     <div className="app-carousel__track" style={{ transform: `translateX(-${carouselIndex * 100}%)` }}>
                       {app.screenshots.map((s, i) => (
@@ -224,24 +243,59 @@ function AppModal({
             </div>
 
             {/* Right column — sidebar */}
-            <div className="app-modal__sidebar">
-              {/* App header */}
-              <div className="app-listing__header">
-                <div className="app-listing__icon">
-                  {app.iconUrl
-                    ? <img src={app.iconUrl} alt="" className="app-modal__icon-img" />
-                    : <span className="material-symbols-rounded" style={{ fontSize: 32 }}>{app.icon}</span>
-                  }
+            <div className="app-modal__sidebar" ref={sidebarRef}>
+              <div className="app-modal__sidebar-scroll">
+                {/* App header */}
+                <div className="app-listing__header">
+                  <div className="app-listing__icon">
+                    {app.iconUrl
+                      ? <img src={app.iconUrl} alt="" className="app-modal__icon-img" />
+                      : <span className="material-symbols-rounded" style={{ fontSize: 32 }}>{app.icon}</span>
+                    }
+                  </div>
+                  <div className="app-listing__header-info">
+                    <h3 className="app-modal__name">{app.name}</h3>
+                    <p className="app-modal__developer">Skapad av {app.developer === "bedfront" ? "Bedfront" : app.developer}</p>
+                  </div>
                 </div>
-                <div className="app-listing__header-info">
-                  <h3 className="app-modal__name">{app.name}</h3>
-                  <p className="app-modal__developer">Skapad av {app.developer === "bedfront" ? "Bedfront" : app.developer}</p>
-                </div>
+
+                {/* Hero heading + description */}
+                {(app.heroHeading || app.heroDescription) && (
+                  <div className="app-listing__hero">
+                    {app.heroHeading && (
+                      <h2 className="app-listing__hero-heading">{app.heroHeading}</h2>
+                    )}
+                    {app.heroDescription && (
+                      <p className="app-listing__hero-desc">{app.heroDescription}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Permissions */}
+                {(app.permissionLabels ?? []).length > 0 && (
+                  <div className="app-modal__permissions">
+                    <h4 className="app-modal__permissions-title">Behörigheter</h4>
+                    <p className="app-modal__permissions-subtitle">När denna app är installerad kan den:</p>
+                    <ul className="app-modal__permissions-list">
+                      {app.permissionLabels!.map((label, i) => (
+                        <li key={i} className="app-modal__permissions-item">
+                          <span className="material-symbols-rounded app-modal__permissions-check">check</span>
+                          {label}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
-              {/* CTA */}
+              {/* CTA — sticky footer */}
               <div className="app-modal__cta">
-                <button className={status ? "admin-btn admin-btn--outline" : "admin-btn admin-btn--accent"} onClick={status ? () => router.push(`/apps/${app.id}`) : handleInstall} disabled={!status && ctaDisabled} type="button">
+                <button
+                  className={`app-modal__cta-btn${status ? " app-modal__cta-btn--secondary" : ""}`}
+                  onClick={status ? () => router.push(`/apps/${app.id}`) : handleInstall}
+                  disabled={!status && ctaDisabled}
+                  type="button"
+                >
                   {status ? "Öppna" : (isPending ? "Installerar..." : "Installera")}
                 </button>
               </div>
@@ -366,27 +420,6 @@ export function AppsClient({ apps, installed, setup, healthStates, initialAppId 
             <h1 className="apps-header__title">App Store</h1>
             <p className="apps-header__tagline">Utöka din bokningsmotor med appar och integrationer</p>
           </div>
-
-          {/* Setup banner */}
-          {!setupReady && (
-            <div className="apps-setup-banner">
-              <EditorIcon name="info" size={22} className="apps-setup-banner__icon" />
-              <div className="apps-setup-banner__text">
-                <p className="apps-setup-banner__title">Slutför grundinstallationen för att installera appar</p>
-                <p className="apps-setup-banner__desc">
-                  {!setup.pms.complete && !setup.payments.complete
-                    ? "Anslut ditt PMS och konfigurera betalningar för att komma igång."
-                    : !setup.pms.complete
-                      ? "Anslut ditt PMS under Integrationer."
-                      : "Konfigurera betalningar under Betalningar."}
-                </p>
-                <div className="apps-setup-banner__links">
-                  {!setup.pms.complete && <Link href="/settings/integrations" className="apps-setup-banner__link">Integrationer →</Link>}
-                  {!setup.payments.complete && <Link href="/settings/payments" className="apps-setup-banner__link">Betalningar →</Link>}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Search */}
           <div className="apps-search">

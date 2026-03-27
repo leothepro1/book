@@ -12,6 +12,7 @@ import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFr
 import { getTaxRate } from "@/app/_lib/orders/tax";
 import { log } from "@/app/_lib/logger";
 import { checkRateLimit } from "@/app/_lib/rate-limit/checkout";
+import { claimIdempotencyKey, completeIdempotencyKey, failIdempotencyKey } from "@/app/_lib/checkout/idempotency";
 import { getPlatformFeeBps } from "@/app/_lib/payments/platform-fee";
 import { initiateOrderPayment } from "@/app/_lib/payments/providers/initiate";
 
@@ -40,22 +41,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
   }
 
-  let body: z.infer<typeof checkoutInputSchema>;
-  try {
-    const raw = await req.json();
-    body = checkoutInputSchema.parse(raw);
-  } catch {
-    return NextResponse.json({ error: "Ogiltig begäran" }, { status: 400 });
-  }
-
-  const { items } = body;
-
   // Resolve tenant from host header — never from request body
   const resolvedTenant = await resolveTenantFromHost();
   if (!resolvedTenant) {
     return NextResponse.json({ error: "TENANT_NOT_FOUND" }, { status: 404 });
   }
   const tenantId = resolvedTenant.id;
+
+  // ── Idempotency key ────────────────────────────────────────
+  const idempotencyKey = req.headers.get("x-idempotency-key");
+  if (!idempotencyKey) {
+    return NextResponse.json({ error: "MISSING_IDEMPOTENCY_KEY", message: "x-idempotency-key header required" }, { status: 400 });
+  }
+
+  const claim = await claimIdempotencyKey(tenantId, idempotencyKey, "checkout-session");
+  if (!claim.claimed) {
+    if (claim.status === "COMPLETED") {
+      return NextResponse.json(claim.responsePayload);
+    }
+    return NextResponse.json(
+      { error: "DUPLICATE_REQUEST", message: "Duplicate request in progress, retry after 2 seconds" },
+      { status: 409 },
+    );
+  }
+
+  let body: z.infer<typeof checkoutInputSchema>;
+  try {
+    const raw = await req.json();
+    body = checkoutInputSchema.parse(raw);
+  } catch {
+    await failIdempotencyKey(tenantId, idempotencyKey, "checkout-session");
+    return NextResponse.json({ error: "Ogiltig begäran" }, { status: 400 });
+  }
+
+  const { items } = body;
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
@@ -216,10 +235,14 @@ export async function POST(req: Request) {
         feeBps,
       });
 
-      return NextResponse.json({ url: init.redirectUrl });
+      const redirectPayload = { url: init.redirectUrl };
+      await completeIdempotencyKey(tenantId, idempotencyKey, "checkout-session", redirectPayload);
+      return NextResponse.json(redirectPayload);
     }
 
-    return NextResponse.json({ clientSecret: init.clientSecret, orderId: order.id });
+    const embeddedPayload = { clientSecret: init.clientSecret, orderId: order.id };
+    await completeIdempotencyKey(tenantId, idempotencyKey, "checkout-session", embeddedPayload);
+    return NextResponse.json(embeddedPayload);
   } catch (err) {
     log("error", "checkout.session_failed", {
       tenantId,
@@ -239,6 +262,7 @@ export async function POST(req: Request) {
       },
     });
 
+    await failIdempotencyKey(tenantId, idempotencyKey, "checkout-session");
     return NextResponse.json(
       { error: "PAYMENT_FAILED", message: err instanceof Error ? err.message : "Betalning misslyckades" },
       { status: 503 },

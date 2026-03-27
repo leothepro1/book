@@ -1,6 +1,8 @@
+import { unstable_cache } from "next/cache";
 import { headers } from "next/headers";
 import { prisma } from "@/app/_lib/db/prisma";
 import { env } from "@/app/_lib/env";
+import { setSentryTenantContext } from "@/app/_lib/observability/sentry";
 
 /**
  * Resolve tenant from the request host header (subdomain).
@@ -18,7 +20,9 @@ export async function resolveTenantFromHost() {
   // Development fallback — no subdomain on localhost
   if (host.startsWith("localhost") || host.startsWith("127.0.0.1")) {
     if (!env.DEV_ORG_ID) return null;
-    return prisma.tenant.findUnique({ where: { clerkOrgId: env.DEV_ORG_ID } });
+    const tenant = await getCachedTenantByClerkOrg(env.DEV_ORG_ID);
+    if (tenant) setSentryTenantContext(tenant.id, tenant.portalSlug ?? undefined);
+    return tenant;
   }
 
   // Production: extract subdomain from {slug}.bedfront.com
@@ -28,5 +32,31 @@ export async function resolveTenantFromHost() {
   const portalSlug = host.slice(0, dotIndex);
   if (!portalSlug) return null;
 
-  return prisma.tenant.findUnique({ where: { portalSlug } });
+  const tenant = await getCachedTenantByHost(portalSlug);
+  if (tenant) setSentryTenantContext(tenant.id, portalSlug);
+  return tenant;
+}
+
+// ── Cached DB lookups ────────────────────────────────────────────
+
+function getCachedTenantByHost(portalSlug: string) {
+  return unstable_cache(
+    () => prisma.tenant.findUnique({ where: { portalSlug } }),
+    ["tenant-by-host", portalSlug],
+    {
+      revalidate: 300,
+      tags: [`tenant-by-host:${portalSlug}`],
+    },
+  )();
+}
+
+function getCachedTenantByClerkOrg(clerkOrgId: string) {
+  return unstable_cache(
+    () => prisma.tenant.findUnique({ where: { clerkOrgId } }),
+    ["tenant-by-host", `clerk:${clerkOrgId}`],
+    {
+      revalidate: 300,
+      tags: [`tenant-by-host:clerk:${clerkOrgId}`],
+    },
+  )();
 }

@@ -19,6 +19,12 @@ export function CartDrawer({ currency = "SEK" }: { currency?: string }) {
   const [isPending, startTransition] = useTransition();
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
+  // Idempotency key — regenerated when cart items change
+  const checkoutIdempotencyKey = useRef<string>(crypto.randomUUID());
+  useEffect(() => {
+    checkoutIdempotencyKey.current = crypto.randomUUID();
+  }, [cart.items]);
+
   // Lock body scroll when drawer is open
   useEffect(() => {
     if (isOpen) {
@@ -46,7 +52,10 @@ export function CartDrawer({ currency = "SEK" }: { currency?: string }) {
     startTransition(async () => {
       const res = await fetch("/api/checkout/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-idempotency-key": checkoutIdempotencyKey.current,
+        },
         body: JSON.stringify({
           items: cart.items,
           tenantId: cart.tenantId,
@@ -66,6 +75,8 @@ export function CartDrawer({ currency = "SEK" }: { currency?: string }) {
       }
 
       const { url } = await res.json();
+      // Regenerate key so returning from Stripe starts a fresh attempt
+      checkoutIdempotencyKey.current = crypto.randomUUID();
       if (url) window.location.href = url;
     });
   };

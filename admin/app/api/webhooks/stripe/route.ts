@@ -74,29 +74,33 @@ export async function POST(req: Request) {
     tenantId = obj.metadata?.tenantId ?? "unknown";
   }
 
-  // ── Event-level dedup ─────────────────────────────────────────
-  // Atomic INSERT — if the event was already processed, the unique
-  // constraint on stripeEventId prevents a second insert.
+  // ── Event-level dedup with self-healing ──────────────────────
+  // UPSERT ensures we record receipt. processedAt=null means "received
+  // but not yet successfully processed" — retries after a failed
+  // transaction are allowed through. processedAt set = fully processed.
 
-  try {
+  const existingEvent = await prisma.stripeWebhookEvent.findUnique({
+    where: { stripeEventId: event.id },
+    select: { processedAt: true },
+  });
+
+  if (existingEvent) {
+    if (existingEvent.processedAt) {
+      // Already fully processed — skip (idempotent)
+      return NextResponse.json({ ok: true, skipped: true });
+    }
+    // processedAt is null → previous attempt failed mid-processing, allow retry
+    log("info", "webhook.retry_after_failure", { eventId: event.id, eventType: event.type });
+  } else {
+    // First time seeing this event — record receipt with processedAt=null
     await prisma.stripeWebhookEvent.create({
       data: {
         stripeEventId: event.id,
         tenantId,
         eventType: event.type,
+        processedAt: null,
       },
     });
-  } catch (e: unknown) {
-    // Unique constraint violation = already processed → no-op
-    if (
-      e &&
-      typeof e === "object" &&
-      "code" in e &&
-      (e as { code: string }).code === "P2002"
-    ) {
-      return NextResponse.json({ ok: true, skipped: true });
-    }
-    throw e;
   }
 
   // ── Dispatch event ────────────────────────────────────────────
@@ -123,13 +127,17 @@ export async function POST(req: Request) {
         break;
 
       default:
-        // Unhandled event type — acknowledge receipt
         break;
     }
+
+    // Mark event as fully processed — enables dedup on future deliveries
+    await prisma.stripeWebhookEvent.update({
+      where: { stripeEventId: event.id },
+      data: { processedAt: new Date() },
+    });
   } catch (err) {
     log("error", "webhook.processing_failed", { eventType: event.type, eventId: event.id, error: String(err) });
-    // Return 200 anyway — Stripe retries on 5xx, and we've already
-    // recorded the event in StripeWebhookEvent so it won't be re-processed
+    // processedAt stays null — next Stripe retry will re-process (self-healing)
     return NextResponse.json({ ok: false, error: "Processing error (acknowledged)" });
   }
 
@@ -157,8 +165,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       ? session.payment_intent
       : session.payment_intent?.id ?? null;
 
+  // Step A — Mark order PAID (small, fast transaction)
   await prisma.$transaction(async (tx) => {
-    // Update order to PAID
     await tx.order.update({
       where: { id: order.id },
       data: {
@@ -169,7 +177,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       },
     });
 
-    // Append events
     await tx.orderEvent.createMany({
       data: [
         {
@@ -186,51 +193,59 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       ],
     });
 
-    // Update PaymentSession status — updateMany to silently skip if no session exists
     await tx.paymentSession.updateMany({
       where: { orderId: order.id },
       data: { status: "RESOLVED", resolvedAt: new Date() },
     });
+  });
 
-    // Consume inventory reservations — mark consumed AND create ledger entries
-    const reservations = await tx.inventoryReservation.findMany({
+  // Step B — Consume inventory (separate operation, after Step A commits)
+  // If this fails, order is already PAID — inventory is a separate concern.
+  try {
+    const reservations = await prisma.inventoryReservation.findMany({
       where: { sessionId: order.id, consumed: false },
     });
 
     if (reservations.length > 0) {
-      await tx.inventoryReservation.updateMany({
-        where: { sessionId: order.id, consumed: false },
-        data: { consumed: true },
-      });
+      await prisma.$transaction(async (tx) => {
+        await tx.inventoryReservation.updateMany({
+          where: { sessionId: order.id, consumed: false },
+          data: { consumed: true },
+        });
 
-      // Create PURCHASE ledger entries (the stock was already decremented
-      // by the RESERVATION — consuming just records the purchase in the ledger)
-      for (const res of reservations) {
-        await tx.inventoryChange.create({
+        for (const res of reservations) {
+          await tx.inventoryChange.create({
+            data: {
+              tenantId: res.tenantId,
+              productId: res.productId,
+              variantId: res.variantId,
+              quantityDelta: 0,
+              quantityAfter: res.variantId
+                ? (await tx.productVariant.findUnique({ where: { id: res.variantId }, select: { inventoryQuantity: true } }))?.inventoryQuantity ?? 0
+                : (await tx.product.findUnique({ where: { id: res.productId }, select: { inventoryQuantity: true } }))?.inventoryQuantity ?? 0,
+              reason: "PURCHASE",
+              note: `Order #${order.orderNumber} — reservation consumed`,
+              referenceId: order.id,
+            },
+          });
+        }
+
+        await tx.orderEvent.create({
           data: {
-            tenantId: res.tenantId,
-            productId: res.productId,
-            variantId: res.variantId,
-            quantityDelta: 0, // Stock already decremented by reservation
-            quantityAfter: res.variantId
-              ? (await tx.productVariant.findUnique({ where: { id: res.variantId }, select: { inventoryQuantity: true } }))?.inventoryQuantity ?? 0
-              : (await tx.product.findUnique({ where: { id: res.productId }, select: { inventoryQuantity: true } }))?.inventoryQuantity ?? 0,
-            reason: "PURCHASE",
-            note: `Order #${order.orderNumber} — reservation consumed`,
-            referenceId: order.id,
+            orderId: order.id,
+            type: "INVENTORY_CONSUMED",
+            message: `${reservations.length} lagerreservation(er) förbrukade`,
           },
         });
-      }
-
-      await tx.orderEvent.create({
-        data: {
-          orderId: order.id,
-          type: "INVENTORY_CONSUMED",
-          message: `${reservations.length} lagerreservation(er) förbrukade`,
-        },
       });
     }
-  });
+  } catch (err) {
+    log("error", "checkout.inventory_consume_failed", {
+      orderId: order.id,
+      tenantId: order.tenantId,
+      error: String(err),
+    });
+  }
 
   // Emit platform event for app webhooks (non-blocking, fire-and-forget)
   const orderMeta = (order.metadata ?? {}) as Record<string, unknown>;

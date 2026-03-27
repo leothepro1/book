@@ -315,6 +315,7 @@ model Booking {
   @@index([status])
   @@index([arrival])
   @@index([tenantId, externalId])
+  @@index([tenantId, guestEmail])
 }
 
 model MagicLink {
@@ -554,6 +555,7 @@ enum EmailSendStatus {
   BOUNCED
   COMPLAINED
   FAILED
+  PERMANENTLY_FAILED
 }
 
 enum EmailEventType {
@@ -646,22 +648,28 @@ model EmailTemplate {
 /// One row per send attempt through sendEmailEvent().
 /// Updated by Resend webhooks as delivery status progresses.
 model EmailSendLog {
-  id          String          @id @default(cuid())
-  tenantId    String
-  eventType   EmailEventType
-  toEmail     String
-  resendId    String?         // Resend's message ID, set after successful send
-  status      EmailSendStatus @default(QUEUED)
-  error       String?         // error message if status = FAILED
-  sentAt      DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id            String          @id @default(cuid())
+  tenantId      String
+  eventType     EmailEventType
+  toEmail       String
+  resendId      String?         // Resend's message ID, set after successful send
+  status        EmailSendStatus @default(QUEUED)
+  error         String?         // error message if status = FAILED
+  attempts      Int             @default(0)
+  lastAttemptAt DateTime?
+  nextRetryAt   DateTime?
+  failureReason String?
+  variables     Json?           // template variables for retry replay
+  sentAt        DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
-  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([resendId])
   @@index([toEmail])
   @@index([tenantId, eventType])
+  @@index([status, nextRetryAt])
 }
 
 // ============================================================================
@@ -1339,6 +1347,7 @@ model Order {
   @@index([tenantId, createdAt])
   @@index([guestEmail])
   @@index([guestAccountId])
+  @@index([status, createdAt])
 }
 
 model OrderLineItem {
@@ -1381,8 +1390,9 @@ model OrderEvent {
 /// Stripe webhook event deduplication — prevents double-processing.
 /// Uses unique constraint on stripeEventId as atomic idempotency gate.
 model StripeWebhookEvent {
-  stripeEventId  String   @id   // evt_xxx — Stripe's unique event ID
-  processedAt    DateTime @default(now())
+  stripeEventId  String    @id   // evt_xxx — Stripe's unique event ID
+  receivedAt     DateTime  @default(now())
+  processedAt    DateTime?  // null = received but not yet successfully processed
   tenantId       String
   eventType      String
 
@@ -1852,4 +1862,31 @@ model EmailSegmentMembership {
 
   @@unique([tenantId, appId, segmentId, email])
   @@index([tenantId, appId, segmentId])
+}
+
+// ============================================================================
+// CHECKOUT IDEMPOTENCY
+// ============================================================================
+
+enum CheckoutIdempotencyStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+/// Prevents duplicate checkout requests from creating duplicate orders.
+/// Keyed on client-supplied idempotency key + tenant + route type.
+/// Rows expire after 24 hours and are cleaned up by cron.
+model CheckoutIdempotencyKey {
+  id              String                    @id @default(cuid())
+  key             String
+  tenantId        String
+  routeType       String                    // "payment-intent" | "checkout-session"
+  status          CheckoutIdempotencyStatus @default(PROCESSING)
+  responsePayload Json?
+  createdAt       DateTime                  @default(now())
+  expiresAt       DateTime                  // 24h TTL
+
+  @@unique([tenantId, key, routeType])
+  @@index([expiresAt])
 }
