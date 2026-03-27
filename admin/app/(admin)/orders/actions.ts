@@ -19,6 +19,7 @@ export type OrderListItem = {
   createdAt: string;
   lineItemCount: number;
   productTitles: string[];
+  sourceChannel: string | null;
 };
 
 export type OrderDetail = {
@@ -134,6 +135,7 @@ export async function getOrders(opts?: {
       createdAt: o.createdAt.toISOString(),
       lineItemCount: o.lineItems.length,
       productTitles: o.lineItems.map((li) => li.title),
+      sourceChannel: o.sourceChannel,
     })),
     total,
   };

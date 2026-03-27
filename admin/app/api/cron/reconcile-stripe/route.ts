@@ -84,6 +84,8 @@ export async function GET(req: Request) {
           where: { id: order.id },
           data: {
             status: "PAID",
+            financialStatus: "PAID",
+            fulfillmentStatus: "UNFULFILLED",
             paidAt: new Date(),
             guestEmail: order.guestEmail || (pi.receipt_email ?? ""),
           },
@@ -103,7 +105,12 @@ export async function GET(req: Request) {
       await prisma.$transaction([
         prisma.order.update({
           where: { id: order.id },
-          data: { status: "CANCELLED", cancelledAt: new Date() },
+          data: {
+            status: "CANCELLED",
+            financialStatus: "VOIDED",
+            fulfillmentStatus: "CANCELLED",
+            cancelledAt: new Date(),
+          },
         }),
         prisma.orderEvent.create({
           data: {
@@ -139,6 +146,8 @@ export async function GET(req: Request) {
           where: { id: order.id },
           data: {
             status: "PAID",
+            financialStatus: "PAID",
+            fulfillmentStatus: "UNFULFILLED",
             paidAt: new Date(),
             stripePaymentIntentId: piId,
             guestEmail: session.customer_email ?? order.guestEmail,
@@ -159,7 +168,12 @@ export async function GET(req: Request) {
       await prisma.$transaction([
         prisma.order.update({
           where: { id: order.id },
-          data: { status: "CANCELLED", cancelledAt: new Date() },
+          data: {
+            status: "CANCELLED",
+            financialStatus: "VOIDED",
+            fulfillmentStatus: "CANCELLED",
+            cancelledAt: new Date(),
+          },
         }),
         prisma.orderEvent.create({
           data: {

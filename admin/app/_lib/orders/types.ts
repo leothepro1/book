@@ -14,11 +14,16 @@ import type {
   OrderEvent,
   OrderStatus,
   OrderEventType,
+  OrderFinancialStatus,
+  OrderFulfillmentStatus,
 } from "@prisma/client";
 
 // ── Re-exports for convenience ─────────────────────────────────
 
-export type { Order, OrderLineItem, OrderEvent, OrderStatus, OrderEventType };
+export type {
+  Order, OrderLineItem, OrderEvent, OrderStatus, OrderEventType,
+  OrderFinancialStatus, OrderFulfillmentStatus,
+};
 
 // ── Composite types ────────────────────────────────────────────
 
@@ -95,4 +100,40 @@ export function canTransition(
   to: OrderStatus,
 ): boolean {
   return VALID_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+// ── Financial status transitions ─────────────────────────────
+
+const FINANCIAL_TRANSITIONS: Record<OrderFinancialStatus, OrderFinancialStatus[]> = {
+  PENDING:            ["AUTHORIZED", "PAID", "VOIDED"],
+  AUTHORIZED:         ["PAID", "VOIDED"],
+  PAID:               ["PARTIALLY_REFUNDED", "REFUNDED"],
+  PARTIALLY_REFUNDED: ["REFUNDED"],
+  REFUNDED:           [],
+  VOIDED:             [],
+};
+
+export function canTransitionFinancial(
+  from: OrderFinancialStatus,
+  to: OrderFinancialStatus,
+): boolean {
+  return FINANCIAL_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+// ── Fulfillment status transitions ───────────────────────────
+
+const FULFILLMENT_TRANSITIONS: Record<OrderFulfillmentStatus, OrderFulfillmentStatus[]> = {
+  UNFULFILLED: ["SCHEDULED", "IN_PROGRESS", "CANCELLED", "ON_HOLD"],
+  SCHEDULED:   ["UNFULFILLED", "IN_PROGRESS", "CANCELLED", "ON_HOLD"],
+  IN_PROGRESS: ["FULFILLED", "ON_HOLD"],
+  FULFILLED:   [],
+  ON_HOLD:     ["UNFULFILLED", "SCHEDULED", "IN_PROGRESS", "CANCELLED"],
+  CANCELLED:   [],
+}
+
+export function canTransitionFulfillment(
+  from: OrderFulfillmentStatus,
+  to: OrderFulfillmentStatus,
+): boolean {
+  return FULFILLMENT_TRANSITIONS[from]?.includes(to) ?? false;
 }

@@ -35,6 +35,16 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("sv-SE");
 }
 
+const CHANNEL_LABELS: Record<string, { label: string; color: string }> = {
+  booking_com: { label: "Booking.com", color: "#003580" },
+  expedia: { label: "Expedia", color: "#00355F" },
+};
+
+function channelDisplay(sourceChannel: string | null): { label: string; color: string } | null {
+  if (!sourceChannel || sourceChannel === "direct") return null;
+  return CHANNEL_LABELS[sourceChannel] ?? { label: sourceChannel, color: "var(--admin-text-secondary)" };
+}
+
 function formatArticles(titles: string[], count: number): string {
   if (count === 0) return "—";
   const shown = titles.slice(0, 2).join(", ");
@@ -266,6 +276,7 @@ export function OrdersClient() {
       <span className="ord-col ord-col--fulfillment">Distributionsstatus</span>
       <span className="ord-col ord-col--items">Artiklar</span>
       <span className="ord-col ord-col--tags">Taggar</span>
+      <span className="ord-col ord-col--channel">Kanal</span>
     </div>
   );
 
@@ -368,6 +379,17 @@ export function OrdersClient() {
                 </div>
                 <div className="ord-col ord-col--tags">
                   <span className="ord-row__tags">—</span>
+                </div>
+                <div className="ord-col ord-col--channel">
+                  {(() => {
+                    const ch = channelDisplay(order.sourceChannel);
+                    if (!ch) return null;
+                    return (
+                      <span className="ord-channel-badge" style={{ color: ch.color }}>
+                        {ch.label}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
             );

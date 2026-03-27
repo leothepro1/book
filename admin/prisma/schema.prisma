@@ -67,6 +67,28 @@ enum GiftCardStatus {
   CANCELLED  // revoked by tenant or refund
 }
 
+/// Financial lifecycle — tracks payment state independently of fulfillment.
+/// Parallels Shopify's financial_status on orders.
+enum OrderFinancialStatus {
+  PENDING              // no payment received yet
+  AUTHORIZED           // payment authorized but not captured
+  PAID                 // payment captured / confirmed
+  PARTIALLY_REFUNDED   // partial refund issued
+  REFUNDED             // full refund issued
+  VOIDED               // authorization voided or session expired
+}
+
+/// Fulfillment lifecycle — tracks delivery/service state independently of payment.
+/// Parallels Shopify's fulfillment_status on orders.
+enum OrderFulfillmentStatus {
+  UNFULFILLED   // nothing shipped/delivered yet
+  SCHEDULED     // fulfillment scheduled for future date (e.g. check-in date)
+  IN_PROGRESS   // partially fulfilled or in transit
+  FULFILLED     // fully delivered/completed
+  ON_HOLD       // paused (investigation, guest request, etc.)
+  CANCELLED     // fulfillment cancelled
+}
+
 enum OrderEventType {
   CREATED
   PAID
@@ -1300,6 +1322,8 @@ model Order {
   orderNumber             Int
 
   status                  OrderStatus    @default(PENDING)
+  financialStatus         OrderFinancialStatus  @default(PENDING)
+  fulfillmentStatus       OrderFulfillmentStatus @default(UNFULFILLED)
   orderType               OrderType      @default(ACCOMMODATION)
   paymentMethod           PaymentMethod  @default(STRIPE_CHECKOUT)
 
@@ -1360,6 +1384,8 @@ model Order {
   @@index([guestAccountId])
   @@index([status, createdAt])
   @@index([tenantId, sourceChannel])
+  @@index([tenantId, financialStatus])
+  @@index([tenantId, fulfillmentStatus])
 }
 
 /// Tracks which products are published to which sales channels.

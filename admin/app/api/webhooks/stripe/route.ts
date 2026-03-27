@@ -26,7 +26,7 @@ import { prisma } from "@/app/_lib/db/prisma";
 import { env } from "@/app/_lib/env";
 import { getStripe } from "@/app/_lib/stripe/client";
 import { adjustInventoryInTx } from "@/app/_lib/products/inventory";
-import { canTransition } from "@/app/_lib/orders/types";
+import { canTransition, canTransitionFinancial, canTransitionFulfillment } from "@/app/_lib/orders/types";
 import { log } from "@/app/_lib/logger";
 import type Stripe from "stripe";
 import { upsertGuestAccountFromOrder } from "@/app/_lib/guest-auth/account";
@@ -171,6 +171,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       where: { id: order.id },
       data: {
         status: "PAID",
+        financialStatus: "PAID",
+        fulfillmentStatus: "UNFULFILLED",
         paidAt: new Date(),
         stripePaymentIntentId: paymentIntentId,
         guestEmail: session.customer_email ?? order.guestEmail,
@@ -330,7 +332,12 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
   await prisma.$transaction(async (tx) => {
     await tx.order.update({
       where: { id: order.id },
-      data: { status: "CANCELLED", cancelledAt: new Date() },
+      data: {
+        status: "CANCELLED",
+        financialStatus: "VOIDED",
+        fulfillmentStatus: "CANCELLED",
+        cancelledAt: new Date(),
+      },
     });
 
     // Release inventory reservations through the ledger
@@ -411,7 +418,11 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   await prisma.$transaction(async (tx) => {
     await tx.order.update({
       where: { id: order.id },
-      data: { status: "REFUNDED", refundedAt: new Date() },
+      data: {
+        status: "REFUNDED",
+        financialStatus: "REFUNDED",
+        refundedAt: new Date(),
+      },
     });
 
     // Restore inventory for refunded items through the ledger
@@ -491,6 +502,8 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
       where: { id: order.id },
       data: {
         status: "PAID",
+        financialStatus: "PAID",
+        fulfillmentStatus: "UNFULFILLED",
         paidAt: new Date(),
         stripePaymentIntentId: pi.id,
         guestEmail: order.guestEmail || (pi.receipt_email ?? ""),
@@ -561,7 +574,11 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
       if (canTransition("PAID", "FULFILLED")) {
         await prisma.order.update({
           where: { id: order.id },
-          data: { status: "FULFILLED", fulfilledAt: new Date() },
+          data: {
+            status: "FULFILLED",
+            fulfillmentStatus: "FULFILLED",
+            fulfilledAt: new Date(),
+          },
         });
         await prisma.orderEvent.create({
           data: {

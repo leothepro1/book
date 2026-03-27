@@ -401,6 +401,18 @@
   color: var(--admin-text-tertiary);
 }
 
+.ord-col--channel {
+  width: 110px;
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.ord-channel-badge {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 /* ── Row content ── */
 
 .ord-row__order-number {

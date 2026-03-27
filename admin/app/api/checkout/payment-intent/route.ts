@@ -294,7 +294,7 @@ export async function POST(req: Request) {
     // Clean up: cancel the orphaned order
     await prisma.order.update({
       where: { id: order.id },
-      data: { status: "CANCELLED", cancelledAt: new Date() },
+      data: { status: "CANCELLED", financialStatus: "VOIDED", fulfillmentStatus: "CANCELLED", cancelledAt: new Date() },
     });
     await prisma.orderEvent.create({
       data: {
