@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { EditorIcon } from "@/app/_components/EditorIcon";
-import { uninstallApp, pauseApp, resumeApp, retryDelivery } from "@/app/_lib/apps/actions";
+import { uninstallApp, pauseApp, resumeApp, retryDelivery, revokeOAuthAccess } from "@/app/_lib/apps/actions";
 import type { WebhookDeliveryItem } from "@/app/_lib/apps/actions";
 import { triggerHealthCheck } from "@/app/_lib/apps/health";
 import { selectPlan, reconfigureStep } from "@/app/_lib/apps/wizard";
@@ -228,13 +228,7 @@ export function AppDetailClient({
               errorMessage={detail.errorMessage}
               onReconnect={() => {
                 startTransition(async () => {
-                  if (app.id === "google-ads") {
-                    const { revokeAccess } = await import("@/app/_lib/apps/google-ads/oauth");
-                    await revokeAccess(detail.appId.includes("google") ? "" : ""); // tenantId resolved server-side
-                  } else if (app.id === "meta-ads") {
-                    const { revokeAccess } = await import("@/app/_lib/apps/meta-ads/oauth");
-                    await revokeAccess("");
-                  }
+                  await revokeOAuthAccess(app.id);
                   router.push(`/apps/${app.id}/setup`);
                 });
               }}

@@ -500,3 +500,25 @@ export async function retryDelivery(deliveryId: string): Promise<{ ok: true } | 
 
   return { ok: true };
 }
+
+/**
+ * Revoke OAuth access for an app. Server-side only — crypto modules
+ * cannot be imported in client components.
+ */
+export async function revokeOAuthAccess(appId: string): Promise<{ ok: boolean }> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return { ok: false };
+
+  const ctx = await getCurrentTenant();
+  if (!ctx) return { ok: false };
+
+  if (appId === "google-ads") {
+    const { revokeAccess } = await import("./google-ads/oauth");
+    await revokeAccess(ctx.tenant.id);
+  } else if (appId === "meta-ads") {
+    const { revokeAccess } = await import("./meta-ads/oauth");
+    await revokeAccess(ctx.tenant.id);
+  }
+
+  return { ok: true };
+}

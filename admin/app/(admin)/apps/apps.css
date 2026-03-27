@@ -324,9 +324,12 @@
 
 .app-modal__overlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   z-index: 200;
-  overflow-y: scroll;
+  overflow-y: auto;
   overscroll-behavior: contain;
   background: rgba(0, 0, 0, 0);
   opacity: 0;
@@ -344,18 +347,35 @@
               opacity 0.25s ease;
 }
 
+/* Lock body scroll when modal is open */
+body:has(.app-modal__overlay--visible) {
+  overflow: hidden !important;
+}
+
 .app-modal__inner {
   position: relative;
   width: calc(1250px + 40px + var(--space-4));
   max-width: calc(100vw - 48px);
   margin: var(--space-8) auto;
+  min-height: min-content;
 }
 
 .app-modal__close-col {
-  position: absolute;
-  top: 0;
-  right: 0;
+  position: sticky;
+  top: var(--space-4);
   z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  width: calc(1250px + 40px + var(--space-4));
+  max-width: calc(100vw - 48px);
+  margin: 0 auto;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.app-modal__close {
+  pointer-events: auto;
 }
 
 .app-modal__close {

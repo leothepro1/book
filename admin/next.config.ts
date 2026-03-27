@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
       allowedOrigins: [
         "localhost:3000",
         "localhost:3001",
+        "localhost:3002",
+        "localhost:3003",
+        "localhost:3005",
+        "localhost:3007",
+        "localhost:3009",
         "*.app.github.dev",
         "bedfront.com",
         "*.bedfront.com",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { EditorIcon } from "@/app/_components/EditorIcon";
@@ -186,8 +187,13 @@ function AppModal({
     ctaLabel = "Aktivera"; ctaAction = () => router.push(`/apps/${app.id}`); ctaClassName = "admin-btn admin-btn--accent"; ctaDisabled = false;
   }
 
-  return (
+  return createPortal(
     <div className={`app-modal__overlay${visible ? " app-modal__overlay--visible" : ""}`} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="app-modal__close-col">
+        <button className="app-modal__close" onClick={onClose} type="button">
+          <EditorIcon name="close" size={24} />
+        </button>
+      </div>
       <div className="app-modal__inner">
         <div className="app-modal">
           <div className="app-modal__body">
@@ -322,13 +328,9 @@ function AppModal({
             )}
           </div>
         </div>
-        <div className="app-modal__close-col">
-          <button className="app-modal__close" onClick={onClose} type="button">
-            <EditorIcon name="close" size={24} />
-          </button>
-        </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

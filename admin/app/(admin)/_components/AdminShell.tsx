@@ -13,7 +13,7 @@ function LayoutContent({ children }: { children: ReactNode }) {
   const { isCollapsed } = useSidebar();
 
   return (
-    <main className={`flex-1 transition-all duration-300 ease-in-out overflow-y-auto ${
+    <main className={`flex-1 transition-all duration-300 ease-in-out overflow-y-auto h-screen ${
       isCollapsed ? 'ml-16' : 'ml-[270px]'
     }`} style={{ background: 'var(--admin-bg)' }}>
       <div className="container mx-auto py-8 px-6">
