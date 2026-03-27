@@ -56,18 +56,13 @@ const googleAds: AppDefinition = {
     { url: "https://cdn.shopify.com/app-store/listing_images/a78e004f44cded1b6998e7a6e081a230/desktop_screenshot/COej1tWawYIDEAE=.jpeg?height=900&quality=90&width=1600", alt: "Detaljerad statistik" },
   ],
   longDescription:
-    "## Automatisk konverteringsspårning\n\n" +
-    "Google Ads-appen kopplar din bokningsmotor direkt till Google Ads Conversions API. " +
-    "Varje gång en gäst slutför en bokning eller ett köp skickas en konverteringshändelse " +
-    "server-side — helt utan cookies eller klient-JavaScript.\n\n" +
-    "## Förbättrad matchning\n\n" +
-    "Med förbättrad matchning aktiverad hashas gästens e-postadress med SHA-256 och skickas " +
-    "tillsammans med konverteringen. Detta ökar matchraten från ~40% till ~70%, vilket ger " +
-    "Google Ads betydligt bättre data för automatisk budoptimering.\n\n" +
-    "## GCLID-stöd\n\n" +
-    "Appen fångar automatiskt GCLID från annonskick-URL:er och lagrar det under hela " +
-    "bokningsflödet. När konverteringen registreras inkluderas GCLID för exakt attribution " +
-    "till rätt annonskampanj och sökord.",
+    "## Anslut ditt hotell till Google och nå fler gäster\n\n" +
+    "Använd det bästa av Google direkt från din adminpanel: Synka rum, priser och tillgänglighet till Google Hotel Ads och konvertera fler sökande resenärer till betalande gäster. Öka beläggningen med Performance Max-annonser på Search, YouTube och Display, och få tillgång till insikter om dina gästers bokningsbeteende med Google Analytics.\n\n" +
+    "- Anslut ditt hotell till Google Hotel Ads och syns när resenärer söker boende\n" +
+    "- Synka rumstyper, priser och tillgänglighet automatiskt från din portal\n" +
+    "- Spåra konverteringar och förstå vilka kanaler som driver bokningar\n" +
+    "- Koppla samman hela gästens resa — från sökning till incheckning — med insikter i Google Analytics\n" +
+    "- Optimera dina annonser med Googles AI och nå rätt resenär vid rätt tillfälle",
   worksWithApps: ["revenue-analytics"],
   worksWithServices: [{ name: "Google Ads" }, { name: "Google Analytics" }],
   supportUrl: "https://bedfront.com/support/google-ads",

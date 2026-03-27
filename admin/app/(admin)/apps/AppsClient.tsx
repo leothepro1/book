@@ -127,14 +127,18 @@ function AppModal({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [carouselIndex, setCarouselIndex] = useState(0);
   const [selectedTier, setSelectedTier] = useState(app.pricing[0]?.tier ?? "free");
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [galleryIndex, setGalleryIndex] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setCarouselIndex(0);
     setSelectedTier(app.pricing[0]?.tier ?? "free");
+    setLightboxOpen(false);
+    setLightboxIndex(0);
+    setGalleryIndex(0);
   }, [app.id, app.pricing]);
 
   // Sync sidebar max-height with carousel slide height
@@ -189,12 +193,10 @@ function AppModal({
 
   return createPortal(
     <div className={`app-modal__overlay${visible ? " app-modal__overlay--visible" : ""}`} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="app-modal__close-col">
+      <div className="app-modal__inner">
         <button className="app-modal__close" onClick={onClose} type="button">
           <EditorIcon name="close" size={24} />
         </button>
-      </div>
-      <div className="app-modal__inner">
         <div className="app-modal">
           <div className="app-modal__body">
             <div className="app-modal__layout">
@@ -202,49 +204,73 @@ function AppModal({
             <div className="app-modal__content">
               {/* Screenshot carousel */}
               {hasScreenshots && (
-                <div className="app-carousel" ref={carouselRef}>
-                  <div className="app-carousel__viewport">
-                    <div className="app-carousel__track" style={{ transform: `translateX(-${carouselIndex * 100}%)` }}>
-                      {app.screenshots.map((s, i) => (
-                        <div key={i} className="app-carousel__slide">
-                          <img
-                            src={s.url.includes("cloudinary") ? `${s.url}/c_fill,w_1200,h_750,g_auto,q_auto,f_auto` : s.url}
-                            alt={s.alt}
-                            className="app-carousel__img"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {app.screenshots.length > 1 && (
-                    <div className="app-carousel__thumbs">
-                      {app.screenshots.map((s, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          className={`app-carousel__thumb${i === carouselIndex ? " app-carousel__thumb--active" : ""}`}
-                          onClick={() => setCarouselIndex(i)}
-                        >
-                          <img
-                            src={s.url.includes("cloudinary") ? `${s.url}/c_fill,w_120,h_75,g_auto,q_auto,f_auto` : s.url}
-                            alt={s.alt}
-                            className="app-carousel__thumb-img"
-                          />
-                        </button>
-                      ))}
-                    </div>
+                <div className="app-gallery" ref={carouselRef}>
+                  <button
+                    type="button"
+                    className="app-gallery__slide"
+                    onClick={() => { setLightboxIndex(galleryIndex); setLightboxOpen(true); }}
+                  >
+                    <img
+                      src={app.screenshots[galleryIndex].url.includes("cloudinary") ? `${app.screenshots[galleryIndex].url}/c_fill,w_900,h_560,g_auto,q_auto,f_auto` : app.screenshots[galleryIndex].url}
+                      alt={app.screenshots[galleryIndex].alt}
+                      className="app-gallery__img"
+                    />
+                  </button>
+                  {galleryIndex > 0 && (
+                    <button
+                      type="button"
+                      className="app-gallery__nav app-gallery__nav--prev"
+                      onClick={() => setGalleryIndex((i) => i - 1)}
+                    >
+                      <EditorIcon name="chevron_left" size={24} />
+                    </button>
+                  )}
+                  {galleryIndex < app.screenshots.length - 1 && (
+                    <button
+                      type="button"
+                      className="app-gallery__nav app-gallery__nav--next"
+                      onClick={() => setGalleryIndex((i) => i + 1)}
+                    >
+                      <EditorIcon name="chevron_right" size={24} />
+                    </button>
                   )}
                 </div>
               )}
 
-              {/* Description */}
-              {app.longDescription && (
-                <div
-                  className="app-listing__prose"
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(app.longDescription) }}
-                />
+              {/* Lightbox */}
+              {lightboxOpen && app.screenshots.length > 0 && createPortal(
+                <div className="app-lightbox" onClick={() => setLightboxOpen(false)}>
+                  <button className="app-lightbox__close" onClick={() => setLightboxOpen(false)} type="button">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+                  </button>
+                  {app.screenshots.length > 1 && (
+                    <>
+                      <button
+                        className="app-lightbox__nav app-lightbox__nav--prev"
+                        onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i - 1 + app.screenshots.length) % app.screenshots.length); }}
+                        type="button"
+                      >
+                        <EditorIcon name="chevron_left" size={28} />
+                      </button>
+                      <button
+                        className="app-lightbox__nav app-lightbox__nav--next"
+                        onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i + 1) % app.screenshots.length); }}
+                        type="button"
+                      >
+                        <EditorIcon name="chevron_right" size={28} />
+                      </button>
+                    </>
+                  )}
+                  <img
+                    src={app.screenshots[lightboxIndex].url}
+                    alt={app.screenshots[lightboxIndex].alt}
+                    className="app-lightbox__img"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>,
+                document.body,
               )}
+
 
             </div>
 
@@ -308,24 +334,6 @@ function AppModal({
             </div>
             </div>
 
-            {/* Pricing section — full width */}
-            {app.pricing.length > 0 && (
-              <div className="app-modal__pricing">
-                <h3 className="app-modal__pricing-title">Priser</h3>
-                <div className={`app-modal__pricing-grid${app.pricing.length >= 3 ? " app-modal__pricing-grid--three" : ""}`}>
-                  {app.pricing.map((p) => (
-                    <div key={p.tier} className="app-modal__pricing-card">
-                      <div className="app-modal__pricing-tier">
-                        {p.tier === "free" ? "Gratis" : p.tier === "grow" ? "Grow" : "Pro"}
-                      </div>
-                      {p.features.map((f, i) => (
-                        <p key={i} className="app-modal__pricing-feature">{f}</p>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>

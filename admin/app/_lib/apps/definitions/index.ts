@@ -7,8 +7,3 @@
 import "./google-ads";
 import "./meta-ads";
 import "./mailchimp";
-import "./email-marketing";
-import "./channel-manager";
-import "./booking-com";
-import "./revenue-analytics";
-import "./guest-crm";
