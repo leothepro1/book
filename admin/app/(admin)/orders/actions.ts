@@ -28,6 +28,10 @@ export type OrderDetail = {
   tenantId: string;
   orderNumber: number;
   status: OrderStatus;
+  financialStatus: string;
+  fulfillmentStatus: string;
+  sourceChannel: string | null;
+  sourceExternalId: string | null;
   guestName: string;
   guestEmail: string;
   guestPhone: string | null;
@@ -169,6 +173,10 @@ export async function getOrder(orderId: string): Promise<OrderDetail | null> {
     tenantId: order.tenantId,
     orderNumber: order.orderNumber,
     status: order.status,
+    financialStatus: order.financialStatus,
+    fulfillmentStatus: order.fulfillmentStatus,
+    sourceChannel: order.sourceChannel,
+    sourceExternalId: order.sourceExternalId,
     guestName: order.guestName,
     guestEmail: order.guestEmail,
     guestPhone: order.guestPhone,

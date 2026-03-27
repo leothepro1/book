@@ -61,6 +61,18 @@ export default async function UnsubscribePage({ searchParams }: Props) {
     create: { tenantId: tenant, email },
   });
 
+  // Sync to GuestAccount if one exists for this email
+  const guest = await prisma.guestAccount.findUnique({
+    where: { tenantId_email: { tenantId: tenant, email } },
+    select: { id: true },
+  });
+  if (guest) {
+    const { updateEmailConsent } = await import("@/app/_lib/guests/consent");
+    await updateEmailConsent(tenant, guest.id, "UNSUBSCRIBED", {
+      source: "email_link",
+    }).catch(() => {});
+  }
+
   return (
     <div style={containerStyle}>
       <div style={cardStyle}>

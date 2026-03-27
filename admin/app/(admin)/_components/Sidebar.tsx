@@ -92,9 +92,9 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
               >
                 {item.icon}
               </span>
-              <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
                 isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-              }`}>
+              }`} style={{ fontWeight: active ? 600 : 500 }}>
                 {item.label}
               </span>
             </Link>
@@ -124,9 +124,9 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
             >
               sell
             </span>
-            <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+            <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-            }`}>
+            }`} style={{ fontWeight: isProductsLinkActive ? 600 : 500 }}>
               Produkter
             </span>
           </Link>
@@ -146,12 +146,12 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
                     key={sub.href}
                     href={sub.href}
                     onClick={(e) => guardedClick(e, sub.href)}
-                    className={`relative block text-[13px] font-[500] ${
+                    className={`relative block text-[13px] ${
                       subActive
                         ? 'bg-[#e3e3e3] text-[#303030]'
                         : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
                     }`}
-                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8 }}
+                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontWeight: subActive ? 600 : 500 }}
                   >
                     {subActive ? (
                       <img
@@ -201,9 +201,9 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
               >
                 group
               </span>
-              <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
                 isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-              }`}>
+              }`} style={{ fontWeight: active ? 600 : 500 }}>
                 Kunder
               </span>
             </Link>
@@ -235,9 +235,9 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
               >
                 villa
               </span>
-              <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
                 isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-              }`}>
+              }`} style={{ fontWeight: active ? 600 : 500 }}>
                 Boenden
               </span>
             </Link>
@@ -263,9 +263,9 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
             >
               database
             </span>
-            <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+            <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-            }`}>
+            }`} style={{ fontWeight: isContentActive ? 600 : 500 }}>
               Innehåll
             </span>
           </Link>
@@ -286,12 +286,12 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
                     key={sub.href}
                     href={sub.href}
                     onClick={(e) => guardedClick(e, sub.href)}
-                    className={`relative block text-[13px] font-[500] ${
+                    className={`relative block text-[13px] ${
                       subActive
                         ? 'bg-[#e3e3e3] text-[#303030]'
                         : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
                     }`}
-                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8 }}
+                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontWeight: subActive ? 600 : 500 }}
                   >
                     {subActive ? (
                       <img
@@ -341,9 +341,9 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
               >
                 wallet
               </span>
-              <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
                 isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-              }`}>
+              }`} style={{ fontWeight: active ? 600 : 500 }}>
                 Ekonomi
               </span>
             </Link>
@@ -376,9 +376,9 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
               >
                 {item.icon}
               </span>
-              <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
                 isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-              }`}>
+              }`} style={{ fontWeight: active ? 600 : 500 }}>
                 {item.label}
               </span>
             </Link>
@@ -449,9 +449,9 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
             >
               settings
             </span>
-            <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+            <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
               isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-            }`}>
+            }`} style={{ fontWeight: 500 }}>
               Inställningar
             </span>
           </button>

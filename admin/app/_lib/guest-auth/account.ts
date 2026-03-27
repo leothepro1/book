@@ -11,6 +11,24 @@ import { log } from "@/app/_lib/logger";
 import type { GuestAccount } from "@prisma/client";
 
 /**
+ * Emit ACCOUNT_CREATED event if the account was just created.
+ * Non-blocking — never fails the main operation.
+ */
+function emitIfNewAccount(account: GuestAccount, source: string): void {
+  if (account.createdAt.getTime() > Date.now() - 5000) {
+    prisma.guestAccountEvent.create({
+      data: {
+        tenantId: account.tenantId,
+        guestAccountId: account.id,
+        type: "ACCOUNT_CREATED",
+        message: "Gästkonto skapat automatiskt",
+        metadata: { source },
+      },
+    }).catch(() => {});
+  }
+}
+
+/**
  * Upsert a guest account for the given tenant and email.
  *
  * - Email is normalized (trim + lowercase) before any DB operation.
@@ -33,6 +51,8 @@ export async function upsertGuestAccount(
     },
     update: {},
   });
+
+  emitIfNewAccount(account, "checkout");
 
   log("info", "guest-account.upserted", { accountId: account.id, tenantId });
 
@@ -94,10 +114,24 @@ export async function upsertGuestAccountFromOrder(
   }
 
   // Step 3: Link order to guest account (idempotent — safe to retry)
-  await prisma.order.update({
+  const order = await prisma.order.update({
     where: { id: orderId },
     data: { guestAccountId: account.id },
+    select: { orderNumber: true, totalAmount: true },
   });
+
+  // Step 4: Emit lifecycle events (non-blocking)
+  emitIfNewAccount(account, "order");
+
+  prisma.guestAccountEvent.create({
+    data: {
+      tenantId,
+      guestAccountId: account.id,
+      type: "ORDER_PLACED",
+      message: `Order #${order.orderNumber} skapad`,
+      metadata: { orderId, amount: order.totalAmount },
+    },
+  }).catch(() => {});
 
   log("info", "guest-account.order-linked", {
     accountId: account.id,

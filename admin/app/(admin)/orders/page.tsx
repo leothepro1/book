@@ -8,8 +8,8 @@ export default function OrdersPage() {
       <div className="admin-editor">
         <div className="admin-header">
           <h1 className="admin-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className="material-symbols-rounded" style={{ fontSize: 22 }}>shopping_bag</span>
-            Beställningar
+            <span className="material-symbols-rounded" style={{ fontSize: 22 }}>inbox</span>
+            Ordrar
           </h1>
         </div>
         <div className="admin-content">

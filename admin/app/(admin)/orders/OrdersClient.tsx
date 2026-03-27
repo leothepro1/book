@@ -174,11 +174,11 @@ export function OrdersClient() {
     return (
       <div className="ord-empty">
         <div className="ord-empty__icon">
-          <EditorIcon name="shopping_bag" size={48} />
+          <EditorIcon name="inbox" size={48} />
         </div>
-        <h2 className="ord-empty__title">Inga beställningar ännu</h2>
+        <h2 className="ord-empty__title">Inga ordrar ännu</h2>
         <p className="ord-empty__desc">
-          Beställningar visas här när dina kunder genomför köp i din butik.
+          Ordrar visas här när dina kunder genomför köp i din butik.
         </p>
       </div>
     );
@@ -334,7 +334,7 @@ export function OrdersClient() {
         {columnHeader}
 
         {orders.length === 0 ? (
-          <div className="ord-empty-filtered">Inga beställningar matchar filtret</div>
+          <div className="ord-empty-filtered">Inga ordrar matchar filtret</div>
         ) : (
           orders.map((order) => {
             const checked = selectedIds.has(order.id);

@@ -112,6 +112,49 @@ enum OrderEventType {
   CHECKOUT_CONFIRMED
 }
 
+// ── Guest Account Enums ─────────────────────────────────────────
+
+enum GuestAccountState {
+  ENABLED    // active account
+  DISABLED   // deactivated by staff
+  INVITED    // invitation sent, not yet accepted
+  DECLINED   // declined invitation
+}
+
+enum GuestMarketingState {
+  SUBSCRIBED
+  UNSUBSCRIBED
+  PENDING
+  NOT_SUBSCRIBED
+  REDACTED        // GDPR erasure requested
+}
+
+enum GuestOptInLevel {
+  SINGLE_OPT_IN      // checked a box
+  CONFIRMED_OPT_IN   // double opt-in email confirmed
+  UNKNOWN
+}
+
+enum GuestEventType {
+  ACCOUNT_CREATED
+  ACCOUNT_UPDATED
+  EMAIL_VERIFIED
+  MARKETING_SUBSCRIBED
+  MARKETING_UNSUBSCRIBED
+  NOTE_ADDED
+  TAG_ADDED
+  TAG_REMOVED
+  ORDER_PLACED
+  ORDER_PAID
+  ORDER_FULFILLED
+  ORDER_CANCELLED
+  ORDER_REFUNDED
+  LOGIN
+  PASSWORD_RESET
+  DATA_EXPORT_REQUESTED
+  DATA_DELETION_REQUESTED
+}
+
 /// Idempotency lock for PMS booking creation.
 /// Prevents duplicate concurrent bookings for the same dates/guest.
 /// Cleaned up by the expire-reservations cron.
@@ -236,6 +279,10 @@ model Tenant {
   apps                TenantApp[]
   billingSettings     TenantBillingSettings?
   channelPublications ProductChannelPublication[]
+  guestTags           GuestTag[]
+  guestNotes          GuestNote[]
+  guestEvents         GuestAccountEvent[]
+  guestAddresses      GuestAddress[]
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -705,6 +752,10 @@ model EmailSendLog {
 // EMAIL UNSUBSCRIBE (Per-tenant opt-out registry)
 // ============================================================================
 
+/// Legacy unsubscribe table for guests without GuestAccount.
+/// New consent is stored on GuestAccount.emailMarketingState.
+/// Keep for backwards compatibility with existing unsubscribe tokens.
+///
 /// Stores opt-out per email address per tenant. Once a record exists,
 /// no further emails are sent to that address from that tenant.
 model EmailUnsubscribe {
@@ -797,7 +848,10 @@ model EmailRateLimit {
 
 /// Per-tenant guest account. One account per email per tenant.
 /// Created lazily during booking sync when a valid guest email exists.
-/// Used for OTP-based guest portal authentication.
+/// Shopify-grade guest customer model.
+/// One account per email per tenant. Created lazily on order payment,
+/// booking sync, or OTP login. Owns marketing consent, tags, notes,
+/// addresses, and a full event audit trail.
 model GuestAccount {
   id          String   @id @default(cuid())
   tenantId    String
@@ -811,6 +865,29 @@ model GuestAccount {
   city        String?
   postalCode  String?
   country     String?   @default("SE")
+
+  // Identity
+  locale           String?                // "sv" | "en" | "de" — language preference
+  verifiedEmail    Boolean  @default(false)
+
+  // State (Shopify CustomerState equivalent)
+  state            GuestAccountState @default(ENABLED)
+
+  // Internal
+  note             String?           // internal staff note, never shown to guest
+
+  // Marketing consent (replaces EmailUnsubscribe for new accounts)
+  emailMarketingState     GuestMarketingState @default(NOT_SUBSCRIBED)
+  emailConsentedAt        DateTime?
+  emailConsentSource      String?   // "checkout" | "portal" | "import" | "manual"
+  emailOptInLevel         GuestOptInLevel @default(SINGLE_OPT_IN)
+  smsMarketingState       GuestMarketingState @default(NOT_SUBSCRIBED)
+  smsConsentedAt          DateTime?
+
+  // GDPR
+  dataSaleOptOut          Boolean  @default(false)
+  dataSaleOptOutAt        DateTime?
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -818,10 +895,17 @@ model GuestAccount {
   bookings Booking[]
   orders   Order[]
   otpCodes GuestOtpCode[]
+  tags             GuestTag[]
+  notes            GuestNote[]
+  events           GuestAccountEvent[]
+  addresses        GuestAddress[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([email])
+  @@index([tenantId, state])
+  @@index([tenantId, emailMarketingState])
+  @@index([tenantId, createdAt])
 }
 
 /// OTP codes for guest authentication.
@@ -839,6 +923,91 @@ model GuestOtpCode {
   guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
 
   @@index([guestAccountId])
+}
+
+/// Guest tags — tenant-scoped, lowercase, for segmentation and filtering.
+/// Many-to-many via unique constraint per guest+tag.
+model GuestTag {
+  id             String       @id @default(cuid())
+  tenantId       String
+  guestAccountId String
+  tag            String       // lowercase, e.g. "vip", "allergi", "företag"
+  createdAt      DateTime     @default(now())
+  createdBy      String?      // actorUserId who added it
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, guestAccountId, tag])
+  @@index([tenantId, tag])
+  @@index([guestAccountId])
+}
+
+/// Internal staff notes on a guest. Never shown to the guest.
+/// Append-oriented — edits tracked via updatedBy.
+model GuestNote {
+  id             String   @id @default(cuid())
+  tenantId       String
+  guestAccountId String
+  content        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?  // actorUserId
+  updatedBy      String?
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, guestAccountId])
+}
+
+/// Append-only audit trail for guest account lifecycle events.
+/// Never UPDATE, never DELETE — immutable log.
+model GuestAccountEvent {
+  id             String         @id @default(cuid())
+  tenantId       String
+  guestAccountId String
+  type           GuestEventType
+  message        String?
+  metadata       Json?
+  actorUserId    String?        // null = system
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime       @default(now())
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, guestAccountId])
+  @@index([tenantId, type])
+  @@index([guestAccountId, createdAt])
+}
+
+/// Guest addresses — one per entry, one marked as default.
+/// Shopify model: customers can have multiple saved addresses.
+model GuestAddress {
+  id             String   @id @default(cuid())
+  tenantId       String
+  guestAccountId String
+  isDefault      Boolean  @default(false)
+  firstName      String?
+  lastName       String?
+  company        String?
+  address1       String
+  address2       String?
+  city           String
+  postalCode     String?
+  province       String?
+  country        String   @default("SE")
+  phone          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, guestAccountId])
+  @@index([guestAccountId, isDefault])
 }
 
 // ============================================================================

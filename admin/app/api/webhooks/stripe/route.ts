@@ -284,6 +284,19 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     }
   }
 
+  // Emit ORDER_PAID guest event (non-blocking)
+  if (order.guestAccountId) {
+    prisma.guestAccountEvent.create({
+      data: {
+        tenantId: order.tenantId,
+        guestAccountId: order.guestAccountId,
+        type: "ORDER_PAID",
+        message: `Order #${order.orderNumber} betald`,
+        metadata: { orderId: order.id, amount: order.totalAmount },
+      },
+    }).catch(() => {});
+  }
+
   // Send order confirmation email (non-blocking)
   try {
     const { sendEmailEvent } = await import("@/app/_lib/email/send");
@@ -621,6 +634,19 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
     } catch (err) {
       log("warn", "webhook.guest_account_failed", { orderId: order.id, error: String(err) });
     }
+  }
+
+  // Emit ORDER_PAID guest event (non-blocking)
+  if (order.guestAccountId) {
+    prisma.guestAccountEvent.create({
+      data: {
+        tenantId: order.tenantId,
+        guestAccountId: order.guestAccountId,
+        type: "ORDER_PAID",
+        message: `Order #${order.orderNumber} betald`,
+        metadata: { orderId: order.id, amount: order.totalAmount },
+      },
+    }).catch(() => {});
   }
 
   // ── Shared: send confirmation email (non-blocking) ──────────

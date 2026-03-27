@@ -129,7 +129,13 @@
       "Bash(mkdir:*)",
       "Bash(echo:*)",
       "Bash(source:*)",
-      "Bash(set:*)"
+      "Bash(set:*)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//workspaces/book/admin/**)",
+      "Bash(done)",
+      "Bash(mkdir -p app/api/admin/guests/[guestAccountId]/stats)",
+      "Bash(mkdir -p app/api/admin/guests/[guestAccountId]/events)"
     ]
   }
 }

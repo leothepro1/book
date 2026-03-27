@@ -64,7 +64,7 @@ export async function transitionFulfillmentStatus(
 ): Promise<FulfillmentTransitionResult> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { id: true, tenantId: true, fulfillmentStatus: true },
+    select: { id: true, tenantId: true, fulfillmentStatus: true, guestAccountId: true, orderNumber: true },
   });
 
   if (!order || order.tenantId !== tenantId) {
@@ -115,6 +115,19 @@ export async function transitionFulfillmentStatus(
     to,
     actorUserId: options.actorUserId ?? null,
   });
+
+  // Emit ORDER_FULFILLED guest event (non-blocking)
+  if (to === "FULFILLED" && order.guestAccountId) {
+    prisma.guestAccountEvent.create({
+      data: {
+        tenantId,
+        guestAccountId: order.guestAccountId,
+        type: "ORDER_FULFILLED",
+        message: `Order #${order.orderNumber} slutförd`,
+        metadata: { orderId: order.id },
+      },
+    }).catch(() => {});
+  }
 
   return {
     success: true,
