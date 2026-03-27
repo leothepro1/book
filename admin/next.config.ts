@@ -15,10 +15,15 @@ const nextConfig: NextConfig = {
   },
   headers: async () => [
     {
-      // Force revalidation of all pages — clears stale browser cache
-      source: "/:path*",
+      source: "/_next/static/:path*",
       headers: [
-        { key: "Cache-Control", value: "no-store, must-revalidate" },
+        { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+      ],
+    },
+    {
+      source: "/api/:path*",
+      headers: [
+        { key: "Cache-Control", value: "no-store" },
       ],
     },
   ],
