@@ -150,6 +150,7 @@ export async function POST(req: Request) {
             currency: item.currency,
           })),
         },
+        sourceChannel: "direct",
         metadata: body.gclid ? { gclid: body.gclid } : undefined,
         events: {
           create: { type: "CREATED", message: `Order #${orderNumber} skapad`, metadata: {} },

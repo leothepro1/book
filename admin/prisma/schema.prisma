@@ -82,6 +82,10 @@ enum OrderEventType {
   PAYMENT_FAILED
   GUEST_INFO_UPDATED
   RECONCILED
+  CHANNEL_ORDER_RECEIVED
+  CHANNEL_ORDER_UPDATED
+  CHANNEL_ORDER_CANCELLED
+  CHANNEL_SYNC_ERROR
 }
 
 /// Idempotency lock for PMS booking creation.
@@ -207,6 +211,7 @@ model Tenant {
   paymentConfig       TenantPaymentConfig?
   apps                TenantApp[]
   billingSettings     TenantBillingSettings?
+  channelPublications ProductChannelPublication[]
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -922,6 +927,7 @@ model Product {
   tags            ProductTagItem[]
   inventoryChanges InventoryChange[]
   priceChanges PriceChange[]
+  channelPublications ProductChannelPublication[]
 
   @@unique([tenantId, slug])
   @@unique([tenantId, pmsSourceId, pmsProvider])
@@ -1328,6 +1334,11 @@ model Order {
   /// Flexible metadata — accommodation dates, PMS refs, etc.
   metadata                Json?
 
+  // Sales channel attribution — which channel originated this order
+  sourceChannel           String?   // "direct" | "booking_com" | "expedia" | app-handle
+  sourceExternalId        String?   // booking ID from OTA (e.g. "BK-12345678")
+  sourceUrl               String?   // link to the order on the OTA platform
+
   // Timestamps
   paidAt                  DateTime?
   fulfilledAt             DateTime?
@@ -1348,6 +1359,27 @@ model Order {
   @@index([guestEmail])
   @@index([guestAccountId])
   @@index([status, createdAt])
+  @@index([tenantId, sourceChannel])
+}
+
+/// Tracks which products are published to which sales channels.
+/// A product can be published to multiple channels simultaneously.
+/// Unpublishing sets unpublishedAt — row is preserved for history.
+model ProductChannelPublication {
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  channelHandle String
+  publishedAt   DateTime  @default(now())
+  unpublishedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([tenantId, productId, channelHandle])
+  @@index([tenantId, channelHandle])
+  @@index([tenantId, productId])
 }
 
 model OrderLineItem {

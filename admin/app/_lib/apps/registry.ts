@@ -46,6 +46,20 @@ export function getAllApps(): AppDefinition[] {
 }
 
 /**
+ * Get all app definitions that declare a salesChannel.
+ */
+export function getSalesChannelApps(): AppDefinition[] {
+  return getAllApps().filter(app => app.salesChannel !== undefined);
+}
+
+/**
+ * Find an app definition by its salesChannel handle.
+ */
+export function getSalesChannelByHandle(handle: string): AppDefinition | undefined {
+  return getAllApps().find(app => app.salesChannel?.handle === handle);
+}
+
+/**
  * Validate that all dependency references are resolvable.
  * Called lazily — safe to call after all definitions are loaded.
  */

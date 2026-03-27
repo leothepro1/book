@@ -62,10 +62,16 @@ export type OrderDetail = {
 
 // ── List orders ────────────────────────────────────────────────
 
+export type OrderSortField = "orderNumber" | "createdAt" | "guestName" | "status" | "totalAmount";
+export type OrderSortDirection = "asc" | "desc";
+
 export async function getOrders(opts?: {
   status?: OrderStatus;
   page?: number;
   limit?: number;
+  sortBy?: OrderSortField;
+  sortDirection?: OrderSortDirection;
+  search?: string;
 }): Promise<{ orders: OrderListItem[]; total: number }> {
   const { orgId } = await getAuth();
   if (!orgId) return { orders: [], total: 0 };
@@ -79,10 +85,28 @@ export async function getOrders(opts?: {
   const page = opts?.page ?? 1;
   const limit = opts?.limit ?? 25;
   const skip = (page - 1) * limit;
+  const sortBy = opts?.sortBy ?? "createdAt";
+  const sortDirection = opts?.sortDirection ?? "desc";
+  const search = opts?.search?.trim();
+
+  // Build search conditions
+  const searchConditions = search ? {
+    OR: [
+      // Order number — try numeric match
+      ...((/^\d+$/.test(search) || /^#?\d+$/.test(search))
+        ? [{ orderNumber: parseInt(search.replace("#", ""), 10) }]
+        : []),
+      // Guest name — case-insensitive contains
+      { guestName: { contains: search, mode: "insensitive" as const } },
+      // Guest email — case-insensitive contains
+      { guestEmail: { contains: search, mode: "insensitive" as const } },
+    ],
+  } : {};
 
   const where = {
     tenantId: tenant.id,
     ...(opts?.status ? { status: opts.status } : {}),
+    ...searchConditions,
   };
 
   const [orders, total] = await Promise.all([
@@ -91,7 +115,7 @@ export async function getOrders(opts?: {
       include: {
         lineItems: { select: { title: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { [sortBy]: sortDirection },
       skip,
       take: limit,
     }),

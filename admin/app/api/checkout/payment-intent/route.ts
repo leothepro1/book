@@ -200,6 +200,7 @@ export async function POST(req: Request) {
         taxAmount,
         totalAmount: totalPrice + taxAmount,
         currency,
+        sourceChannel: "direct",
         metadata: {
           checkIn,
           checkOut,

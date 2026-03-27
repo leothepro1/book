@@ -194,6 +194,18 @@ export const AppChangelogEntrySchema = z.object({
 
 export type AppChangelogEntry = z.infer<typeof AppChangelogEntrySchema>;
 
+// ── Sales Channel Config ────────────────────────────────────────
+
+export const SalesChannelConfigSchema = z.object({
+  handle: z.string().min(1),              // unique identifier e.g. "booking_com"
+  displayName: z.string().min(1),         // "Booking.com"
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/), // hex color for UI badge
+  orderIngestion: z.boolean(),            // true = can receive orders from external OTA
+  requiresExternalId: z.boolean(),        // true = every order has an external booking ID
+});
+
+export type SalesChannelConfig = z.infer<typeof SalesChannelConfigSchema>;
+
 // ── App Definition ──────────────────────────────────────────────
 
 export const AppDefinitionSchema = z.object({
@@ -233,6 +245,7 @@ export const AppDefinitionSchema = z.object({
   documentationUrl: z.string().optional(),
   privacyPolicyUrl: z.string().optional(),
   changelog: z.array(AppChangelogEntrySchema).default([]),
+  salesChannel: SalesChannelConfigSchema.optional(),
 });
 
 export type AppDefinition = z.infer<typeof AppDefinitionSchema>;
