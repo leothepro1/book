@@ -224,6 +224,21 @@ export async function POST(req: Request) {
     },
   });
 
+  // ── Create/link GuestAccount (non-blocking) ──────────────────
+  import("@/app/_lib/guest-auth/account").then(({ upsertGuestAccount }) =>
+    upsertGuestAccount(tenantId, body.guestInfo.email, {
+      firstName: body.guestInfo.firstName,
+      lastName: body.guestInfo.lastName,
+      phone: body.guestInfo.phone ?? undefined,
+      source: "booking",
+    }).then(async (account) => {
+      await prisma.booking.update({
+        where: { id: booking.id },
+        data: { guestAccountId: account.id },
+      }).catch(() => {});
+    }),
+  ).catch((err) => log("error", "booking.guest_account_failed", { bookingId: booking.id, error: String(err) }));
+
   // ── Send confirmation email (non-blocking) ────────────────────
   try {
     const { sendEmailEvent } = await import("@/app/_lib/email/send");

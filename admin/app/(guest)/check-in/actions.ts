@@ -5,6 +5,7 @@ import { getTenantConfig } from "../_lib/tenant";
 import { performCheckIn } from "../_lib/booking/actions";
 import { resolveTenantFromHost } from "../_lib/tenant/resolveTenantFromHost";
 import { getActiveCheckinCards } from "@/app/_lib/pages/config";
+import { upsertGuestAccount } from "@/app/_lib/guest-auth/account";
 import { transitionFulfillmentStatus } from "@/app/_lib/orders/fulfillment";
 import { log } from "@/app/_lib/logger";
 import "@/app/_lib/checkin-cards/definitions";
@@ -159,7 +160,7 @@ export async function checkInCommit(payload: {
   // Tenant-scoped booking lookup
   const booking = await prisma.booking.findFirst({
     where: { id: bookingId, tenantId: guard.tenantId },
-    select: { id: true, tenantId: true },
+    select: { id: true, tenantId: true, guestEmail: true, firstName: true, lastName: true, phone: true, guestAccountId: true },
   });
 
   if (!booking) return { ok: false, message: "Ingen bokning hittades." };
@@ -201,47 +202,60 @@ export async function checkInCommit(payload: {
 
     // PMS notification removed — booking engine uses real-time queries
 
-    // Transition linked order fulfillment status (non-blocking)
-    try {
-      const linkedOrder = await prisma.order.findFirst({
-        where: {
-          tenantId: guard.tenantId,
-          guestEmail: (await prisma.booking.findUnique({
+    // Create/link GuestAccount + transition fulfillment + email (non-blocking)
+    if (booking.guestEmail) {
+      upsertGuestAccount(guard.tenantId, booking.guestEmail, {
+        firstName: booking.firstName ?? undefined,
+        lastName: booking.lastName ?? undefined,
+        phone: booking.phone ?? undefined,
+        source: "checkin",
+      }).then(async (account) => {
+        // Link booking if not already linked
+        if (!booking.guestAccountId) {
+          await prisma.booking.update({
             where: { id: booking.id },
-            select: { guestEmail: true },
-          }))?.guestEmail ?? "",
-          fulfillmentStatus: "UNFULFILLED",
-        },
-        select: { id: true },
-      });
+            data: { guestAccountId: account.id },
+          }).catch(() => {});
+        }
 
-      if (linkedOrder) {
-        await transitionFulfillmentStatus(linkedOrder.id, guard.tenantId, "IN_PROGRESS", {
-          note: "Gäst incheckad via självbetjäning",
+        // Transition linked order to IN_PROGRESS
+        const linkedOrder = await prisma.order.findFirst({
+          where: {
+            tenantId: guard.tenantId,
+            guestAccountId: account.id,
+            fulfillmentStatus: "UNFULFILLED",
+          },
+          select: { id: true },
         });
-      }
-    } catch (err) {
-      log("error", "checkin.fulfillment_transition_failed", { bookingId: booking.id, error: String(err) });
-    }
 
-    // Send CHECK_IN_CONFIRMED email (non-blocking)
-    try {
-      const bookingData = await prisma.booking.findUnique({
-        where: { id: booking.id },
-        select: { guestEmail: true, firstName: true, lastName: true, arrival: true, departure: true, tenantId: true },
-      });
-      if (bookingData) {
-        const tenant = await prisma.tenant.findUnique({ where: { id: bookingData.tenantId }, select: { name: true } });
-        const { sendEmailEvent } = await import("@/app/_lib/email/send");
-        await sendEmailEvent(bookingData.tenantId, "CHECK_IN_CONFIRMED", bookingData.guestEmail, {
-          guestName: `${bookingData.firstName} ${bookingData.lastName}`,
-          hotelName: tenant?.name ?? "",
-          checkIn: bookingData.arrival.toISOString().slice(0, 10),
-          checkOut: bookingData.departure.toISOString().slice(0, 10),
-        });
-      }
-    } catch (err) {
-      log("error", "checkin.email_failed", { bookingId: booking.id, error: String(err) });
+        if (linkedOrder) {
+          await transitionFulfillmentStatus(linkedOrder.id, guard.tenantId, "IN_PROGRESS", {
+            note: "Gäst incheckad via självbetjäning",
+          }).catch(() => {});
+        }
+      }).catch((err) => log("error", "checkin.guest_account_failed", { bookingId: booking.id, error: String(err) }));
+
+      // Send CHECK_IN_CONFIRMED email (non-blocking)
+      (async () => {
+        try {
+          const bookingFull = await prisma.booking.findUnique({
+            where: { id: booking.id },
+            select: { arrival: true, departure: true },
+          });
+          if (bookingFull) {
+            const tenant = await prisma.tenant.findUnique({ where: { id: guard.tenantId }, select: { name: true } });
+            const { sendEmailEvent } = await import("@/app/_lib/email/send");
+            await sendEmailEvent(guard.tenantId, "CHECK_IN_CONFIRMED", booking.guestEmail, {
+              guestName: `${booking.firstName} ${booking.lastName}`,
+              hotelName: tenant?.name ?? "",
+              checkIn: bookingFull.arrival.toISOString().slice(0, 10),
+              checkOut: bookingFull.departure.toISOString().slice(0, 10),
+            });
+          }
+        } catch (err) {
+          log("error", "checkin.email_failed", { bookingId: booking.id, error: String(err) });
+        }
+      })();
     }
   }
 

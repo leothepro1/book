@@ -392,6 +392,7 @@ model Booking {
   @@index([arrival])
   @@index([tenantId, externalId])
   @@index([tenantId, guestEmail])
+  @@index([tenantId, guestAccountId])
 }
 
 model MagicLink {
