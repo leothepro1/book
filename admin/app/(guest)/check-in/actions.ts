@@ -5,6 +5,8 @@ import { getTenantConfig } from "../_lib/tenant";
 import { performCheckIn } from "../_lib/booking/actions";
 import { resolveTenantFromHost } from "../_lib/tenant/resolveTenantFromHost";
 import { getActiveCheckinCards } from "@/app/_lib/pages/config";
+import { transitionFulfillmentStatus } from "@/app/_lib/orders/fulfillment";
+import { log } from "@/app/_lib/logger";
 import "@/app/_lib/checkin-cards/definitions";
 
 function norm(s?: string) {
@@ -198,6 +200,49 @@ export async function checkInCommit(payload: {
     }
 
     // PMS notification removed — booking engine uses real-time queries
+
+    // Transition linked order fulfillment status (non-blocking)
+    try {
+      const linkedOrder = await prisma.order.findFirst({
+        where: {
+          tenantId: guard.tenantId,
+          guestEmail: (await prisma.booking.findUnique({
+            where: { id: booking.id },
+            select: { guestEmail: true },
+          }))?.guestEmail ?? "",
+          fulfillmentStatus: "UNFULFILLED",
+        },
+        select: { id: true },
+      });
+
+      if (linkedOrder) {
+        await transitionFulfillmentStatus(linkedOrder.id, guard.tenantId, "IN_PROGRESS", {
+          note: "Gäst incheckad via självbetjäning",
+        });
+      }
+    } catch (err) {
+      log("error", "checkin.fulfillment_transition_failed", { bookingId: booking.id, error: String(err) });
+    }
+
+    // Send CHECK_IN_CONFIRMED email (non-blocking)
+    try {
+      const bookingData = await prisma.booking.findUnique({
+        where: { id: booking.id },
+        select: { guestEmail: true, firstName: true, lastName: true, arrival: true, departure: true, tenantId: true },
+      });
+      if (bookingData) {
+        const tenant = await prisma.tenant.findUnique({ where: { id: bookingData.tenantId }, select: { name: true } });
+        const { sendEmailEvent } = await import("@/app/_lib/email/send");
+        await sendEmailEvent(bookingData.tenantId, "CHECK_IN_CONFIRMED", bookingData.guestEmail, {
+          guestName: `${bookingData.firstName} ${bookingData.lastName}`,
+          hotelName: tenant?.name ?? "",
+          checkIn: bookingData.arrival.toISOString().slice(0, 10),
+          checkOut: bookingData.departure.toISOString().slice(0, 10),
+        });
+      }
+    } catch (err) {
+      log("error", "checkin.email_failed", { bookingId: booking.id, error: String(err) });
+    }
   }
 
   const nextHref = token ? `/p/${token}` : (next || "/");

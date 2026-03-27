@@ -108,6 +108,8 @@ enum OrderEventType {
   CHANNEL_ORDER_UPDATED
   CHANNEL_ORDER_CANCELLED
   CHANNEL_SYNC_ERROR
+  CHECKIN_CONFIRMED
+  CHECKOUT_CONFIRMED
 }
 
 /// Idempotency lock for PMS booking creation.

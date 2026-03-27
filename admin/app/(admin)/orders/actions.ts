@@ -4,6 +4,7 @@ import { prisma } from "@/app/_lib/db/prisma";
 import { getAuth, requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
 import { adjustInventoryInTx } from "@/app/_lib/products/inventory";
 import { canTransition } from "@/app/_lib/orders/types";
+import { transitionFulfillmentStatus } from "@/app/_lib/orders/fulfillment";
 import type { OrderStatus } from "@prisma/client";
 
 // ── Types ──────────────────────────────────────────────────────
@@ -243,6 +244,12 @@ export async function fulfillOrder(
         actorUserId: userId,
       },
     });
+  });
+
+  // Parallel fulfillmentStatus transition (new dimension)
+  await transitionFulfillmentStatus(orderId, tenant.id, "FULFILLED", {
+    actorUserId: userId ?? undefined,
+    note: "Manuellt markerad som slutförd av admin",
   });
 
   return { ok: true };

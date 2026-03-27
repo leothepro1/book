@@ -3,6 +3,8 @@
 import { prisma } from "../../_lib/db/prisma";
 import { redirect } from "next/navigation";
 import { performCheckOut } from "../_lib/booking/actions";
+import { transitionFulfillmentStatus } from "@/app/_lib/orders/fulfillment";
+import { log } from "@/app/_lib/logger";
 
 type Method = "booking" | "nameArrival" | "email";
 
@@ -76,9 +78,43 @@ export async function checkOutLookup(payload: any): Promise<void> {
   const res = await performCheckOut(booking.id, now);
   if (!res.ok) throw new Error(res.message);
 
-  // Notify PMS adapter (no-op for manual provider)
+  // Transition linked order fulfillment status + send email (non-blocking)
   if (!res.already) {
-    // PMS notification removed — booking engine uses real-time queries
+    try {
+      const bookingData = await prisma.booking.findUnique({
+        where: { id: booking.id },
+        select: { guestEmail: true, firstName: true, lastName: true, arrival: true, departure: true, tenantId: true },
+      });
+
+      if (bookingData) {
+        const linkedOrder = await prisma.order.findFirst({
+          where: {
+            tenantId: bookingData.tenantId,
+            guestEmail: bookingData.guestEmail,
+            fulfillmentStatus: "IN_PROGRESS",
+          },
+          select: { id: true },
+        });
+
+        if (linkedOrder) {
+          await transitionFulfillmentStatus(linkedOrder.id, bookingData.tenantId, "FULFILLED", {
+            note: "Gäst utcheckad via självbetjäning",
+          });
+        }
+
+        // Send CHECK_OUT_CONFIRMED email
+        const tenant = await prisma.tenant.findUnique({ where: { id: bookingData.tenantId }, select: { name: true } });
+        const { sendEmailEvent } = await import("@/app/_lib/email/send");
+        await sendEmailEvent(bookingData.tenantId, "CHECK_OUT_CONFIRMED", bookingData.guestEmail, {
+          guestName: `${bookingData.firstName} ${bookingData.lastName}`,
+          hotelName: tenant?.name ?? "",
+          checkIn: bookingData.arrival.toISOString().slice(0, 10),
+          checkOut: bookingData.departure.toISOString().slice(0, 10),
+        });
+      }
+    } catch (err) {
+      log("error", "checkout.fulfillment_transition_failed", { bookingId: booking.id, error: String(err) });
+    }
   }
 
   if (token) redirect(`/p/${token}`);
