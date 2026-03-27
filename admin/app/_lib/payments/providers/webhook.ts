@@ -15,6 +15,7 @@ import { prisma } from "@/app/_lib/db/prisma";
 import { canTransition } from "@/app/_lib/orders/types";
 import { log } from "@/app/_lib/logger";
 import { adjustInventoryInTx } from "@/app/_lib/products/inventory";
+import { emitPlatformEvent } from "@/app/_lib/apps/webhooks";
 import { getPaymentAdapter } from "./registry";
 import type { PaymentSessionOutcome } from "./types";
 
@@ -176,6 +177,24 @@ export async function handlePaymentWebhook(
       providerKey,
       amount: order.totalAmount,
     });
+
+    // Emit platform event for app webhooks (non-blocking, fire-and-forget)
+    const paidMeta = (order.metadata ?? {}) as Record<string, unknown>;
+    emitPlatformEvent({
+      type: "order.paid",
+      tenantId: order.tenantId,
+      payload: {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        totalAmount: order.totalAmount,
+        currency: order.currency,
+        guestEmail: order.guestEmail,
+        guestName: order.guestName,
+        orderType: order.orderType,
+        paidAt: new Date().toISOString(),
+        ...(paidMeta.gclid ? { gclid: paidMeta.gclid } : {}),
+      },
+    }).catch((err) => log("error", "webhook.app_event_emit_failed", { orderId: order.id, error: String(err) }));
 
     // Guest account creation (non-blocking)
     try {

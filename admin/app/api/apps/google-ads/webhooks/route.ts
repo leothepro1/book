@@ -16,6 +16,7 @@ import { env } from "@/app/_lib/env";
 import { log } from "@/app/_lib/logger";
 import { uploadConversion, uploadConversionAdjustment } from "@/app/_lib/apps/google-ads/conversions";
 import type { ConversionData } from "@/app/_lib/apps/google-ads/conversions";
+import { sendGA4PurchaseEvent } from "@/app/_lib/apps/google-ads/ga4";
 
 const SUBSCRIBED = ["order.paid", "order.refunded"];
 
@@ -80,6 +81,32 @@ export async function POST(req: Request) {
     };
 
     const result = await uploadConversion(tenantId, customerId, conversionData, enhancedConversions);
+
+    // GA4 Measurement Protocol — send purchase event if configured
+    const ga4MeasurementId = (trackingConfig.ga4MeasurementId as string) ?? "";
+    const ga4ApiSecret = (trackingConfig.ga4ApiSecret as string) ?? "";
+
+    if (ga4MeasurementId && ga4ApiSecret) {
+      await sendGA4PurchaseEvent({
+        tenantId,
+        measurementId: ga4MeasurementId,
+        apiSecret: ga4ApiSecret,
+        clientId: (payload.gclid as string) ?? `bedfront-${payload.orderId}`,
+        orderId: (payload.orderId as string) ?? "",
+        orderNumber: (payload.orderNumber as number) ?? 0,
+        totalAmount: (payload.totalAmount as number) ?? 0,
+        currency: (payload.currency as string) ?? "SEK",
+        items: [
+          {
+            itemId: (payload.orderId as string) ?? "",
+            itemName: (payload.roomType as string) ?? "Boende",
+            price: (payload.totalAmount as number) ?? 0,
+            quantity: 1,
+          },
+        ],
+        gclid: (payload.gclid as string) ?? undefined,
+      }).catch(() => {});
+    }
 
     return Response.json({
       received: true,

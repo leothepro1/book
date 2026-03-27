@@ -133,6 +133,20 @@ const googleAds: AppDefinition = {
           default: true,
           hint: "Inkludera bokningsbelopp i konverteringsdata för ROAS-optimering.",
         },
+        {
+          key: "ga4MeasurementId",
+          label: "GA4 Measurement ID",
+          type: "text",
+          default: "",
+          hint: "Hittas i GA4 under Admin → Dataströmmar. Format: G-XXXXXXXXXX.",
+        },
+        {
+          key: "ga4ApiSecret",
+          label: "GA4 API-hemlighet",
+          type: "text",
+          default: "",
+          hint: "Skapas i GA4 under Admin → Dataströmmar → Measurement Protocol API secrets.",
+        },
       ],
     },
     {
