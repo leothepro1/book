@@ -124,7 +124,7 @@ export async function POST(req: Request) {
 
   // Create order
   const order = await prisma.$transaction(async (tx) => {
-    return tx.order.create({
+    const created = await tx.order.create({
       data: {
         tenantId,
         orderNumber,
@@ -159,15 +159,15 @@ export async function POST(req: Request) {
 
     await tx.orderEvent.create({
       data: {
-        orderId: newOrder.id,
-        tenantId: tenantId,
+        orderId: created.id,
+        tenantId,
         type: "ORDER_CREATED",
         message: `Order #${orderNumber} skapad`,
         metadata: { channel: "checkout_session" },
       },
     });
 
-    return newOrder;
+    return created;
   });
 
   // Reserve inventory

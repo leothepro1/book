@@ -8,6 +8,7 @@
 
 import { prisma } from "@/app/_lib/db/prisma";
 import { log } from "@/app/_lib/logger";
+import { createGuestAccountEventInTx } from "@/app/_lib/guests/events";
 import type { GuestAccount } from "@prisma/client";
 
 // ── Types ────────────────────────────────────────────────────
@@ -28,15 +29,15 @@ export interface GuestAccountProfile {
  */
 function emitIfNewAccount(account: GuestAccount, source: string): void {
   if (account.createdAt.getTime() > Date.now() - 5000) {
-    prisma.guestAccountEvent.create({
-      data: {
+    import("@/app/_lib/guests/events").then(({ createGuestAccountEvent }) =>
+      createGuestAccountEvent({
         tenantId: account.tenantId,
         guestAccountId: account.id,
         type: "ACCOUNT_CREATED",
         message: "Gästkonto skapat automatiskt",
         metadata: { source },
-      },
-    }).catch(() => {});
+      }),
+    ).catch((err) => log("error", "guest.account_created_event.failed", { guestAccountId: account.id, error: String(err) }));
   }
 }
 
@@ -136,23 +137,25 @@ export async function upsertGuestAccountFromOrder(
     source: "order",
   });
 
-  // Step 2: Link order to guest account (idempotent — safe to retry)
-  const order = await prisma.order.update({
-    where: { id: orderId },
-    data: { guestAccountId: account.id },
-    select: { orderNumber: true, totalAmount: true },
-  });
+  // Step 2+3: Link order + emit ORDER_PLACED atomically
+  const order = await prisma.$transaction(async (tx) => {
+    const o = await tx.order.update({
+      where: { id: orderId },
+      data: { guestAccountId: account.id },
+      select: { orderNumber: true, totalAmount: true },
+    });
 
-  // Step 3: Emit ORDER_PLACED event (non-blocking)
-  prisma.guestAccountEvent.create({
-    data: {
-      tenantId,
+    await createGuestAccountEventInTx(tx, {
       guestAccountId: account.id,
+      tenantId,
       type: "ORDER_PLACED",
-      message: `Order #${order.orderNumber} skapad`,
-      metadata: { orderId, amount: order.totalAmount },
-    },
-  }).catch(() => {});
+      message: `Bokning #${o.orderNumber} skapad`,
+      metadata: { orderId, orderNumber: o.orderNumber, amount: o.totalAmount },
+      orderId,
+    });
+
+    return o;
+  });
 
   log("info", "guest-account.order-linked", {
     accountId: account.id,

@@ -175,7 +175,7 @@ export default function FilesClient({
       />
 
       {/* Pagination footer */}
-      {totalCount > 0 && (
+      {totalPages > 1 && (
         <div className="files-pagination">
           <div className="files-pagination__nav">
             <button

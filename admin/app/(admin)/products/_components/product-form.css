@@ -103,7 +103,7 @@
 
 .pf-body {
   display: flex;
-  gap: 16px;
+  gap: 1.3rem;
   padding: 0 16px 110px;
   max-width: 1000px;
   margin: 0 auto;
@@ -116,7 +116,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 1rem;
 }
 
 .pf-sidebar {
@@ -124,7 +124,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 1rem;
 }
 
 /* ── Card internals ── */
@@ -675,7 +675,7 @@
 .pf-sidebar .mi-card__field-label {
   color: #303030;
   font-size: 13px;
-  font-weight: 400;
+  font-weight: 550;
   margin-bottom: 0;
 }
 
