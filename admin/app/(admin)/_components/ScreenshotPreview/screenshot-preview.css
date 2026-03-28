@@ -1,0 +1,89 @@
+/* ── Screenshot Preview — desktop + mobile side by side ── */
+
+.ss-preview {
+  padding: 24px 24px 0 24px;
+  background: #f7f7f7;
+  overflow: hidden;
+}
+
+.ss-preview__devices {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--space-5);
+  height: 380px;
+  margin-bottom: -50px;
+}
+
+/* ── Desktop frame — 1440:900 = 8:5 ── */
+
+.ss-preview__desktop {
+  position: relative;
+  height: 100%;
+  aspect-ratio: 8 / 5;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #f7f7f7;
+  border: none;
+  box-shadow: 0rem .5rem 1.5rem -.5rem rgba(0, 0, 0, .28), 0rem .5rem 1rem -.25rem rgba(0, 0, 0, .05), 0rem .1875rem .375rem 0rem rgba(0, 0, 0, .05), 0rem .125rem .25rem 0rem rgba(0, 0, 0, .05), 0rem .0625rem .125rem 0rem rgba(0, 0, 0, .05), 0rem 0rem 0rem .0625rem rgba(0, 0, 0, .06);
+}
+
+/* ── Mobile frame — 390:844 ≈ 9:19.5 ── */
+
+.ss-preview__mobile {
+  position: relative;
+  height: 100%;
+  aspect-ratio: 390 / 844;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #f7f7f7;
+  border: 1px solid var(--admin-border);
+  box-shadow: 0rem .5rem 1.5rem -.5rem rgba(0, 0, 0, .28), 0rem .5rem 1rem -.25rem rgba(0, 0, 0, .05), 0rem .1875rem .375rem 0rem rgba(0, 0, 0, .05), 0rem .125rem .25rem 0rem rgba(0, 0, 0, .05), 0rem .0625rem .125rem 0rem rgba(0, 0, 0, .05), 0rem 0rem 0rem .0625rem rgba(0, 0, 0, .06);
+}
+
+/* ── Shared ── */
+
+.ss-preview__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  transition: opacity var(--duration-normal) var(--ease-default);
+}
+
+.ss-preview__placeholder {
+  background: var(--admin-surface);
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  display: flex;
+}
+
+.ss-preview__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.ss-preview__spinner {
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid var(--admin-border);
+  border-top-color: var(--admin-accent);
+  border-radius: 50%;
+  animation: ss-spin 0.8s linear infinite;
+}
+
+.ss-preview__spinner--sm {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+}
+
+@keyframes ss-spin {
+  to { transform: rotate(360deg); }
+}

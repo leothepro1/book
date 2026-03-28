@@ -10,6 +10,16 @@
 import { prisma } from "@/app/_lib/db/prisma";
 import { nextOrderNumber } from "@/app/_lib/orders/sequence";
 import { log } from "@/app/_lib/logger";
+import { getSalesChannelByHandle } from "./registry";
+
+export class ChannelOrderError extends Error {
+  code: string;
+  constructor(message: string, code: string) {
+    super(message);
+    this.name = "ChannelOrderError";
+    this.code = code;
+  }
+}
 
 // ── Input / Output types ─────────────────────────────────────
 
@@ -18,6 +28,7 @@ export interface ChannelOrderInput {
   channelHandle: string;        // "booking_com"
   sourceExternalId: string;     // OTA's booking reference e.g. "BK-12345678"
   sourceUrl?: string;           // link to order on OTA platform
+  productId?: string;           // Bedfront product ID — validated against channel publication
   guestEmail: string;
   guestName: string;
   guestPhone?: string;
@@ -44,11 +55,14 @@ export async function createChannelOrder(
   input: ChannelOrderInput,
 ): Promise<ChannelOrderResult> {
   const {
-    tenantId, channelHandle, sourceExternalId, sourceUrl,
+    tenantId, channelHandle, sourceExternalId, sourceUrl, productId,
     guestEmail, guestName, guestPhone,
     checkIn, checkOut, roomCategoryName, ratePlanName,
     totalAmount, currency, metadata,
   } = input;
+
+  const channelApp = getSalesChannelByHandle(channelHandle);
+  const displayName = channelApp?.salesChannel?.displayName ?? channelHandle;
 
   try {
     // ── Idempotency check ───────────────────────────────────
@@ -72,6 +86,25 @@ export async function createChannelOrder(
         orderNumber: existing.orderNumber,
         alreadyExists: true,
       };
+    }
+
+    // ── Publication check ───────────────────────────────────
+    if (productId) {
+      const publication = await prisma.productChannelPublication.findFirst({
+        where: {
+          tenantId,
+          productId,
+          channelHandle,
+          unpublishedAt: null,
+        },
+      });
+
+      if (!publication) {
+        throw new ChannelOrderError(
+          `Product ${productId} is not published to channel ${channelHandle}`,
+          "PRODUCT_NOT_PUBLISHED",
+        );
+      }
     }
 
     // ── Atomic order creation ───────────────────────────────
@@ -104,7 +137,7 @@ export async function createChannelOrder(
           },
           lineItems: {
             create: {
-              productId: `external:${channelHandle}`,
+              productId: productId ?? `external:${channelHandle}`,
               variantId: null,
               title: roomCategoryName,
               variantTitle: ratePlanName ?? null,
@@ -118,9 +151,10 @@ export async function createChannelOrder(
           },
           events: {
             create: {
+              tenantId,
               type: "CHANNEL_ORDER_RECEIVED",
-              message: `Bokning mottagen från ${channelHandle} (${sourceExternalId})`,
-              metadata: { channelHandle, sourceExternalId },
+              message: `Bokning mottagen från ${displayName} — extern ref: ${sourceExternalId}`,
+              metadata: { channelHandle, sourceExternalId, sourceUrl: sourceUrl ?? null },
             },
           },
         },
@@ -138,10 +172,54 @@ export async function createChannelOrder(
       orderNumber: order.orderNumber,
     };
   } catch (err) {
+    if (err instanceof ChannelOrderError) {
+      log("warn", "channel.order.rejected", {
+        tenantId, channelHandle, sourceExternalId, code: err.code, error: err.message,
+      });
+      return { success: false, error: err.message };
+    }
     const message = err instanceof Error ? err.message : String(err);
     log("error", "channel.order.failed", {
       tenantId, channelHandle, sourceExternalId, error: message,
     });
     return { success: false, error: message };
   }
+}
+
+// ── Product Channel Publication ─────────────────────────────
+
+export async function publishProductToChannel(
+  tenantId: string,
+  productId: string,
+  channelHandle: string,
+): Promise<void> {
+  await prisma.productChannelPublication.upsert({
+    where: {
+      tenantId_productId_channelHandle: { tenantId, productId, channelHandle },
+    },
+    create: { tenantId, productId, channelHandle, publishedAt: new Date() },
+    update: { unpublishedAt: null, publishedAt: new Date() },
+  });
+}
+
+export async function unpublishProductFromChannel(
+  tenantId: string,
+  productId: string,
+  channelHandle: string,
+): Promise<void> {
+  await prisma.productChannelPublication.updateMany({
+    where: { tenantId, productId, channelHandle, unpublishedAt: null },
+    data: { unpublishedAt: new Date() },
+  });
+}
+
+export async function getPublishedProducts(
+  tenantId: string,
+  channelHandle: string,
+): Promise<string[]> {
+  const rows = await prisma.productChannelPublication.findMany({
+    where: { tenantId, channelHandle, unpublishedAt: null },
+    select: { productId: true },
+  });
+  return rows.map((r) => r.productId);
 }

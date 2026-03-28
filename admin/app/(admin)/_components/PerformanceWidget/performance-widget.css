@@ -1,0 +1,116 @@
+/* ── Performance Widget — Shopify Web Vitals pattern ── */
+
+.perf-widget {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  align-items: start;
+  padding: 16px 20px;
+  background: var(--admin-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 .3125rem .3125rem -.15625rem #00000008, 0 .1875rem .1875rem -.09375rem #00000005, 0 .125rem .125rem -.0625rem #00000005, 0 .0625rem .0625rem -.03125rem #00000008, 0 .03125rem .03125rem #0000000a, 0 0 0 .0625rem #0000000f;
+  margin-bottom: 16px;
+  margin-top: 1.3rem;
+}
+
+.perf-divider {
+  width: 1px;
+  background: #E5E7EB;
+  align-self: stretch;
+  margin: 0 20px;
+}
+
+.perf-col__label {
+  font-size: 13px;
+  font-weight: 550;
+  color: #303030;
+  margin-bottom: 0;
+  font-feature-settings: "cv02","cv03","cv04","cv11";
+  border-bottom: 2px dotted #dadada;
+  width: max-content;
+}
+
+.perf-col__value {
+  font-size: 13px;
+  font-weight: 550;
+  color: #111827;
+  line-height: 1.2;
+  margin-bottom: 6px;
+  font-feature-settings: "cv02","cv03","cv04","cv11";
+}
+
+.perf-col__value--empty {
+  color: #303030;
+}
+
+.perf-col__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.perf-col__sessions {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.perf-session-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.perf-session-item__count {
+  font-size: 16px;
+  font-weight: 550;
+  color: #111827;
+  font-feature-settings: "cv02","cv03","cv04","cv11";
+}
+
+.perf-session-item__label {
+  font-size: 13px;
+  font-weight: 400;
+  color: #6B7280;
+}
+
+/* ── Skeleton ── */
+
+.perf-skeleton {
+  background: #F3F4F6;
+  border-radius: 4px;
+  animation: perf-pulse 1.5s ease-in-out infinite;
+}
+
+/* ── Tooltip ── */
+
+.perf-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 50;
+  width: 300px;
+  padding: 12px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 20px 24px #1919190d, 0 5px 8px #19191907, 0 0 0 1px #2a1c0012;
+}
+
+.perf-tooltip__label {
+  font-size: 12px;
+  font-weight: 550;
+  color: #303030;
+  margin-bottom: 4px;
+}
+
+.perf-tooltip__desc {
+  font-size: 12px;
+  font-weight: 400;
+  color: #303030;
+  line-height: 1.5;
+}
+
+@keyframes perf-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}

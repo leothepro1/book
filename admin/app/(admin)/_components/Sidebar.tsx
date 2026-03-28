@@ -11,9 +11,17 @@ import { useRole } from './RoleContext';
 import type { SidebarApp } from '@/app/_lib/apps/actions';
 
 const NAV_ITEMS = [
-  { href: '/home', label: 'Startsida', icon: 'storefront' },
+  { href: '/home', label: 'Startsida', icon: 'home_app_logo' },
   { href: '/orders', label: 'Ordrar', icon: 'inbox' },
   { href: '/dashboard/analytics', label: 'Analys', icon: 'leaderboard' },
+];
+
+const ORDER_ITEMS = [
+  { href: '/orders/abandoned', label: 'Övergivna kassor' },
+];
+
+const CUSTOMER_ITEMS = [
+  { href: '/customers/segments', label: 'Kundsegment' },
 ];
 
 const PRODUCT_ITEMS = [
@@ -43,6 +51,10 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
   const { isAdmin } = useRole();
 
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
+  const isOrdersLinkActive = pathname === '/orders' || (pathname.startsWith('/orders/') && !pathname.startsWith('/orders/abandoned'));
+  const isOrderAccordionOpen = isOrdersLinkActive || ORDER_ITEMS.some((item) => isActive(item.href));
+  const isCustomersLinkActive = pathname === '/customers' || (pathname.startsWith('/customers/') && !pathname.startsWith('/customers/segments'));
+  const isCustomerAccordionOpen = isCustomersLinkActive || CUSTOMER_ITEMS.some((item) => isActive(item.href));
   const isProductsLinkActive = isActive('/products');
   const isProductAccordionOpen = isProductsLinkActive || PRODUCT_ITEMS.some((item) => isActive(item.href));
   const isContentActive = CONTENT_ITEMS.some((item) => isActive(item.href));
@@ -66,12 +78,12 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
 
       {/* Navigation */}
       <nav className="p-3 flex-1 overflow-y-auto flex flex-col" style={{ gap: 6 }}>
-        {/* Top nav items */}
-        {NAV_ITEMS.filter((_, i) => i < 2).map((item) => {
+        {/* Startsida */}
+        {(() => {
+          const item = NAV_ITEMS[0];
           const active = isActive(item.href);
           return (
             <Link
-              key={item.href}
               href={item.href}
               onClick={(e) => guardedClick(e, item.href)}
               className={`flex items-center gap-3 ${
@@ -92,14 +104,142 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
               >
                 {item.icon}
               </span>
-              <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
                 isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
               }`} style={{ fontWeight: active ? 600 : 500 }}>
                 {item.label}
               </span>
             </Link>
           );
-        })}
+        })()}
+
+        {/* Ordrar — accordion with sub-items */}
+        <div>
+          <Link
+            href="/orders"
+            onClick={(e) => guardedClick(e, '/orders')}
+            className={`flex items-center gap-3 ${
+              isOrdersLinkActive
+                ? 'bg-[#e3e3e3] text-[#303030]'
+                : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
+            }`}
+            style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
+          >
+            <span
+              className="material-symbols-rounded flex-shrink-0"
+              style={{
+                fontSize: 18,
+                fontVariationSettings: isOrderAccordionOpen
+                  ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
+                  : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
+              }}
+            >
+              inbox
+            </span>
+            <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+            }`} style={{ fontWeight: isOrdersLinkActive ? 600 : 500 }}>
+              Ordrar
+            </span>
+          </Link>
+
+          <div className={`overflow-hidden transition-all duration-300 ${
+            isOrderAccordionOpen && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+          }`}>
+            <div className="flex flex-col">
+              {ORDER_ITEMS.map((sub) => {
+                const subActive = isActive(sub.href);
+                return (
+                  <Link
+                    key={sub.href}
+                    href={sub.href}
+                    onClick={(e) => guardedClick(e, sub.href)}
+                    className={`relative block text-[13px] ${
+                      subActive
+                        ? 'bg-[#e3e3e3] text-[#303030]'
+                        : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
+                    }`}
+                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontWeight: subActive ? 600 : 500 }}
+                  >
+                    {subActive && (
+                      <img
+                        src={CONNECTOR_SVG}
+                        alt=""
+                        className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+                        style={{ width: 21, height: 28, left: 7.5, marginTop: -1.5 }}
+                      />
+                    )}
+                    {sub.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Kunder — accordion with sub-items */}
+        <div>
+          <Link
+            href="/customers"
+            onClick={(e) => guardedClick(e, '/customers')}
+            className={`flex items-center gap-3 ${
+              isCustomersLinkActive
+                ? 'bg-[#e3e3e3] text-[#303030]'
+                : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
+            }`}
+            style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
+          >
+            <span
+              className="material-symbols-rounded flex-shrink-0"
+              style={{
+                fontSize: 18,
+                fontVariationSettings: isCustomerAccordionOpen
+                  ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
+                  : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
+              }}
+            >
+              group
+            </span>
+            <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+            }`} style={{ fontWeight: isCustomersLinkActive ? 600 : 500 }}>
+              Kunder
+            </span>
+          </Link>
+
+          <div className={`overflow-hidden transition-all duration-300 ${
+            isCustomerAccordionOpen && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+          }`}>
+            <div className="flex flex-col">
+              {CUSTOMER_ITEMS.map((sub) => {
+                const subActive = isActive(sub.href);
+                return (
+                  <Link
+                    key={sub.href}
+                    href={sub.href}
+                    onClick={(e) => guardedClick(e, sub.href)}
+                    className={`relative block text-[13px] ${
+                      subActive
+                        ? 'bg-[#e3e3e3] text-[#303030]'
+                        : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
+                    }`}
+                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontWeight: subActive ? 600 : 500 }}
+                  >
+                    {subActive && (
+                      <img
+                        src={CONNECTOR_SVG}
+                        alt=""
+                        className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+                        style={{ width: 21, height: 28, left: 7.5, marginTop: -1.5 }}
+                      />
+                    )}
+                    {sub.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
 
         {/* Produkter — accordion with sub-items */}
         <div>
@@ -385,13 +525,81 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
           );
         })}
 
-        {/* Appar — installed ACTIVE apps + "Lägg till" */}
+        {/* Försäljningskanaler */}
+        {!isCollapsed && (
+          <div style={{ marginTop: 'var(--space-2)' }}>
+            <div className="admin-group-label" style={{ padding: '0 8px', marginBottom: 2 }}>
+              Försäljningskanaler
+            </div>
+            {/* Webbshop — always present, always first */}
+            {(() => {
+              const active = isActive('/store');
+              return (
+                <Link
+                  href="/store"
+                  onClick={(e) => guardedClick(e, '/store')}
+                  className={`flex items-center gap-3 ${
+                    active
+                      ? 'bg-[#e3e3e3] text-[#303030]'
+                      : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
+                  }`}
+                  style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
+                >
+                  <span
+                    className="material-symbols-rounded flex-shrink-0"
+                    style={{ fontSize: 18, fontVariationSettings: active
+                      ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
+                      : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
+                  >
+                    storefront
+                  </span>
+                  <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+                    isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+                  }`} style={{ fontWeight: active ? 600 : 500 }}>
+                    Webbshop
+                  </span>
+                </Link>
+              );
+            })()}
+            {/* Installed sales channel apps */}
+            {sidebarApps.filter((a) => a.isSalesChannel).map((app) => {
+              const active = isActive(`/apps/${app.appId}`);
+              return (
+                <Link
+                  key={app.appId}
+                  href={`/apps/${app.appId}`}
+                  onClick={(e) => guardedClick(e, `/apps/${app.appId}`)}
+                  className={`flex items-center gap-3 ${
+                    active
+                      ? 'bg-[#e3e3e3] text-[#303030]'
+                      : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
+                  }`}
+                  style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontSize: 'var(--font-sm)' }}
+                >
+                  <span
+                    className="material-symbols-rounded flex-shrink-0"
+                    style={{ fontSize: 16, fontVariationSettings: active
+                      ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
+                      : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
+                  >
+                    {app.icon}
+                  </span>
+                  <span className="text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden" style={{ fontWeight: active ? 600 : 500 }}>
+                    {app.name}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Appar — installed ACTIVE apps (non-channel) + "Lägg till" */}
         {!isCollapsed && (
           <div style={{ marginTop: 'var(--space-2)' }}>
             <div className="admin-group-label" style={{ padding: '0 8px', marginBottom: 2 }}>
               Appar
             </div>
-            {sidebarApps.map((app) => (
+            {sidebarApps.filter((a) => !a.isSalesChannel).map((app) => (
               <Link
                 key={app.appId}
                 href={`/apps/${app.appId}`}

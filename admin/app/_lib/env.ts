@@ -36,6 +36,8 @@ const envSchema = z.object({
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),
   ACCESS_PASS_PEPPER: z.string().optional(),
+  SCREENSHOT_SECRET: z.string().optional(),
+  SCREENSHOT_BASE_URL: z.string().optional(),
   MEDIA_CLEANUP_SECRET: z.string().optional(),
   INTERNAL_API_SECRET: z.string().optional(),
 
@@ -215,4 +217,6 @@ export const env = {
   },
   DEV_ORG_ID: parsed.DEV_ORG_ID,
   DEV_OWNER_USER_ID: parsed.DEV_OWNER_USER_ID,
+  SCREENSHOT_SECRET: parsed.SCREENSHOT_SECRET ?? null,
+  SCREENSHOT_BASE_URL: parsed.SCREENSHOT_BASE_URL ?? null,
 } as const;

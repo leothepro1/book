@@ -44,6 +44,7 @@ const inputSchema = z.object({
   ratePlanId: z.string().max(200).nullable().optional(),
   paymentType: z.enum(["full", "klarna"]),
   gclid: z.string().max(200).optional(),
+  customerNote: z.string().max(1000).optional(),
 });
 
 export async function POST(req: Request) {
@@ -201,6 +202,7 @@ export async function POST(req: Request) {
         totalAmount: totalPrice + taxAmount,
         currency,
         sourceChannel: "direct",
+        customerNote: body.customerNote ?? null,
         metadata: {
           checkIn,
           checkOut,
@@ -227,14 +229,19 @@ export async function POST(req: Request) {
             currency,
           },
         },
-        events: {
-          create: {
-            type: "CREATED",
-            message: `Order #${orderNumber} skapad — ${resolved.displayTitle}, ${checkIn} → ${checkOut}`,
-          },
-        },
       },
     });
+
+    await tx.orderEvent.create({
+      data: {
+        orderId: newOrder.id,
+        tenantId: tenant.id,
+        type: "ORDER_CREATED",
+        message: `Order #${orderNumber} skapad — ${resolved.displayTitle}, ${checkIn} → ${checkOut}`,
+        metadata: { checkIn, checkOut, guests, nights, ratePlanName },
+      },
+    });
+
     return newOrder;
   });
 
@@ -299,8 +306,9 @@ export async function POST(req: Request) {
     await prisma.orderEvent.create({
       data: {
         orderId: order.id,
-        type: "CANCELLED",
-        message: "Payment initiation failed — order cancelled",
+        tenantId: tenant.id,
+        type: "ORDER_CANCELLED",
+        message: "Betalningsinitiering misslyckades — order avbokad automatiskt",
       },
     });
 

@@ -90,26 +90,44 @@ enum OrderFulfillmentStatus {
 }
 
 enum OrderEventType {
-  CREATED
-  PAID
-  FULFILLED
-  CANCELLED
-  REFUNDED
-  NOTE_ADDED
-  EMAIL_SENT
-  INVENTORY_RESERVED
-  INVENTORY_CONSUMED
-  INVENTORY_RELEASED
-  STRIPE_WEBHOOK_RECEIVED
+  // Order lifecycle
+  ORDER_CREATED
+  ORDER_CONFIRMED
+  ORDER_UPDATED
+  ORDER_CANCELLED
+  ORDER_REOPENED
+
+  // Payment — forward
+  PAYMENT_AUTHORIZED
+  PAYMENT_CAPTURED
   PAYMENT_FAILED
-  GUEST_INFO_UPDATED
+  PAYMENT_VOIDED
+
+  // Payment — backward
+  REFUND_INITIATED
+  REFUND_SUCCEEDED
+  REFUND_FAILED
+
+  // Fulfillment
+  ORDER_FULFILLED
+  ORDER_UNFULFILLED
+  INVENTORY_RELEASED
+
+  // Email
+  EMAIL_SENT
+
+  // Internal
+  NOTE_ADDED
+
+  // System / diagnostics
   RECONCILED
-  CHANNEL_ORDER_RECEIVED
-  CHANNEL_ORDER_UPDATED
-  CHANNEL_ORDER_CANCELLED
-  CHANNEL_SYNC_ERROR
-  CHECKIN_CONFIRMED
-  CHECKOUT_CONFIRMED
+  GUEST_INFO_UPDATED
+
+  // Sales channel
+  CHANNEL_ORDER_RECEIVED    // Order mottagen från extern kanal
+  CHANNEL_ORDER_UPDATED     // Order uppdaterad av extern kanal
+  CHANNEL_ORDER_CANCELLED   // Order avbokad av extern kanal
+  CHANNEL_SYNC_ERROR        // Synkroniseringsfel mot extern kanal
 }
 
 // ── Guest Account Enums ─────────────────────────────────────────
@@ -138,21 +156,22 @@ enum GuestOptInLevel {
 enum GuestEventType {
   ACCOUNT_CREATED
   ACCOUNT_UPDATED
-  EMAIL_VERIFIED
   MARKETING_SUBSCRIBED
   MARKETING_UNSUBSCRIBED
-  NOTE_ADDED
+  COMMENT_ADDED             // Staff comment in timeline (replaces NOTE_ADDED)
   TAG_ADDED
   TAG_REMOVED
   ORDER_PLACED
   ORDER_PAID
   ORDER_FULFILLED
-  ORDER_CANCELLED
-  ORDER_REFUNDED
+  ORDER_CANCELLED           // TODO: trigger from cancelOrder() when guest is linked
+  ORDER_REFUNDED            // TODO: trigger from refundOrder() when implemented
   LOGIN
-  PASSWORD_RESET
-  DATA_EXPORT_REQUESTED
-  DATA_DELETION_REQUESTED
+  GUEST_EMAIL_SENT          // Email sent to guest (any type)
+  DATA_EXPORT_REQUESTED     // TODO: GDPR implementation
+  DATA_DELETION_REQUESTED   // TODO: GDPR implementation
+  GUEST_JOINED_SEGMENT      // "Gäst gick med i segment: [namn]"
+  GUEST_LEFT_SEGMENT        // "Gäst lämnade segment: [namn]"
 }
 
 /// Idempotency lock for PMS booking creation.
@@ -240,6 +259,13 @@ model Tenant {
   earlyCheckinEnabled   Boolean @default(false)
   earlyCheckinDays      Int     @default(0)
 
+  // Theme screenshot — generated asynchronously after publish
+  screenshotDesktopUrl  String?               // Cloudinary URL, desktop (1440×900)
+  screenshotMobileUrl   String?               // Cloudinary URL, mobile (390×844)
+  screenshotHash        String?               // SHA-256 content-hash of settings JSON
+  screenshotUpdatedAt   DateTime?             // When last screenshot was taken
+  screenshotPending     Boolean @default(false) // Job queued for screenshot generation
+
   // Stripe Connect — each tenant connects their OWN Stripe account
   stripeAccountId          String?   // acct_xxx — connected Stripe account ID
   stripeOnboardingComplete Boolean   @default(false)
@@ -283,6 +309,10 @@ model Tenant {
   guestNotes          GuestNote[]
   guestEvents         GuestAccountEvent[]
   guestAddresses      GuestAddress[]
+  guestSegments       GuestSegment[]
+  rumEvents           RumEvent[]
+  rumAggregates       RumDailyAggregate[]
+  rumRateLimit        RumRateLimit?
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -912,6 +942,7 @@ model GuestAccount {
   notes            GuestNote[]
   events           GuestAccountEvent[]
   addresses        GuestAddress[]
+  segmentMemberships GuestSegmentMembership[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -986,11 +1017,13 @@ model GuestAccountEvent {
   actorUserId    String?        // null = system
   ipAddress      String?
   userAgent      String?
+  orderId        String?        // Links order-lifecycle events for idempotency
   createdAt      DateTime       @default(now())
 
   tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
 
+  @@unique([guestAccountId, orderId, type], name: "guest_event_order_idempotency")
   @@index([tenantId, guestAccountId])
   @@index([tenantId, type])
   @@index([guestAccountId, createdAt])
@@ -1539,6 +1572,12 @@ model Order {
   /// Safe to share in emails. Reveals only status and summary.
   statusToken             String?       @unique @default(cuid())
 
+  /// Comma-separated tags for categorization (Shopify pattern)
+  tags                    String            @default("")
+
+  /// Customer-facing note — set by guest at checkout (special requests, vehicle length, etc.)
+  customerNote            String?
+
   /// Flexible metadata — accommodation dates, PMS refs, etc.
   metadata                Json?
 
@@ -1552,6 +1591,7 @@ model Order {
   fulfilledAt             DateTime?
   cancelledAt             DateTime?
   refundedAt              DateTime?
+  archivedAt              DateTime?     // Null = active, set = archived (hidden from default list)
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
 
@@ -1569,6 +1609,7 @@ model Order {
   @@index([status, createdAt])
   @@index([tenantId, sourceChannel])
   @@index([tenantId, financialStatus])
+  @@index([tenantId, financialStatus, createdAt])
   @@index([tenantId, fulfillmentStatus])
 }
 
@@ -1619,14 +1660,17 @@ model OrderEvent {
   id          String          @id @default(cuid())
   orderId     String
   order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenantId    String
 
   type        OrderEventType
-  message     String?
+  message     String
   metadata    Json            @default("{}")
   actorUserId String?         // Clerk userId or null for system events
+  actorName   String?         // Display name at time of event (denormalized)
   createdAt   DateTime        @default(now())
 
   @@index([orderId, createdAt])
+  @@index([tenantId, orderId])
 }
 
 /// Stripe webhook event deduplication — prevents double-processing.
@@ -1837,7 +1881,6 @@ model TenantApp {
   healthHistory TenantAppHealthHistory[]
   webhookDeliveries AppWebhookDelivery[]
   emailSyncs    EmailMarketingSync[]
-  segmentMemberships EmailSegmentMembership[]
   attributions  EmailAttribution[]
 
   @@unique([tenantId, appId])
@@ -2090,20 +2133,48 @@ model EmailAttribution {
   @@index([orderId])
 }
 
-/// Segment membership tracking per contact.
-model EmailSegmentMembership {
-  id        String    @id @default(cuid())
-  tenantId  String
-  appId     String
-  segmentId String
-  email     String
-  addedAt   DateTime  @default(now())
-  removedAt DateTime?
+// ============================================================================
+// GUEST SEGMENTS (Shopify-grade segment engine)
+// ============================================================================
 
-  tenantApp TenantApp @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+/// Segment definition — tenant-scoped, query-driven.
+/// Default segments (isDefault=true) are platform-created, not deletable.
+/// Custom segments created by merchants via admin UI.
+model GuestSegment {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  query       String   @db.Text
+  isDefault   Boolean  @default(false)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  @@unique([tenantId, appId, segmentId, email])
-  @@index([tenantId, appId, segmentId])
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships GuestSegmentMembership[]
+
+  @@index([tenantId])
+  @@index([tenantId, isDefault])
+}
+
+/// Segment membership — tracks which guests belong to which segments.
+/// Soft-delete via leftAt: NULL = active member, non-NULL = left.
+/// History preserved: re-joining creates a NEW row (old row keeps leftAt).
+model GuestSegmentMembership {
+  id             String    @id @default(cuid())
+  tenantId       String
+  segmentId      String
+  guestAccountId String
+  joinedAt       DateTime  @default(now())
+  leftAt         DateTime?
+
+  segment      GuestSegment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  guestAccount GuestAccount  @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([segmentId, guestAccountId], name: "segment_guest_active")
+  @@index([tenantId, segmentId])
+  @@index([tenantId, guestAccountId])
+  @@index([segmentId, leftAt])
 }
 
 // ============================================================================
@@ -2131,4 +2202,83 @@ model CheckoutIdempotencyKey {
 
   @@unique([tenantId, key, routeType])
   @@index([expiresAt])
+}
+
+// ============================================================================
+// RUM ANALYTICS (Real User Monitoring) v2
+// ============================================================================
+
+/// Raw RUM events — retained 30 days for accurate P75 calculation.
+/// Anonymized: no IP, no UA string, no cookies, no querystrings.
+model RumEvent {
+  id           String   @id @default(cuid())
+  tenantId     String
+  lcp          Float?   // ms — only on hard reload
+  inp          Float?   // ms — per route
+  cls          Float?   // unitless — per route
+  sessionId    String   // random UUID per tab, sessionStorage-based, 30min TTL
+  deviceType   String   // "desktop" | "mobile" | "tablet" | "other"
+  pathname     String   // window.location.pathname, never querystring
+  isHardReload Boolean  // true = full page load, false = SPA navigation
+  connection   String?  // "4g" | "3g" | "2g" | "slow-2g"
+  occurredAt   DateTime
+  createdAt    DateTime @default(now())
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, sessionId])
+  @@index([tenantId, deviceType, createdAt])
+}
+
+/// DB-backed rate limiting for beacon endpoint — replaces in-memory Map.
+model RumRateLimit {
+  id          String   @id @default(cuid())
+  tenantId    String   @unique
+  count       Int      @default(0)
+  windowStart DateTime @default(now())
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+/// Daily RUM aggregates — retained 90 days. Used for trend dashboards.
+/// P75 calculated from raw data, not bucket approximation.
+model RumDailyAggregate {
+  id              String   @id @default(cuid())
+  tenantId        String
+  date            DateTime @db.Date
+
+  sessions        Int      @default(0)
+  sessionsDesktop Int      @default(0)
+  sessionsMobile  Int      @default(0)
+  sessionsTablet  Int      @default(0)
+  sessionsOther   Int      @default(0)
+
+  lcpP75          Float?
+  lcpGoodCount    Int      @default(0)
+  lcpNeedsWork    Int      @default(0)
+  lcpPoor         Int      @default(0)
+  lcpCount        Int      @default(0)
+
+  inpP75          Float?
+  inpGoodCount    Int      @default(0)
+  inpNeedsWork    Int      @default(0)
+  inpPoor         Int      @default(0)
+  inpCount        Int      @default(0)
+
+  clsP75          Float?
+  clsGoodCount    Int      @default(0)
+  clsNeedsWork    Int      @default(0)
+  clsPoor         Int      @default(0)
+  clsCount        Int      @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, date])
+  @@index([tenantId, date])
 }

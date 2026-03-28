@@ -31,68 +31,6 @@ export const EmailContactSchema = z.object({
 
 export type EmailContact = z.infer<typeof EmailContactSchema>;
 
-// ── Segments ────────────────────────────────────────────────────
-
-export const SegmentCriteriaSchema = z.object({
-  minBookings: z.number().int().optional(),
-  maxBookings: z.number().int().optional(),
-  minTotalSpend: z.number().int().optional(),
-  daysSinceLastBooking: z.object({
-    lt: z.number().int().optional(),
-    gt: z.number().int().optional(),
-  }).optional(),
-  hasTag: z.string().optional(),
-  language: z.string().optional(),
-});
-
-export type SegmentCriteria = z.infer<typeof SegmentCriteriaSchema>;
-
-export type EmailSegment = {
-  id: string;
-  name: string;
-  description: string;
-  tag: string;
-  criteria: SegmentCriteria;
-};
-
-export const BUILT_IN_SEGMENTS: EmailSegment[] = [
-  {
-    id: "vip-guests",
-    name: "VIP-gäster",
-    description: "Gäster med hög total spend",
-    tag: "bedfront-vip",
-    criteria: { minTotalSpend: 1000000 },
-  },
-  {
-    id: "returning-guests",
-    name: "Återkommande gäster",
-    description: "Gäster med minst 2 bokningar",
-    tag: "bedfront-returning",
-    criteria: { minBookings: 2 },
-  },
-  {
-    id: "recent-guests",
-    name: "Senaste gästerna",
-    description: "Bokade inom senaste 90 dagarna",
-    tag: "bedfront-recent",
-    criteria: { daysSinceLastBooking: { lt: 90 } },
-  },
-  {
-    id: "lapsed-guests",
-    name: "Inaktiva gäster",
-    description: "Inte bokat på 180 dagar",
-    tag: "bedfront-lapsed",
-    criteria: { daysSinceLastBooking: { gt: 180 } },
-  },
-  {
-    id: "new-guests",
-    name: "Nya gäster",
-    description: "Gäster med exakt 1 bokning",
-    tag: "bedfront-new",
-    criteria: { maxBookings: 1 },
-  },
-];
-
 // ── Automation Triggers ─────────────────────────────────────────
 
 export type EmailAutomationTrigger =

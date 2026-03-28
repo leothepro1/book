@@ -220,14 +220,19 @@ export async function POST(req: Request) {
             currency: "SEK",
           },
         },
-        events: {
-          create: {
-            type: "CREATED",
-            message: `Order #${orderNumber} skapad — Presentkort ${body.amount / 100} kr till ${body.recipientName}`,
-          },
-        },
       },
     });
+
+    await tx.orderEvent.create({
+      data: {
+        orderId: newOrder.id,
+        tenantId: tenant.id,
+        type: "ORDER_CREATED",
+        message: `Order #${orderNumber} skapad — Presentkort ${body.amount / 100} kr till ${body.recipientName}`,
+        metadata: { giftCardAmount: body.amount, recipientName: body.recipientName },
+      },
+    });
+
     return newOrder;
   });
 
@@ -287,8 +292,9 @@ export async function POST(req: Request) {
     await prisma.orderEvent.create({
       data: {
         orderId: order.id,
-        type: "CANCELLED",
-        message: "Payment initiation failed — order cancelled",
+        tenantId: tenant.id,
+        type: "ORDER_CANCELLED",
+        message: "Betalningsinitiering misslyckades — order avbokad automatiskt",
       },
     });
 

@@ -72,16 +72,15 @@ export async function POST(req: Request) {
     guestAccountId: guestAccount.id,
   });
 
-  // Emit LOGIN guest event (non-blocking)
-  prisma.guestAccountEvent.create({
-    data: {
-      tenantId,
-      guestAccountId: guestAccount.id,
-      type: "LOGIN",
-      message: "Gäst loggade in via OTP",
-      metadata: { method: "otp" },
-    },
-  }).catch(() => {});
+  // Emit LOGIN guest event
+  const { createGuestAccountEvent } = await import("@/app/_lib/guests/events");
+  await createGuestAccountEvent({
+    guestAccountId: guestAccount.id,
+    tenantId,
+    type: "LOGIN",
+    message: "Gäst loggade in via OTP",
+    metadata: { method: "otp" },
+  });
 
   // Redirect to session-driven portal home page.
   // /portal/home handles "no booking" via resolveGuestContext() → redirect to /no-booking.

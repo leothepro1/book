@@ -119,12 +119,19 @@ export async function POST(req: Request) {
     );
   }
 
+  // ── Resolve product by room name ─────────────────────────
+  const product = await prisma.product.findFirst({
+    where: { tenantId: tenant.id, title: body.room_name, status: "ACTIVE" },
+    select: { id: true },
+  });
+
   // ── Create channel order ────────────────────────────────
   const result = await createChannelOrder({
     tenantId: tenant.id,
     channelHandle: "booking_com",
     sourceExternalId: body.booking_id,
     sourceUrl: body.booking_url,
+    productId: product?.id,
     guestEmail: body.guest_email,
     guestName: body.guest_name,
     guestPhone: body.guest_phone,

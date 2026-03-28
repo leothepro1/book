@@ -30,17 +30,22 @@ export async function addGuestTag(
     throw err;
   }
 
-  prisma.guestAccountEvent.create({
-    data: {
-      tenantId,
-      guestAccountId,
-      type: "TAG_ADDED",
-      message: `Tagg "${normalized}" tillagd`,
-      actorUserId: actorUserId ?? null,
-    },
-  }).catch(() => {});
+  const { createGuestAccountEvent } = await import("@/app/_lib/guests/events");
+  await createGuestAccountEvent({
+    guestAccountId,
+    tenantId,
+    type: "TAG_ADDED",
+    message: `Tagg "${normalized}" tillagd`,
+    actorUserId,
+  });
 
   log("info", "guest.tag.added", { tenantId, guestAccountId, tag: normalized });
+
+  // Segment sync — customer_tags changed (non-blocking)
+  import("@/app/_lib/segments/sync").then(({ syncGuestSegments }) =>
+    syncGuestSegments(guestAccountId, tenantId),
+  ).catch((err) => log("warn", "guest.tag.segment_sync_failed", { tenantId, guestAccountId, error: String(err) }));
+
   return { success: true };
 }
 
@@ -56,17 +61,22 @@ export async function removeGuestTag(
     where: { tenantId, guestAccountId, tag: normalized },
   });
 
-  prisma.guestAccountEvent.create({
-    data: {
-      tenantId,
-      guestAccountId,
-      type: "TAG_REMOVED",
-      message: `Tagg "${normalized}" borttagen`,
-      actorUserId: actorUserId ?? null,
-    },
-  }).catch(() => {});
+  const { createGuestAccountEvent } = await import("@/app/_lib/guests/events");
+  await createGuestAccountEvent({
+    guestAccountId,
+    tenantId,
+    type: "TAG_REMOVED",
+    message: `Tagg "${normalized}" borttagen`,
+    actorUserId,
+  });
 
   log("info", "guest.tag.removed", { tenantId, guestAccountId, tag: normalized });
+
+  // Segment sync — customer_tags changed (non-blocking)
+  import("@/app/_lib/segments/sync").then(({ syncGuestSegments }) =>
+    syncGuestSegments(guestAccountId, tenantId),
+  ).catch((err) => log("warn", "guest.tag.segment_sync_failed", { tenantId, guestAccountId, error: String(err) }));
+
   return { success: true };
 }
 

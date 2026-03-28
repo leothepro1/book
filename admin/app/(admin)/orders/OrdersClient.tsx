@@ -1,38 +1,22 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { EditorIcon } from "@/app/_components/EditorIcon";
-import { getOrders, type OrderListItem, type OrderSortField, type OrderSortDirection } from "./actions";
+import { getOrders, type OrderListItem, type OrderSortField, type OrderSortDirection, type OrderTab } from "./actions";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
-import type { OrderStatus } from "@prisma/client";
+import { OrderBadge } from "@/app/(admin)/_components/orders/OrderBadge";
+import type { OrderFinancialStatus, OrderFulfillmentStatus } from "@prisma/client";
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function paymentStatusLabel(status: OrderStatus): { label: string; className: string } {
-  switch (status) {
-    case "PENDING": return { label: "Väntande", className: "ord-badge--pending" };
-    case "PAID": return { label: "Betald", className: "ord-badge--paid" };
-    case "FULFILLED": return { label: "Betald", className: "ord-badge--paid" };
-    case "CANCELLED": return { label: "Avbokad", className: "ord-badge--cancelled" };
-    case "REFUNDED": return { label: "Återbetald", className: "ord-badge--refunded" };
-    default: return { label: status, className: "" };
-  }
-}
-
-function fulfillmentStatusLabel(status: OrderStatus): { label: string; className: string } {
-  switch (status) {
-    case "PENDING": return { label: "Ej levererad", className: "ord-badge--unfulfilled" };
-    case "PAID": return { label: "Ej levererad", className: "ord-badge--unfulfilled" };
-    case "FULFILLED": return { label: "Levererad", className: "ord-badge--fulfilled" };
-    case "CANCELLED": return { label: "Avbokad", className: "ord-badge--cancelled" };
-    case "REFUNDED": return { label: "Återbetald", className: "ord-badge--refunded" };
-    default: return { label: status, className: "" };
-  }
-}
-
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("sv-SE");
+  const d = new Date(iso);
+  const day = d.getDate();
+  const month = d.toLocaleDateString("sv-SE", { month: "short" }).replace(".", "");
+  const time = d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+  return `${day} ${month}. kl. ${time}`;
 }
 
 const CHANNEL_LABELS: Record<string, { label: string; color: string }> = {
@@ -67,25 +51,28 @@ const SORT_DIRECTIONS: Array<{ key: OrderSortDirection; label: string }> = [
   { key: "asc", label: "Äldst till nyast" },
 ];
 
-// ── Status filters ───────────────────────────────────────────
+// ── Tabs (Shopify-style saved views) ────────────────────────
 
-const FILTERS: Array<{ key: OrderStatus | "ALL"; label: string }> = [
-  { key: "ALL", label: "Alla" },
-  { key: "PENDING", label: "Väntande" },
-  { key: "PAID", label: "Betalda" },
-  { key: "FULFILLED", label: "Levererade" },
-  { key: "CANCELLED", label: "Avbokade" },
-  { key: "REFUNDED", label: "Återbetalda" },
+const TABS: Array<{ key: OrderTab; label: string }> = [
+  { key: "all", label: "Alla" },
+  { key: "unfulfilled", label: "Kommande" },
+  { key: "unpaid", label: "Obetalda" },
+  { key: "open", label: "Öppna" },
+  { key: "closed", label: "Stängda" },
 ];
 
 // ── Component ────────────────────────────────────────────────
 
 export function OrdersClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeTab = (searchParams.get("tab") as OrderTab) || "all";
+  const activeChannel = searchParams.get("channel") || "";
+  const urlPage = parseInt(searchParams.get("page") ?? "1", 10) || 1;
+
   const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | "ALL">("ALL");
+  const [page, setPage] = useState(urlPage);
   const [sortBy, setSortBy] = useState<OrderSortField>("createdAt");
   const [sortDirection, setSortDirection] = useState<OrderSortDirection>("desc");
   const [loaded, setLoaded] = useState(false);
@@ -95,8 +82,11 @@ export function OrdersClient() {
   const [searchMode, setSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [itemsPopup, setItemsPopup] = useState<string | null>(null);
+  const [showChannelDropdown, setShowChannelDropdown] = useState(false);
   const selectDropdownRef = useRef<HTMLDivElement>(null);
   const sortDropdownRef = useRef<HTMLDivElement>(null);
+  const channelDropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const limit = 25;
@@ -114,21 +104,24 @@ export function OrdersClient() {
     }
   }, [searchMode]);
 
+  // Sync page from URL when tab changes
+  useEffect(() => { setPage(urlPage); }, [urlPage]);
+
   useEffect(() => {
-    const filter = statusFilter === "ALL" ? undefined : statusFilter;
     const search = debouncedSearch || undefined;
-    getOrders({ status: filter, page, limit, sortBy, sortDirection, search }).then((result) => {
+    const channel = activeChannel || undefined;
+    getOrders({ tab: activeTab, page, limit, sortBy, sortDirection, search, channel }).then((result) => {
       setOrders(result.orders);
       setTotal(result.total);
       setLoaded(true);
     });
-  }, [page, statusFilter, sortBy, sortDirection, debouncedSearch]);
+  }, [page, activeTab, activeChannel, sortBy, sortDirection, debouncedSearch]);
 
   const totalPages = Math.ceil(total / limit);
 
-  // Close dropdowns on outside click
+  // Close popups on outside click
   useEffect(() => {
-    if (!showSelectDropdown && !showSortDropdown) return;
+    if (!showSelectDropdown && !showSortDropdown && !itemsPopup) return;
     const handle = (e: MouseEvent) => {
       if (showSelectDropdown && selectDropdownRef.current && !selectDropdownRef.current.contains(e.target as Node)) {
         setShowSelectDropdown(false);
@@ -136,10 +129,28 @@ export function OrdersClient() {
       if (showSortDropdown && sortDropdownRef.current && !sortDropdownRef.current.contains(e.target as Node)) {
         setShowSortDropdown(false);
       }
+      if (showChannelDropdown && channelDropdownRef.current && !channelDropdownRef.current.contains(e.target as Node)) {
+        setShowChannelDropdown(false);
+      }
+      if (itemsPopup) {
+        const popup = document.querySelector(".ord-items-popup");
+        const trigger = (e.target as HTMLElement).closest(".ord-row__hoverable");
+        if (popup && !popup.contains(e.target as Node) && !trigger) {
+          setItemsPopup(null);
+        }
+      }
     };
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
-  }, [showSelectDropdown, showSortDropdown]);
+  }, [showSelectDropdown, showSortDropdown, itemsPopup]);
+
+  // Close items popup on scroll
+  useEffect(() => {
+    if (!itemsPopup) return;
+    const close = () => setItemsPopup(null);
+    window.addEventListener("scroll", close, true);
+    return () => window.removeEventListener("scroll", close, true);
+  }, [itemsPopup]);
 
   // Selection logic
   const toggleSelect = useCallback((id: string) => {
@@ -170,7 +181,7 @@ export function OrdersClient() {
   if (!loaded) return null;
 
   // ── Empty state ──
-  if (total === 0 && statusFilter === "ALL") {
+  if (total === 0 && activeTab === "all" && !debouncedSearch) {
     return (
       <div className="ord-empty">
         <div className="ord-empty__icon">
@@ -306,17 +317,53 @@ export function OrdersClient() {
           </>
         ) : (
           <>
-            {FILTERS.map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                className={`ord-filter-btn${statusFilter === f.key ? " ord-filter-btn--active" : ""}`}
-                onClick={() => { setStatusFilter(f.key); setPage(1); }}
+            {TABS.map((t) => (
+              <Link
+                key={t.key}
+                href={t.key === "all" ? "/orders" : `/orders?tab=${t.key}`}
+                className={`ord-filter-btn${activeTab === t.key ? " ord-filter-btn--active" : ""}`}
               >
-                {f.label}
-              </button>
+                {t.label}
+              </Link>
             ))}
             <div className="ord-filter-bar__actions">
+              {/* Channel filter */}
+              <div className="cst-sort" ref={channelDropdownRef}>
+                <button
+                  type="button"
+                  className={`cst-sort__trigger${showChannelDropdown || activeChannel ? " cst-sort__trigger--active" : ""}`}
+                  onClick={() => setShowChannelDropdown(!showChannelDropdown)}
+                  aria-label="Filtrera kanal"
+                >
+                  <span className="material-symbols-rounded" style={{ fontSize: 20 }}>conversion_path</span>
+                </button>
+                {showChannelDropdown && (
+                  <div className="cst-sort__dropdown">
+                    <div className="cst-sort__section-label">Försäljningskanal</div>
+                    {[
+                      { key: "", label: "Alla kanaler" },
+                      { key: "direct", label: "Direktbokning" },
+                      ...Object.entries(CHANNEL_LABELS).map(([key, { label }]) => ({ key, label })),
+                    ].map((ch) => (
+                      <button
+                        key={ch.key}
+                        type="button"
+                        className={`cst-sort__item${activeChannel === ch.key ? " cst-sort__item--active" : ""}`}
+                        onClick={() => {
+                          const params = new URLSearchParams(searchParams.toString());
+                          if (ch.key) params.set("channel", ch.key); else params.delete("channel");
+                          params.delete("page");
+                          router.push(`/orders${params.toString() ? `?${params}` : ""}`);
+                          setShowChannelDropdown(false);
+                        }}
+                      >
+                        {ch.label}
+                        {activeChannel === ch.key && <EditorIcon name="check" size={16} className="cst-sort__item-check" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 className="ord-search-trigger"
@@ -338,8 +385,6 @@ export function OrdersClient() {
         ) : (
           orders.map((order) => {
             const checked = selectedIds.has(order.id);
-            const payment = paymentStatusLabel(order.status);
-            const fulfillment = fulfillmentStatusLabel(order.status);
 
             return (
               <div
@@ -363,22 +408,67 @@ export function OrdersClient() {
                   <span className="ord-row__date">{formatDate(order.createdAt)}</span>
                 </div>
                 <div className="ord-col ord-col--customer">
-                  <span className="ord-row__customer-name">{order.guestName || "—"}</span>
+                  <span className="ord-row__customer-name ord-row__hoverable">{order.guestName || "—"}<EditorIcon name="expand_more" size={16} className="ord-row__hover-chevron" /></span>
                 </div>
                 <div className="ord-col ord-col--total">
                   <span className="ord-row__total">{formatPriceDisplay(order.totalAmount, order.currency)} kr</span>
                 </div>
                 <div className="ord-col ord-col--payment">
-                  <span className={`ord-badge ${payment.className}`}>{payment.label}</span>
+                  <OrderBadge type="financial" financial={order.financialStatus as OrderFinancialStatus} fulfillment={order.fulfillmentStatus as OrderFulfillmentStatus} />
                 </div>
                 <div className="ord-col ord-col--fulfillment">
-                  <span className={`ord-badge ${fulfillment.className}`}>{fulfillment.label}</span>
+                  <OrderBadge type="fulfillment" fulfillment={order.fulfillmentStatus as OrderFulfillmentStatus} />
                 </div>
-                <div className="ord-col ord-col--items">
-                  <span className="ord-row__items">{formatArticles(order.productTitles, order.lineItemCount)}</span>
+                <div
+                  className="ord-col ord-col--items"
+                  style={{ position: "relative", zIndex: itemsPopup === order.id ? 999 : undefined }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setItemsPopup(itemsPopup === order.id ? null : order.id);
+                  }}
+                >
+                  <span className="ord-row__items ord-row__hoverable">
+                    {order.lineItemCount === 0 ? "—" : `${order.lineItemCount} ${order.lineItemCount === 1 ? "artikel" : "artiklar"}`}
+                    <EditorIcon name="expand_more" size={16} className="ord-row__hover-chevron" />
+                  </span>
+                  {itemsPopup === order.id && order.lineItems.length > 0 && (
+                    <div
+                      className="ord-items-popup"
+                      ref={(el) => {
+                        if (!el) return;
+                        const trigger = el.parentElement?.querySelector(".ord-row__hoverable");
+                        if (!trigger) return;
+                        const rect = trigger.getBoundingClientRect();
+                        el.style.position = "fixed";
+                        el.style.top = `${rect.bottom + 4}px`;
+                        el.style.left = `${rect.left}px`;
+                      }}
+                    >
+                      {order.lineItems.map((li, i) => (
+                        <div key={i} className="ord-items-popup__item">
+                          {li.imageUrl ? (
+                            <img src={li.imageUrl} alt={li.title} className="ord-items-popup__img" />
+                          ) : (
+                            <div className="ord-items-popup__img ord-items-popup__img--empty">
+                              <EditorIcon name="image" size={16} />
+                            </div>
+                          )}
+                          <span className="ord-items-popup__title">{li.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="ord-col ord-col--tags">
-                  <span className="ord-row__tags">—</span>
+                  {order.tags.length > 0 ? (
+                    <span className="ord-row__tags">
+                      {order.tags.map((tag) => (
+                        <span key={tag} style={{ display: "inline-block", background: "#E8E8E8", color: "#616161", borderRadius: 8, padding: "2px 8px", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", marginRight: 4 }}>{tag}</span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="ord-row__tags">—</span>
+                  )}
                 </div>
                 <div className="ord-col ord-col--channel">
                   {(() => {
@@ -398,7 +488,7 @@ export function OrdersClient() {
       </div>
 
       {/* Pagination footer */}
-      {total > 0 && (
+      {totalPages > 1 && (
         <div className="files-pagination">
           <div className="files-pagination__nav">
             <button

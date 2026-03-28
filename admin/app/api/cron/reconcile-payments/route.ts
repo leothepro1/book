@@ -80,6 +80,7 @@ export async function GET(req: Request) {
           prisma.orderEvent.create({
             data: {
               orderId: order.id,
+              tenantId: session.tenantId,
               type: "RECONCILED",
               message: `Reconcilierad: ${session.providerKey} session ${session.externalSessionId} — betalning bekräftad`,
               metadata: { externalSessionId: session.externalSessionId, source: "cron", providerKey: session.providerKey },
@@ -106,6 +107,7 @@ export async function GET(req: Request) {
           prisma.orderEvent.create({
             data: {
               orderId: order.id,
+              tenantId: session.tenantId,
               type: "RECONCILED",
               message: `Reconcilierad: ${session.providerKey} session ${session.externalSessionId} — avvisad`,
               metadata: { externalSessionId: session.externalSessionId, source: "cron", providerKey: session.providerKey },

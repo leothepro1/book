@@ -26,15 +26,14 @@ export async function addGuestNote(
     },
   });
 
-  prisma.guestAccountEvent.create({
-    data: {
-      tenantId,
-      guestAccountId,
-      type: "NOTE_ADDED",
-      message: "Anteckning tillagd",
-      actorUserId: actorUserId ?? null,
-    },
-  }).catch(() => {});
+  const { createGuestAccountEvent } = await import("@/app/_lib/guests/events");
+  await createGuestAccountEvent({
+    guestAccountId,
+    tenantId,
+    type: "COMMENT_ADDED",
+    message: "Kommentar tillagd",
+    actorUserId,
+  });
 
   log("info", "guest.note.added", { tenantId, guestAccountId, noteId: note.id });
   return { success: true, noteId: note.id };

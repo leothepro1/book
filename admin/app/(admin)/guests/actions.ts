@@ -85,16 +85,15 @@ export async function updateGuestStateAction(
     data: { state },
   });
 
-  prisma.guestAccountEvent.create({
-    data: {
-      tenantId: tenant.id,
-      guestAccountId,
-      type: "ACCOUNT_UPDATED",
-      message: state === "DISABLED" ? "Konto inaktiverat" : `Kontostatus ändrad till ${state}`,
-      actorUserId: clerkUserId,
-      metadata: { state },
-    },
-  }).catch(() => {});
+  const { createGuestAccountEvent } = await import("@/app/_lib/guests/events");
+  await createGuestAccountEvent({
+    guestAccountId,
+    tenantId: tenant.id,
+    type: "ACCOUNT_UPDATED",
+    message: state === "DISABLED" ? "Konto inaktiverat" : `Kontostatus ändrad till ${state}`,
+    actorUserId: clerkUserId,
+    metadata: { state },
+  });
 
   revalidatePath("/guests");
   return { success: true };

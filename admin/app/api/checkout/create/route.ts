@@ -33,6 +33,7 @@ const checkoutInputSchema = z.object({
   ).min(1, "Varukorgen är tom"),
   guestInfo: guestInfoSchema.optional(),
   gclid: z.string().max(200).optional(),
+  customerNote: z.string().max(1000).optional(),
 });
 
 export async function POST(req: Request) {
@@ -151,12 +152,22 @@ export async function POST(req: Request) {
           })),
         },
         sourceChannel: "direct",
+        customerNote: body.customerNote ?? null,
         metadata: body.gclid ? { gclid: body.gclid } : undefined,
-        events: {
-          create: { type: "CREATED", message: `Order #${orderNumber} skapad`, metadata: {} },
-        },
       },
     });
+
+    await tx.orderEvent.create({
+      data: {
+        orderId: newOrder.id,
+        tenantId: tenantId,
+        type: "ORDER_CREATED",
+        message: `Order #${orderNumber} skapad`,
+        metadata: { channel: "checkout_session" },
+      },
+    });
+
+    return newOrder;
   });
 
   // Reserve inventory
@@ -258,8 +269,9 @@ export async function POST(req: Request) {
     await prisma.orderEvent.create({
       data: {
         orderId: order.id,
-        type: "CANCELLED",
-        message: "Payment session creation failed — order cancelled",
+        tenantId: tenantId,
+        type: "ORDER_CANCELLED",
+        message: "Betalningsinitiering misslyckades — order avbokad automatiskt",
       },
     });
 

@@ -1,13 +1,15 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import { SidebarProvider, useSidebar } from './SidebarContext';
 import { NavigationGuardProvider, UnsavedChangesModal } from './NavigationGuard';
 import { SettingsProvider, useSettings } from './SettingsContext';
 import { RoleProvider } from './RoleContext';
 import { Sidebar } from './Sidebar';
 import type { SidebarApp } from '@/app/_lib/apps/actions';
-import { SettingsPanel } from './SettingsPanel';
+
+const SettingsPanel = dynamic(() => import('./SettingsPanel').then(m => ({ default: m.SettingsPanel })), { ssr: false });
 
 function LayoutContent({ children }: { children: ReactNode }) {
   const { isCollapsed } = useSidebar();

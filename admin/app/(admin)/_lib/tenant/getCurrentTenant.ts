@@ -2,6 +2,7 @@
 
 import { prisma } from "@/app/_lib/db/prisma";
 import { getAuth } from "../auth/devAuth";
+import { setSentryTenantContext } from "@/app/_lib/observability/sentry";
 
 /**
  * Get the current tenant for the authenticated admin user.
@@ -22,11 +23,11 @@ export async function getCurrentTenant() {
 
   if (!tenant) return null;
 
-  // Dynamic import — prevents @sentry/nextjs from being bundled into
-  // the server action client proxy (causes Turbopack module error)
-  import("@/app/_lib/observability/sentry").then(({ setSentryTenantContext }) =>
-    setSentryTenantContext(tenant.id, tenant.portalSlug ?? undefined),
-  ).catch(() => {});
+  try {
+    setSentryTenantContext(tenant.id, tenant.portalSlug ?? undefined);
+  } catch {
+    // Sentry unavailable — safe to ignore
+  }
 
   return {
     tenant,

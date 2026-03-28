@@ -33,6 +33,8 @@ export type SidebarApp = {
   appId: string;
   name: string;
   icon: string;
+  isSalesChannel: boolean;
+  channelHandle?: string;
 };
 
 /**
@@ -49,13 +51,19 @@ export async function getActiveAppsForSidebar(): Promise<SidebarApp[]> {
     orderBy: { installedAt: "asc" },
   });
 
-  return apps
-    .map((a) => {
-      const def = getApp(a.appId);
-      if (!def) return null;
-      return { appId: def.id, name: def.name, icon: def.icon };
-    })
-    .filter((a): a is SidebarApp => a !== null);
+  const result: SidebarApp[] = [];
+  for (const a of apps) {
+    const def = getApp(a.appId);
+    if (!def) continue;
+    result.push({
+      appId: def.id,
+      name: def.name,
+      icon: def.icon,
+      isSalesChannel: !!def.salesChannel,
+      channelHandle: def.salesChannel?.handle,
+    });
+  }
+  return result;
 }
 
 // ── Install ─────────────────────────────────────────────────────

@@ -58,7 +58,7 @@ export async function POST(req: Request) {
         const { id, name, slug, created_by } = evt.data;
         const portalSlug = await generatePortalSlug(name);
         const emailFrom = tenantDefaultEmailFrom(portalSlug);
-        await tx.tenant.create({
+        const newTenant = await tx.tenant.create({
           data: {
             clerkOrgId: id,
             name: name,
@@ -69,6 +69,10 @@ export async function POST(req: Request) {
             settings: getDefaultTenantSettings(name),
           },
         });
+
+        // Seed default guest segments
+        const { seedDefaultSegments } = await import("@/app/_lib/segments/defaults");
+        await seedDefaultSegments(newTenant.id, tx);
       }
 
       // Double-write strategy: updateClerkOrgName() in organisation/actions.ts

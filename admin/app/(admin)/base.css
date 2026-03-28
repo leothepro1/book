@@ -317,7 +317,7 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0;
 }
 
-h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; line-height:1em; }
+h1 { font-size: 17px; font-weight: 600;  line-height:1em; }
 h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; }
 h3 { font-size: 18px; font-weight: 600; }
 h4 { font-size: 16px; font-weight: 500; }
@@ -1111,13 +1111,13 @@ textarea::placeholder {
 }
 
 .admin-group-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--admin-text-secondary);
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--admin-surface-muted);
+    text-transform: none;
+    letter-spacing: 0;
+    color: #464646;
+    border-bottom: none;
+    font-size: 12px;
+    font-weight: 500;
+    margin-top: 25px;
 }
 
 

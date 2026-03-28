@@ -29,12 +29,12 @@ export interface FulfillmentTransitionResult {
 
 function eventTypeForTransition(to: OrderFulfillmentStatus): OrderEventType {
   switch (to) {
-    case "IN_PROGRESS":  return "CHECKIN_CONFIRMED";
-    case "FULFILLED":    return "CHECKOUT_CONFIRMED";
-    case "CANCELLED":    return "CANCELLED";
-    case "ON_HOLD":      return "NOTE_ADDED";
-    case "SCHEDULED":    return "NOTE_ADDED";
-    case "UNFULFILLED":  return "NOTE_ADDED";
+    case "IN_PROGRESS":  return "ORDER_UPDATED";
+    case "FULFILLED":    return "ORDER_FULFILLED";
+    case "CANCELLED":    return "ORDER_CANCELLED";
+    case "ON_HOLD":      return "ORDER_UPDATED";
+    case "SCHEDULED":    return "ORDER_UPDATED";
+    case "UNFULFILLED":  return "ORDER_UNFULFILLED";
   }
 }
 
@@ -100,6 +100,7 @@ export async function transitionFulfillmentStatus(
     prisma.orderEvent.create({
       data: {
         orderId,
+        tenantId,
         type: eventTypeForTransition(to),
         message: buildFulfillmentMessage(to, options.note),
         actorUserId: options.actorUserId ?? null,
@@ -116,17 +117,17 @@ export async function transitionFulfillmentStatus(
     actorUserId: options.actorUserId ?? null,
   });
 
-  // Emit ORDER_FULFILLED guest event (non-blocking)
+  // Emit ORDER_FULFILLED guest event
   if (to === "FULFILLED" && order.guestAccountId) {
-    prisma.guestAccountEvent.create({
-      data: {
-        tenantId,
-        guestAccountId: order.guestAccountId,
-        type: "ORDER_FULFILLED",
-        message: `Order #${order.orderNumber} slutförd`,
-        metadata: { orderId: order.id },
-      },
-    }).catch(() => {});
+    const { createGuestAccountEvent } = await import("@/app/_lib/guests/events");
+    await createGuestAccountEvent({
+      guestAccountId: order.guestAccountId,
+      tenantId,
+      type: "ORDER_FULFILLED",
+      message: `Bokning #${order.orderNumber} genomförd`,
+      metadata: { orderId: order.id, orderNumber: order.orderNumber },
+      orderId: order.id,
+    });
   }
 
   return {

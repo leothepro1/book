@@ -3,14 +3,13 @@
  *
  * buildEmailContact() is the ONLY place that computes contact data.
  * syncContact() is the ONLY place that calls adapter.upsertContact().
- * BUILT_IN_SEGMENTS is the source of truth for segment criteria.
+ * Segment membership is read from GuestSegmentMembership (single source of truth).
  */
 
 import { prisma } from "@/app/_lib/db/prisma";
 import { log } from "@/app/_lib/logger";
 import { RateLimitError } from "./adapters/mailchimp";
-import { BUILT_IN_SEGMENTS } from "./types";
-import type { EmailContact, EmailMarketingAdapter, SyncResult, EmailSegment } from "./types";
+import type { EmailContact, EmailMarketingAdapter, SyncResult } from "./types";
 import type { Prisma } from "@prisma/client";
 
 // ── Build Contact ───────────────────────────────────────────────
@@ -32,7 +31,15 @@ export async function buildEmailContact(
     }),
     prisma.guestAccount.findUnique({
       where: { tenantId_email: { tenantId, email: guestEmail } },
-      select: { id: true, firstName: true, lastName: true, phone: true, country: true },
+      select: {
+        id: true, firstName: true, lastName: true, phone: true, country: true,
+        segmentMemberships: {
+          where: { leftAt: null },
+          select: {
+            segment: { select: { id: true, name: true } },
+          },
+        },
+      },
     }),
   ]);
 
@@ -42,15 +49,10 @@ export async function buildEmailContact(
   const firstBooking = bookings[bookings.length - 1];
   const vipThreshold = ((appSettings.vipThreshold as number) ?? 10000) * 100;
 
-  // Compute segment tags
-  const tags: string[] = [];
-  const now = Date.now();
-
-  for (const seg of BUILT_IN_SEGMENTS) {
-    if (matchesSegment(seg, totalBookings, totalSpend, lastBooking?.arrival, now)) {
-      tags.push(seg.tag);
-    }
-  }
+  // Segment tags from GuestSegmentMembership (single source of truth)
+  const tags: string[] = guestAccount?.segmentMemberships.map(
+    (m) => `bedfront-segment-${m.segment.id}`,
+  ) ?? [];
 
   return {
     email: guestEmail,
@@ -70,20 +72,6 @@ export async function buildEmailContact(
   };
 }
 
-function matchesSegment(seg: EmailSegment, bookings: number, spend: number, lastArrival: Date | undefined, nowMs: number): boolean {
-  const c = seg.criteria;
-  if (c.minBookings !== undefined && bookings < c.minBookings) return false;
-  if (c.maxBookings !== undefined && bookings > c.maxBookings) return false;
-  if (c.minTotalSpend !== undefined && spend < c.minTotalSpend) return false;
-  if (c.daysSinceLastBooking && lastArrival) {
-    const daysSince = Math.floor((nowMs - lastArrival.getTime()) / (24 * 60 * 60 * 1000));
-    if (c.daysSinceLastBooking.lt !== undefined && daysSince >= c.daysSinceLastBooking.lt) return false;
-    if (c.daysSinceLastBooking.gt !== undefined && daysSince <= c.daysSinceLastBooking.gt) return false;
-  }
-  if (c.daysSinceLastBooking && !lastArrival) return false;
-  return true;
-}
-
 // ── Sync Contact ────────────────────────────────────────────────
 
 export async function syncContact(
@@ -99,14 +87,9 @@ export async function syncContact(
 
   await adapter.upsertContact(apiKey, listId, contact);
 
-  // Sync segment tags
+  // Sync segment tags to external provider
   const currentTags = contact.tags;
-  const allSegmentTags = BUILT_IN_SEGMENTS.map((s) => s.tag);
-  const tagsToAdd = currentTags.filter((t) => allSegmentTags.includes(t));
-  const tagsToRemove = allSegmentTags.filter((t) => !currentTags.includes(t));
-
-  if (tagsToAdd.length > 0) await adapter.addTags(apiKey, listId, email, tagsToAdd);
-  if (tagsToRemove.length > 0) await adapter.removeTags(apiKey, listId, email, tagsToRemove);
+  if (currentTags.length > 0) await adapter.addTags(apiKey, listId, email, currentTags);
 
   // Upsert sync record
   await prisma.emailMarketingSync.upsert({
@@ -114,28 +97,6 @@ export async function syncContact(
     create: { tenantId, appId, email, status: "SYNCED", contactData: contact as unknown as Prisma.InputJsonValue },
     update: { status: "SYNCED", lastSyncedAt: new Date(), contactData: contact as unknown as Prisma.InputJsonValue, errorMessage: null },
   });
-
-  // Upsert segment memberships
-  for (const seg of BUILT_IN_SEGMENTS) {
-    const inSegment = currentTags.includes(seg.tag);
-    if (inSegment) {
-      await prisma.emailSegmentMembership.upsert({
-        where: { tenantId_appId_segmentId_email: { tenantId, appId, segmentId: seg.id, email } },
-        create: { tenantId, appId, segmentId: seg.id, email },
-        update: { removedAt: null },
-      });
-    } else {
-      const existing = await prisma.emailSegmentMembership.findUnique({
-        where: { tenantId_appId_segmentId_email: { tenantId, appId, segmentId: seg.id, email } },
-      });
-      if (existing && !existing.removedAt) {
-        await prisma.emailSegmentMembership.update({
-          where: { id: existing.id },
-          data: { removedAt: new Date() },
-        });
-      }
-    }
-  }
 }
 
 // ── Sync All Contacts ───────────────────────────────────────────

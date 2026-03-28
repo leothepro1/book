@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { getCurrentTenant } from "./getCurrentTenant";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { scanTranslatableStrings } from "@/app/_lib/translations/scanner";
+import { computeSettingsHash } from "@/app/_lib/screenshots/hash";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 
 /**
@@ -26,11 +27,15 @@ export async function publishDraft(): Promise<{ success: boolean; error?: string
 
     const currentVersion = tenant.settingsVersion;
 
+    // Compute content-hash for screenshot cache-busting
+    const newHash = computeSettingsHash(tenant.draftSettings);
+    const hashChanged = newHash !== tenant.screenshotHash;
+
     // Atomic transaction: config publish + translation publish together
     // If either fails, both roll back.
     try {
       await prisma.$transaction(async (tx) => {
-        // 1. Publish config with optimistic lock
+        // 1. Publish config with optimistic lock + screenshot hash
         const updated = await tx.tenant.updateMany({
           where: {
             id: tenant.id,
@@ -43,6 +48,8 @@ export async function publishDraft(): Promise<{ success: boolean; error?: string
             draftUpdatedAt: null,
             draftUpdatedBy: null,
             settingsVersion: currentVersion + 1,
+            screenshotHash: newHash,
+            ...(hashChanged ? { screenshotPending: true } : {}),
           },
         });
 
@@ -94,6 +101,28 @@ export async function publishDraft(): Promise<{ success: boolean; error?: string
       }
     } catch (cleanupError) {
       console.error("[publishDraft] Translation cleanup failed:", cleanupError);
+    }
+
+    // Screenshot trigger — fire and forget, OUTSIDE transaction
+    if (hashChanged) {
+      const screenshotSecret = process.env.SCREENSHOT_SECRET;
+      const baseUrl = process.env.SCREENSHOT_BASE_URL ?? process.env.NEXTAUTH_URL ?? "";
+      if (screenshotSecret && baseUrl) {
+        fetch(`${baseUrl}/api/screenshot`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${screenshotSecret}`,
+          },
+          body: JSON.stringify({ tenantId: tenant.id }),
+        }).catch((err) => {
+          console.error("[publishDraft] Screenshot trigger failed", {
+            tenantId: tenant.id,
+            error: String(err),
+          });
+        });
+        // No await — cron retries if this fails
+      }
     }
 
     return { success: true };

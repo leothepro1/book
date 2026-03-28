@@ -68,8 +68,10 @@ export async function POST(req: Request) {
     prisma.orderEvent.create({
       data: {
         orderId: order.id,
+        tenantId: tenant.id,
         type: "GUEST_INFO_UPDATED",
-        message: `Gästuppgifter: ${body.guestName} (${body.guestEmail})`,
+        message: `Gästuppgifter registrerade — ${body.guestName} (${body.guestEmail})`,
+        metadata: { guestName: body.guestName, guestEmail: body.guestEmail },
       },
     }),
   ]);

@@ -5,6 +5,7 @@ import { getAuth, requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
 import { adjustInventoryInTx } from "@/app/_lib/products/inventory";
 import { canTransition } from "@/app/_lib/orders/types";
 import { transitionFulfillmentStatus } from "@/app/_lib/orders/fulfillment";
+import { createOrderEvent, createOrderEventInTx } from "@/app/_lib/orders/events";
 import type { OrderStatus } from "@prisma/client";
 
 // ── Types ──────────────────────────────────────────────────────
@@ -13,6 +14,8 @@ export type OrderListItem = {
   id: string;
   orderNumber: number;
   status: OrderStatus;
+  financialStatus: string;
+  fulfillmentStatus: string;
   guestName: string;
   guestEmail: string;
   totalAmount: number;
@@ -20,7 +23,10 @@ export type OrderListItem = {
   createdAt: string;
   lineItemCount: number;
   productTitles: string[];
+  lineItems: { title: string; imageUrl: string | null }[];
   sourceChannel: string | null;
+  tags: string[];
+  recoveryStatus?: "not_contacted" | "contacted";
 };
 
 export type OrderDetail = {
@@ -35,6 +41,18 @@ export type OrderDetail = {
   guestName: string;
   guestEmail: string;
   guestPhone: string | null;
+  guestAccountId: string | null;
+  guestOrderCount: number;
+  guestAddress: {
+    firstName: string | null;
+    lastName: string | null;
+    company: string | null;
+    address1: string | null;
+    address2: string | null;
+    city: string | null;
+    postalCode: string | null;
+    country: string | null;
+  } | null;
   subtotalAmount: number;
   taxAmount: number;
   totalAmount: number;
@@ -45,7 +63,12 @@ export type OrderDetail = {
   fulfilledAt: string | null;
   cancelledAt: string | null;
   refundedAt: string | null;
+  orderType: string;
+  tags: string[];
+  customerNote: string | null;
+  archivedAt: string | null;
   createdAt: string;
+  metadata: Record<string, unknown> | null;
   lineItems: {
     id: string;
     title: string;
@@ -60,24 +83,84 @@ export type OrderDetail = {
   events: {
     id: string;
     type: string;
-    message: string | null;
+    message: string;
+    metadata: Record<string, unknown>;
     actorUserId: string | null;
+    actorName: string | null;
     createdAt: string;
   }[];
+  payment: {
+    status: string;
+    amount: number;
+    currency: string;
+    resolvedAt: string | null;
+    providerKey: string;
+    externalSessionId: string | null;
+  } | null;
+  /** Clerk staff profiles keyed by userId — resolved once, used by all events */
+  staffProfiles: Record<string, { name: string; imageUrl: string | null }>;
+  /** Adjacent order IDs for prev/next navigation */
+  prevOrderId: string | null;
+  nextOrderId: string | null;
 };
 
 // ── List orders ────────────────────────────────────────────────
 
+export type OrderTab = "all" | "unfulfilled" | "unpaid" | "open" | "closed" | "abandoned";
 export type OrderSortField = "orderNumber" | "createdAt" | "guestName" | "status" | "totalAmount";
 export type OrderSortDirection = "asc" | "desc";
 
+function buildTabWhere(tab: OrderTab, tenantId: string) {
+  const base = { tenantId };
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+  switch (tab) {
+    case "all":
+      return base;
+
+    case "unfulfilled":
+      // Paid but not yet delivered
+      return { ...base, financialStatus: "PAID" as const, fulfillmentStatus: "UNFULFILLED" as const };
+
+    case "unpaid":
+      // Active checkouts — PENDING and less than 1h old (not abandoned)
+      return { ...base, financialStatus: "PENDING" as const, createdAt: { gt: oneHourAgo } };
+
+    case "open":
+      // Not refunded/voided and not cancelled fulfillment
+      return {
+        ...base,
+        financialStatus: { notIn: ["REFUNDED" as const, "VOIDED" as const] },
+        fulfillmentStatus: { not: "CANCELLED" as const },
+      };
+
+    case "closed":
+      // Fulfilled or refunded/voided
+      return {
+        ...base,
+        OR: [
+          { fulfillmentStatus: "FULFILLED" as const },
+          { financialStatus: { in: ["REFUNDED" as const, "VOIDED" as const] } },
+        ],
+      };
+
+    case "abandoned":
+      // PENDING and older than 1h — abandoned checkouts
+      return { ...base, financialStatus: "PENDING" as const, createdAt: { lt: oneHourAgo } };
+
+    default:
+      return base;
+  }
+}
+
 export async function getOrders(opts?: {
-  status?: OrderStatus;
+  tab?: OrderTab;
   page?: number;
   limit?: number;
   sortBy?: OrderSortField;
   sortDirection?: OrderSortDirection;
   search?: string;
+  channel?: string;
 }): Promise<{ orders: OrderListItem[]; total: number }> {
   const { orgId } = await getAuth();
   if (!orgId) return { orders: [], total: 0 };
@@ -94,32 +177,43 @@ export async function getOrders(opts?: {
   const sortBy = opts?.sortBy ?? "createdAt";
   const sortDirection = opts?.sortDirection ?? "desc";
   const search = opts?.search?.trim();
+  const tab = opts?.tab ?? "all";
 
   // Build search conditions
   const searchConditions = search ? {
     OR: [
-      // Order number — try numeric match
       ...((/^\d+$/.test(search) || /^#?\d+$/.test(search))
         ? [{ orderNumber: parseInt(search.replace("#", ""), 10) }]
         : []),
-      // Guest name — case-insensitive contains
       { guestName: { contains: search, mode: "insensitive" as const } },
-      // Guest email — case-insensitive contains
       { guestEmail: { contains: search, mode: "insensitive" as const } },
     ],
   } : {};
 
+  const channelFilter = opts?.channel
+    ? { sourceChannel: opts.channel }
+    : {};
+
   const where = {
-    tenantId: tenant.id,
-    ...(opts?.status ? { status: opts.status } : {}),
+    ...buildTabWhere(tab, tenant.id),
     ...searchConditions,
+    ...channelFilter,
   };
+
+  const isAbandoned = tab === "abandoned";
 
   const [orders, total] = await Promise.all([
     prisma.order.findMany({
       where,
       include: {
-        lineItems: { select: { title: true } },
+        lineItems: { select: { title: true, imageUrl: true } },
+        ...(isAbandoned && {
+          events: {
+            where: { type: { in: ["NOTE_ADDED", "EMAIL_SENT"] } },
+            select: { id: true },
+            take: 1,
+          },
+        }),
       },
       orderBy: { [sortBy]: sortDirection },
       skip,
@@ -133,6 +227,8 @@ export async function getOrders(opts?: {
       id: o.id,
       orderNumber: o.orderNumber,
       status: o.status,
+      financialStatus: o.financialStatus,
+      fulfillmentStatus: o.fulfillmentStatus,
       guestName: o.guestName,
       guestEmail: o.guestEmail,
       totalAmount: o.totalAmount,
@@ -140,7 +236,14 @@ export async function getOrders(opts?: {
       createdAt: o.createdAt.toISOString(),
       lineItemCount: o.lineItems.length,
       productTitles: o.lineItems.map((li) => li.title),
+      lineItems: o.lineItems.map((li) => ({ title: li.title, imageUrl: li.imageUrl })),
       sourceChannel: o.sourceChannel,
+      tags: o.tags ? o.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+      ...(isAbandoned && {
+        recoveryStatus: ((o as unknown as { events?: { id: string }[] }).events?.length ?? 0) > 0
+          ? "contacted" as const
+          : "not_contacted" as const,
+      }),
     })),
     total,
   };
@@ -162,11 +265,68 @@ export async function getOrder(orderId: string): Promise<OrderDetail | null> {
     where: { id: orderId, tenantId: tenant.id },
     include: {
       lineItems: true,
-      events: { orderBy: { createdAt: "desc" } },
+      events: {
+        orderBy: { createdAt: "desc" },
+        select: { id: true, type: true, message: true, metadata: true, actorUserId: true, actorName: true, createdAt: true },
+      },
+      paymentSession: true,
+      guestAccount: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          address1: true,
+          address2: true,
+          city: true,
+          postalCode: true,
+          country: true,
+          _count: { select: { orders: true } },
+        },
+      },
     },
   });
 
   if (!order) return null;
+
+  const ga = order.guestAccount;
+
+  // Adjacent orders for prev/next navigation (by orderNumber)
+  const [prevOrder, nextOrder] = await Promise.all([
+    prisma.order.findFirst({
+      where: { tenantId: tenant.id, orderNumber: { lt: order.orderNumber } },
+      orderBy: { orderNumber: "desc" },
+      select: { id: true },
+    }),
+    prisma.order.findFirst({
+      where: { tenantId: tenant.id, orderNumber: { gt: order.orderNumber } },
+      orderBy: { orderNumber: "asc" },
+      select: { id: true },
+    }),
+  ]);
+
+  // Resolve Clerk staff profiles — batch fetch unique userIds
+  const staffProfiles: Record<string, { name: string; imageUrl: string | null }> = {};
+  const uniqueUserIds = [...new Set(order.events.map((e) => e.actorUserId).filter(Boolean))] as string[];
+
+  if (uniqueUserIds.length > 0) {
+    try {
+      const { clerkClient } = await import("@clerk/nextjs/server");
+      const client = await clerkClient();
+      const users = await client.users.getUserList({ userId: uniqueUserIds, limit: uniqueUserIds.length });
+      for (const user of users.data) {
+        const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.emailAddresses[0]?.emailAddress || "Personal";
+        staffProfiles[user.id] = { name, imageUrl: user.imageUrl ?? null };
+      }
+    } catch {
+      // Dev mode or Clerk unavailable — use metadata fallback
+      for (const event of order.events) {
+        if (event.actorUserId && !staffProfiles[event.actorUserId]) {
+          const metaName = (event.metadata as Record<string, unknown>)?.authorName as string | undefined;
+          staffProfiles[event.actorUserId] = { name: metaName ?? "Personal", imageUrl: null };
+        }
+      }
+    }
+  }
 
   return {
     id: order.id,
@@ -180,6 +340,18 @@ export async function getOrder(orderId: string): Promise<OrderDetail | null> {
     guestName: order.guestName,
     guestEmail: order.guestEmail,
     guestPhone: order.guestPhone,
+    guestAccountId: ga?.id ?? null,
+    guestOrderCount: ga?._count.orders ?? 0,
+    guestAddress: ga ? {
+      firstName: ga.firstName,
+      lastName: ga.lastName,
+      company: null,
+      address1: ga.address1,
+      address2: ga.address2,
+      city: ga.city,
+      postalCode: ga.postalCode,
+      country: ga.country,
+    } : null,
     subtotalAmount: order.subtotalAmount,
     taxAmount: order.taxAmount,
     totalAmount: order.totalAmount,
@@ -190,7 +362,12 @@ export async function getOrder(orderId: string): Promise<OrderDetail | null> {
     fulfilledAt: order.fulfilledAt?.toISOString() ?? null,
     cancelledAt: order.cancelledAt?.toISOString() ?? null,
     refundedAt: order.refundedAt?.toISOString() ?? null,
+    orderType: order.orderType,
+    tags: order.tags ? order.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+    customerNote: order.customerNote ?? null,
+    archivedAt: order.archivedAt?.toISOString() ?? null,
     createdAt: order.createdAt.toISOString(),
+    metadata: (order.metadata as Record<string, unknown>) ?? null,
     lineItems: order.lineItems.map((li) => ({
       id: li.id,
       title: li.title,
@@ -206,10 +383,130 @@ export async function getOrder(orderId: string): Promise<OrderDetail | null> {
       id: e.id,
       type: e.type,
       message: e.message,
+      metadata: (e.metadata as Record<string, unknown>) ?? {},
       actorUserId: e.actorUserId,
+      actorName: e.actorName ?? null,
       createdAt: e.createdAt.toISOString(),
     })),
+    payment: order.paymentSession ? {
+      status: order.paymentSession.status,
+      amount: order.paymentSession.amount,
+      currency: order.paymentSession.currency,
+      resolvedAt: order.paymentSession.resolvedAt?.toISOString() ?? null,
+      providerKey: order.paymentSession.providerKey,
+      externalSessionId: order.paymentSession.externalSessionId ?? null,
+    } : null,
+    staffProfiles,
+    prevOrderId: prevOrder?.id ?? null,
+    nextOrderId: nextOrder?.id ?? null,
   };
+}
+
+// ── Update customer note ──────────────────────────────────────
+
+export async function updateCustomerNote(
+  orderId: string,
+  note: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return admin;
+
+  const trimmed = note.trim();
+  if (trimmed.length > 1000) return { ok: false, error: "Anteckningen är för lång (max 1000 tecken)" };
+
+  const { orgId, userId } = await getAuth();
+  if (!orgId) return { ok: false, error: "Ingen organisation vald" };
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { clerkOrgId: orgId },
+    select: { id: true },
+  });
+  if (!tenant) return { ok: false, error: "Organisationen hittades inte" };
+
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, tenantId: tenant.id },
+    select: { id: true },
+  });
+  if (!order) return { ok: false, error: "Ordern hittades inte" };
+
+  let actorName = "Personal";
+  if (userId) {
+    try {
+      const { clerkClient } = await import("@clerk/nextjs/server");
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      actorName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Personal";
+    } catch { /* dev mode */ }
+  }
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: { customerNote: trimmed || null },
+  });
+
+  await createOrderEvent({
+    orderId,
+    tenantId: tenant.id,
+    type: "ORDER_UPDATED",
+    message: "Anteckning tillagd i den här ordern.",
+    actorUserId: userId ?? undefined,
+    actorName,
+  });
+
+  return { ok: true };
+}
+
+// ── Add comment ───────────────────────────────────────────────
+
+export async function addOrderComment(
+  orderId: string,
+  comment: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return admin;
+
+  const trimmed = comment.trim();
+  if (!trimmed) return { ok: false, error: "Kommentaren kan inte vara tom" };
+  if (trimmed.length > 2000) return { ok: false, error: "Kommentaren är för lång (max 2000 tecken)" };
+
+  const { orgId, userId } = await getAuth();
+  if (!orgId) return { ok: false, error: "Ingen organisation vald" };
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { clerkOrgId: orgId },
+    select: { id: true },
+  });
+  if (!tenant) return { ok: false, error: "Organisationen hittades inte" };
+
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, tenantId: tenant.id },
+    select: { id: true },
+  });
+  if (!order) return { ok: false, error: "Ordern hittades inte" };
+
+  // Resolve user display name from Clerk
+  let authorName = "Personal";
+  if (userId) {
+    try {
+      const { clerkClient } = await import("@clerk/nextjs/server");
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      authorName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.emailAddresses[0]?.emailAddress || "Personal";
+    } catch {
+      // Dev mode or Clerk unavailable — fall back
+    }
+  }
+
+  await createOrderEvent({
+    orderId,
+    tenantId: tenant.id,
+    type: "NOTE_ADDED",
+    message: trimmed,
+    actorUserId: userId ?? undefined,
+    actorName: authorName,
+  });
+
+  return { ok: true };
 }
 
 // ── Fulfill order ──────────────────────────────────────────────
@@ -238,19 +535,30 @@ export async function fulfillOrder(
     return { ok: false, error: `Ordern kan inte levereras (status: ${order.status})` };
   }
 
+  // Resolve actor name
+  let actorName = "Personal";
+  if (userId) {
+    try {
+      const { clerkClient } = await import("@clerk/nextjs/server");
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      actorName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Personal";
+    } catch { /* dev mode */ }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.order.update({
       where: { id: orderId },
       data: { status: "FULFILLED", fulfilledAt: new Date() },
     });
 
-    await tx.orderEvent.create({
-      data: {
-        orderId,
-        type: "FULFILLED",
-        message: "Order markerad som levererad",
-        actorUserId: userId,
-      },
+    await createOrderEventInTx(tx, {
+      orderId,
+      tenantId: tenant.id,
+      type: "ORDER_FULFILLED",
+      message: "Order markerad som levererad",
+      actorUserId: userId ?? undefined,
+      actorName,
     });
   });
 
@@ -289,19 +597,30 @@ export async function cancelOrder(
     return { ok: false, error: `Ordern kan inte avbokas (status: ${order.status})` };
   }
 
+  // Resolve actor name
+  let actorName = "Personal";
+  if (userId) {
+    try {
+      const { clerkClient } = await import("@clerk/nextjs/server");
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      actorName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Personal";
+    } catch { /* dev mode */ }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.order.update({
       where: { id: orderId },
       data: { status: "CANCELLED", cancelledAt: new Date() },
     });
 
-    await tx.orderEvent.create({
-      data: {
-        orderId,
-        type: "CANCELLED",
-        message: "Order avbokad av admin",
-        actorUserId: userId,
-      },
+    await createOrderEventInTx(tx, {
+      orderId,
+      tenantId: tenant.id,
+      type: "ORDER_CANCELLED",
+      message: `Order avbokad av ${actorName}`,
+      actorUserId: userId ?? undefined,
+      actorName,
     });
 
     // Release inventory reservations
@@ -315,7 +634,6 @@ export async function cancelOrder(
         data: { consumed: true },
       });
 
-      // Restore stock through adjustInventoryInTx — proper ledger entries
       for (const res of reservations) {
         await adjustInventoryInTx(tx, {
           tenantId: tenant.id,
@@ -328,16 +646,183 @@ export async function cancelOrder(
         });
       }
 
-      await tx.orderEvent.create({
-        data: {
-          orderId,
-          type: "INVENTORY_RELEASED",
-          message: "Lagerreservationer frigivna",
-          actorUserId: userId,
-        },
+      await createOrderEventInTx(tx, {
+        orderId,
+        tenantId: tenant.id,
+        type: "INVENTORY_RELEASED",
+        message: "Lagerreservationer frigivna",
       });
     }
   });
+
+  return { ok: true };
+}
+
+// ── Update order tags ─────────────────────────────────────────
+
+export async function updateOrderTags(
+  orderId: string,
+  tags: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return admin;
+
+  const { orgId } = await getAuth();
+  if (!orgId) return { ok: false, error: "Ingen organisation vald" };
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { clerkOrgId: orgId },
+    select: { id: true },
+  });
+  if (!tenant) return { ok: false, error: "Organisationen hittades inte" };
+
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, tenantId: tenant.id },
+    select: { id: true },
+  });
+  if (!order) return { ok: false, error: "Ordern hittades inte" };
+
+  const normalized = tags.map((t) => t.trim().toLowerCase()).filter(Boolean);
+  const unique = [...new Set(normalized)];
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: { tags: unique.join(",") },
+  });
+
+  return { ok: true };
+}
+
+// ── Archive order ─────────────────────────────────────────────
+
+export async function archiveOrder(
+  orderId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return admin;
+
+  const { orgId, userId } = await getAuth();
+  if (!orgId) return { ok: false, error: "Ingen organisation vald" };
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { clerkOrgId: orgId },
+    select: { id: true },
+  });
+  if (!tenant) return { ok: false, error: "Organisationen hittades inte" };
+
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, tenantId: tenant.id },
+    select: { id: true, archivedAt: true },
+  });
+  if (!order) return { ok: false, error: "Ordern hittades inte" };
+  if (order.archivedAt) return { ok: false, error: "Ordern är redan arkiverad" };
+
+  let actorName = "Personal";
+  if (userId) {
+    try {
+      const { clerkClient } = await import("@clerk/nextjs/server");
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      actorName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Personal";
+    } catch { /* dev mode */ }
+  }
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: { archivedAt: new Date() },
+  });
+
+  await createOrderEvent({
+    orderId,
+    tenantId: tenant.id,
+    type: "ORDER_UPDATED",
+    message: `Order arkiverad av ${actorName}`,
+    actorUserId: userId ?? undefined,
+    actorName,
+  });
+
+  return { ok: true };
+}
+
+// ── Unarchive order ───────────────────────────────────────────
+
+export async function unarchiveOrder(
+  orderId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return admin;
+
+  const { orgId, userId } = await getAuth();
+  if (!orgId) return { ok: false, error: "Ingen organisation vald" };
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { clerkOrgId: orgId },
+    select: { id: true },
+  });
+  if (!tenant) return { ok: false, error: "Organisationen hittades inte" };
+
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, tenantId: tenant.id },
+    select: { id: true, archivedAt: true },
+  });
+  if (!order) return { ok: false, error: "Ordern hittades inte" };
+  if (!order.archivedAt) return { ok: false, error: "Ordern är inte arkiverad" };
+
+  let actorName = "Personal";
+  if (userId) {
+    try {
+      const { clerkClient } = await import("@clerk/nextjs/server");
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      actorName = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Personal";
+    } catch { /* dev mode */ }
+  }
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: { archivedAt: null },
+  });
+
+  await createOrderEvent({
+    orderId,
+    tenantId: tenant.id,
+    type: "ORDER_UPDATED",
+    message: `Order avarkiverad av ${actorName}`,
+    actorUserId: userId ?? undefined,
+    actorName,
+  });
+
+  return { ok: true };
+}
+
+// ── Delete order ──────────────────────────────────────────────
+
+export async function deleteOrder(
+  orderId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return admin;
+
+  const { orgId } = await getAuth();
+  if (!orgId) return { ok: false, error: "Ingen organisation vald" };
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { clerkOrgId: orgId },
+    select: { id: true },
+  });
+  if (!tenant) return { ok: false, error: "Organisationen hittades inte" };
+
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, tenantId: tenant.id },
+    select: { id: true, status: true },
+  });
+  if (!order) return { ok: false, error: "Ordern hittades inte" };
+
+  if (order.status !== "CANCELLED") {
+    return { ok: false, error: "Endast annulerade ordrar kan tas bort. Annulera ordern först." };
+  }
+
+  await prisma.order.delete({ where: { id: orderId } });
 
   return { ok: true };
 }

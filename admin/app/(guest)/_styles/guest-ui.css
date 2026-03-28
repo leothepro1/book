@@ -154,3 +154,16 @@
   font-family: var(--font-body);
 }
 
+/* ── Screenshot mode — hide overlays for automated captures ── */
+
+.screenshot-mode [data-chat-widget],
+.screenshot-mode [data-cookie-banner],
+.screenshot-mode [data-intercom],
+.screenshot-mode iframe:not([data-portal-preview]),
+.screenshot-mode .drift-widget,
+.screenshot-mode #hubspot-messages-iframe-container,
+.screenshot-mode [data-admin-only],
+.screenshot-mode .preview-bar {
+  display: none !important;
+}
+

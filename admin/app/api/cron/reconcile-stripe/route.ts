@@ -93,6 +93,7 @@ export async function GET(req: Request) {
         prisma.orderEvent.create({
           data: {
             orderId: order.id,
+            tenantId: order.tenantId,
             type: "RECONCILED",
             message: `Reconcilierad: payment_intent ${pi.id} succeeded (webhook missad)`,
             metadata: { paymentIntentId: pi.id, source: "cron" },
@@ -115,6 +116,7 @@ export async function GET(req: Request) {
         prisma.orderEvent.create({
           data: {
             orderId: order.id,
+            tenantId: order.tenantId,
             type: "RECONCILED",
             message: `Reconcilierad: payment_intent ${pi.id} cancelled`,
             metadata: { paymentIntentId: pi.id, source: "cron" },
@@ -156,6 +158,7 @@ export async function GET(req: Request) {
         prisma.orderEvent.create({
           data: {
             orderId: order.id,
+            tenantId: order.tenantId,
             type: "RECONCILED",
             message: `Reconcilierad: checkout session ${session.id} paid (webhook missad)`,
             metadata: { sessionId: session.id, source: "cron" },
@@ -178,6 +181,7 @@ export async function GET(req: Request) {
         prisma.orderEvent.create({
           data: {
             orderId: order.id,
+            tenantId: order.tenantId,
             type: "RECONCILED",
             message: `Reconcilierad: checkout session ${session.id} expired`,
             metadata: { sessionId: session.id, source: "cron" },

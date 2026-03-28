@@ -179,26 +179,33 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       },
     });
 
-    await tx.orderEvent.createMany({
-      data: [
-        {
-          orderId: order.id,
-          type: "STRIPE_WEBHOOK_RECEIVED",
-          message: `checkout.session.completed (${session.id})`,
-          metadata: { sessionId: session.id, paymentIntentId },
-        },
-        {
-          orderId: order.id,
-          type: "PAID",
-          message: `Betalning mottagen — ${session.amount_total ? session.amount_total / 100 : "?"} ${session.currency?.toUpperCase() ?? "SEK"}`,
-        },
-      ],
+    await tx.orderEvent.create({
+      data: {
+        orderId: order.id,
+        tenantId: order.tenantId,
+        type: "PAYMENT_CAPTURED",
+        message: `Betalning mottagen — ${session.amount_total ? session.amount_total / 100 : "?"} ${session.currency?.toUpperCase() ?? "SEK"}`,
+        metadata: { sessionId: session.id, paymentIntentId, amount: session.amount_total, currency: session.currency, stripeEventId: event.id },
+      },
     });
 
     await tx.paymentSession.updateMany({
       where: { orderId: order.id },
       data: { status: "RESOLVED", resolvedAt: new Date() },
     });
+
+    // ORDER_PAID guest event — atomic with payment update, idempotent
+    if (order.guestAccountId) {
+      const { createGuestAccountEventInTx } = await import("@/app/_lib/guests/events");
+      await createGuestAccountEventInTx(tx, {
+        guestAccountId: order.guestAccountId,
+        tenantId: order.tenantId,
+        type: "ORDER_PAID",
+        message: `Bokning #${order.orderNumber} betald — ${session.amount_total ? session.amount_total / 100 : "?"} ${session.currency?.toUpperCase() ?? "SEK"}`,
+        metadata: { orderId: order.id, orderNumber: order.orderNumber, amount: session.amount_total, currency: session.currency },
+        orderId: order.id,
+      });
+    }
   });
 
   // Step B — Consume inventory (separate operation, after Step A commits)
@@ -232,13 +239,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
           });
         }
 
-        await tx.orderEvent.create({
-          data: {
-            orderId: order.id,
-            type: "INVENTORY_CONSUMED",
-            message: `${reservations.length} lagerreservation(er) förbrukade`,
-          },
-        });
+        // Inventory consumption tracked in inventoryChange ledger — no separate timeline event
       });
     }
   } catch (err) {
@@ -284,17 +285,11 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     }
   }
 
-  // Emit ORDER_PAID guest event (non-blocking)
+  // Segment sync — re-evaluate after payment (non-blocking)
   if (order.guestAccountId) {
-    prisma.guestAccountEvent.create({
-      data: {
-        tenantId: order.tenantId,
-        guestAccountId: order.guestAccountId,
-        type: "ORDER_PAID",
-        message: `Order #${order.orderNumber} betald`,
-        metadata: { orderId: order.id, amount: order.totalAmount },
-      },
-    }).catch(() => {});
+    import("@/app/_lib/segments/sync").then(({ syncGuestSegments }) =>
+      syncGuestSegments(order.guestAccountId!, order.tenantId),
+    ).catch((err) => log("warn", "webhook.segment_sync_failed", { orderId: order.id, error: String(err) }));
   }
 
   // Send order confirmation email (non-blocking)
@@ -327,6 +322,20 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         portalUrl: portalBase ? `${portalBase}/login` : "",
       },
     );
+
+    // Emit guest email event (non-blocking)
+    if (order.guestAccountId) {
+      import("@/app/_lib/guests/email-event").then(({ emitGuestEmailEvent }) =>
+        emitGuestEmailEvent({
+          tenantId: order.tenantId,
+          guestAccountId: order.guestAccountId!,
+          emailType: "Orderbekräftelse",
+          recipientEmail: order.guestEmail,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+        }),
+      ).catch(() => {});
+    }
   } catch (err) {
     log("error", "webhook.email_failed", { orderId: order.id, orderNumber: order.orderNumber, error: String(err) });
   }
@@ -378,29 +387,26 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
       }
     }
 
-    await tx.orderEvent.createMany({
-      data: [
-        {
-          orderId: order.id,
-          type: "STRIPE_WEBHOOK_RECEIVED",
-          message: `checkout.session.expired (${session.id})`,
-        },
-        {
-          orderId: order.id,
-          type: "CANCELLED",
-          message: "Checkout-session löpte ut",
-        },
-        ...(reservations.length > 0
-          ? [
-              {
-                orderId: order.id,
-                type: "INVENTORY_RELEASED" as const,
-                message: `${reservations.length} lagerreservation(er) frigivna`,
-              },
-            ]
-          : []),
-      ],
+    await tx.orderEvent.create({
+      data: {
+        orderId: order.id,
+        tenantId: order.tenantId,
+        type: "ORDER_CANCELLED",
+        message: "Kassasession utgången — order avbokad automatiskt",
+        metadata: { sessionId: session.id, stripeEventId: event.id },
+      },
     });
+
+    if (reservations.length > 0) {
+      await tx.orderEvent.create({
+        data: {
+          orderId: order.id,
+          tenantId: order.tenantId,
+          type: "INVENTORY_RELEASED",
+          message: `${reservations.length} lagerreservation(er) frigivna`,
+        },
+      });
+    }
 
     // Update PaymentSession status — updateMany to silently skip if no session exists
     await tx.paymentSession.updateMany({
@@ -451,20 +457,14 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
       });
     }
 
-    await tx.orderEvent.createMany({
-      data: [
-        {
-          orderId: order.id,
-          type: "STRIPE_WEBHOOK_RECEIVED",
-          message: `charge.refunded (${charge.id})`,
-          metadata: { chargeId: charge.id },
-        },
-        {
-          orderId: order.id,
-          type: "REFUNDED",
-          message: `Återbetalning genomförd — ${charge.amount_refunded / 100} ${charge.currency.toUpperCase()}`,
-        },
-      ],
+    await tx.orderEvent.create({
+      data: {
+        orderId: order.id,
+        tenantId: order.tenantId,
+        type: "REFUND_SUCCEEDED",
+        message: `Återbetalning genomförd — ${charge.amount_refunded / 100} ${charge.currency.toUpperCase()}`,
+        metadata: { chargeId: charge.id, amount: charge.amount_refunded, currency: charge.currency, stripeEventId: event.id },
+      },
     });
   });
 
@@ -523,20 +523,14 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
       },
     });
 
-    await tx.orderEvent.createMany({
-      data: [
-        {
-          orderId: order.id,
-          type: "STRIPE_WEBHOOK_RECEIVED",
-          message: `payment_intent.succeeded (${pi.id})`,
-          metadata: { paymentIntentId: pi.id },
-        },
-        {
-          orderId: order.id,
-          type: "PAID",
-          message: `Betalning mottagen — ${pi.amount / 100} ${pi.currency.toUpperCase()}`,
-        },
-      ],
+    await tx.orderEvent.create({
+      data: {
+        orderId: order.id,
+        tenantId: order.tenantId,
+        type: "PAYMENT_CAPTURED",
+        message: `Betalning mottagen — ${pi.amount / 100} ${pi.currency.toUpperCase()}`,
+        metadata: { paymentIntentId: pi.id, amount: pi.amount, currency: pi.currency, stripeEventId: event.id },
+      },
     });
 
     // Update PaymentSession status — updateMany to silently skip if no session exists
@@ -544,7 +538,27 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
       where: { orderId: order.id },
       data: { status: "RESOLVED", resolvedAt: new Date() },
     });
+
+    // ORDER_PAID guest event — atomic with payment update, idempotent
+    if (order.guestAccountId) {
+      const { createGuestAccountEventInTx } = await import("@/app/_lib/guests/events");
+      await createGuestAccountEventInTx(tx, {
+        guestAccountId: order.guestAccountId,
+        tenantId: order.tenantId,
+        type: "ORDER_PAID",
+        message: `Bokning #${order.orderNumber} betald — ${pi.amount / 100} ${pi.currency.toUpperCase()}`,
+        metadata: { orderId: order.id, orderNumber: order.orderNumber, amount: pi.amount, currency: pi.currency },
+        orderId: order.id,
+      });
+    }
   });
+
+  // Segment sync — re-evaluate after payment (non-blocking)
+  if (order.guestAccountId) {
+    import("@/app/_lib/segments/sync").then(({ syncGuestSegments }) =>
+      syncGuestSegments(order.guestAccountId!, order.tenantId),
+    ).catch((err) => log("warn", "webhook.segment_sync_failed", { orderId: order.id, error: String(err) }));
+  }
 
   // Emit platform event for app webhooks (non-blocking, fire-and-forget)
   const piOrderMeta = (order.metadata ?? {}) as Record<string, unknown>;
@@ -596,8 +610,9 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
         await prisma.orderEvent.create({
           data: {
             orderId: order.id,
-            type: "FULFILLED",
-            message: `Presentkort ${giftCard.code} skapat — ${giftCard.initialAmount / 100} kr`,
+            type: "ORDER_FULFILLED",
+            tenantId: order.tenantId,
+            message: `Presentkort ${giftCard.code} aktiverat — ${giftCard.initialAmount / 100} kr`,
             metadata: { giftCardId: giftCard.id, code: giftCard.code },
           },
         });
@@ -636,19 +651,6 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
     }
   }
 
-  // Emit ORDER_PAID guest event (non-blocking)
-  if (order.guestAccountId) {
-    prisma.guestAccountEvent.create({
-      data: {
-        tenantId: order.tenantId,
-        guestAccountId: order.guestAccountId,
-        type: "ORDER_PAID",
-        message: `Order #${order.orderNumber} betald`,
-        metadata: { orderId: order.id, amount: order.totalAmount },
-      },
-    }).catch(() => {});
-  }
-
   // ── Shared: send confirmation email (non-blocking) ──────────
   try {
     if (effectiveEmail) {
@@ -680,6 +682,20 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
           portalUrl: portalBase ? `${portalBase}/login` : "",
         },
       );
+
+      // Emit guest email event (non-blocking)
+      if (order.guestAccountId) {
+        import("@/app/_lib/guests/email-event").then(({ emitGuestEmailEvent }) =>
+          emitGuestEmailEvent({
+            tenantId: order.tenantId,
+            guestAccountId: order.guestAccountId!,
+            emailType: "Orderbekräftelse",
+            recipientEmail: effectiveEmail,
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+          }),
+        ).catch(() => {});
+      }
     }
   } catch (err) {
     log("error", "webhook.email_failed", { orderId: order.id, orderNumber: order.orderNumber, error: String(err) });
@@ -716,11 +732,14 @@ async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
     await tx.orderEvent.create({
       data: {
         orderId: order.id,
+        tenantId: order.tenantId,
         type: "PAYMENT_FAILED",
         message: `Betalningsförsök misslyckades — ${pi.last_payment_error?.message ?? "okänt fel"}`,
         metadata: {
           paymentIntentId: pi.id,
-          errorCode: pi.last_payment_error?.code ?? null,
+          declineCode: pi.last_payment_error?.decline_code ?? null,
+          stripeErrorCode: pi.last_payment_error?.code ?? null,
+          stripeEventId: event.id,
         },
       },
     });

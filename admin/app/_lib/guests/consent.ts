@@ -44,19 +44,18 @@ export async function updateEmailConsent(
   }
 
   // Audit event
-  const eventType = state === "SUBSCRIBED" ? "MARKETING_SUBSCRIBED" : "MARKETING_UNSUBSCRIBED";
-  prisma.guestAccountEvent.create({
-    data: {
-      tenantId,
-      guestAccountId,
-      type: eventType,
-      message: state === "SUBSCRIBED"
-        ? "Prenumeration på marknadsföringsmail aktiverad"
-        : "Avregistrerad från marknadsföringsmail",
-      actorUserId: options.actorUserId ?? null,
-      metadata: { source: options.source ?? "manual" },
-    },
-  }).catch(() => {});
+  const eventType = state === "SUBSCRIBED" ? "MARKETING_SUBSCRIBED" as const : "MARKETING_UNSUBSCRIBED" as const;
+  const { createGuestAccountEvent } = await import("@/app/_lib/guests/events");
+  await createGuestAccountEvent({
+    guestAccountId,
+    tenantId,
+    type: eventType,
+    message: state === "SUBSCRIBED"
+      ? "Prenumeration på marknadsföringsmail aktiverad"
+      : "Avregistrerad från marknadsföringsmail",
+    actorUserId: options.actorUserId,
+    metadata: { source: options.source ?? "manual" },
+  });
 
   log("info", "guest.consent.updated", {
     tenantId, guestAccountId, state, source: options.source ?? "manual",
@@ -95,6 +94,11 @@ export async function updateEmailConsent(
       });
     }
   }
+
+  // Segment sync — marketing_consent changed (non-blocking)
+  import("@/app/_lib/segments/sync").then(({ syncGuestSegments }) =>
+    syncGuestSegments(guestAccountId, tenantId),
+  ).catch((err) => log("warn", "guest.consent.segment_sync_failed", { tenantId, guestAccountId, error: String(err) }));
 
   return { success: true };
 }

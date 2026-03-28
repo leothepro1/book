@@ -1,4 +1,5 @@
 import { OrderDetailClient } from "./OrderDetailClient";
+import "../orders.css";
 
 export default async function OrderDetailPage({
   params,
