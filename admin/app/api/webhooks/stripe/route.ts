@@ -42,9 +42,9 @@ export async function POST(req: Request) {
   }
 
   // Verify webhook signature
-  let event!: Stripe.Event;
+  let _event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(
+    _event = stripe.webhooks.constructEvent(
       rawBody,
       signature,
       env.STRIPE_WEBHOOK_SECRET,
@@ -53,6 +53,7 @@ export async function POST(req: Request) {
     log("error", "webhook.signature_failed", { error: String(err) });
     return new NextResponse("Invalid signature", { status: 400 });
   }
+  const event: Stripe.Event = _event;
 
   // ── Resolve tenant — verify Connect account matches ──────────
   const obj = event.data.object as { metadata?: Record<string, string> };
