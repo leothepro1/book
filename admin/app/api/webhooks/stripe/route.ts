@@ -186,7 +186,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         tenantId: order.tenantId,
         type: "PAYMENT_CAPTURED",
         message: `Betalning mottagen — ${session.amount_total ? session.amount_total / 100 : "?"} ${session.currency?.toUpperCase() ?? "SEK"}`,
-        metadata: { sessionId: session.id, paymentIntentId, amount: session.amount_total, currency: session.currency, stripeEventId: event.id },
+        metadata: { sessionId: session.id, paymentIntentId, amount: session.amount_total, currency: session.currency },
       },
     });
 
@@ -394,7 +394,7 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
         tenantId: order.tenantId,
         type: "ORDER_CANCELLED",
         message: "Kassasession utgången — order avbokad automatiskt",
-        metadata: { sessionId: session.id, stripeEventId: event.id },
+        metadata: { sessionId: session.id },
       },
     });
 
@@ -464,7 +464,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
         tenantId: order.tenantId,
         type: "REFUND_SUCCEEDED",
         message: `Återbetalning genomförd — ${charge.amount_refunded / 100} ${charge.currency.toUpperCase()}`,
-        metadata: { chargeId: charge.id, amount: charge.amount_refunded, currency: charge.currency, stripeEventId: event.id },
+        metadata: { chargeId: charge.id, amount: charge.amount_refunded, currency: charge.currency },
       },
     });
   });
@@ -530,7 +530,7 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
         tenantId: order.tenantId,
         type: "PAYMENT_CAPTURED",
         message: `Betalning mottagen — ${pi.amount / 100} ${pi.currency.toUpperCase()}`,
-        metadata: { paymentIntentId: pi.id, amount: pi.amount, currency: pi.currency, stripeEventId: event.id },
+        metadata: { paymentIntentId: pi.id, amount: pi.amount, currency: pi.currency },
       },
     });
 
@@ -740,7 +740,6 @@ async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
           paymentIntentId: pi.id,
           declineCode: pi.last_payment_error?.decline_code ?? null,
           stripeErrorCode: pi.last_payment_error?.code ?? null,
-          stripeEventId: event.id,
         },
       },
     });
