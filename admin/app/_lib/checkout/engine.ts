@@ -158,7 +158,8 @@ export async function processCheckout<TInput>(
           },
           events: {
             create: {
-              type: "CREATED",
+              tenantId: tenant.id,
+              type: "ORDER_CREATED",
               message: `Order #${orderNumber} skapad`,
             },
           },
@@ -242,8 +243,9 @@ export async function processCheckout<TInput>(
         await prisma.orderEvent.create({
           data: {
             orderId,
-            type: "CANCELLED",
-            message: "Stripe call failed — order cancelled automatically",
+            tenantId,
+            type: "ORDER_CANCELLED",
+            message: "Betalningsinitiering misslyckades — order avbokad automatiskt",
           },
         });
       } catch {
