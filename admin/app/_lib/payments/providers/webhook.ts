@@ -104,7 +104,8 @@ export async function handlePaymentWebhook(
         await tx.orderEvent.create({
           data: {
             orderId: order.id,
-            type: "PAID",
+            tenantId: order.tenantId,
+            type: "PAYMENT_CAPTURED",
             message: `Betalning mottagen via ${adapter.displayName}`,
             metadata: { providerKey, externalEventId: event.externalEventId },
           },
@@ -140,13 +141,7 @@ export async function handlePaymentWebhook(
               },
             });
           }
-          await tx.orderEvent.create({
-            data: {
-              orderId: order.id,
-              type: "INVENTORY_CONSUMED",
-              message: `${reservations.length} lagerreservation(er) förbrukade`,
-            },
-          });
+          // Inventory consumption tracked in inventoryChange ledger
         }
       });
     } catch (err) {
@@ -162,8 +157,9 @@ export async function handlePaymentWebhook(
         await prisma.orderEvent.create({
           data: {
             orderId: order.id,
-            type: "PAID",
-            message: `Betalning mottagen via ${adapter.displayName} (legacy)`,
+            tenantId: order.tenantId,
+            type: "PAYMENT_CAPTURED",
+            message: `Betalning mottagen via ${adapter.displayName}`,
             metadata: { providerKey },
           },
         });
@@ -277,8 +273,9 @@ export async function handlePaymentWebhook(
           await prisma.orderEvent.create({
             data: {
               orderId: order.id,
-              type: "FULFILLED",
-              message: `Presentkort ${giftCard.code} skapat — ${giftCard.initialAmount / 100} kr`,
+              tenantId: order.tenantId,
+              type: "ORDER_FULFILLED",
+              message: `Presentkort ${giftCard.code} aktiverat — ${giftCard.initialAmount / 100} kr`,
               metadata: { giftCardId: giftCard.id, code: giftCard.code },
             },
           });
@@ -298,6 +295,7 @@ export async function handlePaymentWebhook(
       await tx.orderEvent.create({
         data: {
           orderId: order.id,
+          tenantId: order.tenantId,
           type: "PAYMENT_FAILED",
           message: `Betalning avvisad: ${outcome.reason}`,
           metadata: { providerKey, reason: outcome.reason },
