@@ -243,7 +243,7 @@ export async function processCheckout<TInput>(
         await prisma.orderEvent.create({
           data: {
             orderId,
-            tenantId,
+            tenantId: tenant.id,
             type: "ORDER_CANCELLED",
             message: "Betalningsinitiering misslyckades — order avbokad automatiskt",
           },
