@@ -31,6 +31,7 @@ import { log } from "@/app/_lib/logger";
 import type Stripe from "stripe";
 import { upsertGuestAccountFromOrder } from "@/app/_lib/guest-auth/account";
 import { createGiftCard } from "@/app/_lib/gift-cards/create";
+import { releaseDiscountUsageInTx } from "@/app/_lib/discounts/release";
 
 export async function POST(req: Request) {
   const stripe = getStripe();
@@ -409,6 +410,13 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
       });
     }
 
+    // Release discount usage (idempotent — no-op if no discount applied)
+    await releaseDiscountUsageInTx(tx, {
+      orderId: order.id,
+      tenantId: order.tenantId,
+      reason: "CANCELLED",
+    });
+
     // Update PaymentSession status — updateMany to silently skip if no session exists
     await tx.paymentSession.updateMany({
       where: { orderId: order.id },
@@ -466,6 +474,13 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
         message: `Återbetalning genomförd — ${charge.amount_refunded / 100} ${charge.currency.toUpperCase()}`,
         metadata: { chargeId: charge.id, amount: charge.amount_refunded, currency: charge.currency },
       },
+    });
+
+    // Release discount usage (idempotent — no-op if no discount applied)
+    await releaseDiscountUsageInTx(tx, {
+      orderId: order.id,
+      tenantId: order.tenantId,
+      reason: "REFUNDED",
     });
   });
 

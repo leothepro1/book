@@ -350,6 +350,40 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
           );
         })()}
 
+        {/* Rabatter — standalone link */}
+        {(() => {
+          const active = isActive('/discounts');
+          return (
+            <Link
+              href="/discounts"
+              onClick={(e) => guardedClick(e, '/discounts')}
+              className={`flex items-center gap-3 ${
+                active
+                  ? 'bg-[#e3e3e3] text-[#303030]'
+                  : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
+              }`}
+              style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
+            >
+              <span
+                className="material-symbols-rounded flex-shrink-0"
+                style={{
+                  fontSize: 18,
+                  fontVariationSettings: active
+                    ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
+                    : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
+                }}
+              >
+                percent_discount
+              </span>
+              <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+                isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+              }`} style={{ fontWeight: active ? 600 : 500 }}>
+                Rabatter
+              </span>
+            </Link>
+          );
+        })()}
+
         {/* Innehåll — accordion with sub-items */}
         <div>
           <Link

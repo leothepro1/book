@@ -69,6 +69,7 @@ export const createOrderInput = z.object({
   guestInfo: guestInfoSchema,
   lineItems: z.array(createOrderLineItemInput).min(1, "Varukorgen är tom"),
   currency: z.string().default("SEK"),
+  discountCode: z.string().min(1).max(64).optional(),
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderInput>;

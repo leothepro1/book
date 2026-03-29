@@ -15,6 +15,10 @@ import { checkRateLimit } from "@/app/_lib/rate-limit/checkout";
 import { claimIdempotencyKey, completeIdempotencyKey, failIdempotencyKey } from "@/app/_lib/checkout/idempotency";
 import { getPlatformFeeBps } from "@/app/_lib/payments/platform-fee";
 import { initiateOrderPayment } from "@/app/_lib/payments/providers/initiate";
+import { evaluateDiscountCode, evaluateAutomaticDiscount } from "@/app/_lib/discounts/engine";
+import { findDiscountCode } from "@/app/_lib/discounts/codes";
+import { applyDiscountInTx } from "@/app/_lib/discounts/apply";
+import type { DiscountEvaluationResult } from "@/app/_lib/discounts/types";
 
 const checkoutInputSchema = z.object({
   items: z.array(
@@ -34,6 +38,9 @@ const checkoutInputSchema = z.object({
   guestInfo: guestInfoSchema.optional(),
   gclid: z.string().max(200).optional(),
   customerNote: z.string().max(1000).optional(),
+  discountCode: z.string().min(1).max(64).optional(),
+  checkInDate: z.string().optional(),
+  checkOutDate: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -120,10 +127,68 @@ export async function POST(req: Request) {
   const totalAmount = subtotalAmount + taxAmount;
   const currency = validation.validatedItems[0]?.currency ?? "SEK";
 
+  // ── Discount evaluation (before order creation) ────────���───
+  // Re-evaluation inside tx is the authoritative check
+  let discountResult: Extract<DiscountEvaluationResult, { valid: true }> | null = null;
+  let discountCodeId: string | undefined;
+
+  const productIds = validation.validatedItems.map((i) => i.productId);
+  const itemCount = validation.validatedItems.reduce((sum, i) => sum + i.quantity, 0);
+
+  const checkInDate = body.checkInDate ? new Date(body.checkInDate) : undefined;
+  const checkOutDate = body.checkOutDate ? new Date(body.checkOutDate) : undefined;
+  const nights = checkInDate && checkOutDate
+    ? Math.max(0, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / 86_400_000))
+    : 0;
+
+  if (body.discountCode) {
+    // Guest entered a discount code — evaluate it
+    const codeResult = await evaluateDiscountCode({
+      tenantId,
+      code: body.discountCode,
+      orderAmount: totalAmount,
+      productIds,
+      itemCount,
+      guestEmail: body.guestInfo?.email,
+      checkInDate,
+      checkOutDate,
+    });
+
+    if (!codeResult.valid) {
+      await failIdempotencyKey(tenantId, idempotencyKey, "checkout-session");
+      return NextResponse.json({ error: codeResult.error }, { status: 409 });
+    }
+
+    discountResult = codeResult;
+
+    // Resolve DiscountCode.id for applyDiscountInTx
+    const codeRecord = await findDiscountCode(tenantId, body.discountCode);
+    discountCodeId = codeRecord?.id;
+  } else {
+    // No code — check for automatic discounts
+    const autoResult = await evaluateAutomaticDiscount(tenantId, {
+      orderAmount: totalAmount,
+      productIds,
+      itemCount,
+      guestEmail: body.guestInfo?.email,
+      guestAccountId: undefined,
+      guestSegmentIds: [],
+      checkInDate,
+      checkOutDate,
+      nights,
+    });
+
+    if (autoResult.valid) {
+      discountResult = autoResult;
+    }
+  }
+
   const orderNumber = await nextOrderNumber(tenantId);
 
   // Create order
-  const order = await prisma.$transaction(async (tx) => {
+  let order;
+  try {
+  order = await prisma.$transaction(async (tx) => {
     const created = await tx.order.create({
       data: {
         tenantId,
@@ -167,8 +232,33 @@ export async function POST(req: Request) {
       },
     });
 
+    // ── Apply discount inside transaction ─────────────────────
+    if (discountResult) {
+      const createdLineItems = await tx.orderLineItem.findMany({
+        where: { orderId: created.id },
+        select: { id: true, productId: true, totalAmount: true },
+      });
+
+      await applyDiscountInTx(tx, {
+        orderId: created.id,
+        tenantId,
+        guestEmail: body.guestInfo?.email ?? "",
+        guestAccountId: undefined,
+        result: discountResult,
+        discountCodeId,
+        lineItems: createdLineItems,
+      });
+    }
+
     return created;
   });
+  } catch (txErr) {
+    if (txErr instanceof Error && txErr.message === "USAGE_LIMIT_REACHED") {
+      await failIdempotencyKey(tenantId, idempotencyKey, "checkout-session");
+      return NextResponse.json({ error: "USAGE_LIMIT_REACHED" }, { status: 409 });
+    }
+    throw txErr;
+  }
 
   // Reserve inventory
   for (const item of validation.validatedItems) {
@@ -187,6 +277,12 @@ export async function POST(req: Request) {
       }
     }
   }
+
+  // ── Post-discount charge amount ──────────────────────────────
+  // Stripe receives the post-discount amount. The order records both
+  // the original totalAmount AND the discountAmount for audit purposes.
+  const discountAmount = discountResult?.discountAmount ?? 0;
+  const chargeAmount = Math.max(0, totalAmount - discountAmount);
 
   // Calculate platform fee
   const feeBps = getPlatformFeeBps(tenant.subscriptionPlan, tenant.platformFeeBps);
@@ -209,7 +305,7 @@ export async function POST(req: Request) {
       order: {
         id: order.id,
         tenantId,
-        totalAmount,
+        totalAmount: chargeAmount,
         currency,
       },
       guest: {
@@ -242,7 +338,8 @@ export async function POST(req: Request) {
         tenantId,
         orderId: order.id,
         orderNumber,
-        amount: totalAmount,
+        amount: chargeAmount,
+        discountAmount,
         currency,
         feeBps,
       });

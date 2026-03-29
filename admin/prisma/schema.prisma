@@ -128,6 +128,11 @@ enum OrderEventType {
   CHANNEL_ORDER_UPDATED     // Order uppdaterad av extern kanal
   CHANNEL_ORDER_CANCELLED   // Order avbokad av extern kanal
   CHANNEL_SYNC_ERROR        // Synkroniseringsfel mot extern kanal
+
+  // Discount
+  DISCOUNT_APPLIED
+  DISCOUNT_CODE_REDEEMED
+  DISCOUNT_REMOVED
 }
 
 // ── Guest Account Enums ─────────────────────────────────────────
@@ -172,6 +177,57 @@ enum GuestEventType {
   DATA_DELETION_REQUESTED   // TODO: GDPR implementation
   GUEST_JOINED_SEGMENT      // "Gäst gick med i segment: [namn]"
   GUEST_LEFT_SEGMENT        // "Gäst lämnade segment: [namn]"
+}
+
+// ── Discount Enums ──────────────────────────────────────────────
+
+enum DiscountMethod {
+  AUTOMATIC
+  CODE
+}
+
+enum DiscountValueType {
+  PERCENTAGE   // value field stores basis points: 1500 = 15.00%
+  FIXED_AMOUNT // value field stores ören: 10000 = 100 SEK
+}
+
+enum DiscountTargetType {
+  ORDER      // discount applies to order subtotal
+  LINE_ITEM  // discount applies to specific products
+}
+
+enum DiscountStatus {
+  ACTIVE
+  SCHEDULED  // startsAt is in the future
+  EXPIRED    // endsAt has passed
+  DISABLED   // manually deactivated
+}
+
+enum DiscountConditionType {
+  // Hospitality-specific
+  MIN_NIGHTS       // intValue: minimum number of nights
+  DAYS_IN_ADVANCE  // intValue: must book at least N days before arrival
+  ARRIVAL_WINDOW   // jsonValue: { startsAt: ISO, endsAt: ISO }
+  // Commerce
+  MIN_ORDER_AMOUNT // intValue: minimum order total in ören
+  MIN_ITEMS        // intValue: minimum item count
+  SPECIFIC_PRODUCTS // jsonValue: string[] of productIds
+  CUSTOMER_SEGMENT // stringValue: segmentId
+  ONCE_PER_CUSTOMER // no value needed — presence means the rule is active
+  SPECIFIC_COLLECTIONS // use DiscountCollection join table
+  SPECIFIC_CUSTOMERS   // use DiscountCustomer join table
+}
+
+enum DiscountEventType {
+  CREATED
+  UPDATED
+  ENABLED
+  DISABLED
+  CODE_ADDED
+  CODE_REMOVED
+  USAGE_RECORDED
+  USAGE_VOIDED    // discount usage released on order cancel/refund
+  NOTE_ADDED      // staff comment on a discount
 }
 
 /// Idempotency lock for PMS booking creation.
@@ -313,6 +369,10 @@ model Tenant {
   rumEvents           RumEvent[]
   rumAggregates       RumDailyAggregate[]
   rumRateLimit        RumRateLimit?
+  discounts           Discount[]
+
+  // Feature toggle — tenant can disable all discount functionality
+  discountsEnabled    Boolean              @default(true)
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -943,6 +1003,7 @@ model GuestAccount {
   events           GuestAccountEvent[]
   addresses        GuestAddress[]
   segmentMemberships GuestSegmentMembership[]
+  discountTargets    DiscountCustomer[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -1167,6 +1228,7 @@ model Product {
   inventoryChanges InventoryChange[]
   priceChanges PriceChange[]
   channelPublications ProductChannelPublication[]
+  discountTargets     DiscountProduct[]
 
   @@unique([tenantId, slug])
   @@unique([tenantId, pmsSourceId, pmsProvider])
@@ -1338,6 +1400,7 @@ model ProductCollection {
   updatedAt   DateTime  @updatedAt
 
   items       ProductCollectionItem[]
+  discountTargets DiscountCollection[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -1560,6 +1623,10 @@ model Order {
   totalAmount             Int           // what guest paid
   currency                String        @default("SEK")
 
+  // Discount — snapshot at checkout time
+  discountAmount          Int           @default(0) // total discount in ören
+  discountCode            String?       // code used (null for automatic discounts)
+
   // @deprecated — use PaymentSession.externalSessionId for lookups.
   // Kept for backwards compatibility with existing orders.
   stripeCheckoutSessionId String?       @unique
@@ -1600,6 +1667,8 @@ model Order {
   events                  OrderEvent[]
   giftCard                GiftCard?
   paymentSession          PaymentSession?
+  discountAllocations     DiscountAllocation[]
+  discountUsage           DiscountUsage?
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId, status])
@@ -1652,6 +1721,10 @@ model OrderLineItem {
   totalAmount   Int      // quantity * unitAmount
   currency      String   @default("SEK")
 
+  // Discount — allocated amount for this line
+  discountAmount      Int                  @default(0)
+  discountAllocations DiscountAllocation[]
+
   @@index([orderId])
   @@index([productId])
 }
@@ -1671,6 +1744,230 @@ model OrderEvent {
 
   @@index([orderId, createdAt])
   @@index([tenantId, orderId])
+}
+
+// ============================================================================
+// DISCOUNTS
+// ============================================================================
+
+/// Core discount definition. Shopify-grade: supports both automatic and
+/// code-based discounts, percentage or fixed amount, order or line-item level.
+/// Monetary values follow platform convention: ören (smallest currency unit).
+model Discount {
+  id          String            @id @default(cuid())
+  tenantId    String
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  title       String            // internal admin label
+  description String?           // shown to guest for AUTOMATIC discounts
+
+  method      DiscountMethod
+  valueType   DiscountValueType
+  value       Int               // bps if PERCENTAGE, ören if FIXED_AMOUNT
+  targetType  DiscountTargetType
+
+  // Targeting scope — explicit flags, not inferred by absence of conditions
+  appliesToAllProducts   Boolean @default(true)
+  appliesToAllCustomers  Boolean @default(true)
+
+  // Minimum purchase requirement — typed fields, not EAV condition rows
+  minimumAmount          Int?    // in ören — null = no minimum
+  minimumQuantity        Int?    // item count — null = no minimum
+
+  status      DiscountStatus    @default(ACTIVE)
+
+  startsAt    DateTime          @default(now())
+  endsAt      DateTime?
+
+  usageLimit  Int?              // null = unlimited
+  usageCount  Int               @default(0) // denormalized — source of truth is COUNT(DiscountUsage)
+
+  combinesWithProductDiscounts  Boolean @default(false)
+  combinesWithOrderDiscounts    Boolean @default(false)
+  combinesWithShippingDiscounts Boolean @default(false)
+
+  createdByUserId String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  codes       DiscountCode[]
+  conditions  DiscountCondition[]
+  allocations DiscountAllocation[]
+  usages      DiscountUsage[]
+  events      DiscountEvent[]
+  targetedProducts    DiscountProduct[]
+  targetedCollections DiscountCollection[]
+  targetedSegments    DiscountSegment[]
+  targetedCustomers   DiscountCustomer[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, method])
+  @@index([tenantId, startsAt, endsAt])
+}
+
+/// Discount codes — one discount can have multiple codes (e.g. "SUMMER2026", "VIP10").
+/// Codes are always stored uppercase and trimmed. Unique per tenant.
+model DiscountCode {
+  id          String    @id @default(cuid())
+  discountId  String
+  discount    Discount  @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  tenantId    String
+
+  code        String    // always stored UPPERCASE trimmed
+  usageLimit  Int?      // overrides Discount.usageLimit for this code
+  usageCount  Int       @default(0)
+  isActive    Boolean   @default(true)
+
+  createdAt   DateTime  @default(now())
+
+  usages      DiscountUsage[]
+
+  @@unique([tenantId, code])
+  @@index([discountId])
+  @@index([tenantId, isActive])
+}
+
+/// Conditions that must ALL be met for the discount to apply.
+/// AND logic — every condition on the discount must pass.
+model DiscountCondition {
+  id          String                @id @default(cuid())
+  discountId  String
+  discount    Discount              @relation(fields: [discountId], references: [id], onDelete: Cascade)
+
+  type        DiscountConditionType
+
+  intValue    Int?     // MIN_NIGHTS, DAYS_IN_ADVANCE, MIN_ORDER_AMOUNT, MIN_ITEMS
+  stringValue String?  // CUSTOMER_SEGMENT segmentId
+  jsonValue   Json?    // SPECIFIC_PRODUCTS (string[]), ARRIVAL_WINDOW ({ startsAt, endsAt })
+
+  @@index([discountId])
+  @@index([discountId, type])
+}
+
+/// Normalized product targeting — replaces SPECIFIC_PRODUCTS jsonValue.
+/// FK to Product ensures referential integrity + cascade on product deletion.
+model DiscountProduct {
+  id          String   @id @default(cuid())
+  discountId  String
+  discount    Discount @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tenantId    String
+
+  @@unique([discountId, productId])
+  @@index([discountId])
+  @@index([tenantId, productId])
+}
+
+/// Normalized collection targeting.
+/// FK to ProductCollection ensures referential integrity.
+model DiscountCollection {
+  id           String            @id @default(cuid())
+  discountId   String
+  discount     Discount          @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  collectionId String
+  collection   ProductCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  tenantId     String
+
+  @@unique([discountId, collectionId])
+  @@index([discountId])
+  @@index([tenantId, collectionId])
+}
+
+/// Normalized customer segment targeting.
+/// FK to GuestSegment ensures referential integrity.
+model DiscountSegment {
+  id         String       @id @default(cuid())
+  discountId String
+  discount   Discount     @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  segmentId  String
+  segment    GuestSegment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  tenantId   String
+
+  @@unique([discountId, segmentId])
+  @@index([discountId])
+  @@index([tenantId, segmentId])
+}
+
+/// Normalized specific customer targeting.
+/// FK to GuestAccount ensures referential integrity.
+model DiscountCustomer {
+  id             String       @id @default(cuid())
+  discountId     String
+  discount       Discount     @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  guestAccountId String
+  guestAccount   GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
+  tenantId       String
+
+  @@unique([discountId, guestAccountId])
+  @@index([discountId])
+  @@index([tenantId, guestAccountId])
+}
+
+/// Records how a discount was distributed across an order.
+/// Order-level discounts: orderLineItemId is null, amount is total discount.
+/// Line-item discounts: one allocation per affected line item.
+model DiscountAllocation {
+  id              String         @id @default(cuid())
+  orderId         String
+  order           Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderLineItemId String?        // null = order-level discount
+  orderLineItem   OrderLineItem? @relation(fields: [orderLineItemId], references: [id], onDelete: SetNull)
+  discountId      String
+  discount        Discount       @relation(fields: [discountId], references: [id])
+  tenantId        String
+
+  amount          Int            // allocated discount amount in ören
+
+  createdAt       DateTime       @default(now())
+
+  @@index([orderId])
+  @@index([discountId])
+  @@index([tenantId])
+}
+
+/// Tracks each time a discount was used on an order.
+/// One order can only redeem one discount (unique orderId).
+/// Source of truth for usage counting — Discount.usageCount is denormalized.
+model DiscountUsage {
+  id             String        @id @default(cuid())
+  discountId     String
+  discount       Discount      @relation(fields: [discountId], references: [id], onDelete: Restrict)
+  discountCodeId String?
+  discountCode   DiscountCode? @relation(fields: [discountCodeId], references: [id], onDelete: SetNull)
+  tenantId       String
+
+  orderId        String        @unique // one order can only redeem one discount
+  order          Order         @relation(fields: [orderId], references: [id])
+  guestAccountId String?
+  guestEmail     String
+
+  discountAmount Int           // actual amount discounted in ören
+  voidedAt       DateTime?     // set when usage is cancelled/refunded — idempotency guard
+  createdAt      DateTime      @default(now())
+
+  @@index([discountId, createdAt])
+  @@index([tenantId, guestEmail])
+  @@index([tenantId, discountId])
+}
+
+/// Append-only audit log for discount lifecycle events.
+model DiscountEvent {
+  id          String             @id @default(cuid())
+  discountId  String
+  discount    Discount           @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  tenantId    String
+
+  type        DiscountEventType
+  message     String
+  metadata    Json               @default("{}")
+  actorUserId String?
+  actorName   String?            // denormalized display name — set at write time
+
+  createdAt   DateTime           @default(now())
+
+  @@index([discountId, createdAt])
+  @@index([tenantId])
 }
 
 /// Stripe webhook event deduplication — prevents double-processing.
@@ -2152,6 +2449,7 @@ model GuestSegment {
 
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   memberships GuestSegmentMembership[]
+  discountTargets DiscountSegment[]
 
   @@index([tenantId])
   @@index([tenantId, isDefault])
