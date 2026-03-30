@@ -823,7 +823,7 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
                 <span className="pf-card-title">Produktorganisering</span>
               </div>
 
-              <label className="mi-card__field-label" style={{ marginBottom: 6, display: "block" }}>Produktserier</label>
+              <label className="mi-card__field-label" style={{ marginBottom: 6, display: "block", fontWeight: 400 }}>Produktserier</label>
               <div className="admin-dropdown" ref={collectionsRef}>
                 <div className="pf-collection-trigger" onClick={() => setCollectionsOpen(true)}>
                   <EditorIcon name="search" size={18} style={{ color: "var(--admin-text-tertiary)", flexShrink: 0 }} />
@@ -850,11 +850,11 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
                               className="admin-dropdown__item"
                               onClick={() => toggleCollection(col.id)}
                             >
-                              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                <div className={`files-header-check${checked ? " files-header-check--active" : ""}`} style={{ width: 16, height: 16, borderRadius: 3 }}>
-                                  <EditorIcon name="check" size={12} className="files-header-check__icon" />
-                                </div>
-                                <span style={{ fontSize: 14 }}>{col.title}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <span className={`fac-check${checked ? " fac-check--on" : ""}`}>
+                                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none" className="fac-check__svg"><path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                </span>
+                                <span style={{ fontSize: 13 }}>{col.title}</span>
                               </div>
                             </button>
                           );
@@ -892,7 +892,7 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
               )}
 
               {/* Tags */}
-              <label className="mi-card__field-label" style={{ marginBottom: 6, marginTop: 16, display: "block" }}>Taggar</label>
+              <label className="mi-card__field-label" style={{ marginBottom: 6, marginTop: 16, display: "block", fontWeight: 400 }}>Taggar</label>
               <div className="pf-collection-trigger">
                 <input
                   type="text"

@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
-import { useSearchParams, useRouter } from "next/navigation";
-import { DiscountStatusBadge } from "./_components/DiscountStatusBadge";
+import { useRouter } from "next/navigation";
 import { EditorIcon } from "@/app/_components/EditorIcon";
-import { Loading } from "@/app/_components/Loading/Loading";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import type { DiscountStatus, DiscountMethod, DiscountValueType } from "@prisma/client";
+
+// ── Types ────────────────────────────────────────────────────
 
 type DiscountListItem = {
   id: string;
@@ -31,91 +30,97 @@ type ListResponse = {
   pageSize: number;
 };
 
-const TABS: { key: string; label: string; status?: string }[] = [
-  { key: "all", label: "Alla" },
-  { key: "active", label: "Aktiva", status: "ACTIVE" },
-  { key: "scheduled", label: "Schemalagda", status: "SCHEDULED" },
-  { key: "expired", label: "Utgångna", status: "EXPIRED" },
-  { key: "disabled", label: "Avaktiverade", status: "DISABLED" },
-];
+// ── Helpers ──────────────────────────────────────────────────
 
 function formatValue(valueType: DiscountValueType, value: number): string {
-  if (valueType === "PERCENTAGE") {
-    return `${value / 100}%`;
-  }
+  if (valueType === "PERCENTAGE") return `${value / 100}%`;
   return `${formatPriceDisplay(value, "SEK")} kr`;
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("sv-SE", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+function statusLabel(status: DiscountStatus): { label: string; className: string } {
+  switch (status) {
+    case "ACTIVE": return { label: "Aktiv", className: "products-status--active" };
+    case "SCHEDULED": return { label: "Schemalagd", className: "products-status--draft" };
+    case "EXPIRED": return { label: "Utgången", className: "products-status--archived" };
+    case "DISABLED": return { label: "Avaktiverad", className: "products-status--archived" };
+    default: return { label: status, className: "" };
+  }
 }
 
+function methodLabel(method: DiscountMethod): string {
+  return method === "CODE" ? "Kod" : "Automatisk";
+}
+
+// ── Filters ─────────────────────────────────────────────────
+
+type StatusFilter = "ALL" | "ACTIVE" | "SCHEDULED" | "EXPIRED" | "DISABLED";
+
+const STATUS_FILTERS: Array<{ key: StatusFilter; label: string }> = [
+  { key: "ALL", label: "Alla" },
+  { key: "ACTIVE", label: "Aktiva" },
+  { key: "SCHEDULED", label: "Schemalagda" },
+  { key: "EXPIRED", label: "Utgångna" },
+  { key: "DISABLED", label: "Avaktiverade" },
+];
+
+// ── Component ────────────────────────────────────────────────
+
 export function DiscountsClient({ onCreateClick }: { onCreateClick?: () => void }) {
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const statusParam = searchParams.get("status") ?? "";
-
-  const activeTab = TABS.find((t) => t.status === statusParam)?.key ?? "all";
-
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [data, setData] = useState<ListResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
+  const [loaded, setLoaded] = useState(false);
 
   const fetchDiscounts = useCallback(async () => {
-    setLoading(true);
     const params = new URLSearchParams();
-    if (statusParam) params.set("status", statusParam);
-    params.set("page", String(page));
-    params.set("limit", "20");
+    if (statusFilter !== "ALL") params.set("status", statusFilter);
+    params.set("page", "1");
+    params.set("limit", "50");
 
     const res = await fetch(`/api/admin/discounts?${params}`);
     if (res.ok) {
       setData(await res.json());
     }
-    setLoading(false);
-  }, [statusParam, page]);
+    setLoaded(true);
+  }, [statusFilter]);
 
   useEffect(() => {
     fetchDiscounts();
   }, [fetchDiscounts]);
 
-  const switchTab = (tab: typeof TABS[number]) => {
-    setPage(1);
-    if (tab.status) {
-      router.push(`/discounts?status=${tab.status}`);
-    } else {
-      router.push("/discounts");
-    }
-  };
+  if (!loaded) return null;
 
-  // Empty state
-  if (!loading && data && data.total === 0 && activeTab === "all") {
+  const discounts = data?.discounts ?? [];
+
+  // ── Empty state ──
+  if (discounts.length === 0 && statusFilter === "ALL") {
     return (
       <>
-        <div className="disc-tabs">
-          {TABS.map((tab) => (
+        <div className="products-filter-bar">
+          {STATUS_FILTERS.map((f) => (
             <button
-              key={tab.key}
-              className={`disc-tab${activeTab === tab.key ? " disc-tab--active" : ""}`}
-              onClick={() => switchTab(tab)}
+              key={f.key}
+              type="button"
+              className={`products-filter-btn${statusFilter === f.key ? " products-filter-btn--active" : ""}`}
+              onClick={() => setStatusFilter(f.key)}
             >
-              {tab.label}
+              {f.label}
             </button>
           ))}
         </div>
-        <div className="disc-empty">
-          <div className="disc-empty__icon">
-            <EditorIcon name="sell" size={48} />
+        <div className="products-empty">
+          <div className="products-empty__icon">
+            <EditorIcon name="percent" size={48} />
           </div>
-          <h2 className="disc-empty__title">Inga rabatter skapade</h2>
-          <p className="disc-empty__desc">
+          <h2 className="products-empty__title">Inga rabatter skapade</h2>
+          <p className="products-empty__desc">
             Skapa din första rabatt för att erbjuda dina gäster prisavdrag vid bokning eller köp.
           </p>
-          <button className="settings-btn--connect" onClick={onCreateClick}>
+          <button
+            className="settings-btn--connect"
+            style={{ fontSize: 14, padding: "8px 20px" }}
+            onClick={onCreateClick}
+          >
             Skapa rabatt
           </button>
         </div>
@@ -123,104 +128,82 @@ export function DiscountsClient({ onCreateClick }: { onCreateClick?: () => void 
     );
   }
 
+  // ── Column header ──
+  const columnHeader = (
+    <div className="files-column-headers">
+      <span className="products-col products-col--name">Rabatt</span>
+      <span className="products-col products-col--detail">Status</span>
+      <span className="products-col products-col--detail">Metod</span>
+      <span className="products-col products-col--detail">Värde</span>
+      <span className="products-col products-col--detail">Användningar</span>
+    </div>
+  );
+
   return (
     <>
-      {/* Tabs */}
-      <div className="disc-tabs">
-        {TABS.map((tab) => (
+      <div className="products-filter-bar">
+        {STATUS_FILTERS.map((f) => (
           <button
-            key={tab.key}
-            className={`disc-tab${activeTab === tab.key ? " disc-tab--active" : ""}`}
-            onClick={() => switchTab(tab)}
+            key={f.key}
+            type="button"
+            className={`products-filter-btn${statusFilter === f.key ? " products-filter-btn--active" : ""}`}
+            onClick={() => setStatusFilter(f.key)}
           >
-            {tab.label}
+            {f.label}
           </button>
         ))}
       </div>
+      <div className="products-inner">
+        {columnHeader}
 
-      {loading ? (
-        <div style={{ padding: 48, display: "flex", justifyContent: "center" }}>
-          <Loading variant="section" />
-        </div>
-      ) : data && data.discounts.length > 0 ? (
-        <div className="disc-table">
-          {/* Header */}
-          <div className="disc-header">
-            <span>Titel</span>
-            <span>Metod</span>
-            <span>Värde</span>
-            <span>Användningar</span>
-            <span>Status</span>
-            <span>Giltig t.o.m</span>
-            <span></span>
-          </div>
+        {discounts.map((d) => {
+          const { label: sLabel, className: sClass } = statusLabel(d.status);
 
-          {/* Rows */}
-          {data.discounts.map((d) => (
-            <Link
+          return (
+            <div
               key={d.id}
-              href={`/discounts/${d.id}`}
-              className="disc-row"
+              className="products-row"
+              onClick={() => router.push(`/discounts/${d.id}`)}
             >
-              <span className="disc-row__title">{d.title}</span>
-              <span className="disc-row__method">
-                <span
-                  style={{
-                    background: d.method === "CODE" ? "#E8F0FE" : "#F0E8FE",
-                    color: d.method === "CODE" ? "#1A4B8E" : "#5E1A8E",
-                    borderRadius: 8,
-                    padding: "2px 8px",
-                    fontSize: 12,
-                    fontWeight: 500,
-                  }}
-                >
-                  {d.method === "CODE" ? "Kod" : "Automatisk"}
+              <div className="products-col products-col--name">
+                <span className="products-row__title">{d.title}</span>
+                {d.codes.length > 0 && (
+                  <span className="products-row__meta">{d.codes[0].code}</span>
+                )}
+              </div>
+              <div className="products-col products-col--detail">
+                <span className={`products-status ${sClass}`}>{sLabel}</span>
+              </div>
+              <div className="products-col products-col--detail">
+                <span style={{
+                  background: d.method === "CODE" ? "#E8F0FE" : "#F0E8FE",
+                  color: d.method === "CODE" ? "#1A4B8E" : "#5E1A8E",
+                  borderRadius: 7,
+                  padding: "2px 8px",
+                  fontSize: 12,
+                  fontWeight: 500,
+                }}>
+                  {methodLabel(d.method)}
                 </span>
-              </span>
-              <span className="disc-row__value">{formatValue(d.valueType, d.value)}</span>
-              <span className="disc-row__usage">
+              </div>
+              <div className="products-col products-col--detail">
+                {formatValue(d.valueType, d.value)}
+              </div>
+              <div className="products-col products-col--detail">
                 {d.usageCount}{d.usageLimit ? ` / ${d.usageLimit}` : " / \u221E"}
-              </span>
-              <span>
-                <DiscountStatusBadge status={d.status} />
-              </span>
-              <span className="disc-row__date">
-                {d.endsAt ? formatDate(d.endsAt) : "\u2013"}
-              </span>
-              <span className="disc-row__action">
-                <EditorIcon name="chevron_right" size={18} />
-              </span>
-            </Link>
-          ))}
-
-          {/* Pagination */}
-          {data.total > data.pageSize && (
-            <div className="disc-pagination">
-              <button
-                className="disc-pagination__btn"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                <EditorIcon name="chevron_left" size={16} />
-              </button>
-              <span className="disc-pagination__info">
-                Sida {data.page} av {Math.ceil(data.total / data.pageSize)}
-              </span>
-              <button
-                className="disc-pagination__btn"
-                disabled={page >= Math.ceil(data.total / data.pageSize)}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                <EditorIcon name="chevron_right" size={16} />
-              </button>
+              </div>
             </div>
-          )}
-        </div>
-      ) : (
-        <div className="disc-empty">
-          <p className="disc-empty__desc">Inga rabatter matchar filtret.</p>
-        </div>
-      )}
+          );
+        })}
+
+        {discounts.length === 0 && statusFilter !== "ALL" && (
+          <div className="products-empty" style={{ padding: "40px 24px" }}>
+            <p className="products-empty__desc" style={{ margin: 0 }}>
+              Inga rabatter matchar filtret.
+            </p>
+          </div>
+        )}
+      </div>
     </>
   );
 }

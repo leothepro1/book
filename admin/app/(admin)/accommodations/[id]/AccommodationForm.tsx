@@ -27,6 +27,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { groupFacilitiesByCategory, FACILITY_MAP, FACILITY_CATEGORY_LABELS } from "@/app/_lib/accommodations/facility-map";
 import type { FacilityCategory } from "@/app/_lib/accommodations/facility-map";
 import { updateAccommodation } from "../actions";
+import { listAccommodationCategories } from "@/app/(admin)/accommodation-categories/actions";
 import type { ResolvedAccommodation } from "@/app/_lib/accommodations/types";
 import type { AccommodationStatus, FacilityType, BedType } from "@prisma/client";
 import "../../products/_components/product-form.css";
@@ -141,6 +142,7 @@ export default function AccommodationForm({
 
   // ── Capacity ──
   const [capacityModalOpen, setCapacityModalOpen] = useState(false);
+  const [bedDropdownOpen, setBedDropdownOpen] = useState(false);
   const [capMaxGuests, setCapMaxGuests] = useState(accommodation.maxGuests);
   const [capMinGuests, setCapMinGuests] = useState(accommodation.minGuests);
   const [capExtraBeds, setCapExtraBeds] = useState(accommodation.extraBeds);
@@ -153,6 +155,68 @@ export default function AccommodationForm({
   const [selectedFacilities, setSelectedFacilities] = useState<Set<FacilityType>>(
     () => new Set(accommodation.facilities.filter((f) => f.isVisible).map((f) => f.facilityType as FacilityType)),
   );
+
+  // ── Categories (same pattern as ProductForm collections) ──
+  type CategoryItem = { id: string; title: string };
+  const [allCategories, setAllCategories] = useState<CategoryItem[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(
+    () => new Set(accommodation.categoryIds),
+  );
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [categoriesSearch, setCategoriesSearch] = useState("");
+  const categoriesRef = useRef<HTMLDivElement>(null);
+
+  // Load categories on mount
+  useEffect(() => {
+    listAccommodationCategories().then((cats) => {
+      setAllCategories(cats.map((c) => ({ id: c.id, title: c.title })));
+    });
+  }, []);
+
+  // Close categories dropdown on outside click
+  useEffect(() => {
+    if (!categoriesOpen) return;
+    const handle = (e: MouseEvent) => {
+      if (categoriesRef.current && !categoriesRef.current.contains(e.target as Node)) setCategoriesOpen(false);
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [categoriesOpen]);
+
+  const toggleCategory = useCallback((id: string) => {
+    setSelectedCategoryIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    markDirty();
+  }, []);
+
+  const removeCategory = useCallback((id: string) => {
+    setSelectedCategoryIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    markDirty();
+  }, []);
+
+  // ── Tags ──
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
+
+  const addTag = useCallback((raw: string) => {
+    const name = raw.trim().toLowerCase();
+    if (!name) return;
+    setTags((prev) => prev.includes(name) ? prev : [...prev, name]);
+    setTagInput("");
+    markDirty();
+  }, []);
+
+  const removeTag = useCallback((name: string) => {
+    setTags((prev) => prev.filter((t) => t !== name));
+    markDirty();
+  }, []);
 
   // ── Bed configs ──
   const [bedConfigs, setBedConfigs] = useState(
@@ -181,6 +245,7 @@ export default function AccommodationForm({
           source: "MANUAL" as const,
           overrideHidden: false,
         })),
+        categoryIds: Array.from(selectedCategoryIds),
         maxGuests: capMaxGuests,
         minGuests: capMinGuests,
         extraBeds: capExtraBeds,
@@ -217,6 +282,9 @@ export default function AccommodationForm({
     setCapRoomSize(accommodation.roomSizeSqm ?? 0);
     setCapBedrooms(accommodation.bedrooms ?? 0);
     setCapBathrooms(accommodation.bathrooms ?? 0);
+    setSelectedCategoryIds(new Set(accommodation.categoryIds));
+    setTags([]);
+    setTagInput("");
     setTimeout(() => {
       setDirty(false);
       setIsDiscarding(false);
@@ -331,50 +399,6 @@ export default function AccommodationForm({
               </div>
             </div>
 
-            {/* Card 2 — Bäddkonfiguration */}
-            <div style={CARD}>
-              <div className="pf-card-header" style={{ marginBottom: 12 }}>
-                <span className="pf-card-title">Bäddkonfiguration</span>
-              </div>
-              {bedConfigs.length === 0 ? (
-                <p style={{ fontSize: "var(--font-xs)", color: "var(--admin-text-tertiary)", margin: 0 }}>
-                  Ingen bäddkonfiguration angiven.
-                </p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {bedConfigs.map((b, i) => (
-                    <div key={b.bedType} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <span style={{ flex: 1, fontSize: 13 }}>{BED_TYPE_LABELS[b.bedType] ?? b.bedType}</span>
-                      <button
-                        type="button"
-                        style={{ width: 28, height: 28, borderRadius: 6, border: "1px solid var(--admin-border)", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-                        onClick={() => {
-                          const next = [...bedConfigs];
-                          next[i] = { ...next[i], quantity: Math.max(0, next[i].quantity - 1) };
-                          setBedConfigs(next.filter((c) => c.quantity > 0));
-                          markDirty();
-                        }}
-                      >
-                        <EditorIcon name="remove" size={16} />
-                      </button>
-                      <span style={{ width: 24, textAlign: "center", fontSize: 14, fontWeight: 500 }}>{b.quantity}</span>
-                      <button
-                        type="button"
-                        style={{ width: 28, height: 28, borderRadius: 6, border: "1px solid var(--admin-border)", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-                        onClick={() => {
-                          const next = [...bedConfigs];
-                          next[i] = { ...next[i], quantity: next[i].quantity + 1 };
-                          setBedConfigs(next);
-                          markDirty();
-                        }}
-                      >
-                        <EditorIcon name="add" size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Right column (30%) */}
@@ -459,12 +483,12 @@ export default function AccommodationForm({
                   Inga faciliteter valda.
                 </p>
               ) : (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                <div className="pf-collection-pills">
                   {Array.from(selectedFacilities).map((ft) => {
                     const meta = FACILITY_MAP[ft];
                     if (!meta) return null;
                     return (
-                      <span key={ft} style={{ display: "inline-block", padding: "2px 8px", borderRadius: 7, fontSize: 11, fontWeight: 500, background: "#f0f0f0", color: "var(--admin-text-secondary)" }}>
+                      <span key={ft} className="pf-collection-pill">
                         {meta.label}
                       </span>
                     );
@@ -473,18 +497,113 @@ export default function AccommodationForm({
               )}
             </div>
 
-            {/* PMS-information */}
-            <div style={{ ...CARD, background: "var(--admin-surface)" }}>
+            {/* Boendeorganisering */}
+            <div style={CARD}>
               <div className="pf-card-header" style={{ marginBottom: 12 }}>
-                <span className="pf-card-title">PMS-information</span>
+                <span className="pf-card-title">Boendeorganisering</span>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", fontSize: "var(--font-sm)" }}>
-                <Row label="Leverantör" value={accommodation.pmsProvider ?? "Manuell"} />
-                <Row label="Externt ID" value={accommodation.externalId ?? "–"} mono />
-                <Row label="Senast synkad" value={formatDate(accommodation.updatedAt)} />
-                <Row label="Typ" value={TYPE_LABELS[accommodation.accommodationType] ?? accommodation.accommodationType} />
+
+              <label className="mi-card__field-label" style={{ marginBottom: 6, display: "block", fontWeight: 400 }}>Boendetyper</label>
+              <div className="admin-dropdown" ref={categoriesRef}>
+                <div className="pf-collection-trigger" onClick={() => setCategoriesOpen(true)}>
+                  <EditorIcon name="search" size={18} style={{ color: "var(--admin-text-tertiary)", flexShrink: 0 }} />
+                  <input
+                    type="text"
+                    className="pf-collection-trigger__input"
+                    value={categoriesSearch}
+                    onChange={(e) => { setCategoriesSearch(e.target.value); setCategoriesOpen(true); }}
+                    onFocus={() => setCategoriesOpen(true)}
+                    placeholder=""
+                  />
+                </div>
+                {categoriesOpen && (
+                  <div className="admin-dropdown__list" style={{ padding: 0 }}>
+                    <div style={{ maxHeight: 200, overflowY: "auto", padding: "4px" }}>
+                      {allCategories
+                        .filter((c) => !categoriesSearch || c.title.toLowerCase().includes(categoriesSearch.toLowerCase()))
+                        .map((cat) => {
+                          const checked = selectedCategoryIds.has(cat.id);
+                          return (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              className="admin-dropdown__item"
+                              onClick={() => toggleCategory(cat.id)}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <span className={`fac-check${checked ? " fac-check--on" : ""}`}>
+                                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none" className="fac-check__svg"><path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                </span>
+                                <span style={{ fontSize: 13 }}>{cat.title}</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      {allCategories.filter((c) => !categoriesSearch || c.title.toLowerCase().includes(categoriesSearch.toLowerCase())).length === 0 && (
+                        <div style={{ padding: "12px 16px", fontSize: 13, color: "var(--admin-text-tertiary)" }}>
+                          Inga boendetyper hittades
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {selectedCategoryIds.size > 0 && (
+                <div className="pf-collection-pills">
+                  {Array.from(selectedCategoryIds).map((id) => {
+                    const cat = allCategories.find((c) => c.id === id);
+                    if (!cat) return null;
+                    return (
+                      <span key={id} className="pf-collection-pill">
+                        {cat.title}
+                        <button
+                          type="button"
+                          className="pf-collection-pill__remove"
+                          onClick={() => removeCategory(id)}
+                          aria-label={`Ta bort ${cat.title}`}
+                        >
+                          <EditorIcon name="close" size={12} />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Taggar */}
+              <label className="mi-card__field-label" style={{ marginBottom: 6, marginTop: 16, display: "block", fontWeight: 400 }}>Taggar</label>
+              <div className="pf-collection-trigger">
+                <input
+                  type="text"
+                  className="pf-collection-trigger__input"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); }
+                  }}
+                  placeholder=""
+                />
+              </div>
+              {tags.length > 0 && (
+                <div className="pf-collection-pills">
+                  {tags.map((tag) => (
+                    <span key={tag} className="pf-collection-pill">
+                      {tag}
+                      <button
+                        type="button"
+                        className="pf-collection-pill__remove"
+                        onClick={() => removeTag(tag)}
+                        aria-label={`Ta bort ${tag}`}
+                      >
+                        <EditorIcon name="close" size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
+
           </div>
         </div>
       </div>
@@ -570,8 +689,10 @@ export default function AccommodationForm({
               </button>
               <button
                 type="button"
-                className="admin-btn admin-btn--accent"
-                style={{ padding: "6px 12px", borderRadius: 8 }}
+                className="admin-btn"
+                style={{ padding: "6px 12px", borderRadius: 8, background: "var(--dark-primary)", color: "var(--dark-primary-text)", transition: "background 0.15s" }}
+                onMouseEnter={(e) => { (e.target as HTMLElement).style.background = "var(--dark-primary-hover)"; }}
+                onMouseLeave={(e) => { (e.target as HTMLElement).style.background = "var(--dark-primary)"; }}
                 onClick={() => {
                   setFacilityModalOpen(false);
                   markDirty();
@@ -611,6 +732,77 @@ export default function AccommodationForm({
               <CapField label="Rumsstorlek (m²)" value={capRoomSize} onChange={(v) => setCapRoomSize(v)} min={0} step={0.5} />
               <CapField label="Sovrum" value={capBedrooms} onChange={(v) => setCapBedrooms(v)} min={0} />
               <CapField label="Badrum" value={capBathrooms} onChange={(v) => setCapBathrooms(v)} min={0} />
+
+              {/* Bäddkonfiguration */}
+              <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 16, marginTop: 4 }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--admin-text)", marginBottom: 8 }}>Bäddkonfiguration</label>
+                {bedConfigs.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+                    {bedConfigs.map((b, i) => (
+                      <div key={b.bedType} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <button
+                          type="button"
+                          style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--admin-text-tertiary)", flexShrink: 0 }}
+                          onClick={() => setBedConfigs(bedConfigs.filter((_, idx) => idx !== i))}
+                        >
+                          <EditorIcon name="close" size={14} />
+                        </button>
+                        <span style={{ flex: 1, fontSize: 13, color: "var(--admin-text)" }}>{BED_TYPE_LABELS[b.bedType] ?? b.bedType}</span>
+                        <button
+                          type="button"
+                          style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid var(--admin-border)", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--admin-text)" }}
+                          onClick={() => {
+                            const next = [...bedConfigs];
+                            if (next[i].quantity <= 1) {
+                              setBedConfigs(next.filter((_, idx) => idx !== i));
+                            } else {
+                              next[i] = { ...next[i], quantity: next[i].quantity - 1 };
+                              setBedConfigs(next);
+                            }
+                          }}
+                        >
+                          <EditorIcon name="remove" size={14} />
+                        </button>
+                        <span style={{ width: 22, textAlign: "center", fontSize: 13, fontWeight: 500 }}>{b.quantity}</span>
+                        <button
+                          type="button"
+                          style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid var(--admin-border)", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--admin-text)" }}
+                          onClick={() => {
+                            const next = [...bedConfigs];
+                            next[i] = { ...next[i], quantity: next[i].quantity + 1 };
+                            setBedConfigs(next);
+                          }}
+                        >
+                          <EditorIcon name="add" size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#616161", cursor: "pointer", pointerEvents: "none" }}>
+                    <EditorIcon name="add_circle" size={16} />
+                    Lägg till sängtyp
+                  </div>
+                  <select
+                    style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", width: "100%", height: "100%" }}
+                    value=""
+                    onChange={(e) => {
+                      const bt = e.target.value as BedType;
+                      if (!bt) return;
+                      if (bedConfigs.some((b) => b.bedType === bt)) return;
+                      setBedConfigs([...bedConfigs, { bedType: bt, quantity: 1 }]);
+                    }}
+                  >
+                    <option value="">Lägg till sängtyp...</option>
+                    {(Object.entries(BED_TYPE_LABELS) as [string, string][])
+                      .filter(([key]) => !bedConfigs.some((b) => b.bedType === key))
+                      .map(([key, label]) => (
+                        <option key={key} value={key}>{label}</option>
+                      ))}
+                  </select>
+                </div>
+              </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "12px 20px", borderTop: "1px solid var(--admin-border)" }}>
               <button

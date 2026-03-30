@@ -91,7 +91,6 @@ export default function ProductsClient({
   const [showSelectDropdown, setShowSelectDropdown] = useState(false);
   const selectDropdownRef = useRef<HTMLDivElement>(null);
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "DRAFT" | "ARCHIVED">("ALL");
-  const [typeFilter, setTypeFilter] = useState<"ALL" | "STANDARD" | "GIFT_CARD">("ALL");
 
   // Load all products once (filter client-side)
   useEffect(() => {
@@ -103,7 +102,6 @@ export default function ProductsClient({
 
   const filteredProducts = products.filter((p) => {
     if (statusFilter !== "ALL" && p.status !== statusFilter) return false;
-    if (typeFilter !== "ALL" && p.productType !== typeFilter) return false;
     return true;
   });
 
@@ -248,12 +246,6 @@ export default function ProductsClient({
     { key: "ARCHIVED", label: "Arkiverade" },
   ];
 
-  const TYPE_FILTERS: Array<{ key: typeof typeFilter; label: string }> = [
-    { key: "ALL", label: "Alla typer" },
-    { key: "STANDARD", label: "Produkter" },
-    { key: "GIFT_CARD", label: "Presentkort" },
-  ];
-
   return (
     <>
       <div className="products-filter-bar">
@@ -263,17 +255,6 @@ export default function ProductsClient({
             type="button"
             className={`products-filter-btn${statusFilter === f.key ? " products-filter-btn--active" : ""}`}
             onClick={() => setStatusFilter(f.key)}
-          >
-            {f.label}
-          </button>
-        ))}
-        <span style={{ width: 1, height: 20, background: "var(--admin-border)", margin: "0 var(--space-2)" }} />
-        {TYPE_FILTERS.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            className={`products-filter-btn${typeFilter === f.key ? " products-filter-btn--active" : ""}`}
-            onClick={() => setTypeFilter(f.key)}
           >
             {f.label}
           </button>

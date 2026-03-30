@@ -13,7 +13,7 @@ export default function AccommodationCategoriesPage() {
       <div className="admin-editor">
         <div className="admin-header">
           <h1 className="admin-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className="material-symbols-rounded" style={{ fontSize: 22 }}>category</span>
+            <span className="material-symbols-rounded" style={{ fontSize: 22 }}>villa</span>
             Boendetyper
           </h1>
           <div className="admin-actions">
@@ -22,7 +22,7 @@ export default function AccommodationCategoriesPage() {
               style={{ fontSize: 13, padding: "5px 12px" }}
               onClick={() => addRef.current?.()}
             >
-              Lagg till boendetyp
+              Lägg till boendetyp
             </button>
           </div>
         </div>

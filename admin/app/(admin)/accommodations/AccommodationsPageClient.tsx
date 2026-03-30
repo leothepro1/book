@@ -40,16 +40,6 @@ export default function AccommodationsPageClient({
             <span className="material-symbols-rounded" style={{ fontSize: 22 }}>villa</span>
             Boenden
           </h1>
-          <div className="admin-actions">
-            <button
-              className="settings-btn--connect"
-              style={{ fontSize: 13, padding: "5px 12px" }}
-              onClick={handleSync}
-              disabled={isSyncing}
-            >
-              {isSyncing ? "Synkar..." : "Synka PMS"}
-            </button>
-          </div>
         </div>
         <div className="admin-content">
           <AccommodationsClient

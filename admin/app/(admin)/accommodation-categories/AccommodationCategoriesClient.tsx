@@ -113,9 +113,9 @@ export default function AccommodationCategoriesClient({
         <div className="products-empty__icon">
           <EditorIcon name="category" size={48} />
         </div>
-        <h2 className="products-empty__title">Inga boendetyper annu</h2>
+        <h2 className="products-empty__title">Inga boendetyper ännu</h2>
         <p className="products-empty__desc">
-          Skapa din forsta boendetyp — Stugor, Hotellrum, Campingplatser, eller vad du vill gruppera.
+          Skapa din första boendetyp — Stugor, Hotellrum, Campingplatser, eller vad du vill gruppera.
         </p>
         <button
           className="settings-btn--connect"
@@ -267,7 +267,7 @@ export default function AccommodationCategoriesClient({
               Ta bort {selCount === 1 ? "1 boendetyp" : `${selCount} boendetyper`}?
             </h3>
             <p style={{ fontSize: 14, color: "#616161", lineHeight: 1.6, marginBottom: 20 }}>
-              {selCount === 1 ? "Boendetypen" : "Boendetyperna"} tas bort permanent. Boenden i kategorin paverkas inte.
+              {selCount === 1 ? "Boendetypen" : "Boendetyperna"} tas bort permanent. Boenden i kategorin påverkas inte.
             </p>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button className="settings-btn--outline" onClick={() => setShowDeleteConfirm(false)}>

@@ -1561,6 +1561,7 @@ model ProductCollection {
 
   items       ProductCollectionItem[]
   discountTargets DiscountCollection[]
+  accommodationCategoryAddons AccommodationCategoryAddon[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -1836,6 +1837,7 @@ model AccommodationCategory {
 
   tenant Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   items  AccommodationCategoryItem[]
+  addonCollections AccommodationCategoryAddon[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -1857,6 +1859,23 @@ model AccommodationCategoryItem {
   @@unique([categoryId, accommodationId])
   @@index([categoryId, sortOrder])
   @@index([accommodationId])
+}
+
+/// Links an AccommodationCategory to a ProductCollection whose products
+/// are offered as addons when booking accommodations in that category.
+model AccommodationCategoryAddon {
+  id           String   @id @default(cuid())
+  categoryId   String
+  collectionId String
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  category   AccommodationCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  collection ProductCollection     @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, collectionId])
+  @@index([categoryId, sortOrder])
+  @@index([collectionId])
 }
 
 // ============================================================================

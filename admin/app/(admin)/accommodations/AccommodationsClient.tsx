@@ -30,6 +30,14 @@ function formatPrice(amount: number, currency: string): string {
 
 type CategoryTab = { id: string; title: string };
 
+function getCategoryLabel(categoryIds: string[], categories: CategoryTab[]): string {
+  if (categoryIds.length === 0) return "Okategoriserat";
+  const first = categories.find((c) => c.id === categoryIds[0]);
+  if (!first) return "Okategoriserat";
+  if (categoryIds.length === 1) return first.title;
+  return `${first.title} +${categoryIds.length - 1}`;
+}
+
 // ── Component ────────────────────────────────────────────────
 
 export default function AccommodationsClient({
@@ -42,11 +50,11 @@ export default function AccommodationsClient({
   onSync?: () => void;
 }) {
   const router = useRouter();
-  const [activeCategory, setActiveCategory] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE" | "ARCHIVED">("ALL");
 
   const filtered = accommodations.filter((a) => {
-    if (activeCategory === "ALL") return true;
-    return a.categoryIds.includes(activeCategory);
+    if (statusFilter !== "ALL" && a.status !== statusFilter) return false;
+    return true;
   });
 
   // ── Empty state ──
@@ -78,35 +86,31 @@ export default function AccommodationsClient({
     <div className="files-column-headers">
       <span className="accommodations-col--thumb" />
       <span className="accommodations-col--name">Boende</span>
-      <span className="accommodations-col--detail">Kapacitet</span>
-      <span className="accommodations-col--detail accommodations-col--right">Pris/natt</span>
       <span className="accommodations-col--detail">Status</span>
+      <span className="accommodations-col--detail">Kategori</span>
+      <span className="accommodations-col--detail">Kapacitet</span>
     </div>
   );
 
   return (
     <>
-      {categories.length > 0 && (
-        <div className="accommodations-filter-bar">
+      <div className="accommodations-filter-bar">
+        {([
+          { key: "ALL" as const, label: "Alla" },
+          { key: "ACTIVE" as const, label: "Aktiva" },
+          { key: "INACTIVE" as const, label: "Utkast" },
+          { key: "ARCHIVED" as const, label: "Arkiverade" },
+        ]).map((f) => (
           <button
+            key={f.key}
             type="button"
-            className={`accommodations-filter-btn${activeCategory === "ALL" ? " accommodations-filter-btn--active" : ""}`}
-            onClick={() => setActiveCategory("ALL")}
+            className={`accommodations-filter-btn${statusFilter === f.key ? " accommodations-filter-btn--active" : ""}`}
+            onClick={() => setStatusFilter(f.key)}
           >
-            Alla
+            {f.label}
           </button>
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              className={`accommodations-filter-btn${activeCategory === cat.id ? " accommodations-filter-btn--active" : ""}`}
-              onClick={() => setActiveCategory(cat.id)}
-            >
-              {cat.title}
-            </button>
-          ))}
-        </div>
-      )}
+        ))}
+      </div>
       <div className="accommodations-inner">
         {columnHeader}
 
@@ -131,16 +135,15 @@ export default function AccommodationsClient({
               </div>
               <div className="accommodations-col--name">
                 <span className="accommodations-row__title">{acc.displayName}</span>
-                <span className="accommodations-row__slug">{acc.slug}</span>
-              </div>
-              <div className="accommodations-col--detail">
-                {capacityLabel(acc.minGuests, acc.maxGuests)}
-              </div>
-              <div className="accommodations-col--detail accommodations-col--right">
-                {acc.basePricePerNight > 0 ? formatPrice(acc.basePricePerNight, acc.currency) : "–"}
               </div>
               <div className="accommodations-col--detail">
                 <span className={`accommodations-status ${sClass}`}>{sLabel}</span>
+              </div>
+              <div className="accommodations-col--detail">
+                <span className="products-category">{getCategoryLabel(acc.categoryIds, categories)}</span>
+              </div>
+              <div className="accommodations-col--detail">
+                {capacityLabel(acc.minGuests, acc.maxGuests)}
               </div>
             </div>
           );

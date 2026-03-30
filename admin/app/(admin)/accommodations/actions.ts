@@ -30,6 +30,7 @@ export type AccommodationUpdateInput = {
     bedType: BedType;
     quantity: number;
   }>;
+  categoryIds?: string[];
   media?: Array<{
     url: string;
     altText: string | null;
@@ -135,6 +136,28 @@ export async function updateAccommodation(
             source: "MANUAL" as const,
           })),
         });
+      }
+    }
+
+    // Sync category membership — delete all, recreate
+    if (data.categoryIds !== undefined) {
+      await tx.accommodationCategoryItem.deleteMany({
+        where: { accommodationId: id },
+      });
+
+      if (data.categoryIds.length > 0) {
+        // Validate categories belong to tenant
+        const validCats = await tx.accommodationCategory.findMany({
+          where: { id: { in: data.categoryIds }, tenantId },
+          select: { id: true },
+        });
+        const validIds = new Set(validCats.map((c) => c.id));
+        const memberships = data.categoryIds
+          .filter((catId) => validIds.has(catId))
+          .map((categoryId, i) => ({ categoryId, accommodationId: id, sortOrder: i }));
+        if (memberships.length > 0) {
+          await tx.accommodationCategoryItem.createMany({ data: memberships });
+        }
       }
     }
   });

@@ -8,7 +8,7 @@ import { RichTextEditor } from "@/app/_components/RichTextEditor";
 import { MediaLibraryModal } from "@/app/(admin)/_components/MediaLibrary";
 import type { MediaLibraryResult } from "@/app/(admin)/_components/MediaLibrary";
 import { PublishBarUI } from "@/app/(admin)/_components/PublishBar/PublishBar";
-import { createAccommodationCategory, updateAccommodationCategory, searchAccommodations } from "../actions";
+import { createAccommodationCategory, updateAccommodationCategory, updateAccommodationCategoryAddons, searchAccommodations, searchProductCollections } from "../actions";
 import {
   DndContext,
   PointerSensor,
@@ -63,7 +63,15 @@ function displayName(a: AccommodationItem): string {
   return a.nameOverride || a.name;
 }
 
-export default function AccommodationCategoryForm({ category }: { category?: ExistingCategory }) {
+type AddonCollectionItem = { id: string; title: string; imageUrl?: string | null; status?: string; productCount: number };
+
+export default function AccommodationCategoryForm({
+  category,
+  initialAddonCollections,
+}: {
+  category?: ExistingCategory;
+  initialAddonCollections?: AddonCollectionItem[];
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isSaving, setIsSaving] = useState(false);
@@ -97,6 +105,62 @@ export default function AccommodationCategoryForm({ category }: { category?: Exi
   const [addedAccommodations, setAddedAccommodations] = useState<AccommodationItem[]>(
     () => (category?.items ?? []).map((i) => i.accommodation),
   );
+
+  // ── Addon collections ──
+  const [addonCollections, setAddonCollections] = useState<AddonCollectionItem[]>(
+    () => initialAddonCollections ?? [],
+  );
+  const [addonPickerOpen, setAddonPickerOpen] = useState(false);
+  const [addonPickerSearch, setAddonPickerSearch] = useState("");
+  const [addonPickerResults, setAddonPickerResults] = useState<AddonCollectionItem[]>([]);
+  const [addonPickerLoading, setAddonPickerLoading] = useState(false);
+  const [addonPickerChecked, setAddonPickerChecked] = useState<Set<string>>(new Set());
+  const addonPickerSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadAddonPickerResults = useCallback(async (query: string) => {
+    setAddonPickerLoading(true);
+    const results = await searchProductCollections(query);
+    setAddonPickerResults(results.map((r) => ({ id: r.id, title: r.title, imageUrl: r.imageUrl, status: r.status, productCount: r._count.items })));
+    setAddonPickerLoading(false);
+  }, []);
+
+  const openAddonPicker = useCallback(() => {
+    setAddonPickerOpen(true);
+    setAddonPickerSearch("");
+    setAddonPickerChecked(new Set(addonCollections.map((c) => c.id)));
+    loadAddonPickerResults("");
+  }, [addonCollections, loadAddonPickerResults]);
+
+  const handleAddonPickerSearch = useCallback((query: string) => {
+    setAddonPickerSearch(query);
+    if (addonPickerSearchTimer.current) clearTimeout(addonPickerSearchTimer.current);
+    addonPickerSearchTimer.current = setTimeout(() => {
+      loadAddonPickerResults(query);
+    }, 300);
+  }, [loadAddonPickerResults]);
+
+  const toggleAddonPickerItem = useCallback((id: string) => {
+    setAddonPickerChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const confirmAddonPicker = useCallback(() => {
+    const selectedCollections = addonPickerResults.filter((c) => addonPickerChecked.has(c.id));
+    const existingIds = new Set(addonCollections.map((c) => c.id));
+    const kept = addonCollections.filter((c) => addonPickerChecked.has(c.id));
+    const added = selectedCollections.filter((c) => !existingIds.has(c.id));
+    setAddonCollections([...kept, ...added]);
+    setAddonPickerOpen(false);
+    setDirty(true);
+  }, [addonPickerResults, addonPickerChecked, addonCollections]);
+
+  const removeAddonCollection = useCallback((collectionId: string) => {
+    setAddonCollections((prev) => prev.filter((c) => c.id !== collectionId));
+    setDirty(true);
+  }, []);
 
   // Load picker results
   const loadPickerResults = useCallback(async (query: string, page: number, append: boolean) => {
@@ -224,6 +288,10 @@ export default function AccommodationCategoryForm({ category }: { category?: Exi
 
       setIsSaving(false);
       if (result.ok) {
+        // Save addon collections linkage
+        if (isEdit) {
+          await updateAccommodationCategoryAddons(category!.id, addonCollections.map((c) => c.id));
+        }
         setDirty(false);
         setSavedAt(true);
         setTimeout(() => setSavedAt(false), 1500);
@@ -237,7 +305,7 @@ export default function AccommodationCategoryForm({ category }: { category?: Exi
         setTimeout(() => setSaveError(null), 5000);
       }
     });
-  }, [title, description, imageUrl, status, addedAccommodations, isEdit, category, router]);
+  }, [title, description, imageUrl, status, addedAccommodations, addonCollections, isEdit, category, router]);
 
   const handleDiscard = useCallback(() => {
     setIsDiscarding(true);
@@ -248,9 +316,10 @@ export default function AccommodationCategoryForm({ category }: { category?: Exi
     setAddedAccommodations(
       (category?.items ?? []).map((i) => i.accommodation),
     );
+    setAddonCollections(initialAddonCollections ?? []);
     setSaveError(null);
     setTimeout(() => { setDirty(false); setIsDiscarding(false); }, 100);
-  }, [category]);
+  }, [category, initialAddonCollections]);
 
   return (
     <div className="admin-page admin-page--no-preview products-page">
@@ -264,7 +333,7 @@ export default function AccommodationCategoryForm({ category }: { category?: Exi
               onClick={() => router.push("/accommodation-categories")}
               aria-label="Tillbaka till boendetyper"
             >
-              <span className="material-symbols-rounded" style={{ fontSize: 22 }}>category</span>
+              <span className="material-symbols-rounded" style={{ fontSize: 22 }}>villa</span>
             </button>
             <EditorIcon name="chevron_right" size={16} style={{ color: "var(--admin-text-tertiary)", flexShrink: 0 }} />
             <span style={{ marginLeft: 3 }}>{breadcrumbTitle}</span>
@@ -327,13 +396,13 @@ export default function AccommodationCategoryForm({ category }: { category?: Exi
                   <input
                     type="text"
                     className="pf-collection-trigger__input"
-                    placeholder="Sok boenden"
+                    placeholder="Sök boenden"
                     onFocus={openPicker}
                     readOnly
                   />
                 </div>
                 <button type="button" className="settings-btn--muted" onClick={openPicker}>
-                  Bladdra
+                  Bläddra
                 </button>
               </div>
               <div style={{ borderTop: "1px solid #EBEBEB" }}>
@@ -365,6 +434,62 @@ export default function AccommodationCategoryForm({ category }: { category?: Exi
                 )}
               </div>
             </div>
+
+            {/* Tilläggsprodukter */}
+            <div style={CARD}>
+              <div className="pf-card-header" style={{ marginBottom: 12 }}>
+                <span className="pf-card-title">Tilläggsprodukter</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <div className="pf-collection-trigger" style={{ flex: 1 }}>
+                  <EditorIcon name="search" size={18} style={{ color: "var(--admin-text-tertiary)", flexShrink: 0 }} />
+                  <input
+                    type="text"
+                    className="pf-collection-trigger__input"
+                    placeholder="Sök produktserier"
+                    onFocus={openAddonPicker}
+                    readOnly
+                  />
+                </div>
+                <button type="button" className="settings-btn--muted" onClick={openAddonPicker}>
+                  Bläddra
+                </button>
+              </div>
+              <div style={{ borderTop: "1px solid #EBEBEB" }}>
+                {addonCollections.length === 0 ? (
+                  <p style={{ padding: "16px 0", fontSize: 13, color: "var(--admin-text-tertiary)", margin: 0, textAlign: "center" }}>
+                    Inga produktserier tillagda
+                  </p>
+                ) : (
+                  addonCollections.map((col) => (
+                    <div key={col.id} style={{ display: "flex", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #EBEBEB" }}>
+                      {col.imageUrl ? (
+                        <img src={col.imageUrl} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover", border: "1px solid #EBEBEB", flexShrink: 0, marginLeft: 16 }} />
+                      ) : (
+                        <div style={{ width: 36, height: 36, borderRadius: 6, border: "1px solid #EBEBEB", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--admin-text-tertiary)", flexShrink: 0, marginLeft: 16 }}>
+                          <EditorIcon name="work" size={16} />
+                        </div>
+                      )}
+                      <span style={{ flex: "1 1 0%", fontSize: 13, color: "var(--admin-text)", marginLeft: 12 }}>{col.title}</span>
+                      <span style={{ fontSize: 12, color: "var(--admin-text-tertiary)", marginRight: 8, flexShrink: 0 }}>
+                        {col.productCount} {col.productCount === 1 ? "produkt" : "produkter"}
+                      </span>
+                      <span className={`products-status products-status--${col.status === "ACTIVE" ? "active" : "draft"}`} style={{ marginRight: 16, flexShrink: 0 }}>
+                        {col.status === "ACTIVE" ? "Aktiv" : "Utkast"}
+                      </span>
+                      <button
+                        type="button"
+                        style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--admin-text-tertiary)", display: "flex", alignItems: "center", padding: 4, borderRadius: 4, flexShrink: 0 }}
+                        onClick={() => removeAddonCollection(col.id)}
+                        aria-label="Ta bort"
+                      >
+                        <EditorIcon name="close" size={16} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Right column (30%) */}
@@ -391,7 +516,7 @@ export default function AccommodationCategoryForm({ category }: { category?: Exi
                     >
                       <div style={{ flex: 1 }}>
                         <div className="admin-dropdown__text" style={{ fontWeight: 500, textAlign: "left" }}>Aktiv</div>
-                        <div style={{ fontSize: 12, color: "#303030", marginTop: 2, fontWeight: 400 }}>Visas pa forsaljningskanaler och marknader</div>
+                        <div style={{ fontSize: 12, color: "#303030", marginTop: 2, fontWeight: 400 }}>Visas på försäljningskanaler och marknader</div>
                       </div>
                     </button>
                     <button
@@ -401,7 +526,7 @@ export default function AccommodationCategoryForm({ category }: { category?: Exi
                     >
                       <div style={{ flex: 1 }}>
                         <div className="admin-dropdown__text" style={{ fontWeight: 500, textAlign: "left" }}>Utkast</div>
-                        <div style={{ fontSize: 12, color: "#303030", marginTop: 2, fontWeight: 400 }}>Doljer boendetypen — boenden i kategorin paverkas inte</div>
+                        <div style={{ fontSize: 12, color: "#303030", marginTop: 2, fontWeight: 400 }}>Döljer boendetypen — boenden i kategorin påverkas inte</div>
                       </div>
                     </button>
                   </div>
@@ -427,7 +552,7 @@ export default function AccommodationCategoryForm({ category }: { category?: Exi
               ) : (
                 <div className="pf-media-empty" style={{ padding: "62px 16px" }}>
                   <button type="button" className="pf-media-empty__btn" onClick={() => setMediaLibOpen(true)}>
-                    Lagg till bild
+                    Lägg till bild
                   </button>
                 </div>
               )}
@@ -475,12 +600,12 @@ export default function AccommodationCategoryForm({ category }: { category?: Exi
           >
             {/* Header */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 20px 12px", borderBottom: "1px solid #EBEBEB", background: "#f3f3f3" }}>
-              <h3 style={{ fontSize: 17, fontWeight: 600, margin: 0 }}>Redigera boenden</h3>
+              <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Redigera boenden</h3>
               <button
                 type="button"
                 onClick={() => setPickerOpen(false)}
                 style={{ display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", cursor: "pointer", color: "var(--admin-text-secondary)" }}
-                aria-label="Stang"
+                aria-label="Stäng"
               >
                 <EditorIcon name="close" size={20} />
               </button>
@@ -495,7 +620,7 @@ export default function AccommodationCategoryForm({ category }: { category?: Exi
                   className="pf-collection-trigger__input"
                   value={pickerSearch}
                   onChange={(e) => handlePickerSearch(e.target.value)}
-                  placeholder="Sok boenden"
+                  placeholder="Sök boenden"
                   autoFocus
                 />
               </div>
@@ -549,7 +674,6 @@ export default function AccommodationCategoryForm({ category }: { category?: Exi
                     )}
                     <div style={{ flex: "1 1 0%", minWidth: 0 }}>
                       <span style={{ fontSize: 13, color: "var(--admin-text)", display: "block" }}>{displayName(a)}</span>
-                      <span style={{ fontSize: 11, color: "var(--admin-text-tertiary)" }}>{TYPE_LABELS[a.accommodationType] ?? a.accommodationType}</span>
                     </div>
                     <span className={`products-status products-status--${a.status === "ACTIVE" ? "active" : "draft"}`}>
                       {a.status === "ACTIVE" ? "Aktiv" : "Utkast"}
@@ -577,6 +701,121 @@ export default function AccommodationCategoryForm({ category }: { category?: Exi
                 Avbryt
               </button>
               <button className="settings-btn--connect" style={{ fontSize: 13, padding: "6px 15px", height: "max-content" }} onClick={confirmPicker}>
+                Klar
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* Addon collection picker modal */}
+      {addonPickerOpen && createPortal(
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setAddonPickerOpen(false)}
+        >
+          <div style={{ position: "absolute", inset: 0, background: "var(--admin-overlay)", animation: "settings-modal-fade-in 0.15s ease" }} />
+          <div
+            style={{
+              position: "relative", zIndex: 1, background: "var(--admin-surface)",
+              borderRadius: 16, width: 560, maxHeight: "80vh", minHeight: 550,
+              display: "flex", flexDirection: "column", overflow: "hidden",
+              animation: "settings-modal-scale-in 0.2s cubic-bezier(0.32, 0.72, 0, 1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 20px 12px", borderBottom: "1px solid #EBEBEB", background: "#f3f3f3" }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Redigera tilläggsprodukter</h3>
+              <button
+                type="button"
+                onClick={() => setAddonPickerOpen(false)}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", cursor: "pointer", color: "var(--admin-text-secondary)" }}
+                aria-label="Stäng"
+              >
+                <EditorIcon name="close" size={20} />
+              </button>
+            </div>
+
+            {/* Search */}
+            <div style={{ padding: "12px 20px", borderBottom: "1px solid #EBEBEB" }}>
+              <div className="pf-collection-trigger">
+                <EditorIcon name="search" size={18} style={{ color: "var(--admin-text-tertiary)", flexShrink: 0 }} />
+                <input
+                  type="text"
+                  className="pf-collection-trigger__input"
+                  value={addonPickerSearch}
+                  onChange={(e) => handleAddonPickerSearch(e.target.value)}
+                  placeholder="Sök produktserier"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Collection list */}
+            <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+              {addonPickerLoading && addonPickerResults.length === 0 && (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <div key={`skel-${i}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: "1px solid #EBEBEB" }}>
+                    <div style={{ width: 16, height: 16, borderRadius: 3, background: "#e8e8e8", flexShrink: 0, animation: "skeleton-shimmer 1.2s ease-in-out infinite" }} />
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ height: 12, borderRadius: 4, background: "#e8e8e8", width: `${60 + (i % 3) * 15}%`, animation: "skeleton-shimmer 1.2s ease-in-out infinite", animationDelay: `${i * 0.05}s` }} />
+                    </div>
+                  </div>
+                ))
+              )}
+              {addonPickerResults.map((col) => {
+                const checked = addonPickerChecked.has(col.id);
+                return (
+                  <div
+                    key={col.id}
+                    onClick={() => toggleAddonPickerItem(col.id)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 12, padding: "10px 20px",
+                      cursor: "pointer", borderBottom: "1px solid #EBEBEB",
+                    }}
+                  >
+                    <div className={`files-header-check${checked ? " files-header-check--active" : ""}`} style={{ width: 16, height: 16, borderRadius: 3, flexShrink: 0 }}>
+                      <EditorIcon name="check" size={12} className="files-header-check__icon" />
+                    </div>
+                    {col.imageUrl ? (
+                      <img src={col.imageUrl} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover", border: "1px solid #EBEBEB", flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: 36, height: 36, borderRadius: 6, border: "1px solid #EBEBEB", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--admin-text-tertiary)", flexShrink: 0 }}>
+                        <EditorIcon name="work" size={16} />
+                      </div>
+                    )}
+                    <span style={{ flex: "1 1 0%", fontSize: 13, color: "var(--admin-text)" }}>{col.title}</span>
+                    <span style={{ fontSize: 12, color: "var(--admin-text-tertiary)", flexShrink: 0, marginRight: 8 }}>
+                      {col.productCount} {col.productCount === 1 ? "produkt" : "produkter"}
+                    </span>
+                    <span className={`products-status products-status--${col.status === "ACTIVE" ? "active" : "draft"}`}>
+                      {col.status === "ACTIVE" ? "Aktiv" : "Utkast"}
+                    </span>
+                  </div>
+                );
+              })}
+              {addonPickerLoading && (
+                <div style={{ display: "flex", justifyContent: "center", padding: 16 }}>
+                  <svg width="21" height="21" viewBox="0 0 21 21" fill="none" style={{ animation: "spin 0.8s linear infinite" }}>
+                    <circle cx="10.5" cy="10.5" r="7.5" stroke="var(--admin-text-tertiary)" strokeWidth="2" strokeDasharray="33 14.1" strokeLinecap="round" />
+                  </svg>
+                </div>
+              )}
+              {!addonPickerLoading && addonPickerResults.length === 0 && (
+                <p style={{ padding: 20, textAlign: "center", fontSize: 13, color: "var(--admin-text-tertiary)", margin: 0 }}>
+                  Inga produktserier hittades
+                </p>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "12px 20px", borderTop: "1px solid #EBEBEB" }}>
+              <button className="settings-btn--outline" style={{ fontSize: 13, padding: "6px 15px", height: "max-content" }} onClick={() => setAddonPickerOpen(false)}>
+                Avbryt
+              </button>
+              <button className="settings-btn--connect" style={{ fontSize: 13, padding: "6px 15px", height: "max-content" }} onClick={confirmAddonPicker}>
                 Klar
               </button>
             </div>
@@ -613,7 +852,6 @@ function AccommodationRowContent({ accommodation: a }: { accommodation: Accommod
       )}
       <div style={{ flex: "1 1 0%", marginLeft: 12, minWidth: 0 }}>
         <span style={{ fontSize: 13, color: "var(--admin-text)", display: "block" }}>{displayName(a)}</span>
-        <span style={{ fontSize: 11, color: "var(--admin-text-tertiary)" }}>{TYPE_LABELS[a.accommodationType] ?? a.accommodationType}</span>
       </div>
       <span className={`products-status products-status--${a.status === "ACTIVE" ? "active" : "draft"}`} style={{ marginRight: 24, flexShrink: 0 }}>
         {a.status === "ACTIVE" ? "Aktiv" : "Utkast"}
@@ -644,7 +882,6 @@ function SortableAccommodationRow({ accommodation, onRemove, onNavigate }: { acc
       )}
       <div style={{ flex: "1 1 0%", marginLeft: 12, minWidth: 0 }}>
         <span style={{ fontSize: 13, color: "var(--admin-text)", display: "block" }}>{displayName(accommodation)}</span>
-        <span style={{ fontSize: 11, color: "var(--admin-text-tertiary)" }}>{TYPE_LABELS[accommodation.accommodationType] ?? accommodation.accommodationType}</span>
       </div>
       <span className={`products-status products-status--${accommodation.status === "ACTIVE" ? "active" : "draft"}`} style={{ marginRight: 24, flexShrink: 0 }}>
         {accommodation.status === "ACTIVE" ? "Aktiv" : "Utkast"}

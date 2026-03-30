@@ -142,7 +142,7 @@
 }
 
 .accommodations-col--detail {
-  width: 14%;
+  width: 20%;
   flex-shrink: 0;
   font-size: 13px;
   color: var(--admin-text);

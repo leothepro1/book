@@ -7,6 +7,7 @@ import { DiscountsClient } from "./DiscountsClient";
 import { Loading } from "@/app/_components/Loading/Loading";
 import { EditorIcon } from "@/app/_components/EditorIcon";
 import "./discounts.css";
+import "../products/products.css";
 
 type DiscountType = "order_amount" | "line_item_amount" | "buy_x_get_y" | "combined";
 
@@ -39,7 +40,7 @@ export default function DiscountsPage() {
   };
 
   return (
-    <div className="admin-page admin-page--no-preview discounts-page">
+    <div className="admin-page admin-page--no-preview discounts-page products-page">
       <div className="admin-editor">
         <div className="admin-header">
           <h1 className="admin-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>

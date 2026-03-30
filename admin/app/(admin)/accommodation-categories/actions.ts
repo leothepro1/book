@@ -93,7 +93,7 @@ export async function updateAccommodationCategory(
   if (!existing) return { ok: false, error: "Boendetypen hittades inte" };
 
   if (input.expectedVersion !== undefined && input.expectedVersion !== existing.version) {
-    return { ok: false, error: "Boendetypen har andrats. Ladda om.", code: "VERSION_CONFLICT" };
+    return { ok: false, error: "Boendetypen har ändrats. Ladda om.", code: "VERSION_CONFLICT" };
   }
 
   let slug = existing.slug;
@@ -167,6 +167,67 @@ export async function listAccommodationCategories() {
     where: { tenantId: tenantData.tenant.id },
     include: { _count: { select: { items: true } } },
     orderBy: { sortOrder: "asc" },
+  });
+}
+
+export async function updateAccommodationCategoryAddons(
+  categoryId: string,
+  collectionIds: string[],
+): Promise<ActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error };
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return { ok: false, error: "Inte inloggad" };
+  const tenantId = tenantData.tenant.id;
+
+  const existing = await prisma.accommodationCategory.findFirst({
+    where: { id: categoryId, tenantId },
+    select: { id: true },
+  });
+  if (!existing) return { ok: false, error: "Boendetypen hittades inte" };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.accommodationCategoryAddon.deleteMany({ where: { categoryId } });
+    if (collectionIds.length > 0) {
+      const valid = await tx.productCollection.findMany({
+        where: { id: { in: collectionIds }, tenantId },
+        select: { id: true },
+      });
+      const validIds = new Set(valid.map((c) => c.id));
+      const links = collectionIds
+        .filter((id) => validIds.has(id))
+        .map((collectionId, i) => ({ categoryId, collectionId, sortOrder: i }));
+      if (links.length > 0) {
+        await tx.accommodationCategoryAddon.createMany({ data: links });
+      }
+    }
+  });
+
+  revalidatePath(`/accommodation-categories/${categoryId}`);
+  return { ok: true, data: undefined };
+}
+
+export async function searchProductCollections(query: string) {
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return [];
+
+  return prisma.productCollection.findMany({
+    where: {
+      tenantId: tenantData.tenant.id,
+      status: "ACTIVE",
+      ...(query ? {
+        title: { contains: query, mode: "insensitive" as const },
+      } : {}),
+    },
+    select: {
+      id: true,
+      title: true,
+      imageUrl: true,
+      status: true,
+      _count: { select: { items: true } },
+    },
+    take: 20,
+    orderBy: { title: "asc" },
   });
 }
 

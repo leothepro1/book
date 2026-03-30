@@ -32,11 +32,40 @@ export default async function EditAccommodationCategoryPage({
         },
         orderBy: { sortOrder: "asc" },
       },
+      addonCollections: {
+        orderBy: { sortOrder: "asc" },
+        select: {
+          collectionId: true,
+          sortOrder: true,
+          collection: {
+            select: {
+              id: true,
+              title: true,
+              imageUrl: true,
+              status: true,
+              _count: { select: { items: true } },
+            },
+          },
+        },
+      },
     },
   });
 
   if (!category) notFound();
 
+  const initialAddonCollections = category.addonCollections.map((ac) => ({
+    id: ac.collection.id,
+    title: ac.collection.title,
+    imageUrl: ac.collection.imageUrl,
+    status: ac.collection.status,
+    productCount: ac.collection._count.items,
+  }));
+
   const serialized = JSON.parse(JSON.stringify(category));
-  return <AccommodationCategoryForm category={serialized} />;
+  return (
+    <AccommodationCategoryForm
+      category={serialized}
+      initialAddonCollections={initialAddonCollections}
+    />
+  );
 }

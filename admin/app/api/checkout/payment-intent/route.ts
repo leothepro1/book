@@ -22,6 +22,8 @@ import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { resolveProduct } from "@/app/_lib/products/resolve";
 import { resolveAccommodationPrice, AccommodationPriceError } from "@/app/_lib/accommodations";
+import { resolveAddonLineItems, AddonValidationError } from "@/app/_lib/accommodations/addons";
+import type { ResolvedAddonLineItem } from "@/app/_lib/accommodations/addons";
 import { nextOrderNumber } from "@/app/_lib/orders/sequence";
 import { getTaxRate } from "@/app/_lib/orders/tax";
 import { log } from "@/app/_lib/logger";
@@ -46,6 +48,11 @@ const inputSchema = z.object({
   paymentType: z.enum(["full", "klarna"]),
   gclid: z.string().max(200).optional(),
   customerNote: z.string().max(1000).optional(),
+  addons: z.array(z.object({
+    productId: z.string(),
+    variantId: z.string().nullable(),
+    quantity: z.number().int().min(1).max(99),
+  })).optional().default([]),
 });
 
 export async function POST(req: Request) {
@@ -144,6 +151,31 @@ export async function POST(req: Request) {
     }
   }
 
+  // ── Resolve addon line items ────────────────────────────────
+  let addonLineItems: ResolvedAddonLineItem[] = [];
+  if (body.addons && body.addons.length > 0 && body.accommodationId) {
+    try {
+      addonLineItems = await resolveAddonLineItems(
+        tenant.id,
+        body.accommodationId,
+        body.addons,
+      );
+    } catch (err) {
+      if (err instanceof AddonValidationError) {
+        await failIdempotencyKey(tenant.id, idempotencyKey, "payment-intent");
+        return NextResponse.json(
+          { error: err.code, message: err.message },
+          { status: 400 },
+        );
+      }
+      throw err;
+    }
+  }
+
+  // Add addon totals to the accommodation price
+  const addonTotal = addonLineItems.reduce((sum, item) => sum + item.totalAmount, 0);
+  totalPrice = totalPrice + addonTotal;
+
   // ── Amount bounds check ────────────────────────────────────
   if (totalPrice < MIN_AMOUNT || totalPrice > MAX_AMOUNT) {
     log("error", "checkout.amount_out_of_bounds", {
@@ -217,18 +249,34 @@ export async function POST(req: Request) {
           ...(body.gclid ? { gclid: body.gclid } : {}),
         },
         lineItems: {
-          create: {
-            productId: product.id,
-            variantId: null,
-            title: resolved.displayTitle,
-            variantTitle: ratePlanName,
-            sku: null,
-            imageUrl: product.media[0]?.url ?? null,
-            quantity: 1,
-            unitAmount: totalPrice,
-            totalAmount: totalPrice,
-            currency,
-          },
+          create: [
+            // Line item #1: accommodation
+            {
+              productId: product.id,
+              variantId: null,
+              title: resolved.displayTitle,
+              variantTitle: ratePlanName,
+              sku: null,
+              imageUrl: product.media[0]?.url ?? null,
+              quantity: 1,
+              unitAmount: totalPrice - addonTotal,
+              totalAmount: totalPrice - addonTotal,
+              currency,
+            },
+            // Line items #2+: addons
+            ...addonLineItems.map((addon) => ({
+              productId: addon.productId,
+              variantId: addon.variantId,
+              title: addon.title,
+              variantTitle: addon.variantTitle,
+              sku: addon.sku,
+              imageUrl: addon.imageUrl,
+              quantity: addon.quantity,
+              unitAmount: addon.unitAmount,
+              totalAmount: addon.totalAmount,
+              currency: addon.currency,
+            })),
+          ],
         },
       },
     });

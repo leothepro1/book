@@ -473,13 +473,11 @@ textarea::placeholder {
 /* ── Accent (blue) ── */
 
 .admin-btn--accent {
-  background: var(--admin-accent);
+  background: var(--dark-primary);
   color: var(--admin-accent-text);
 }
 
-.admin-btn--accent:hover:not(:disabled) {
-  background: var(--admin-accent-hover);
-}
+
 
 /* ── Danger Primary (red fill, white text — "Ta bort") ── */
 
@@ -718,8 +716,8 @@ textarea::placeholder {
   justify-content: space-between;
   width: 100%;
   padding: var(--dropdown-item-padding);
-  font-size: var(--font-md);
-  font-weight: 450;
+  font-size: 13px;
+  font-weight: 400;
   color: var(--admin-text);
   border: none;
   background: none;
@@ -1451,8 +1449,8 @@ textarea::placeholder {
 }
 
 .fac-check--on {
-  background: var(--admin-accent);
-  border-color: var(--admin-accent);
+  background: var(--dark-primary);
+  border-color: var(--dark-primary);
 }
 
 .fac-check__svg {

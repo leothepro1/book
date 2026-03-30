@@ -109,13 +109,13 @@
   align-items: center;
   height: 43px;
   gap: 16px;
-  border-radius: .75rem .75rem 0px 0px;
+  border-radius: 0;
   padding: 10px 16px;
   border-bottom: 1px solid var(--admin-border);
   font-size: 14px;
   font-weight: 500;
   color: #303030;
-  background: #f3f3f3;
+  background: #f7f7f7;
   position: sticky;
   top: 0;
   z-index: 5;
