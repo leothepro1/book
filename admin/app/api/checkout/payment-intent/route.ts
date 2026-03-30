@@ -21,7 +21,7 @@ import { getPlatformFeeBps } from "@/app/_lib/payments/platform-fee";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { resolveProduct } from "@/app/_lib/products/resolve";
-import { resolveAdapter } from "@/app/_lib/integrations/resolve";
+import { resolveAccommodationPrice, AccommodationPriceError } from "@/app/_lib/accommodations";
 import { nextOrderNumber } from "@/app/_lib/orders/sequence";
 import { getTaxRate } from "@/app/_lib/orders/tax";
 import { log } from "@/app/_lib/logger";
@@ -38,6 +38,7 @@ const MAX_AMOUNT = 10_000_000; // 100,000 SEK — requires manual review
 
 const inputSchema = z.object({
   productSlug: z.string().min(1).max(100),
+  accommodationId: z.string().min(1).max(100).optional(),
   checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   guests: z.number().int().min(1).max(99),
@@ -109,33 +110,33 @@ export async function POST(req: Request) {
   let totalPrice = resolved.price;
   let currency = resolved.currency;
   let ratePlanName: string | null = null;
+  let accommodationExternalId: string | null = null;
 
-  if (product.productType === "PMS_ACCOMMODATION" && product.pmsSourceId) {
+  if (body.accommodationId) {
     try {
-      const adapter = await resolveAdapter(tenant.id);
-      const availability = await adapter.getAvailability(tenant.id, {
+      const priceResult = await resolveAccommodationPrice({
+        tenantId: tenant.id,
+        accommodationId: body.accommodationId,
+        ratePlanId: ratePlanId ?? undefined,
         checkIn: new Date(checkIn),
         checkOut: new Date(checkOut),
         guests,
       });
-
-      const entry = availability.categories.find(
-        (e) => e.category.externalId === product.pmsSourceId,
-      );
-
-      if (entry && entry.ratePlans.length > 0) {
-        const ratePlan = ratePlanId
-          ? entry.ratePlans.find((rp) => rp.externalId === ratePlanId)
-          : entry.ratePlans[0];
-
-        if (ratePlan) {
-          totalPrice = ratePlan.totalPrice;
-          currency = ratePlan.currency;
-          ratePlanName = ratePlan.name;
-        }
-      }
+      totalPrice = priceResult.totalPrice;
+      currency = priceResult.currency;
+      ratePlanName = priceResult.ratePlan.name;
+      accommodationExternalId = priceResult.externalId;
     } catch (err) {
+      if (err instanceof AccommodationPriceError) {
+        const status = err.code === "PMS_UNAVAILABLE" ? 503 : 400;
+        await failIdempotencyKey(tenant.id, idempotencyKey, "payment-intent");
+        return NextResponse.json(
+          { error: err.code, message: err.message },
+          { status },
+        );
+      }
       log("error", "checkout.pms_price_failed", { tenantId: tenant.id, productSlug, error: String(err) });
+      await failIdempotencyKey(tenant.id, idempotencyKey, "payment-intent");
       return NextResponse.json(
         { error: "PMS_UNAVAILABLE", message: "Kunde inte hämta pris från bokningssystemet." },
         { status: 503 },
@@ -212,7 +213,7 @@ export async function POST(req: Request) {
           ratePlanName,
           productSlug,
           productType: product.productType,
-          pmsSourceId: product.pmsSourceId ?? null,
+          accommodationId: body.accommodationId ?? null,
           ...(body.gclid ? { gclid: body.gclid } : {}),
         },
         lineItems: {
@@ -241,6 +242,28 @@ export async function POST(req: Request) {
         metadata: { checkIn, checkOut, guests, nights, ratePlanName },
       },
     });
+
+    // Create linked Booking record for accommodation orders
+    if (body.accommodationId) {
+      await tx.booking.create({
+        data: {
+          tenantId: tenant.id,
+          orderId: newOrder.id,
+          accommodationId: body.accommodationId,
+          firstName: "",    // Collected later via update-guest
+          lastName: "",
+          guestEmail: "",
+          arrival: new Date(checkIn),
+          departure: new Date(checkOut),
+          checkIn: new Date(checkIn),
+          checkOut: new Date(checkOut),
+          guestCount: guests,
+          ratePlanId: ratePlanId ?? null,
+          unit: accommodationExternalId ?? body.productSlug,
+          status: "PRE_CHECKIN",
+        },
+      });
+    }
 
     return newOrder;
   });

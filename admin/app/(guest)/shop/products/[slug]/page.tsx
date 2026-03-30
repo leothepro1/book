@@ -1,9 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
-import { resolveProduct } from "@/app/_lib/products/resolve";
 import { ProductDetail } from "./ProductDetail";
-import { PmsProductPage } from "@/app/(guest)/_components/products/PmsProductPage";
 
 export const revalidate = 60;
 export const dynamicParams = true;
@@ -20,6 +18,16 @@ export default async function ProductPage({
   const tenant = await resolveTenantFromHost();
   if (!tenant) return notFound();
 
+  // Check if this slug matches an Accommodation — redirect to /stays/[slug]
+  const accommodation = await prisma.accommodation.findFirst({
+    where: { tenantId: tenant.id, slug, archivedAt: null },
+    select: { id: true },
+  });
+  if (accommodation) {
+    const { redirect } = await import("next/navigation");
+    redirect(`/stays/${slug}`);
+  }
+
   const product = await prisma.product.findUnique({
     where: { tenantId_slug: { tenantId: tenant.id, slug } },
     include: {
@@ -31,32 +39,7 @@ export default async function ProductPage({
 
   if (!product || product.status !== "ACTIVE") return notFound();
 
-  // PMS_ACCOMMODATION → booking flow page
-  if (product.productType === "PMS_ACCOMMODATION") {
-    const resolved = resolveProduct(product);
-    return (
-      <PmsProductPage
-        product={{
-          id: resolved.id,
-          displayTitle: resolved.displayTitle,
-          displayDescription: resolved.displayDescription,
-          pmsSourceId: resolved.pmsSourceId,
-          pmsProvider: resolved.pmsProvider,
-          slug: resolved.slug,
-          media: product.media.map((m) => ({ id: m.id, url: m.url, type: m.type, alt: m.alt })),
-          pmsData: product.pmsData as Record<string, unknown> | null,
-        }}
-        tenantId={tenant.id}
-        searchParams={{
-          checkIn: sp.checkIn ?? null,
-          checkOut: sp.checkOut ?? null,
-          guests: sp.guests ? parseInt(sp.guests, 10) : null,
-        }}
-      />
-    );
-  }
-
-  // STANDARD → cart flow page
+  // STANDARD / GIFT_CARD → cart flow page
   return (
     <ProductDetail
       product={{

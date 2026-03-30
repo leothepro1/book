@@ -25,12 +25,12 @@ import { z } from "zod";
 export const ProductStatusSchema = z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]);
 export type ProductStatus = z.infer<typeof ProductStatusSchema>;
 
-export const ProductTypeSchema = z.enum(["STANDARD", "PMS_ACCOMMODATION"]);
+export const ProductTypeSchema = z.enum(["STANDARD", "GIFT_CARD"]);
 export type ProductType = z.infer<typeof ProductTypeSchema>;
 
 export const ProductType = {
   STANDARD: "STANDARD",
-  PMS_ACCOMMODATION: "PMS_ACCOMMODATION",
+  GIFT_CARD: "GIFT_CARD",
 } as const;
 
 export const InventoryChangeReasonSchema = z.enum([
@@ -256,8 +256,6 @@ export const CreateCollectionSchema = z.object({
   imageUrl: z.string().url().nullable().optional(),
   status: ProductStatusSchema.default("DRAFT"),
   productIds: z.array(z.string()).default([]),
-  isAccommodationType: z.boolean().default(false),
-  addonCollectionId: z.string().nullable().optional(),
 });
 
 export type CreateCollectionInput = z.infer<typeof CreateCollectionSchema>;
@@ -270,17 +268,11 @@ export const UpdateCollectionSchema = z.object({
   imageUrl: z.string().url().nullable().optional(),
   status: ProductStatusSchema.optional(),
   productIds: z.array(z.string()).optional(),
-  isAccommodationType: z.boolean().optional(),
-  addonCollectionId: z.string().nullable().optional(),
 });
 
 export type UpdateCollectionInput = z.infer<typeof UpdateCollectionSchema>;
 
 // ── Product type helpers ────────────────────────────────────
-
-export function isPmsProduct(product: { productType: string }): boolean {
-  return product.productType === "PMS_ACCOMMODATION";
-}
 
 export function isStandardProduct(product: { productType: string }): boolean {
   return product.productType === "STANDARD";
@@ -289,9 +281,8 @@ export function isStandardProduct(product: { productType: string }): boolean {
 // ── Resolved product ────────────────────────────────────────
 
 /**
- * What the UI always works with. Never read pmsData directly.
- * For PMS_ACCOMMODATION: displayTitle = titleOverride ?? pmsData.name ?? title
- * For STANDARD: displayTitle = title
+ * What the UI always works with.
+ * displayTitle = title
  */
 export interface ResolvedProduct {
   id: string;
@@ -301,9 +292,6 @@ export interface ResolvedProduct {
   status: ProductStatus;
   displayTitle: string;
   displayDescription: string;
-  pmsSourceId: string | null;
-  pmsProvider: string | null;
-  pmsSyncedAt: Date | null;
   price: number;
   currency: string;
   compareAtPrice: number | null;

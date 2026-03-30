@@ -1,0 +1,233 @@
+/* ── Accommodations page — mirrors products page layout ── */
+.container:has(.accommodations-page) {
+  max-width: none;
+  padding: 0;
+  height: 100vh;
+  overflow: visible;
+}
+
+.accommodations-page .admin-header {
+  border-bottom: none;
+  justify-content: space-between;
+  align-items: center;
+  height: auto;
+  padding: 16px;
+  display: flex;
+}
+
+.accommodations-page .admin-content {
+  background: #fff;
+  border-radius: .75rem;
+  overflow: hidden;
+  margin: 0 16px;
+  padding: 0;
+  box-shadow: 0 .3125rem .3125rem -.15625rem #00000008, 0 .1875rem .1875rem -.09375rem #00000005, 0 .125rem .125rem -.0625rem #00000005, 0 .0625rem .0625rem -.03125rem #00000008, 0 .03125rem .03125rem #0000000a, 0 0 0 .0625rem #0000000f;
+  overflow: hidden !important;
+  height: max-content;
+  min-height: auto !important;
+  max-height: max-content;
+}
+
+.accommodations-page {
+  overflow: visible !important;
+  height: auto !important;
+}
+
+.accommodations-page .admin-editor {
+  overflow: visible !important;
+  height: auto !important;
+  padding: 0px 0px 80px 0px;
+}
+
+.accommodations-inner {
+  overflow: visible !important;
+}
+
+/* ── Empty state ── */
+
+.accommodations-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  text-align: center;
+}
+
+.accommodations-empty__icon {
+  color: var(--admin-text-tertiary);
+  margin-bottom: 16px;
+}
+
+.accommodations-empty__title {
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--admin-text);
+  margin: 0 0 8px;
+}
+
+.accommodations-empty__desc {
+  font-size: var(--font-sm);
+  color: var(--admin-text-secondary);
+  max-width: 360px;
+  line-height: 1.5;
+  margin: 0 0 24px;
+}
+
+/* ── Filter bar ── */
+
+.accommodations-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+}
+
+.accommodations-filter-btn {
+  color: var(--admin-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--admin-font);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background var(--duration-fast), color var(--duration-fast);
+  background: none;
+  border: none;
+  padding: 5px 12px;
+}
+
+.accommodations-filter-btn:hover {
+  background: #f0f0f0;
+  color: var(--admin-text);
+}
+
+.accommodations-filter-btn--active {
+  color: var(--admin-text);
+  background: #EBEBEB;
+}
+
+/* ── Accommodation row ── */
+
+.accommodations-row {
+  display: flex;
+  overflow: hidden;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--admin-border);
+  cursor: pointer;
+}
+
+.accommodations-row:last-child {
+  border-bottom: none;
+}
+
+.accommodations-row:hover {
+  background: #f7f7f7;
+}
+
+/* ── Columns ── */
+
+.accommodations-col--thumb {
+  width: 40px;
+  flex-shrink: 0;
+}
+
+.accommodations-col--name {
+  flex: 1;
+  font-size: 13px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.accommodations-col--detail {
+  width: 14%;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--admin-text);
+}
+
+.accommodations-col--right {
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+/* ── Row content ── */
+
+.accommodations-row__title {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--admin-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.accommodations-row__slug {
+  font-size: 12px;
+  color: var(--admin-text-tertiary);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Thumbnail ── */
+
+.accommodations-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  display: block;
+}
+
+.accommodations-thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--admin-text-tertiary);
+}
+
+/* ── Status badge ── */
+
+.accommodations-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.accommodations-status--active {
+  color: #223A5A;
+  background: #AFFEBF;
+}
+
+.accommodations-status--inactive {
+  background: var(--admin-surface);
+  color: var(--admin-text-tertiary);
+}
+
+.accommodations-status--archived {
+  background: #FFDDD6;
+  color: #6B1B1B;
+}
+
+/* ── Type badge ── */
+
+.accommodations-type {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  background: #D5EBFF;
+  color: #223A5A;
+}

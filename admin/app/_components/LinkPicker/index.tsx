@@ -54,7 +54,7 @@ const DEFAULT_CATEGORIES: LinkPickerCategory[] = [
     label: "Sidor",
     items: [
       { label: "Hem", url: "/", icon: "home" },
-      { label: "Bokningar", url: "/stays", icon: "calendar_today" },
+      { label: "Bokningar", url: "/search", icon: "calendar_today" },
       { label: "Konto", url: "/account", icon: "face" },
     ],
   },

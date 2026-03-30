@@ -16,7 +16,7 @@ import "./guest-footer.css";
 function resolveIcon(url: string): string {
   // Pages (same as LinkPicker > Sidor)
   if (url === "/") return "home";
-  if (url === "/stays") return "calendar_today";
+  if (url === "/search") return "calendar_today";
   if (url === "/account") return "face";
 
   // Element links (same as LinkPicker > Element)
@@ -85,7 +85,7 @@ function isLegacyActive(key: FooterKey, pathname: string) {
 
 const LEGACY_ITEMS: { key: FooterKey; label: string; url: string; icon: string }[] = [
   { key: "home", label: "Home", url: "/", icon: "home" },
-  { key: "stays", label: "Stays", url: "/stays", icon: "calendar_today" },
+  { key: "stays", label: "Stays", url: "/search", icon: "calendar_today" },
   { key: "account", label: "Account", url: "/account", icon: "face" },
 ];
 

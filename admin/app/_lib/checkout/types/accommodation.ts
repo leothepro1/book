@@ -10,10 +10,9 @@
 import { z } from "zod";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveProduct } from "@/app/_lib/products/resolve";
-import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { validateStayDates } from "@/app/_lib/validation/dates";
 import { resolvePaymentMethods } from "@/app/_lib/payments/resolve";
-import { log } from "@/app/_lib/logger";
+import { resolveAccommodationPrice, AccommodationPriceError } from "@/app/_lib/accommodations";
 import { CheckoutError } from "../errors";
 import type { CheckoutType, CheckoutContext, ResolvedPrice } from "../types";
 import type { PaymentMethodConfig } from "@/app/_lib/payments/types";
@@ -22,6 +21,7 @@ import type { PaymentMethodConfig } from "@/app/_lib/payments/types";
 
 const inputSchema = z.object({
   productSlug: z.string().min(1).max(100),
+  accommodationId: z.string().min(1).max(100).optional(),
   checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   guests: z.number().int().min(1).max(99),
@@ -74,36 +74,28 @@ export const accommodationCheckout: CheckoutType<AccommodationInput> = {
     let currency = resolved.currency;
     let ratePlanName: string | null = null;
 
-    if (product.productType === "PMS_ACCOMMODATION" && product.pmsSourceId) {
+    if (input.accommodationId) {
       try {
-        const adapter = await resolveAdapter(tenant.id);
-        const availability = await adapter.getAvailability(tenant.id, {
+        const priceResult = await resolveAccommodationPrice({
+          tenantId: tenant.id,
+          accommodationId: input.accommodationId,
+          ratePlanId: input.ratePlanId ?? undefined,
           checkIn: new Date(input.checkIn),
           checkOut: new Date(input.checkOut),
           guests: input.guests,
         });
 
-        const entry = availability.categories.find(
-          (e) => e.category.externalId === product.pmsSourceId,
-        );
-
-        if (entry && entry.ratePlans.length > 0) {
-          const ratePlan = input.ratePlanId
-            ? entry.ratePlans.find((rp) => rp.externalId === input.ratePlanId)
-            : entry.ratePlans[0];
-
-          if (ratePlan) {
-            totalPrice = ratePlan.totalPrice;
-            currency = ratePlan.currency;
-            ratePlanName = ratePlan.name;
-          }
-        }
+        totalPrice = priceResult.totalPrice;
+        currency = priceResult.currency;
+        ratePlanName = priceResult.ratePlan.name;
       } catch (err) {
-        log("error", "checkout.pms_price_failed", {
-          tenantId: tenant.id,
-          productSlug: input.productSlug,
-          error: String(err),
-        });
+        if (err instanceof AccommodationPriceError) {
+          throw new CheckoutError(
+            err.code === "PMS_UNAVAILABLE" ? "PMS_UNAVAILABLE" : "PRODUCT_NOT_FOUND",
+            err.message,
+            err.code === "PMS_UNAVAILABLE" ? 503 : 400,
+          );
+        }
         throw new CheckoutError(
           "PMS_UNAVAILABLE",
           "Kunde inte hämta pris från bokningssystemet.",
@@ -136,7 +128,7 @@ export const accommodationCheckout: CheckoutType<AccommodationInput> = {
 
   buildMetadata(ctx) {
     const { input, cache } = ctx;
-    const product = cache.get(PRODUCT_KEY) as { productType: string; pmsSourceId: string | null } | undefined;
+    const product = cache.get(PRODUCT_KEY) as { productType: string } | undefined;
     const ratePlanName = cache.get(RATE_PLAN_NAME_KEY) as string | null;
     const dateCheck = validateStayDates(input.checkIn, input.checkOut);
 
@@ -149,7 +141,7 @@ export const accommodationCheckout: CheckoutType<AccommodationInput> = {
       ratePlanName,
       productSlug: input.productSlug,
       productType: product?.productType ?? null,
-      pmsSourceId: product?.pmsSourceId ?? null,
+      accommodationId: input.accommodationId ?? null,
     };
   },
 

@@ -25,6 +25,7 @@ const CUSTOMER_ITEMS = [
 ];
 
 const PRODUCT_ITEMS = [
+  { href: '/accommodations', label: 'Boenden' },
   { href: '/collections', label: 'Produktserier' },
   { href: '/inventory', label: 'Lager' },
   { href: '/gift-cards', label: 'Presentkort' },

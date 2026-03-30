@@ -230,6 +230,166 @@ enum DiscountEventType {
   NOTE_ADDED      // staff comment on a discount
 }
 
+// ── Accommodation Enums ─────────────────────────────────────────
+
+enum AccommodationType {
+  HOTEL
+  CABIN
+  CAMPING
+  APARTMENT
+  PITCH
+}
+
+enum AccommodationStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum AccommodationUnitStatus {
+  AVAILABLE
+  MAINTENANCE
+  BLOCKED
+  RETIRED
+}
+
+enum BedType {
+  SINGLE
+  DOUBLE
+  QUEEN
+  KING
+  SOFA_BED
+  BUNK_BED
+  FRENCH
+  FUTON
+  TATAMI
+  FOLDABLE
+  EXTRA_BED
+}
+
+enum FacilityType {
+  // Climate
+  AIR_CONDITIONING
+  HEATING
+  FAN
+  FIREPLACE
+
+  // Bathroom
+  BATHTUB
+  SHOWER
+  SAUNA
+  HOT_TUB
+  HAIRDRYER
+  BATHROBES
+  SLIPPERS
+  FREE_TOILETRIES
+  BIDET
+  WC
+
+  // Kitchen
+  KITCHEN
+  KITCHENETTE
+  REFRIGERATOR
+  FREEZER
+  MICROWAVE
+  OVEN
+  STOVE
+  DISHWASHER
+  KETTLE
+  COFFEE_MAKER
+  TOASTER
+  COOKWARE
+  MINIBAR
+
+  // Media & Tech
+  WIFI
+  FIBER
+  TV
+  FLAT_SCREEN_TV
+  CABLE_TV
+  SATELLITE_TV
+  PAY_TV
+  BLUETOOTH_SPEAKER
+  APPLE_TV
+  CHROMECAST
+  DVD_PLAYER
+  CD_PLAYER
+  GAME_CONSOLE
+  LAPTOP_STORAGE
+
+  // Bedroom & Living
+  WARDROBE
+  SOFA
+  SOFA_BED_LIVING
+  DESK
+  IRONING_BOARD
+  IRON
+  TROUSER_PRESS
+  WASHER
+  DRYER
+  DRYING_CABINET
+  STEAMER
+  DUMBBELL
+
+  // Outdoor & View
+  BALCONY
+  TERRACE
+  PATIO
+  PRIVATE_POOL
+  GARDEN_VIEW
+  POOL_VIEW
+  SEA_VIEW
+  LAKE_VIEW
+  MOUNTAIN_VIEW
+  CITY_VIEW
+  CANAL_VIEW
+  RIVER_VIEW
+  FJORD_VIEW
+
+  // Access & Policy
+  PRIVATE_ENTRANCE
+  STORAGE_BOX
+  PETS_ALLOWED
+  PETS_NOT_ALLOWED
+  NO_SMOKING
+  SOUNDPROOFED
+  WHEELCHAIR_ACCESSIBLE
+  EV_CHARGER
+  SKI_STORAGE
+  MOTOR_HEATER
+
+  // Services
+  WAKE_UP_SERVICE
+  ALARM_CLOCK
+  LATE_CHECKOUT
+  DEPARTURE_CLEANING
+}
+
+enum FacilitySource {
+  PMS
+  MANUAL
+}
+
+enum RatePlanCancellationPolicy {
+  FLEXIBLE
+  MODERATE
+  NON_REFUNDABLE
+}
+
+enum RatePlanStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum RestrictionType {
+  MIN_STAY
+  MAX_STAY
+  CLOSED_TO_ARRIVAL
+  CLOSED_TO_DEPARTURE
+  NO_CHECK_IN
+  NO_CHECK_OUT
+}
+
 /// Idempotency lock for PMS booking creation.
 /// Prevents duplicate concurrent bookings for the same dates/guest.
 /// Cleaned up by the expire-reservations cron.
@@ -370,6 +530,7 @@ model Tenant {
   rumAggregates       RumDailyAggregate[]
   rumRateLimit        RumRateLimit?
   discounts           Discount[]
+  accommodations      Accommodation[]
 
   // Feature toggle — tenant can disable all discount functionality
   discountsEnabled    Boolean              @default(true)
@@ -473,6 +634,20 @@ model Booking {
   guestAccountId String?
   guestAccount   GuestAccount? @relation(fields: [guestAccountId], references: [id], onDelete: SetNull)
 
+  // ── Accommodation infrastructure (added for first-class accommodation model) ──
+  // Optional during migration — will be made required after data backfill.
+  accommodationId String?  // FK → Accommodation
+  orderId         String?  // FK → Order
+  ratePlanId      String?  // which rate plan was booked
+  checkIn         DateTime? // canonical check-in (replaces arrival after migration)
+  checkOut        DateTime? // canonical check-out (replaces departure after migration)
+  guestCount      Int?
+  specialRequests String?  @db.Text
+  pmsBookingRef   String?  // PMS confirmation number (kept alongside externalId during migration)
+
+  accommodation   Accommodation? @relation(fields: [accommodationId], references: [id])
+  order           Order?         @relation(fields: [orderId], references: [id])
+
   magicLinks   MagicLink[]
   createdAt    DateTime    @default(now())
 
@@ -483,6 +658,9 @@ model Booking {
   @@index([tenantId, externalId])
   @@index([tenantId, guestEmail])
   @@index([tenantId, guestAccountId])
+  @@index([accommodationId])
+  @@index([orderId])
+  @@index([tenantId, accommodationId])
 }
 
 model MagicLink {
@@ -1129,7 +1307,7 @@ enum ProductStatus {
 
 enum ProductType {
   STANDARD
-  PMS_ACCOMMODATION
+  GIFT_CARD
 }
 
 enum InventoryChangeReason {
@@ -1174,14 +1352,6 @@ model Product {
 
   status      ProductStatus @default(DRAFT)
   productType ProductType   @default(STANDARD)
-
-  // ── PMS link (only for PMS_ACCOMMODATION) ──────────────────
-  pmsSourceId         String?          // external ID from PMS (e.g. Mews serviceId)
-  pmsProvider         String?          // "mews" | "apaleo" | "fake"
-  pmsSyncedAt         DateTime?        // last time PMS data was pulled
-  pmsData             Json?            // raw PMS snapshot — for debugging, never rendered
-  titleOverride       String?          // tenant-set title, overrides PMS name
-  descriptionOverride String?          // tenant-set description
 
   // ── Pricing ────────────────────────────────────────────────
   /// Base price in smallest currency unit (ören). Used when no variants exist.
@@ -1231,13 +1401,11 @@ model Product {
   discountTargets     DiscountProduct[]
 
   @@unique([tenantId, slug])
-  @@unique([tenantId, pmsSourceId, pmsProvider])
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, productType])
   @@index([tenantId, sortOrder])
   @@index([tenantId, archivedAt])
-  @@index([tenantId, pmsProvider, pmsSourceId])
 }
 
 /// Product media — images and videos attached to a product.
@@ -1384,15 +1552,6 @@ model ProductCollection {
 
   sortOrder   Int       @default(0)
 
-  /// When true: collection appears in search form "Boendetyp" dropdown
-  /// and acts as accommodation category filter for PMS availability search.
-  isAccommodationType Boolean @default(false)
-
-  /// ID of another ProductCollection whose STANDARD products are offered
-  /// as add-on products when booking accommodations from this collection.
-  /// Only meaningful when isAccommodationType = true.
-  addonCollectionId   String?
-
   /// Optimistic locking — incremented on every update
   version     Int       @default(1)
 
@@ -1426,6 +1585,228 @@ model ProductCollectionItem {
   @@unique([collectionId, productId])
   @@index([collectionId, sortOrder])
   @@index([productId])
+}
+
+// ============================================================================
+// ACCOMMODATION (First-class accommodation model — replaces PMS_ACCOMMODATION on Product)
+// ============================================================================
+
+/// First-class accommodation model. Hotels, cabins, camping pitches, apartments.
+/// Separated from Product to give accommodations their own structured fields
+/// (capacity, facilities, bed configs, rate plans, restrictions, media).
+///
+/// PMS sync writes to this model. Tenant can override name/description.
+/// resolveAccommodation() reads nameOverride ?? pmsName ?? name.
+model Accommodation {
+  id       String @id @default(cuid())
+  tenantId String
+
+  // Identity
+  name            String
+  slug            String
+  shortName       String?
+  externalCode    String?   // BookVisit "Kod" / PMS short code
+  externalId      String?   // PMS room type ID (was pmsSourceId)
+  pmsProvider     String?   // "mews" | "bookvisit" | "manual" | "fake"
+  pmsSyncedAt     DateTime?
+  pmsData         Json?     // Raw PMS snapshot — kept for debugging only, never read in app code
+
+  // Type & status
+  accommodationType AccommodationType
+  status            AccommodationStatus @default(ACTIVE)
+
+  // Content — override pattern: resolveAccommodation() always reads nameOverride ?? pmsName ?? name
+  nameOverride        String?
+  descriptionOverride String? @db.Text
+  description         String  @db.Text @default("")
+
+  // Capacity
+  maxGuests     Int
+  minGuests     Int  @default(1)
+  defaultGuests Int?
+  maxAdults     Int?
+  minAdults     Int?
+  maxChildren   Int?
+  minChildren   Int?
+  extraBeds     Int  @default(0)
+
+  // Physical
+  roomSizeSqm  Float?
+  bedrooms     Int?
+  bathrooms    Int?
+  floorNumber  Int?
+
+  // Pricing (local snapshot — fallback display only, never used for checkout validation)
+  basePricePerNight Int     @default(0) // ören
+  currency          String  @default("SEK")
+
+  // Tax
+  taxRate Int @default(0) // basis points e.g. 1200 = 12%
+
+  // Availability baseline (total units available when fully open)
+  totalUnits     Int @default(1)
+  baseAvailability Int @default(1) // BookVisit: "Tillgänglighet"
+
+  // PMS group / category mapping
+  roomTypeGroupId String? // BookVisit: "Rumstypsgrupp"
+
+  // Sorting
+  sortOrder Int @default(0)
+
+  // Timestamps
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  // Relations
+  tenant       Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  units        AccommodationUnit[]
+  facilities   AccommodationFacility[]
+  bedConfigs   BedConfiguration[]
+  ratePlans    RatePlan[]
+  restrictions AccommodationRestriction[]
+  media        AccommodationMedia[]
+  bookings     Booking[]
+
+  @@unique([tenantId, slug])
+  @@unique([tenantId, externalId, pmsProvider])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, accommodationType])
+  @@index([tenantId, sortOrder])
+  @@index([tenantId, archivedAt])
+  @@index([tenantId, pmsProvider, externalId])
+}
+
+/// Physical room/unit within an accommodation category.
+/// e.g. "Room 101", "Stuga 4", "Plats A12"
+model AccommodationUnit {
+  id              String @id @default(cuid())
+  tenantId        String
+  accommodationId String
+
+  // Identity
+  name       String   // e.g. "101", "Stuga 4", "Plats A12"
+  externalId String?  // PMS physical room ID (Mews: Resource.Id)
+  floor      Int?
+  notes      String?
+
+  status AccommodationUnitStatus @default(AVAILABLE)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, accommodationId, name])
+  @@index([tenantId])
+  @@index([accommodationId])
+  @@index([tenantId, status])
+}
+
+/// Normalized facility on an accommodation — enum-based, not JSON.
+/// PMS sync creates entries with source=PMS. Tenant can add MANUAL ones.
+/// overrideHidden lets tenant suppress a PMS-synced facility from display.
+model AccommodationFacility {
+  id              String @id @default(cuid())
+  accommodationId String
+
+  facilityType    FacilityType
+  source          FacilitySource @default(MANUAL)
+  overrideHidden  Boolean        @default(false) // tenant can hide a PMS-synced facility
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+
+  @@unique([accommodationId, facilityType])
+  @@index([accommodationId])
+}
+
+/// Bed configuration for an accommodation — normalized, not JSON.
+model BedConfiguration {
+  id              String @id @default(cuid())
+  accommodationId String
+
+  bedType  BedType
+  quantity Int     @default(1)
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+
+  @@unique([accommodationId, bedType])
+  @@index([accommodationId])
+}
+
+/// Rate plan for an accommodation — pricing option (flexible, non-refundable, etc.).
+/// PMS sync upserts these. Display-only pricing snapshot.
+model RatePlan {
+  id              String @id @default(cuid())
+  tenantId        String
+  accommodationId String
+
+  externalId   String? // PMS rate plan ID
+  name         String
+  description  String? @db.Text
+
+  cancellationPolicy     RatePlanCancellationPolicy @default(FLEXIBLE)
+  cancellationDescription String?                   @db.Text
+
+  // Pricing snapshot — updated on sync, used for display only
+  pricePerNight Int    // ören
+  currency      String @default("SEK")
+
+  status    RatePlanStatus @default(ACTIVE)
+  validFrom DateTime?
+  validTo   DateTime?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+
+  @@unique([accommodationId, externalId])
+  @@index([tenantId])
+  @@index([accommodationId])
+  @@index([accommodationId, status])
+}
+
+/// Per-date restriction on an accommodation — min stay, CTA/CTD, etc.
+model AccommodationRestriction {
+  id              String @id @default(cuid())
+  tenantId        String
+  accommodationId String
+
+  restrictionType RestrictionType
+  date            DateTime        // The specific date this restriction applies to
+  value           Int?            // For MIN_STAY / MAX_STAY: number of nights. Null for boolean restrictions.
+  source          FacilitySource  @default(MANUAL)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+
+  @@unique([accommodationId, restrictionType, date])
+  @@index([tenantId])
+  @@index([accommodationId])
+  @@index([accommodationId, date])
+}
+
+/// Media (images) attached to an accommodation. Ordered by sortOrder.
+model AccommodationMedia {
+  id              String @id @default(cuid())
+  accommodationId String
+
+  url       String
+  altText   String?
+  sortOrder Int     @default(0)
+  source    FacilitySource @default(MANUAL)
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+
+  @@index([accommodationId])
+  @@index([accommodationId, sortOrder])
 }
 
 // ============================================================================
@@ -1669,6 +2050,7 @@ model Order {
   paymentSession          PaymentSession?
   discountAllocations     DiscountAllocation[]
   discountUsage           DiscountUsage?
+  bookings                Booking[]
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId, status])

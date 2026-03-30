@@ -80,7 +80,7 @@ function CompactSearchForm({
     params.set("checkIn", checkIn);
     params.set("checkOut", checkOut);
     params.set("guests", String(guests));
-    router.push(`/stays?${params.toString()}`);
+    router.push(`/search?${params.toString()}`);
   };
 
   return (

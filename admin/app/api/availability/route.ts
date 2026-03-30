@@ -8,6 +8,14 @@ export const dynamic = "force-dynamic";
  * GET /api/availability?tenantId=xxx&checkIn=2025-06-01&checkOut=2025-06-05&guests=2
  *
  * Never cached — availability is always fresh from PMS.
+ *
+ * Filtering:
+ *   typeId — AccommodationType enum value (e.g. "HOTEL") OR legacy ProductCollection.id
+ *   types  — comma-separated AccommodationType values (e.g. "CAMPING,HOTEL")
+ *
+ * Response enrichment:
+ *   Each result entry includes accommodationId (FK to Accommodation table)
+ *   for direct linking without a second lookup.
  */
 
 import { NextResponse } from "next/server";
@@ -16,6 +24,11 @@ import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import type { AvailabilityEntry, Restriction } from "@/app/_lib/integrations/types";
 import { prisma } from "@/app/_lib/db/prisma";
 import { validateStayDates } from "@/app/_lib/validation/dates";
+import { log } from "@/app/_lib/logger";
+import { AccommodationType } from "@prisma/client";
+
+const VALID_ACCOMMODATION_TYPES = new Set<string>(Object.values(AccommodationType));
+const NO_STORE = { "Cache-Control": "no-store" };
 
 const paramsSchema = z.object({
   tenantId: z.string().min(1, "tenantId krävs"),
@@ -23,7 +36,7 @@ const paramsSchema = z.object({
   checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ogiltigt datumformat (YYYY-MM-DD)"),
   guests: z.coerce.number().int().min(1, "Minst 1 gäst").max(99),
   types: z.string().optional(), // comma-separated: "CAMPING,HOTEL"
-  typeId: z.string().optional(), // collection ID (isAccommodationType=true)
+  typeId: z.string().optional(), // AccommodationType value OR legacy collection ID
 });
 
 export async function GET(req: Request) {
@@ -40,7 +53,7 @@ export async function GET(req: Request) {
           message: i.message,
         })),
       },
-      { status: 400, headers: { "Cache-Control": "no-store" } },
+      { status: 400, headers: NO_STORE },
     );
   }
 
@@ -51,40 +64,73 @@ export async function GET(req: Request) {
   if (!dateCheck.valid) {
     return NextResponse.json(
       { error: "INVALID_PARAMS", fields: [{ field: "checkIn", message: dateCheck.error }] },
-      { status: 400, headers: { "Cache-Control": "no-store" } },
+      { status: 400, headers: NO_STORE },
     );
   }
   const { checkIn, checkOut, nights } = dateCheck;
+
+  // ── Build type filter for adapter call ──────────────────────────
   const typeFilter = types ? types.split(",").filter(Boolean) : undefined;
 
-  // typeId filter: collection-based → look up PMS source IDs
-  let pmsSourceIdFilter: string[] | undefined;
-  if (parsed.data.typeId) {
-    const collectionProducts = await prisma.product.findMany({
-      where: {
-        tenantId,
-        productType: "PMS_ACCOMMODATION",
-        collectionItems: { some: { collectionId: parsed.data.typeId } },
-      },
-      select: { pmsSourceId: true },
-    });
-    pmsSourceIdFilter = collectionProducts
-      .map((p) => p.pmsSourceId)
-      .filter((id): id is string => id != null);
-  }
+  // ── Build externalId filter from typeId or types param ──────────
+  let externalIdFilter: string[] | undefined;
 
+  if (parsed.data.typeId) {
+    const typeId = parsed.data.typeId;
+
+    if (VALID_ACCOMMODATION_TYPES.has(typeId)) {
+      // A) typeId is a valid AccommodationType — query Accommodation table
+      const accommodations = await prisma.accommodation.findMany({
+        where: {
+          tenantId,
+          status: "ACTIVE",
+          accommodationType: typeId as AccommodationType,
+        },
+        select: { externalId: true },
+      });
+      externalIdFilter = accommodations
+        .map((a) => a.externalId)
+        .filter((id): id is string => id != null);
+    } else {
+      // Unknown typeId — not an AccommodationType, no longer falls back to ProductCollection
+      log("warn", "availability.unknown_type_id", { tenantId, typeId });
+      externalIdFilter = []; // empty = no results
+    }
+  } else if (typeFilter && typeFilter.length > 0) {
+    // C) types param — validate and filter via Accommodation table
+    const validTypes = typeFilter.filter((t) => VALID_ACCOMMODATION_TYPES.has(t));
+    if (validTypes.length > 0) {
+      const accommodations = await prisma.accommodation.findMany({
+        where: {
+          tenantId,
+          status: "ACTIVE",
+          accommodationType: { in: validTypes as AccommodationType[] },
+        },
+        select: { externalId: true },
+      });
+      externalIdFilter = accommodations
+        .map((a) => a.externalId)
+        .filter((id): id is string => id != null);
+    }
+  }
+  // D) Neither typeId nor types — no filtering (all categories returned)
+
+  // ── Resolve PMS adapter ─────────────────────────────────────────
   let adapter;
   try {
     adapter = await resolveAdapter(tenantId);
   } catch (err) {
-    console.error("[availability] Failed to resolve adapter:", err);
+    log("error", "availability.resolve_adapter_failed", {
+      tenantId,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return NextResponse.json(
       { error: "PMS_UNAVAILABLE", message: "Bokningssystemet är tillfälligt otillgängligt." },
-      { status: 503, headers: { "Cache-Control": "no-store" } },
+      { status: 503, headers: NO_STORE },
     );
   }
 
-  // Fetch availability and restrictions in parallel
+  // ── Fetch availability and restrictions in parallel ─────────────
   let availabilityResult;
   let restrictions: Restriction[];
   try {
@@ -98,14 +144,24 @@ export async function GET(req: Request) {
       adapter.getRestrictions(tenantId, checkIn, checkOut),
     ]);
   } catch (err) {
-    console.error("[availability] PMS query failed:", err);
+    log("error", "availability.pms_query_failed", {
+      tenantId,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return NextResponse.json(
       { error: "PMS_UNAVAILABLE", message: "Kunde inte hämta tillgänglighet. Försök igen." },
-      { status: 503, headers: { "Cache-Control": "no-store" } },
+      { status: 503, headers: NO_STORE },
     );
   }
 
-  // Build restriction map: categoryId → Restriction[]
+  // ── Apply externalId filtering ──────────────────────────────────
+  const filteredCategories = externalIdFilter
+    ? availabilityResult.categories.filter((entry: AvailabilityEntry) =>
+        externalIdFilter.includes(entry.category.externalId),
+      )
+    : availabilityResult.categories;
+
+  // ── Build restriction map ───────────────────────────────────────
   const restrictionMap = new Map<string, Restriction[]>();
   for (const r of restrictions) {
     const key = r.categoryExternalId ?? "__all";
@@ -114,14 +170,30 @@ export async function GET(req: Request) {
     restrictionMap.set(key, list);
   }
 
-  // Apply restriction filtering
-  // Filter by collection-based typeId if specified
-  const filteredCategories = pmsSourceIdFilter
-    ? availabilityResult.categories.filter((entry: AvailabilityEntry) =>
-        pmsSourceIdFilter.includes(entry.category.externalId),
-      )
-    : availabilityResult.categories;
+  // ── Batch lookup: externalId → Accommodation.id ─────────────────
+  const categoryExternalIds = filteredCategories
+    .map((entry: AvailabilityEntry) => entry.category.externalId)
+    .filter(Boolean);
 
+  const accommodationRows = categoryExternalIds.length > 0
+    ? await prisma.accommodation.findMany({
+        where: {
+          tenantId,
+          externalId: { in: categoryExternalIds },
+          status: "ACTIVE",
+        },
+        select: { id: true, externalId: true },
+      })
+    : [];
+
+  const accommodationIdMap = new Map<string, string>();
+  for (const row of accommodationRows) {
+    if (row.externalId) {
+      accommodationIdMap.set(row.externalId, row.id);
+    }
+  }
+
+  // ── Build results ───────────────────────────────────────────────
   const results = filteredCategories.map((entry: AvailabilityEntry) => {
     const catRestrictions = [
       ...(restrictionMap.get(entry.category.externalId) ?? []),
@@ -167,6 +239,7 @@ export async function GET(req: Request) {
       availableUnits: entry.availableUnits,
       available,
       restrictionViolations: violations,
+      accommodationId: accommodationIdMap.get(entry.category.externalId) ?? null,
     };
   });
 
@@ -181,6 +254,6 @@ export async function GET(req: Request) {
       },
       tenantId,
     },
-    { headers: { "Cache-Control": "no-store" } },
+    { headers: NO_STORE },
   );
 }

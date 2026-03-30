@@ -28,15 +28,13 @@ export async function ProductPreviewPage() {
   // Fetch first active product for preview — prefer PMS, fallback to any
   const previewProduct = await prisma.product.findFirst({
     where: { tenantId, status: "ACTIVE" },
-    orderBy: [{ productType: "desc" }, { createdAt: "asc" }], // PMS_ACCOMMODATION first
+    orderBy: [{ productType: "desc" }, { createdAt: "asc" }],
     include: {
       media: { orderBy: { sortOrder: "asc" }, take: 7 },
     },
   });
 
   const resolved = previewProduct ? resolveProduct(previewProduct) : null;
-
-  const pmsRaw = previewProduct?.pmsData as Record<string, unknown> | null;
 
   const productData = resolved
     ? {
@@ -48,8 +46,8 @@ export async function ProductPreviewPage() {
         price: resolved.price,
         currency: resolved.currency,
         productType: resolved.productType,
-        facilities: (pmsRaw?.facilities as string[]) ?? [],
-        maxGuests: (pmsRaw?.maxGuests as number) ?? null,
+        facilities: [] as string[],
+        maxGuests: null as number | null,
       }
     : {
         id: "preview",

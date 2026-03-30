@@ -26,15 +26,6 @@ export default async function EditCollectionPage({
 
   if (!collection) notFound();
 
-  // Fetch addon collection if linked
-  let addonCollection = null;
-  if (collection.addonCollectionId) {
-    addonCollection = await prisma.productCollection.findUnique({
-      where: { id: collection.addonCollectionId },
-      select: { id: true, title: true, imageUrl: true },
-    });
-  }
-
-  const serialized = JSON.parse(JSON.stringify({ ...collection, addonCollection }));
+  const serialized = JSON.parse(JSON.stringify(collection));
   return <CollectionForm collection={serialized} />;
 }

@@ -28,6 +28,7 @@ import { getStripe } from "@/app/_lib/stripe/client";
 import { adjustInventoryInTx } from "@/app/_lib/products/inventory";
 import { canTransition, canTransitionFinancial, canTransitionFulfillment } from "@/app/_lib/orders/types";
 import { log } from "@/app/_lib/logger";
+import { createPmsBookingAfterPayment } from "@/app/_lib/accommodations/create-pms-booking";
 import type Stripe from "stripe";
 import { upsertGuestAccountFromOrder } from "@/app/_lib/guest-auth/account";
 import { createGiftCard } from "@/app/_lib/gift-cards/create";
@@ -595,6 +596,62 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
       },
     }),
   ).catch((err) => log("error", "webhook.app_event_emit_failed", { orderId: order.id, error: String(err) }));
+
+  // ── ACCOMMODATION: create PMS booking after payment ──────────
+  if (orderType === "ACCOMMODATION") {
+    try {
+      const pmsResult = await createPmsBookingAfterPayment({
+        orderId: order.id,
+        tenantId: order.tenantId,
+      });
+
+      if (!pmsResult.ok) {
+        log("error", "webhook.pms_booking_failed_after_payment", {
+          orderId: order.id,
+          tenantId: order.tenantId,
+          error: pmsResult.error,
+          retryable: pmsResult.retryable,
+        });
+
+        if (pmsResult.retryable) {
+          // Set fulfillment to ON_HOLD so staff can see it needs attention
+          if (canTransitionFulfillment("UNFULFILLED", "ON_HOLD")) {
+            await prisma.order.update({
+              where: { id: order.id },
+              data: { fulfillmentStatus: "ON_HOLD" },
+            });
+            await prisma.orderEvent.create({
+              data: {
+                orderId: order.id,
+                tenantId: order.tenantId,
+                type: "ORDER_UPDATED",
+                message: `PMS-bokning misslyckades — manuell hantering krävs: ${pmsResult.error}`,
+              },
+            });
+          }
+        }
+      }
+    } catch (err) {
+      // Unexpected error — log but never crash the webhook
+      log("error", "webhook.pms_booking_unexpected_error", {
+        orderId: order.id,
+        tenantId: order.tenantId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+
+      // Set fulfillment to ON_HOLD
+      try {
+        if (canTransitionFulfillment("UNFULFILLED", "ON_HOLD")) {
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { fulfillmentStatus: "ON_HOLD" },
+          });
+        }
+      } catch {
+        // Best effort — don't throw from error handler
+      }
+    }
+  }
 
   // ── PURCHASE: create gift card + mark fulfilled ─────────────
   if (orderType === "PURCHASE") {

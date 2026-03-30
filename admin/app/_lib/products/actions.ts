@@ -29,7 +29,6 @@ import {
   titleToSlug,
   validateVariantsAgainstOptions,
   ProductActionError,
-  isPmsProduct,
 } from "./types";
 import type {
   CreateProductInput,
@@ -43,7 +42,7 @@ import type { InventoryChangeReason } from "@prisma/client";
 
 type ActionResult<T = void> =
   | { ok: true; data: T }
-  | { ok: false; error: string; code?: "VERSION_CONFLICT" | "PMS_PRODUCT_IMMUTABLE_FIELD" | "PMS_PRODUCT_CREATE_FORBIDDEN" };
+  | { ok: false; error: string; code?: "VERSION_CONFLICT" };
 
 // ── Slug collision resolution (retry loop + DB constraint) ───
 
@@ -103,15 +102,6 @@ export async function createProduct(
   }
 
   const data = parsed.data;
-
-  // PMS products cannot be created via createProduct()
-  if ((input as Record<string, unknown>).productType === "PMS_ACCOMMODATION") {
-    return {
-      ok: false,
-      error: "PMS-boenden importeras automatiskt från ditt PMS.",
-      code: "PMS_PRODUCT_CREATE_FORBIDDEN",
-    };
-  }
 
   // Validate variants match options
   if (data.variants.length > 0) {
@@ -305,21 +295,6 @@ export async function updateProduct(
     },
   });
   if (!existing) return { ok: false, error: "Produkten hittades inte" };
-
-  // PMS products: reject changes to price, variants, options, inventory
-  if (isPmsProduct(existing)) {
-    const immutableFields = ["price", "compareAtPrice", "variants", "options",
-      "trackInventory", "inventoryQuantity", "continueSellingWhenOutOfStock"] as const;
-    for (const field of immutableFields) {
-      if (data[field] !== undefined) {
-        return {
-          ok: false,
-          error: "Pris och lager styrs av ditt PMS och kan inte ändras här.",
-          code: "PMS_PRODUCT_IMMUTABLE_FIELD",
-        };
-      }
-    }
-  }
 
   // Validate variants against options (use provided options, or fall back to existing)
   if (data.variants && data.variants.length > 0) {
@@ -725,8 +700,6 @@ export async function createCollection(
         data: {
           tenantId, title: data.title, description: data.description,
           slug, imageUrl: data.imageUrl ?? null, status: data.status,
-          isAccommodationType: data.isAccommodationType ?? false,
-          addonCollectionId: data.addonCollectionId ?? null,
         },
       });
       if (data.productIds.length > 0) {
@@ -797,8 +770,6 @@ export async function updateCollection(
           ...(data.description !== undefined && { description: data.description }),
           ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl }),
           ...(data.status !== undefined && { status: data.status }),
-          ...(data.isAccommodationType !== undefined && { isAccommodationType: data.isAccommodationType }),
-          ...(data.addonCollectionId !== undefined && { addonCollectionId: data.addonCollectionId }),
           version: { increment: 1 },
         },
       });
@@ -862,8 +833,11 @@ export async function listCollections() {
 // PMS SYNC ACTION
 // ═════════════════════════════════════════════════════════════
 
+/**
+ * @deprecated Use syncAccommodations() from @/app/_lib/accommodations instead.
+ */
 export async function syncPmsProductsAction(): Promise<
-  ActionResult<{ created: number; updated: number; unchanged: number; errors: Array<{ pmsSourceId: string; error: string }> }>
+  ActionResult<{ created: number; updated: number; unchanged: number; errors: string[] }>
 > {
   const auth = await requireAdmin();
   if (!auth.ok) return { ok: false, error: auth.error };
@@ -871,17 +845,8 @@ export async function syncPmsProductsAction(): Promise<
   const tenantData = await getCurrentTenant();
   if (!tenantData) return { ok: false, error: "Inte inloggad" };
 
-  const { syncPmsProducts } = await import("./pms-sync");
-
-  // Determine provider from tenant integration
-  const integration = await prisma.tenantIntegration.findUnique({
-    where: { tenantId: tenantData.tenant.id },
-    select: { provider: true, status: true },
-  });
-
-  const provider = integration?.status === "active" ? integration.provider : "manual";
-
-  const result = await syncPmsProducts(tenantData.tenant.id, provider);
+  const { syncAccommodations } = await import("@/app/_lib/accommodations");
+  const result = await syncAccommodations(tenantData.tenant.id);
   return { ok: true, data: result };
 }
 
@@ -900,31 +865,17 @@ export async function getPreviewProductName(): Promise<string | null> {
   const product = await prisma.product.findFirst({
     where: { tenantId: tenantData.tenant.id, status: "ACTIVE" },
     orderBy: [{ productType: "desc" }, { createdAt: "asc" }],
-    select: { title: true, titleOverride: true, pmsData: true },
+    select: { title: true },
   });
 
   if (!product) return null;
-  const pmsRaw = product.pmsData as Record<string, unknown> | null;
-  return product.titleOverride ?? (pmsRaw?.name as string | undefined) ?? product.title;
+  return product.title;
 }
 
 /**
- * Returns all collections where isAccommodationType = true and status = ACTIVE.
- * Used by the search form dropdown. Public — no auth required.
+ * Returns accommodation type collections.
+ * Stubbed — accommodation type flag removed from collections.
  */
-export async function getAccommodationTypes(tenantId: string) {
-  return prisma.productCollection.findMany({
-    where: {
-      tenantId,
-      isAccommodationType: true,
-      status: "ACTIVE",
-    },
-    select: {
-      id: true,
-      title: true,
-      slug: true,
-      imageUrl: true,
-    },
-    orderBy: { sortOrder: "asc" },
-  });
+export async function getAccommodationTypes(_tenantId: string) {
+  return [] as { id: string; title: string; slug: string; imageUrl: string | null }[];
 }

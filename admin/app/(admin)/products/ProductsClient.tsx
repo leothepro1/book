@@ -14,7 +14,6 @@ type ProductListItem = {
   slug: string;
   status: "ACTIVE" | "DRAFT" | "ARCHIVED";
   productType: string;
-  pmsProvider: string | null;
   price: number;
   currency: string;
   trackInventory: boolean;
@@ -92,7 +91,7 @@ export default function ProductsClient({
   const [showSelectDropdown, setShowSelectDropdown] = useState(false);
   const selectDropdownRef = useRef<HTMLDivElement>(null);
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "DRAFT" | "ARCHIVED">("ALL");
-  const [typeFilter, setTypeFilter] = useState<"ALL" | "STANDARD" | "PMS_ACCOMMODATION">("ALL");
+  const [typeFilter, setTypeFilter] = useState<"ALL" | "STANDARD" | "GIFT_CARD">("ALL");
 
   // Load all products once (filter client-side)
   useEffect(() => {
@@ -252,7 +251,7 @@ export default function ProductsClient({
   const TYPE_FILTERS: Array<{ key: typeof typeFilter; label: string }> = [
     { key: "ALL", label: "Alla typer" },
     { key: "STANDARD", label: "Produkter" },
-    { key: "PMS_ACCOMMODATION", label: "Boenden" },
+    { key: "GIFT_CARD", label: "Presentkort" },
   ];
 
   return (
@@ -323,13 +322,13 @@ export default function ProductsClient({
               <span className="products-category">{getCategoryLabel(product)}</span>
             </div>
             <div className="products-col products-col--detail">
-              {product.productType !== "PMS_ACCOMMODATION" && (() => {
+              {(() => {
                 const inv = getInventoryDisplay(product);
                 return <span style={inv.outOfStock ? { color: "var(--admin-danger)", fontWeight: 500 } : undefined}>{inv.text}</span>;
               })()}
             </div>
             <div className="products-col products-col--detail products-col--right">
-              {product.productType !== "PMS_ACCOMMODATION" && getDisplayPrice(product)}
+              {getDisplayPrice(product)}
             </div>
           </div>
         );

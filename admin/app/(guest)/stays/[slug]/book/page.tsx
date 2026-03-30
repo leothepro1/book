@@ -9,10 +9,10 @@ export default async function BookPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ categoryId: string }>;
+  params: Promise<{ slug: string }>;
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { categoryId } = await params;
+  const { slug } = await params;
   const sp = await searchParams;
   const tenant = await resolveTenantFromHost();
   if (!tenant) return notFound();
@@ -24,13 +24,13 @@ export default async function BookPage({
   const totalAmount = sp.totalAmount ? parseInt(sp.totalAmount, 10) : null;
 
   if (!checkIn || !checkOut || !guests || !ratePlanId) {
-    redirect(`/stays/${categoryId}?checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`);
+    redirect(`/stays/${slug}?checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`);
   }
 
   // Fetch category + rate plan info for display
   const adapter = await resolveAdapter(tenant.id);
   const roomTypes = await adapter.getRoomTypes(tenant.id);
-  const category = roomTypes.find((c) => c.externalId === categoryId);
+  const category = roomTypes.find((c) => c.externalId === slug);
   if (!category) return notFound();
 
   const nights = Math.round(
@@ -46,7 +46,7 @@ export default async function BookPage({
   return (
     <BookingFormClient
       tenantId={tenant.id}
-      categoryId={categoryId}
+      categoryId={slug}
       categoryName={category.name}
       ratePlanId={ratePlanId}
       checkIn={checkIn}

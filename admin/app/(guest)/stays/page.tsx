@@ -1,40 +1,21 @@
-import { notFound } from "next/navigation";
-import { resolveTenantFromHost } from "../_lib/tenant/resolveTenantFromHost";
-import { getTenantConfig } from "../_lib/tenant/getTenantConfig";
-import { resolveBookingFromToken } from "../_lib/portal/resolveBooking";
-import { getBookingStatus } from "../_lib/booking";
-import { ThemeRenderer } from "../_lib/themes";
-import GuestPageShell from "../_components/GuestPageShell";
-
-export const dynamic = "force-dynamic";
+import { redirect } from "next/navigation";
 
 /**
- * /stays — public availability search page.
- * Renders via ThemeRenderer with templateKey="stays" — same pipeline
- * as the editor preview. SearchResults locked section handles the
- * search form and results client-side.
+ * Redirect /stays → /search (301)
+ *
+ * The search page moved to /search. This redirect ensures
+ * bookmarked and linked /stays URLs still work.
  */
-export default async function StaysPage() {
-  const tenant = await resolveTenantFromHost();
-  if (!tenant) return notFound();
-
-  const config = await getTenantConfig(tenant.id, {});
-
-  // ThemeRenderer requires a booking context — use preview mock
-  const booking = await resolveBookingFromToken("preview");
-  if (!booking) return notFound();
-
-  const bookingStatus = getBookingStatus(booking);
-
-  return (
-    <GuestPageShell config={config}>
-      <ThemeRenderer
-        templateKey="stays"
-        config={config}
-        booking={booking}
-        bookingStatus={bookingStatus}
-        token="preview"
-      />
-    </GuestPageShell>
-  );
+export default async function StaysRedirect({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const sp = await searchParams;
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(sp)) {
+    if (value !== undefined) params.set(key, value);
+  }
+  const qs = params.toString();
+  redirect(`/search${qs ? `?${qs}` : ""}`);
 }

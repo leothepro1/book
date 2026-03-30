@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
@@ -35,11 +35,6 @@ export default async function CollectionPage({
   });
 
   if (!collection || collection.status !== "ACTIVE") return notFound();
-
-  // Accommodation type collections → redirect to search with typeId filter
-  if (collection.isAccommodationType) {
-    redirect(`/stays?typeId=${collection.id}`);
-  }
 
   // Filter to only ACTIVE products
   const products = collection.items

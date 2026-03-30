@@ -4,9 +4,15 @@ export const dynamic = "force-dynamic";
  * Booking Creation API
  * ════════════════════
  *
- * Creates a booking via PMS adapter + stores in local DB.
- * Re-validates availability AND price server-side before creating.
- * Never trusts client-supplied totalAmount — always re-computes from PMS.
+ * Creates a Booking record in the local DB.
+ *
+ * TODO: This route handles PMS-synced bookings (OTA, walk-in).
+ * Direct bookings from Bedfront checkout are created by the payment-intent
+ * route (which creates a Booking inside the Order transaction) and the PMS
+ * booking is created by the payment webhook after payment confirmation.
+ *
+ * This route does NOT call adapter.createBooking() — PMS booking creation
+ * happens after payment confirmation in the webhook handler.
  */
 
 import { NextResponse } from "next/server";
@@ -20,7 +26,9 @@ import { checkRateLimit } from "@/app/_lib/rate-limit/checkout";
 import { log } from "@/app/_lib/logger";
 import { randomBytes, createHash } from "crypto";
 
-const inputSchema = CreateBookingParamsSchema;
+const inputSchema = CreateBookingParamsSchema.extend({
+  orderId: z.string().optional(),
+});
 
 export async function POST(req: Request) {
   // ── Rate limit ──────────────────────────────────────────────
@@ -192,25 +200,20 @@ export async function POST(req: Request) {
     // Restriction check failure non-blocking — proceed with booking
   }
 
-  // ── Create booking via PMS ────────────────────────────────────
-  let confirmation;
-  try {
-    confirmation = await adapter.createBooking(tenantId, body);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Bokningen kunde inte skapas.";
-    return NextResponse.json(
-      { error: "PMS_UNAVAILABLE", message },
-      { status: 503 },
-    );
-  }
+  // ── Resolve accommodationId from categoryId ───────────────────
+  const accommodation = await prisma.accommodation.findFirst({
+    where: { tenantId, externalId: body.categoryId, archivedAt: null },
+    select: { id: true },
+  });
 
-  // ── Store in local DB (after PMS confirms) ────────────────────
+  // ── Store Booking in local DB ────────────────────────────────
+  // PMS createBooking() is NOT called here — it happens after payment
+  // confirmation in the webhook handler (createPmsBookingAfterPayment).
   const portalToken = randomBytes(24).toString("base64url");
 
   const booking = await prisma.booking.create({
     data: {
       tenantId,
-      externalId: confirmation.externalId,
       externalSource: adapter.provider,
       firstName: body.guestInfo.firstName,
       lastName: body.guestInfo.lastName,
@@ -218,9 +221,15 @@ export async function POST(req: Request) {
       phone: body.guestInfo.phone ?? null,
       arrival: checkIn,
       departure: checkOut,
+      checkIn,
+      checkOut,
       unit: body.categoryId,
       status: "PRE_CHECKIN",
       portalToken,
+      accommodationId: accommodation?.id ?? null,
+      orderId: body.orderId ?? null,
+      guestCount: body.guests,
+      ratePlanId: body.ratePlanId ?? null,
     },
   });
 
@@ -239,23 +248,6 @@ export async function POST(req: Request) {
     }),
   ).catch((err) => log("error", "booking.guest_account_failed", { bookingId: booking.id, error: String(err) }));
 
-  // ── Send confirmation email (non-blocking) ────────────────────
-  try {
-    const { sendEmailEvent } = await import("@/app/_lib/email/send");
-    await sendEmailEvent(tenantId, "BOOKING_CONFIRMED", body.guestInfo.email, {
-      guestName: `${body.guestInfo.firstName} ${body.guestInfo.lastName}`,
-      hotelName: tenant!.name,
-      checkIn: body.checkIn,
-      checkOut: body.checkOut,
-      roomType: body.categoryId,
-      bookingRef: confirmation.confirmationNumber,
-      loginUrl: "",
-    });
-  } catch (err) {
-    log("error", "booking.confirmation_email_failed", { tenantId, error: String(err) });
-    // Email failure NEVER aborts booking
-  }
-
   // Emit platform event for app webhooks (non-blocking)
   import("@/app/_lib/apps/webhooks").then(({ emitPlatformEvent }) =>
     emitPlatformEvent({
@@ -268,18 +260,17 @@ export async function POST(req: Request) {
         checkIn: body.checkIn,
         checkOut: body.checkOut,
         categoryId: body.categoryId,
-        confirmationNumber: confirmation.confirmationNumber,
       },
     }),
   ).catch((err) => log("error", "booking.app_event_emit_failed", { bookingId: booking.id, error: String(err) }));
 
   log("info", "booking.created", {
     tenantId, bookingId: booking.id, categoryId: body.categoryId,
+    accommodationId: accommodation?.id ?? null,
     checkIn: body.checkIn, checkOut: body.checkOut,
   });
 
   return NextResponse.json({
-    confirmationNumber: confirmation.confirmationNumber,
     bookingId: booking.id,
     portalToken,
     totalAmount: serverTotalAmount,

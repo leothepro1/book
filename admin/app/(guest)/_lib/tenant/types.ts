@@ -68,7 +68,7 @@ export const DEFAULT_FOOTER_MENU: MenuConfig = {
   handle: "footer",
   items: [
     { id: "mi_home", label: "Hem", url: "/" },
-    { id: "mi_stays", label: "Bokningar", url: "/stays" },
+    { id: "mi_stays", label: "Bokningar", url: "/search" },
     { id: "mi_account", label: "Konto", url: "/account" },
   ],
   createdAt: new Date().toISOString(),

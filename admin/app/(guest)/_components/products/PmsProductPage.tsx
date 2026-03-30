@@ -58,7 +58,7 @@ interface AvailabilityData {
   nights: number;
 }
 
-export function PmsProductPage({ product, tenantId, searchParams }: PmsProductProps) {
+export function AccommodationDetailPage({ product, tenantId, searchParams }: PmsProductProps) {
   const router = useRouter();
   const [activeImage, setActiveImage] = useState(0);
   const [availability, setAvailability] = useState<AvailabilityData | null>(null);
@@ -218,7 +218,7 @@ export function PmsProductPage({ product, tenantId, searchParams }: PmsProductPr
             <div className="pmsp__unavailable">
               <span className="material-symbols-rounded" style={{ fontSize: 24, opacity: 0.3 }}>event_busy</span>
               <p>Inte tillgängligt för {formatDateRange(new Date(searchParams.checkIn!), new Date(searchParams.checkOut!))}.</p>
-              <Link href={`/stays?checkIn=${searchParams.checkIn}&checkOut=${searchParams.checkOut}&guests=${searchParams.guests}`} className="pmsp__link">
+              <Link href={`/search?checkIn=${searchParams.checkIn}&checkOut=${searchParams.checkOut}&guests=${searchParams.guests}`} className="pmsp__link">
                 Sök andra boenden →
               </Link>
             </div>

@@ -70,12 +70,6 @@ type ExistingProduct = {
   slug: string;
   status: "ACTIVE" | "DRAFT" | "ARCHIVED";
   productType: string;
-  pmsSourceId: string | null;
-  pmsProvider: string | null;
-  pmsSyncedAt: Date | string | null;
-  pmsData: unknown;
-  titleOverride: string | null;
-  descriptionOverride: string | null;
   price: number;
   compareAtPrice: number | null;
   currency: string;
@@ -104,8 +98,6 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
   const markDirty = useCallback(() => setDirty(true), []);
 
   const isEdit = !!product;
-  const isPms = product?.productType === "PMS_ACCOMMODATION";
-
   // ── Core fields (pre-populated from product when editing) ──
   const [title, setTitle] = useState(product?.title ?? "");
   const [description, setDescription] = useState(product?.description ?? "");
@@ -365,17 +357,7 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
     setIsSaving(true);
     setSaveError(null);
     startTransition(async () => {
-      // PMS products: only send editable fields — never price/variants/options/inventory
-      const payload = isPms
-        ? {
-            title, // maps to titleOverride on server
-            description, // maps to descriptionOverride on server
-            media: media.map(({ _id, ...m }) => m),
-            status,
-            collectionIds: Array.from(selectedCollectionIds),
-            tags,
-          }
-        : {
+      const payload = {
             title,
             description,
             media: media.map(({ _id, ...m }) => m),
@@ -397,7 +379,6 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
       if (isEdit) {
         result = await updateProduct(product!.id, { ...payload, expectedVersion: product!.version });
       } else {
-        // createProduct is always STANDARD — PMS products are never created via this form
         result = await createProduct(payload as Parameters<typeof createProduct>[0]);
       }
 
@@ -416,7 +397,7 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
         setTimeout(() => setSaveError(null), 5000);
       }
     });
-  }, [title, description, price, compareAtPrice, taxable, status, media, options, variants, selectedCollectionIds, tags, router, isEdit, product, isPms]);
+  }, [title, description, price, compareAtPrice, taxable, status, media, options, variants, selectedCollectionIds, tags, router, isEdit, product]);
 
   const handleDiscard = useCallback(() => {
     setIsDiscarding(true);
@@ -574,20 +555,7 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
               </div>
             </div>
 
-            {/* Card 2: Price — locked for PMS products */}
-            {isPms ? (
-              <div style={{ ...CARD }}>
-                <div className="pf-card-header" style={{ padding: 0, marginBottom: 8 }}>
-                  <span className="pf-card-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    Pris
-                    <span className="material-symbols-rounded" style={{ fontSize: 16, color: "var(--admin-text-tertiary)" }}>lock</span>
-                  </span>
-                </div>
-                <p style={{ fontSize: "var(--font-xs)", color: "var(--admin-text-tertiary)", margin: 0 }}>
-                  Styrs av ditt PMS &middot; Kan inte ändras här
-                </p>
-              </div>
-            ) : (
+            {/* Card 2: Price */}
             <div style={{ ...CARD, padding: 0 }}>
               <div style={{ padding: 16 }}>
                 <div className="pf-card-header" style={{ padding: 0, marginBottom: 12 }}>
@@ -664,22 +632,7 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
               </div>
             </div>
 
-            )}
-
-            {/* Card 3: Variants — hidden for PMS products */}
-            {isPms ? (
-              <div style={{ ...CARD }}>
-                <div className="pf-card-header" style={{ padding: 0, marginBottom: 8 }}>
-                  <span className="pf-card-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    Varianter
-                    <span className="material-symbols-rounded" style={{ fontSize: 16, color: "var(--admin-text-tertiary)" }}>lock</span>
-                  </span>
-                </div>
-                <p style={{ fontSize: "var(--font-xs)", color: "var(--admin-text-tertiary)", margin: 0 }}>
-                  Varianter och lager hanteras av ditt PMS.
-                </p>
-              </div>
-            ) : (
+            {/* Card 3: Variants */}
             <div style={{ ...CARD, padding: 0 }}>
               <div className="pf-card-header" style={{ padding: "16px 16px 12px" }}>
                 <span className="pf-card-title">Varianter</span>
@@ -810,34 +763,6 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
                 </>
               )}
             </div>
-            )}
-
-            {/* PMS info panel — only for PMS products */}
-            {isPms && product && (
-              <div style={{ ...CARD, background: "var(--admin-surface)" }}>
-                <div className="pf-card-header" style={{ padding: 0, marginBottom: 12 }}>
-                  <span className="pf-card-title">PMS-information</span>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", fontSize: "var(--font-sm)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--admin-text-secondary)" }}>Källa</span>
-                    <span>{product.pmsProvider ?? "—"}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--admin-text-secondary)" }}>PMS-ID</span>
-                    <span style={{ fontFamily: "var(--sf-mono, monospace)", fontSize: "var(--font-xs)" }}>{product.pmsSourceId ?? "—"}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--admin-text-secondary)" }}>Senast sync</span>
-                    <span>
-                      {product.pmsSyncedAt
-                        ? new Date(product.pmsSyncedAt).toLocaleString("sv-SE")
-                        : "Aldrig"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Right column (30%) */}

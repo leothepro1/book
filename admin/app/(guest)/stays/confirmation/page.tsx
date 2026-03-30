@@ -79,7 +79,7 @@ export default async function ConfirmationPage({
           </Link>
         )}
         <Link
-          href="/stays"
+          href="/search"
           style={{
             fontSize: "0.8125rem",
             color: "color-mix(in srgb, var(--text, #000) 55%, transparent)",

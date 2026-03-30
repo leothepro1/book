@@ -202,7 +202,7 @@ function SearchForm() {
     params.set("guests", String(adults + children_));
     if (selectedTypes.length > 0) params.set("types", selectedTypes.join(","));
     // Hard navigation to ensure server re-renders with new search params
-    window.location.href = `/stays?${params.toString()}`;
+    window.location.href = `/search?${params.toString()}`;
   }, [checkIn, checkOut, adults, children_, selectedTypes, router]);
 
   const guestIsPlaceholder = adults === 0 && children_ === 0;

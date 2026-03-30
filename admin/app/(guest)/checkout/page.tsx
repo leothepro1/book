@@ -3,7 +3,7 @@ import { resolveTenantFromHost } from "../_lib/tenant/resolveTenantFromHost";
 import { getTenantConfig } from "../_lib/tenant/getTenantConfig";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveProduct } from "@/app/_lib/products/resolve";
-import { resolveAdapter } from "@/app/_lib/integrations/resolve";
+import { resolveAccommodationPrice, AccommodationPriceError } from "@/app/_lib/accommodations";
 import { CheckoutClient } from "./CheckoutClient";
 import { resolvePaymentMethods } from "@/app/_lib/payments/resolve";
 import type { PaymentMethodConfig } from "@/app/_lib/payments/types";
@@ -28,6 +28,7 @@ export default async function CheckoutPage({
 
   const sp = await searchParams;
   const productSlug = sp.product;
+  const accommodationId = sp.accommodationId ?? null;
   const checkIn = sp.checkIn ?? null;
   const checkOut = sp.checkOut ?? null;
   const guests = sp.guests ? parseInt(sp.guests, 10) : 2;
@@ -45,39 +46,29 @@ export default async function CheckoutPage({
 
   const resolved = resolveProduct(product);
 
-  // Resolve price from PMS — authoritative, never from client
+  // Resolve price — authoritative, never from client
   let totalPrice = resolved.price; // fallback for STANDARD products
   let currency = resolved.currency;
   let ratePlanName: string | null = null;
 
-  if (product.productType === "PMS_ACCOMMODATION" && product.pmsSourceId) {
+  if (accommodationId) {
     try {
-      const adapter = await resolveAdapter(tenant.id);
-      const availability = await adapter.getAvailability(tenant.id, {
+      const priceResult = await resolveAccommodationPrice({
+        tenantId: tenant.id,
+        accommodationId,
+        ratePlanId: ratePlanId ?? undefined,
         checkIn: new Date(checkIn),
         checkOut: new Date(checkOut),
         guests,
       });
-
-      const entry = availability.categories.find(
-        (e) => e.category.externalId === product.pmsSourceId,
-      );
-
-      if (entry && entry.ratePlans.length > 0) {
-        // Find requested rate plan, or use first available
-        const ratePlan = ratePlanId
-          ? entry.ratePlans.find((rp) => rp.externalId === ratePlanId)
-          : entry.ratePlans[0];
-
-        if (ratePlan) {
-          totalPrice = ratePlan.totalPrice;
-          currency = ratePlan.currency;
-          ratePlanName = ratePlan.name;
-        }
-      }
+      totalPrice = priceResult.totalPrice;
+      currency = priceResult.currency;
+      ratePlanName = priceResult.ratePlan.name;
     } catch (err) {
-      console.error("[checkout] PMS price resolution failed:", err);
-      // Fall through with price = 0 — will show error in UI
+      if (!(err instanceof AccommodationPriceError)) {
+        // Unexpected — fall through with price = 0, UI will show error
+      }
+      // Known errors also fall through — price stays 0, UI shows error
     }
   }
 

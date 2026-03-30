@@ -99,7 +99,7 @@ export function RoomDetailClient({
   if (error || !category) {
     return (
       <div className="rd">
-        <Link href={`/stays?checkIn=${searchParams.checkIn}&checkOut=${searchParams.checkOut}&guests=${searchParams.guests}`} className="rd__back">
+        <Link href={`/search?checkIn=${searchParams.checkIn}&checkOut=${searchParams.checkOut}&guests=${searchParams.guests}`} className="rd__back">
           <span className="material-symbols-rounded" style={{ fontSize: 18 }}>arrow_back</span>
           Tillbaka till sökresultat
         </Link>
@@ -164,7 +164,7 @@ export function RoomDetailClient({
     <div className="rd">
       {/* Back link */}
       <Link
-        href={`/stays?checkIn=${searchParams.checkIn}&checkOut=${searchParams.checkOut}&guests=${searchParams.guests}`}
+        href={`/search?checkIn=${searchParams.checkIn}&checkOut=${searchParams.checkOut}&guests=${searchParams.guests}`}
         className="rd__back"
       >
         <span className="material-symbols-rounded" style={{ fontSize: 18 }}>arrow_back</span>

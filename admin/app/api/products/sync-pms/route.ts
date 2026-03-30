@@ -4,15 +4,15 @@ export const dynamic = "force-dynamic";
  * PMS Product Sync Trigger
  * ════════════════════════
  *
- * POST — triggers a PMS product sync for a tenant.
+ * POST — triggers a PMS accommodation sync for a tenant.
  * Auth: Clerk admin session OR CRON_SECRET Bearer token.
  */
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { env } from "@/app/_lib/env";
-import { syncPmsProducts } from "@/app/_lib/products/pms-sync";
-import { prisma } from "@/app/_lib/db/prisma";
+import { syncAccommodations } from "@/app/_lib/accommodations";
+import { log } from "@/app/_lib/logger";
 
 const bodySchema = z.object({
   tenantId: z.string().min(1),
@@ -24,7 +24,6 @@ export async function POST(req: Request) {
   const isCron = authHeader === `Bearer ${env.CRON_SECRET}`;
 
   if (!isCron) {
-    // Try admin auth
     try {
       const { requireAdmin } = await import("@/app/(admin)/_lib/auth/devAuth");
       const auth = await requireAdmin();
@@ -46,23 +45,16 @@ export async function POST(req: Request) {
     );
   }
 
-  // Determine provider from tenant integration
-  const integration = await prisma.tenantIntegration.findUnique({
-    where: { tenantId: body.tenantId },
-    select: { provider: true, status: true },
-  });
-
-  const provider = integration?.status === "active" ? integration.provider : "manual";
-
   try {
-    const result = await syncPmsProducts(body.tenantId, provider);
+    const result = await syncAccommodations(body.tenantId);
     return NextResponse.json({
       ok: true,
-      result,
+      ...result,
+      accommodations: result,
       syncedAt: new Date().toISOString(),
     });
   } catch (err) {
-    console.error("[sync-pms] Sync failed:", err);
+    log("error", "sync_pms.failed", { tenantId: body.tenantId, error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json(
       { error: "SYNC_FAILED", message: err instanceof Error ? err.message : "Sync failed" },
       { status: 503 },
