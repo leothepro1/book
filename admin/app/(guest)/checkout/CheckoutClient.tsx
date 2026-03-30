@@ -10,6 +10,7 @@ import type { PaymentRequest } from "@stripe/stripe-js";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { CheckoutModal } from "./CheckoutModal";
 import { LoadingScreen } from "@/app/_components/Loading";
+import { track } from "@/app/_lib/analytics/client";
 import "./checkout.css";
 
 const stripePromise = loadStripe(
@@ -17,6 +18,7 @@ const stripePromise = loadStripe(
 );
 
 interface CheckoutProps {
+  tenantId: string;
   product: {
     title: string;
     image: string | null;
@@ -496,7 +498,7 @@ function FieldError({ error }: { error?: string }) {
 
 // ── Main Checkout ──────────────────────────────────────────
 
-export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests, nights, bookingTerms, header, ratePlanId, availableMethods, walletsEnabled = true, klarnaEnabled = true }: CheckoutProps) {
+export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkOut, guests, nights, bookingTerms, header, ratePlanId, availableMethods, walletsEnabled = true, klarnaEnabled = true }: CheckoutProps) {
   const router = useRouter();
   const [activeStep, setActiveStep] = useState<StepId>(1);
   const [visibleStep, setVisibleStep] = useState<StepId>(1); // which body is expanded (lags activeStep for stagger)
@@ -526,6 +528,22 @@ export function CheckoutClient({ product, productSlug, checkIn, checkOut, guests
   const [cardName, setCardName] = useState("");
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
+
+  // ── Analytics: CHECKOUT_STARTED on mount ──
+  useEffect(() => {
+    track({
+      tenantId,
+      eventType: "CHECKOUT_STARTED",
+      payload: {
+        productSlug,
+        checkIn,
+        checkOut,
+        guests,
+        subtotalAmount: product?.price ?? 0,
+      },
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Contact info (step 1) ───────────────────────────────────
   const [contactEmail, setContactEmail] = useState("");
   const [contactCountry, setContactCountry] = useState("SE");

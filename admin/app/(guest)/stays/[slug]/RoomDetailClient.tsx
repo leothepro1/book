@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { formatDateRange } from "@/app/_lib/search/dates";
 import { saveBookingSelection } from "@/app/(guest)/_lib/booking/booking-selection";
+import { track } from "@/app/_lib/analytics/client";
 import "./room-detail.css";
 
 // ── Types ──────────────────────────────────────────────────────
@@ -95,6 +96,35 @@ export function RoomDetailClient({
 
   const totalAmount = (currentRatePlan?.totalPrice ?? 0) + addonTotal;
 
+  // ── Analytics: ACCOMMODATION_VIEWED on mount ──
+  useEffect(() => {
+    if (!category) return;
+    track({
+      tenantId: searchParams.tenantId,
+      eventType: "ACCOMMODATION_VIEWED",
+      payload: {
+        accommodationName: category.name,
+        categoryExternalId: category.externalId,
+      },
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Analytics: track rate plan + addon changes ──
+  const handleRatePlanSelect = useCallback((rp: typeof ratePlans[number]) => {
+    setSelectedRatePlan(rp.externalId);
+    track({
+      tenantId: searchParams.tenantId,
+      eventType: "RATE_PLAN_SELECTED",
+      payload: {
+        ratePlanId: rp.externalId,
+        ratePlanName: rp.name,
+        pricePerNight: rp.pricePerNight,
+        totalPrice: rp.totalPrice,
+        nights: searchParams.nights,
+      },
+    });
+  }, [searchParams.tenantId, searchParams.nights]);
+
   // Error state — PMS unavailable (all hooks declared above)
   if (error || !category) {
     return (
@@ -149,14 +179,28 @@ export function RoomDetailClient({
   };
 
   const toggleAddon = (addonId: string) => {
+    const wasSelected = selectedAddons.has(addonId) && selectedAddons.get(addonId)! > 0;
+    const addon = addons.find((a) => a.externalId === addonId);
+
     setSelectedAddons((prev) => {
       const next = new Map(prev);
-      if (next.has(addonId) && next.get(addonId)! > 0) {
+      if (wasSelected) {
         next.delete(addonId);
       } else {
         next.set(addonId, 1);
       }
       return next;
+    });
+
+    // Analytics
+    track({
+      tenantId: searchParams.tenantId,
+      eventType: wasSelected ? "ADDON_REMOVED" : "ADDON_ADDED",
+      payload: {
+        addonId,
+        addonName: addon?.name ?? null,
+        price: addon?.price ?? 0,
+      },
     });
   };
 
@@ -224,7 +268,7 @@ export function RoomDetailClient({
                 <button
                   key={rp.externalId}
                   className={`rd__rate-plan${selectedRatePlan === rp.externalId ? " rd__rate-plan--selected" : ""}`}
-                  onClick={() => setSelectedRatePlan(rp.externalId)}
+                  onClick={() => handleRatePlanSelect(rp)}
                 >
                   <div className="rd__rate-plan-info">
                     <div className="rd__rate-plan-name">{rp.name}</div>

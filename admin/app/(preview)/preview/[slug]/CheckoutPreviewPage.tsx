@@ -62,6 +62,7 @@ export async function CheckoutPreviewPage() {
 
   return (
     <CheckoutClient
+      tenantId={tenantId}
       product={
         resolved
           ? {

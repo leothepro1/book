@@ -529,6 +529,8 @@ model Tenant {
   rumEvents           RumEvent[]
   rumAggregates       RumDailyAggregate[]
   rumRateLimit        RumRateLimit?
+  analyticsEvents     AnalyticsEvent[]
+  analyticsMetrics    AnalyticsDailyMetric[]
   discounts           Discount[]
   accommodations      Accommodation[]
   accommodationCategories AccommodationCategory[]
@@ -3030,4 +3032,131 @@ model RumDailyAggregate {
 
   @@unique([tenantId, date])
   @@index([tenantId, date])
+}
+
+// ============================================================================
+// ANALYTICS (Behavioral event tracking + pre-aggregated metrics)
+// ============================================================================
+
+enum AnalyticsEventType {
+  // Session & navigation (frontend)
+  SESSION_STARTED
+  PAGE_VIEWED
+  SESSION_ENDED
+
+  // Accommodation & search (frontend)
+  SEARCH_PERFORMED
+  ACCOMMODATION_VIEWED
+  RATE_PLAN_SELECTED
+
+  // Product & addon (frontend)
+  PRODUCT_VIEWED
+  ADDON_VIEWED
+  ADDON_ADDED
+  ADDON_REMOVED
+
+  // Checkout funnel (frontend)
+  CHECKOUT_STARTED
+  CHECKOUT_COMPLETED
+  CHECKOUT_ABANDONED
+
+  // Commerce — server-side only, never emitted from frontend
+  ORDER_CREATED
+  ORDER_PAID
+  ORDER_CANCELLED
+  ORDER_REFUNDED
+}
+
+enum AnalyticsMetric {
+  REVENUE
+  SESSIONS
+  VISITORS
+  ORDERS
+  AVERAGE_ORDER_VALUE
+  RETURNING_CUSTOMER_RATE
+}
+
+enum AnalyticsDimension {
+  TOTAL
+  CHANNEL
+  CITY
+  DEVICE
+  PRODUCT
+}
+
+enum DeviceType {
+  DESKTOP
+  MOBILE
+  TABLET
+}
+
+/// Normalized geo — one row per unique city.
+/// Events reference this via locationId FK.
+model AnalyticsLocation {
+  id      String @id @default(cuid())
+  country String // ISO 3166-1 alpha-2
+  city    String
+  lat     Float  // City centroid — never exact visitor position
+  lng     Float
+
+  events AnalyticsEvent[]
+
+  @@unique([country, city])
+  @@index([country])
+}
+
+/// Raw event log — append-only, immutable.
+/// Written once. Never updated. Never deleted (except tenant cascade).
+model AnalyticsEvent {
+  id         String             @id @default(cuid())
+  tenantId   String
+  sessionId  String
+  visitorId  String
+  eventType  AnalyticsEventType
+  occurredAt DateTime
+  receivedAt DateTime           @default(now())
+
+  page      String?
+  referrer  String?
+
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  utmContent  String?
+  utmTerm     String?
+
+  deviceType DeviceType @default(DESKTOP)
+
+  locationId String?
+  location   AnalyticsLocation? @relation(fields: [locationId], references: [id])
+
+  payload Json?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, eventType])
+  @@index([tenantId, sessionId])
+  @@index([tenantId, visitorId])
+  @@index([tenantId, occurredAt])
+  @@index([tenantId, occurredAt, eventType])
+}
+
+/// Pre-aggregated metrics — written by cron.
+/// Dashboard reads from here — never from AnalyticsEvent directly.
+model AnalyticsDailyMetric {
+  id             String             @id @default(cuid())
+  tenantId       String
+  date           DateTime
+  metric         AnalyticsMetric
+  dimension      AnalyticsDimension
+  dimensionValue String
+  value          Int
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, date, metric, dimension, dimensionValue])
+  @@index([tenantId, date])
+  @@index([tenantId, metric, date])
+  @@index([tenantId, dimension, date])
 }

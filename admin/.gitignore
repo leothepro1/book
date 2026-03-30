@@ -44,3 +44,6 @@ next-env.d.ts
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# GeoLite2 database (too large for git, downloaded at build time)
+lib/geo/GeoLite2-City.mmdb

@@ -22,6 +22,7 @@ import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { resolveProduct } from "@/app/_lib/products/resolve";
 import { resolveAccommodationPrice, AccommodationPriceError } from "@/app/_lib/accommodations";
+import { emitAnalyticsEvent } from "@/app/_lib/analytics";
 import { resolveAddonLineItems, AddonValidationError } from "@/app/_lib/accommodations/addons";
 import type { ResolvedAddonLineItem } from "@/app/_lib/accommodations/addons";
 import { nextOrderNumber } from "@/app/_lib/orders/sequence";
@@ -314,6 +315,20 @@ export async function POST(req: Request) {
     }
 
     return newOrder;
+  });
+
+  // Emit analytics event — fire-and-forget, OUTSIDE transaction
+  void emitAnalyticsEvent({
+    tenantId: tenant.id,
+    eventType: "ORDER_CREATED",
+    payload: {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      orderType: "ACCOMMODATION",
+      totalAmount: order.totalAmount,
+      currency: order.currency,
+      sourceChannel: "direct",
+    },
   });
 
   // ── Calculate platform fee ────────────────────────────────────

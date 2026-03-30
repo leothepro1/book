@@ -105,6 +105,7 @@ export default async function CheckoutPage({
         currency,
         ratePlanName,
       }}
+      tenantId={tenant.id}
       productSlug={productSlug}
       checkIn={checkIn}
       checkOut={checkOut}

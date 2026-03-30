@@ -19,6 +19,7 @@
     { "path": "/api/cron/segment-sync", "schedule": "0 3 * * *" },
     { "path": "/api/cron/screenshot-pending", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/rum-aggregate", "schedule": "0 1 * * *" },
-    { "path": "/api/cron/sync-discount-statuses", "schedule": "*/15 * * * *" }
+    { "path": "/api/cron/sync-discount-statuses", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/aggregate-analytics", "schedule": "*/5 * * * *" }
   ]
 }

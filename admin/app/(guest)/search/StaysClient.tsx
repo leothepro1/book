@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { formatDateRange } from "@/app/_lib/search/dates";
+import { track } from "@/app/_lib/analytics/client";
 import "./stays.css";
 
 // ── Types ──────────────────────────────────────────────────────
@@ -235,6 +236,16 @@ export function StaysClient({
         const json = await res.json();
         setData(json);
         setError(null);
+        track({
+          tenantId,
+          eventType: "SEARCH_PERFORMED",
+          payload: {
+            checkIn,
+            checkOut,
+            guests,
+            resultCount: json.results?.length ?? 0,
+          },
+        });
       })
       .catch(() => { if (!cancelled) setError("Kunde inte hämta tillgänglighet. Försök igen."); })
       .finally(() => { if (!cancelled) setLoaded(true); });

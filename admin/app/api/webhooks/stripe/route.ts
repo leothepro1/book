@@ -29,6 +29,7 @@ import { adjustInventoryInTx } from "@/app/_lib/products/inventory";
 import { canTransition, canTransitionFinancial, canTransitionFulfillment } from "@/app/_lib/orders/types";
 import { log } from "@/app/_lib/logger";
 import { createPmsBookingAfterPayment } from "@/app/_lib/accommodations/create-pms-booking";
+import { emitAnalyticsEvent } from "@/app/_lib/analytics";
 import type Stripe from "stripe";
 import { upsertGuestAccountFromOrder } from "@/app/_lib/guest-auth/account";
 import { createGiftCard } from "@/app/_lib/gift-cards/create";
@@ -209,6 +210,18 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         orderId: order.id,
       });
     }
+  });
+
+  // Emit analytics — fire-and-forget, OUTSIDE transaction
+  void emitAnalyticsEvent({
+    tenantId: order.tenantId,
+    eventType: "ORDER_PAID",
+    payload: {
+      orderId: order.id,
+      totalAmount: order.totalAmount,
+      currency: order.currency,
+      paymentMethod: order.paymentMethod,
+    },
   });
 
   // Step B — Consume inventory (separate operation, after Step A commits)
@@ -424,6 +437,17 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
       data: { status: "REJECTED", resolvedAt: new Date() },
     });
   });
+
+  // Emit analytics — fire-and-forget, OUTSIDE transaction
+  void emitAnalyticsEvent({
+    tenantId: order.tenantId,
+    eventType: "ORDER_CANCELLED",
+    payload: {
+      orderId: order.id,
+      totalAmount: order.totalAmount,
+      currency: order.currency,
+    },
+  });
 }
 
 // ── charge.refunded ────────────────────────────────────────────
@@ -483,6 +507,17 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
       tenantId: order.tenantId,
       reason: "REFUNDED",
     });
+  });
+
+  // Emit analytics — fire-and-forget, OUTSIDE transaction
+  void emitAnalyticsEvent({
+    tenantId: order.tenantId,
+    eventType: "ORDER_REFUNDED",
+    payload: {
+      orderId: order.id,
+      refundAmount: charge.amount_refunded,
+      currency: charge.currency.toUpperCase(),
+    },
   });
 
   // Emit platform event for app webhooks (non-blocking)
@@ -568,6 +603,18 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
         orderId: order.id,
       });
     }
+  });
+
+  // Emit analytics — fire-and-forget, OUTSIDE transaction
+  void emitAnalyticsEvent({
+    tenantId: order.tenantId,
+    eventType: "ORDER_PAID",
+    payload: {
+      orderId: order.id,
+      totalAmount: order.totalAmount,
+      currency: order.currency,
+      paymentMethod: order.paymentMethod,
+    },
   });
 
   // Segment sync — re-evaluate after payment (non-blocking)

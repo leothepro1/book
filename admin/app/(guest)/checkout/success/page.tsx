@@ -4,6 +4,7 @@ import { resolveTenantFromHost } from "../../_lib/tenant/resolveTenantFromHost";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { format, parseISO } from "date-fns";
 import { sv } from "date-fns/locale";
+import { CheckoutCompletedTracker } from "./CheckoutCompletedTracker";
 
 export const dynamic = "force-dynamic";
 
@@ -38,11 +39,23 @@ export default async function CheckoutSuccessPage({
 
   const isPending = order.status === "PENDING";
   const meta = order.metadata as Record<string, unknown> | null;
+
+  // Track CHECKOUT_COMPLETED (client-side, fires once on mount)
+  const trackerElement = !isPending ? (
+    <CheckoutCompletedTracker
+      tenantId={tenant.id}
+      orderId={order.id}
+      orderNumber={order.orderNumber}
+      totalAmount={order.totalAmount}
+    />
+  ) : null;
   const checkIn = meta?.checkIn as string | undefined;
   const checkOut = meta?.checkOut as string | undefined;
   const guests = meta?.guests as number | undefined;
 
   return (
+    <>
+    {trackerElement}
     <div style={{ maxWidth: 600, margin: "0 auto", padding: "clamp(2rem, 5vw, 4rem) 1.5rem", fontFamily: '"Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif' }}>
       <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
         {isPending ? (
@@ -190,5 +203,6 @@ export default async function CheckoutSuccessPage({
         </div>
       )}
     </div>
+    </>
   );
 }

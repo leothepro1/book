@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  outputFileTracingIncludes: {
+    "/api/**": ["./lib/geo/**"],
+  },
   experimental: {
     ...(isDev && { staleTimes: { dynamic: 0, static: 30 } }),
     serverActions: {

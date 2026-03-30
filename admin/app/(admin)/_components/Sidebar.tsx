@@ -13,7 +13,11 @@ import type { SidebarApp } from '@/app/_lib/apps/actions';
 const NAV_ITEMS = [
   { href: '/home', label: 'Startsida', icon: 'home_app_logo' },
   { href: '/orders', label: 'Ordrar', icon: 'inbox' },
-  { href: '/dashboard/analytics', label: 'Analys', icon: 'leaderboard' },
+  { href: '/analytics', label: 'Analys', icon: 'bar_chart' },
+];
+
+const ANALYTICS_ITEMS = [
+  { href: '/live', label: 'Live-vy' },
 ];
 
 const ORDER_ITEMS = [
@@ -59,6 +63,8 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
   const isOrderAccordionOpen = isOrdersLinkActive || ORDER_ITEMS.some((item) => isActive(item.href));
   const isCustomersLinkActive = pathname === '/customers' || (pathname.startsWith('/customers/') && !pathname.startsWith('/customers/segments'));
   const isCustomerAccordionOpen = isCustomersLinkActive || CUSTOMER_ITEMS.some((item) => isActive(item.href));
+  const isAnalyticsLinkActive = pathname === '/analytics';
+  const isAnalyticsAccordionOpen = isAnalyticsLinkActive || ANALYTICS_ITEMS.some((item) => isActive(item.href));
   const isProductsLinkActive = isActive('/products');
   const isProductAccordionOpen = isProductsLinkActive || PRODUCT_ITEMS.some((item) => isActive(item.href));
   const isAccommodationsLinkActive = pathname === '/accommodations' || (pathname.startsWith('/accommodations/') && !pathname.startsWith('/accommodation-categories'));
@@ -537,40 +543,80 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
           );
         })()}
 
-        {/* Bottom nav items (Analys) */}
-        {NAV_ITEMS.filter((_, i) => i >= 2).map((item) => {
-          const active = isActive(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={(e) => guardedClick(e, item.href)}
-              className={`flex items-center gap-3 ${
-                active
-                  ? 'bg-[#e3e3e3] text-[#303030]'
-                  : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
-              }`}
-              style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
+        {/* Analys — accordion with sub-items */}
+        <div>
+          <Link
+            href="/analytics"
+            onClick={(e) => guardedClick(e, '/analytics')}
+            className={`flex items-center gap-3 ${
+              isAnalyticsLinkActive
+                ? 'bg-[#e3e3e3] text-[#303030]'
+                : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
+            }`}
+            style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
+          >
+            <span
+              className="material-symbols-rounded flex-shrink-0"
+              style={{
+                fontSize: 18,
+                fontVariationSettings: isAnalyticsAccordionOpen
+                  ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
+                  : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
+              }}
             >
-              <span
-                className="material-symbols-rounded flex-shrink-0"
-                style={{
-                  fontSize: 18,
-                  fontVariationSettings: active
-                    ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                    : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-                }}
-              >
-                {item.icon}
-              </span>
-              <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-                isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-              }`} style={{ fontWeight: active ? 600 : 500 }}>
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
+              travel_explore
+            </span>
+            <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+            }`} style={{ fontWeight: isAnalyticsLinkActive ? 600 : 500 }}>
+              Analys
+            </span>
+          </Link>
+
+          <div className={`overflow-hidden transition-all duration-300 ${
+            isAnalyticsAccordionOpen && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+          }`}>
+            <div className="flex flex-col">
+              {ANALYTICS_ITEMS.map((sub, idx) => {
+                const subActive = isActive(sub.href);
+                const activeIdx = ANALYTICS_ITEMS.findIndex((s) => isActive(s.href));
+                const hasActiveSub = activeIdx !== -1;
+                const showLine = hasActiveSub && !subActive && idx < activeIdx;
+
+                return (
+                  <Link
+                    key={sub.href}
+                    href={sub.href}
+                    onClick={(e) => guardedClick(e, sub.href)}
+                    className={`relative block text-[13px] ${
+                      subActive
+                        ? 'bg-[#e3e3e3] text-[#303030]'
+                        : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
+                    }`}
+                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontWeight: subActive ? 600 : 500 }}
+                  >
+                    {subActive ? (
+                      <img
+                        src={CONNECTOR_SVG}
+                        alt=""
+                        className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+                        style={{ width: 21, height: 28, left: 7.5, marginTop: -1.5 }}
+                      />
+                    ) : showLine ? (
+                      <img
+                        src={LINE_SVG}
+                        alt=""
+                        className="absolute pointer-events-none"
+                        style={{ width: 21, left: 7.5, top: -6, bottom: -6, height: 'calc(100% + 12px)' }}
+                      />
+                    ) : null}
+                    {sub.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
 
         {/* Försäljningskanaler */}
         {!isCollapsed && (
