@@ -25,10 +25,13 @@ const CUSTOMER_ITEMS = [
 ];
 
 const PRODUCT_ITEMS = [
-  { href: '/accommodations', label: 'Boenden' },
   { href: '/collections', label: 'Produktserier' },
   { href: '/inventory', label: 'Lager' },
   { href: '/gift-cards', label: 'Presentkort' },
+];
+
+const ACCOMMODATION_ITEMS = [
+  { href: '/accommodation-categories', label: 'Boendetyper' },
 ];
 
 const CONTENT_ITEMS = [
@@ -58,6 +61,8 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
   const isCustomerAccordionOpen = isCustomersLinkActive || CUSTOMER_ITEMS.some((item) => isActive(item.href));
   const isProductsLinkActive = isActive('/products');
   const isProductAccordionOpen = isProductsLinkActive || PRODUCT_ITEMS.some((item) => isActive(item.href));
+  const isAccommodationsLinkActive = pathname === '/accommodations' || (pathname.startsWith('/accommodations/') && !pathname.startsWith('/accommodation-categories'));
+  const isAccommodationAccordionOpen = isAccommodationsLinkActive || ACCOMMODATION_ITEMS.some((item) => isActive(item.href));
   const isContentActive = CONTENT_ITEMS.some((item) => isActive(item.href));
 
   const guardedClick = (e: MouseEvent<HTMLAnchorElement>, href: string) => {
@@ -317,39 +322,80 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
           </div>
         </div>
 
-        {/* Boenden — standalone link */}
-        {(() => {
-          const active = isActive('/properties');
-          return (
-            <Link
-              href="/properties"
-              onClick={(e) => guardedClick(e, '/properties')}
-              className={`flex items-center gap-3 ${
-                active
-                  ? 'bg-[#e3e3e3] text-[#303030]'
-                  : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
-              }`}
-              style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
+        {/* Boenden — accordion with sub-items */}
+        <div>
+          <Link
+            href="/accommodations"
+            onClick={(e) => guardedClick(e, '/accommodations')}
+            className={`flex items-center gap-3 ${
+              isAccommodationsLinkActive
+                ? 'bg-[#e3e3e3] text-[#303030]'
+                : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
+            }`}
+            style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
+          >
+            <span
+              className="material-symbols-rounded flex-shrink-0"
+              style={{
+                fontSize: 18,
+                fontVariationSettings: isAccommodationAccordionOpen
+                  ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
+                  : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
+              }}
             >
-              <span
-                className="material-symbols-rounded flex-shrink-0"
-                style={{
-                  fontSize: 18,
-                  fontVariationSettings: active
-                    ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                    : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-                }}
-              >
-                villa
-              </span>
-              <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-                isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-              }`} style={{ fontWeight: active ? 600 : 500 }}>
-                Boenden
-              </span>
-            </Link>
-          );
-        })()}
+              villa
+            </span>
+            <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+            }`} style={{ fontWeight: isAccommodationsLinkActive ? 600 : 500 }}>
+              Boenden
+            </span>
+          </Link>
+
+          <div className={`overflow-hidden transition-all duration-300 ${
+            isAccommodationAccordionOpen && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+          }`}>
+            <div className="flex flex-col">
+              {ACCOMMODATION_ITEMS.map((sub, idx) => {
+                const subActive = isActive(sub.href);
+                const activeIdx = ACCOMMODATION_ITEMS.findIndex((s) => isActive(s.href));
+                const hasActiveSub = activeIdx !== -1;
+                const showLine = hasActiveSub && !subActive && idx < activeIdx;
+
+                return (
+                  <Link
+                    key={sub.href}
+                    href={sub.href}
+                    onClick={(e) => guardedClick(e, sub.href)}
+                    className={`relative block text-[13px] ${
+                      subActive
+                        ? 'bg-[#e3e3e3] text-[#303030]'
+                        : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
+                    }`}
+                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontWeight: subActive ? 600 : 500 }}
+                  >
+                    {subActive ? (
+                      <img
+                        src={CONNECTOR_SVG}
+                        alt=""
+                        className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+                        style={{ width: 21, height: 28, left: 7.5, marginTop: -1.5 }}
+                      />
+                    ) : showLine ? (
+                      <img
+                        src={LINE_SVG}
+                        alt=""
+                        className="absolute pointer-events-none"
+                        style={{ width: 21, left: 7.5, top: -6, bottom: -6, height: 'calc(100% + 12px)' }}
+                      />
+                    ) : null}
+                    {sub.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
 
         {/* Rabatter — standalone link */}
         {(() => {

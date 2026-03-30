@@ -56,6 +56,9 @@ export function resolveAccommodation(
     totalUnits: accommodation.totalUnits,
     baseAvailability: accommodation.baseAvailability,
 
+    // Category membership
+    categoryIds: accommodation.categoryItems.map((ci) => ci.categoryId),
+
     // Timestamps
     sortOrder: accommodation.sortOrder,
     createdAt: accommodation.createdAt,

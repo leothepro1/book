@@ -15,6 +15,7 @@ import type {
   AccommodationFacility,
   AccommodationMedia,
   AccommodationUnit,
+  AccommodationCategoryItem,
   BedConfiguration,
   RatePlan,
   AccommodationRestriction,
@@ -49,6 +50,7 @@ export type AccommodationWithRelations = Accommodation & {
   restrictions: AccommodationRestriction[];
   media: AccommodationMedia[];
   units: AccommodationUnit[];
+  categoryItems: AccommodationCategoryItem[];
 };
 
 // ── Resolved/display type — what all UI and business logic consumes ──
@@ -103,6 +105,9 @@ export type ResolvedAccommodation = {
   restrictions: ResolvedRestriction[];
   media: ResolvedMedia[];
   units: ResolvedUnit[];
+
+  // Category membership
+  categoryIds: string[];
 
   // Raw fields (kept for internal use only)
   sortOrder: number;
@@ -265,5 +270,10 @@ export const ACCOMMODATION_SELECT = {
       status: true,
     },
     orderBy: { name: "asc" as const },
+  },
+  categoryItems: {
+    select: {
+      categoryId: true,
+    },
   },
 } as const;

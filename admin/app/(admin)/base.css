@@ -15,7 +15,7 @@
   --admin-surface:       #FFFFFF;
   --admin-surface-hover: #f7f7f7;
   --admin-surface-active:#f3f3f3;
-  --admin-surface-muted: #f0efed;
+  --admin-surface-muted: #F3F3F4;
   --admin-surface-sunken:#ECEBEA;
 
   /* Sidebar */
@@ -736,7 +736,7 @@ textarea::placeholder {
 
 .admin-dropdown__item--active {
   font-weight: 500;
-  background: #EBEBEB;
+  background: #f3f3f4;
 }
 
 /* Check icon inside active item */
@@ -1414,6 +1414,70 @@ textarea::placeholder {
     display: inline-flex;
 }
 
+
+/* ── Shared Checkbox (fac-check) ── */
+
+.fac-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--admin-text);
+  background: none;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+}
+
+.fac-check-row:hover .fac-check {
+  border-color: #999;
+}
+
+.fac-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid var(--admin-border);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+  color: #fff;
+}
+
+.fac-check--on {
+  background: var(--admin-accent);
+  border-color: var(--admin-accent);
+}
+
+.fac-check__svg {
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.fac-check--on .fac-check__svg {
+  opacity: 1;
+}
+
+.fac-check__svg path {
+  stroke-dasharray: 14;
+  stroke-dashoffset: 0;
+}
+
+.fac-check--on .fac-check__svg path {
+  stroke-dasharray: 14;
+  animation: fac-draw 0.25s ease forwards;
+}
+
+@keyframes fac-draw {
+  from { stroke-dashoffset: 14; }
+  to   { stroke-dashoffset: 0; }
+}
 
 /* ══════════════════════════════════════════════════════════════
    Shared field design tokens (sf-*)

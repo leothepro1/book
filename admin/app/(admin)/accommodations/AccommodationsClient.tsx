@@ -8,18 +8,6 @@ import type { ResolvedAccommodation } from "@/app/_lib/accommodations/types";
 
 // ── Helpers ──────────────────────────────────────────────────
 
-const TYPE_LABELS: Record<string, string> = {
-  HOTEL: "Hotell",
-  CABIN: "Stuga",
-  CAMPING: "Camping",
-  APARTMENT: "Lägenhet",
-  PITCH: "Plats",
-};
-
-function typeLabel(type: string): string {
-  return TYPE_LABELS[type] ?? type;
-}
-
 function statusLabel(status: string): { label: string; className: string } {
   switch (status) {
     case "ACTIVE": return { label: "Aktiv", className: "accommodations-status--active" };
@@ -38,34 +26,27 @@ function formatPrice(amount: number, currency: string): string {
   return formatPriceDisplay(amount, currency) + (currency === "SEK" ? " kr" : "");
 }
 
-// ── Filter types ────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────
 
-type TypeFilter = "ALL" | "HOTEL" | "CABIN" | "CAMPING" | "APARTMENT" | "PITCH";
-
-const TYPE_FILTERS: Array<{ key: TypeFilter; label: string }> = [
-  { key: "ALL", label: "Alla" },
-  { key: "HOTEL", label: "Hotell" },
-  { key: "CABIN", label: "Stugor" },
-  { key: "CAMPING", label: "Camping" },
-  { key: "APARTMENT", label: "Lägenheter" },
-  { key: "PITCH", label: "Platser" },
-];
+type CategoryTab = { id: string; title: string };
 
 // ── Component ────────────────────────────────────────────────
 
 export default function AccommodationsClient({
   accommodations,
+  categories,
   onSync,
 }: {
   accommodations: ResolvedAccommodation[];
+  categories: CategoryTab[];
   onSync?: () => void;
 }) {
   const router = useRouter();
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL");
+  const [activeCategory, setActiveCategory] = useState<string>("ALL");
 
   const filtered = accommodations.filter((a) => {
-    if (typeFilter !== "ALL" && a.accommodationType !== typeFilter) return false;
-    return true;
+    if (activeCategory === "ALL") return true;
+    return a.categoryIds.includes(activeCategory);
   });
 
   // ── Empty state ──
@@ -97,7 +78,6 @@ export default function AccommodationsClient({
     <div className="files-column-headers">
       <span className="accommodations-col--thumb" />
       <span className="accommodations-col--name">Boende</span>
-      <span className="accommodations-col--detail">Typ</span>
       <span className="accommodations-col--detail">Kapacitet</span>
       <span className="accommodations-col--detail accommodations-col--right">Pris/natt</span>
       <span className="accommodations-col--detail">Status</span>
@@ -106,18 +86,27 @@ export default function AccommodationsClient({
 
   return (
     <>
-      <div className="accommodations-filter-bar">
-        {TYPE_FILTERS.map((f) => (
+      {categories.length > 0 && (
+        <div className="accommodations-filter-bar">
           <button
-            key={f.key}
             type="button"
-            className={`accommodations-filter-btn${typeFilter === f.key ? " accommodations-filter-btn--active" : ""}`}
-            onClick={() => setTypeFilter(f.key)}
+            className={`accommodations-filter-btn${activeCategory === "ALL" ? " accommodations-filter-btn--active" : ""}`}
+            onClick={() => setActiveCategory("ALL")}
           >
-            {f.label}
+            Alla
           </button>
-        ))}
-      </div>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              className={`accommodations-filter-btn${activeCategory === cat.id ? " accommodations-filter-btn--active" : ""}`}
+              onClick={() => setActiveCategory(cat.id)}
+            >
+              {cat.title}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="accommodations-inner">
         {columnHeader}
 
@@ -143,9 +132,6 @@ export default function AccommodationsClient({
               <div className="accommodations-col--name">
                 <span className="accommodations-row__title">{acc.displayName}</span>
                 <span className="accommodations-row__slug">{acc.slug}</span>
-              </div>
-              <div className="accommodations-col--detail">
-                <span className="accommodations-type">{typeLabel(acc.accommodationType)}</span>
               </div>
               <div className="accommodations-col--detail">
                 {capacityLabel(acc.minGuests, acc.maxGuests)}

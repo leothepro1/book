@@ -6,9 +6,11 @@ import type { ResolvedAccommodation } from "@/app/_lib/accommodations/types";
 
 export default function AccommodationsPageClient({
   accommodations,
+  categories,
   tenantId,
 }: {
   accommodations: ResolvedAccommodation[];
+  categories: Array<{ id: string; title: string }>;
   tenantId: string;
 }) {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -35,7 +37,7 @@ export default function AccommodationsPageClient({
       <div className="admin-editor">
         <div className="admin-header">
           <h1 className="admin-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className="material-symbols-rounded" style={{ fontSize: 22 }}>bed</span>
+            <span className="material-symbols-rounded" style={{ fontSize: 22 }}>villa</span>
             Boenden
           </h1>
           <div className="admin-actions">
@@ -52,6 +54,7 @@ export default function AccommodationsPageClient({
         <div className="admin-content">
           <AccommodationsClient
             accommodations={accommodations}
+            categories={categories}
             onSync={handleSync}
           />
         </div>

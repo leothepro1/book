@@ -531,6 +531,7 @@ model Tenant {
   rumRateLimit        RumRateLimit?
   discounts           Discount[]
   accommodations      Accommodation[]
+  accommodationCategories AccommodationCategory[]
 
   // Feature toggle — tenant can disable all discount functionality
   discountsEnabled    Boolean              @default(true)
@@ -1667,6 +1668,7 @@ model Accommodation {
   restrictions AccommodationRestriction[]
   media        AccommodationMedia[]
   bookings     Booking[]
+  categoryItems AccommodationCategoryItem[]
 
   @@unique([tenantId, slug])
   @@unique([tenantId, externalId, pmsProvider])
@@ -1807,6 +1809,54 @@ model AccommodationMedia {
 
   @@index([accommodationId])
   @@index([accommodationId, sortOrder])
+}
+
+// ============================================================================
+// ACCOMMODATION CATEGORIES (Tenant-defined grouping of accommodations)
+// ============================================================================
+
+/// Tenant-defined category for grouping accommodations.
+/// Parallel to ProductCollection — manual grouping with optional PMS-seed.
+/// Examples: "Hotell", "Stugor", "Premium camping", "Sommarpaket"
+model AccommodationCategory {
+  id          String   @id @default(cuid())
+  tenantId    String
+  title       String
+  description String   @db.Text @default("")
+  slug        String
+  imageUrl    String?
+  status      AccommodationStatus @default(ACTIVE)
+  sortOrder   Int      @default(0)
+  /// PMS type string that seeded this category (e.g. "HOTEL").
+  /// Null for manually created categories. Never overwritten by sync.
+  pmsRef      String?
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items  AccommodationCategoryItem[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, sortOrder])
+}
+
+/// Join table: Accommodation ↔ AccommodationCategory (many-to-many with sort order).
+model AccommodationCategoryItem {
+  id              String   @id @default(cuid())
+  categoryId      String
+  accommodationId String
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  category      AccommodationCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  accommodation Accommodation         @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, accommodationId])
+  @@index([categoryId, sortOrder])
+  @@index([accommodationId])
 }
 
 // ============================================================================

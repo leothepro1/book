@@ -209,6 +209,14 @@ export async function syncAccommodations(
     }
   }
 
+  // Auto-seed AccommodationCategory records from accommodation types
+  try {
+    await seedAccommodationCategories(tenantId, categories);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log("error", "sync_accommodations.seed_categories_failed", { tenantId, error: msg });
+  }
+
   log("info", "sync_accommodations.complete", {
     tenantId,
     created: result.created,
@@ -377,6 +385,94 @@ function mapFacilities(
   }
 
   return mapped;
+}
+
+// ── Category seeding ─────────────────────────────────────────────
+
+const ACCOMMODATION_TYPE_SEED_LABELS: Record<string, string> = {
+  HOTEL: "Hotell",
+  CABIN: "Stugor",
+  CAMPING: "Camping",
+  APARTMENT: "Lägenheter",
+  PITCH: "Platser",
+};
+
+async function seedAccommodationCategories(
+  tenantId: string,
+  categories: RoomCategory[],
+): Promise<void> {
+  // 1. Collect unique types
+  const types = new Set<string>();
+  for (const cat of categories) {
+    const mapped = ACCOMMODATION_TYPE_MAP[cat.type];
+    if (mapped) types.add(mapped);
+  }
+
+  // 2. Ensure one AccommodationCategory per type
+  for (const type of types) {
+    const existing = await prisma.accommodationCategory.findFirst({
+      where: { tenantId, pmsRef: type },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      const title = ACCOMMODATION_TYPE_SEED_LABELS[type] ?? type;
+      const slug = await resolveUniqueCategorySlug(tenantId, slugify(title));
+
+      await prisma.accommodationCategory.create({
+        data: {
+          tenantId,
+          title,
+          slug,
+          pmsRef: type,
+          status: "ACTIVE",
+        },
+      });
+    }
+  }
+
+  // 3. Sync membership — link accommodations to their type-based category
+  const allAccommodations = await prisma.accommodation.findMany({
+    where: { tenantId, archivedAt: null },
+    select: { id: true, accommodationType: true },
+  });
+
+  const allCategories = await prisma.accommodationCategory.findMany({
+    where: { tenantId, pmsRef: { not: null } },
+    select: { id: true, pmsRef: true },
+  });
+
+  const catByRef = new Map(allCategories.map((c) => [c.pmsRef!, c.id]));
+
+  for (const acc of allAccommodations) {
+    const catId = catByRef.get(acc.accommodationType);
+    if (!catId) continue;
+
+    // Upsert membership (skipDuplicates handles existing links)
+    await prisma.accommodationCategoryItem.upsert({
+      where: {
+        categoryId_accommodationId: { categoryId: catId, accommodationId: acc.id },
+      },
+      create: { categoryId: catId, accommodationId: acc.id },
+      update: {},
+    });
+  }
+}
+
+async function resolveUniqueCategorySlug(
+  tenantId: string,
+  baseSlug: string,
+): Promise<string> {
+  const slug = baseSlug || "kategori";
+  for (let i = 0; i < 10; i++) {
+    const candidate = i === 0 ? slug : `${slug}-${i}`;
+    const conflict = await prisma.accommodationCategory.findUnique({
+      where: { tenantId_slug: { tenantId, slug: candidate } },
+      select: { id: true },
+    });
+    if (!conflict) return candidate;
+  }
+  return `${slug}-${Date.now().toString(36)}`;
 }
 
 // ── Slug helpers ──────────────────────────────────────────────────

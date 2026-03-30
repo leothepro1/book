@@ -15,6 +15,12 @@ export type AccommodationUpdateInput = {
   descriptionOverride?: string | null;
   status?: AccommodationStatus;
   externalCode?: string | null;
+  maxGuests?: number;
+  minGuests?: number;
+  extraBeds?: number;
+  roomSizeSqm?: number | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
   facilities?: Array<{
     facilityType: FacilityType;
     source: FacilitySource;
@@ -23,6 +29,11 @@ export type AccommodationUpdateInput = {
   bedConfigs?: Array<{
     bedType: BedType;
     quantity: number;
+  }>;
+  media?: Array<{
+    url: string;
+    altText: string | null;
+    sortOrder: number;
   }>;
 };
 
@@ -45,7 +56,7 @@ export async function updateAccommodation(
   if (!existing) return { ok: false, error: "Boendet hittades inte" };
 
   await prisma.$transaction(async (tx) => {
-    // Update overridable fields
+    // Update overridable fields + capacity
     await tx.accommodation.update({
       where: { id },
       data: {
@@ -53,6 +64,12 @@ export async function updateAccommodation(
         ...(data.descriptionOverride !== undefined && { descriptionOverride: data.descriptionOverride }),
         ...(data.status !== undefined && { status: data.status }),
         ...(data.externalCode !== undefined && { externalCode: data.externalCode }),
+        ...(data.maxGuests !== undefined && { maxGuests: data.maxGuests }),
+        ...(data.minGuests !== undefined && { minGuests: data.minGuests }),
+        ...(data.extraBeds !== undefined && { extraBeds: data.extraBeds }),
+        ...(data.roomSizeSqm !== undefined && { roomSizeSqm: data.roomSizeSqm }),
+        ...(data.bedrooms !== undefined && { bedrooms: data.bedrooms }),
+        ...(data.bathrooms !== undefined && { bathrooms: data.bathrooms }),
       },
     });
 
@@ -98,6 +115,25 @@ export async function updateAccommodation(
             quantity: b.quantity,
           })),
           skipDuplicates: true,
+        });
+      }
+    }
+
+    // Sync media — delete all MANUAL, recreate from input
+    if (data.media) {
+      await tx.accommodationMedia.deleteMany({
+        where: { accommodationId: id, source: "MANUAL" },
+      });
+
+      if (data.media.length > 0) {
+        await tx.accommodationMedia.createMany({
+          data: data.media.map((m) => ({
+            accommodationId: id,
+            url: m.url,
+            altText: m.altText,
+            sortOrder: m.sortOrder,
+            source: "MANUAL" as const,
+          })),
         });
       }
     }

@@ -749,18 +749,12 @@ export default function NewDiscountPage() {
               <div className="pf-card-header" style={{ marginBottom: 12 }}>
                 <span className="pf-card-title">Maximalt antal rabattanvändningar</span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: hasUsageLimit ? 8 : 10 }}>
-                <button
-                  type="button"
-                  className={`admin-toggle${hasUsageLimit ? " admin-toggle-on" : ""}`}
-                  onClick={() => { setHasUsageLimit(!hasUsageLimit); markDirty(); }}
-                >
-                  <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-rounded">check</span>
-                  <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-rounded">remove</span>
-                  <span className="admin-toggle-thumb" />
-                </button>
-                <span style={{ fontSize: 13, color: "var(--admin-text)" }}>Begränsa det totala antalet gånger den här rabatten kan användas</span>
-              </div>
+              <button type="button" className="fac-check-row" style={{ marginBottom: hasUsageLimit ? 8 : 10 }} onClick={() => { setHasUsageLimit(!hasUsageLimit); markDirty(); }}>
+                <span className={`fac-check${hasUsageLimit ? " fac-check--on" : ""}`}>
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none" className="fac-check__svg"><path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </span>
+                Begränsa det totala antalet gånger den här rabatten kan användas
+              </button>
               {hasUsageLimit && (
                 <div className="pf-field" style={{ marginBottom: 10, paddingLeft: 53 }}>
                   <input
@@ -773,18 +767,12 @@ export default function NewDiscountPage() {
                   />
                 </div>
               )}
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <button
-                  type="button"
-                  className={`admin-toggle${oncePerCustomer ? " admin-toggle-on" : ""}`}
-                  onClick={() => { setOncePerCustomer(!oncePerCustomer); markDirty(); }}
-                >
-                  <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-rounded">check</span>
-                  <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-rounded">remove</span>
-                  <span className="admin-toggle-thumb" />
-                </button>
-                <span style={{ fontSize: 13, color: "var(--admin-text)" }}>Begränsa till en användning per kund</span>
-              </div>
+              <button type="button" className="fac-check-row" onClick={() => { setOncePerCustomer(!oncePerCustomer); markDirty(); }}>
+                <span className={`fac-check${oncePerCustomer ? " fac-check--on" : ""}`}>
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none" className="fac-check__svg"><path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </span>
+                Begränsa till en användning per kund
+              </button>
             </div>
 
             {/* Card 7: Kombinationer */}
@@ -792,30 +780,18 @@ export default function NewDiscountPage() {
               <div className="pf-card-header" style={{ marginBottom: 12 }}>
                 <span className="pf-card-title">Kombinationer</span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <button
-                  type="button"
-                  className={`admin-toggle${combinesProduct ? " admin-toggle-on" : ""}`}
-                  onClick={() => { setCombinesProduct(!combinesProduct); markDirty(); }}
-                >
-                  <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-rounded">check</span>
-                  <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-rounded">remove</span>
-                  <span className="admin-toggle-thumb" />
-                </button>
-                <span style={{ fontSize: 13, color: "var(--admin-text)" }}>Kombineras med produktrabatter</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <button
-                  type="button"
-                  className={`admin-toggle${combinesOrder ? " admin-toggle-on" : ""}`}
-                  onClick={() => { setCombinesOrder(!combinesOrder); markDirty(); }}
-                >
-                  <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-rounded">check</span>
-                  <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-rounded">remove</span>
-                  <span className="admin-toggle-thumb" />
-                </button>
-                <span style={{ fontSize: 13, color: "var(--admin-text)" }}>Kombineras med orderrabatter</span>
-              </div>
+              <button type="button" className="fac-check-row" style={{ marginBottom: 10 }} onClick={() => { setCombinesProduct(!combinesProduct); markDirty(); }}>
+                <span className={`fac-check${combinesProduct ? " fac-check--on" : ""}`}>
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none" className="fac-check__svg"><path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </span>
+                Kombineras med produktrabatter
+              </button>
+              <button type="button" className="fac-check-row" onClick={() => { setCombinesOrder(!combinesOrder); markDirty(); }}>
+                <span className={`fac-check${combinesOrder ? " fac-check--on" : ""}`}>
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none" className="fac-check__svg"><path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </span>
+                Kombineras med orderrabatter
+              </button>
             </div>
 
             {/* Card 8: Aktiva datum */}
@@ -835,17 +811,13 @@ export default function NewDiscountPage() {
                   </div>
                 </div>
               </div>
-              <div className="pf-field" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <button
-                  type="button"
-                  className={`admin-toggle${hasEndDate ? " admin-toggle-on" : ""}`}
-                  onClick={() => { setHasEndDate(!hasEndDate); markDirty(); }}
-                >
-                  <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-rounded">check</span>
-                  <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-rounded">remove</span>
-                  <span className="admin-toggle-thumb" />
+              <div className="pf-field">
+                <button type="button" className="fac-check-row" onClick={() => { setHasEndDate(!hasEndDate); markDirty(); }}>
+                  <span className={`fac-check${hasEndDate ? " fac-check--on" : ""}`}>
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none" className="fac-check__svg"><path d="M1 4L3.5 6.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </span>
+                  Ange slutdatum
                 </button>
-                <span style={{ fontSize: 13, color: "var(--admin-text)" }}>Ange slutdatum</span>
               </div>
               {hasEndDate && (
                 <div className="pf-field">

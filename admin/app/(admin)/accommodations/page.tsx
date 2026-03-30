@@ -15,18 +15,30 @@ export default async function AccommodationsPage() {
 
   const tenantId = tenantData.tenant.id;
 
-  const rows = await prisma.accommodation.findMany({
-    where: { tenantId, archivedAt: null },
-    select: ACCOMMODATION_SELECT,
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-  });
+  const [rows, categoryRows] = await Promise.all([
+    prisma.accommodation.findMany({
+      where: { tenantId, archivedAt: null },
+      select: ACCOMMODATION_SELECT,
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
+    prisma.accommodationCategory.findMany({
+      where: { tenantId, status: "ACTIVE" },
+      orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
+      select: { id: true, title: true, slug: true, sortOrder: true },
+    }),
+  ]);
 
   const accommodations = rows.map((row) =>
     resolveAccommodation(row as unknown as AccommodationWithRelations),
   );
 
-  // Serialize dates for client component
   const serialized = JSON.parse(JSON.stringify(accommodations));
 
-  return <AccommodationsPageClient accommodations={serialized} tenantId={tenantId} />;
+  return (
+    <AccommodationsPageClient
+      accommodations={serialized}
+      categories={categoryRows}
+      tenantId={tenantId}
+    />
+  );
 }
