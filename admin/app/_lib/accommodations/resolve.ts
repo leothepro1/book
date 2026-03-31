@@ -19,6 +19,7 @@ export function resolveAccommodation(
     tenantId: accommodation.tenantId,
     slug: accommodation.slug,
     externalId: accommodation.externalId,
+    externalCode: accommodation.externalCode ?? null,
     pmsProvider: accommodation.pmsProvider,
 
     // Resolved display fields

@@ -62,6 +62,7 @@ export type ResolvedAccommodation = {
   tenantId: string;
   slug: string;
   externalId: string | null;
+  externalCode: string | null;
   pmsProvider: string | null;
 
   // Resolved display fields (override ?? raw)
