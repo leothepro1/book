@@ -512,7 +512,7 @@ async function handleSessionPaymentIntent(
 
   // ── Create Order from session snapshot ──────────────────────
   const orderNumber = await nextOrderNumber(tenantId);
-  const taxRate = getTaxRate("PMS_ACCOMMODATION", "SE");
+  const taxRate = getTaxRate("STANDARD", "SE");
   const taxAmount = taxRate > 0 ? Math.round(totalPrice * taxRate / 10000) : 0;
 
   const order = await prisma.$transaction(async (tx) => {

@@ -127,7 +127,10 @@ export type ElementType =
   | "product-features"
   | "product-price"
   | "product-booking-form"
-  | "add-to-cart";
+  | "add-to-cart"
+  | "accommodation-highlights"
+  | "accommodation-capacity"
+  | "accommodation-facilities";
 
 /**
  * A named settings bundle for an element type.

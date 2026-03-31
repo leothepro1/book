@@ -19,6 +19,7 @@ import type {
   BedConfiguration,
   RatePlan,
   AccommodationRestriction,
+  AccommodationHighlight,
   AccommodationType as PrismaAccommodationType,
   AccommodationStatus as PrismaAccommodationStatus,
   FacilityType as PrismaFacilityType,
@@ -48,6 +49,7 @@ export type AccommodationWithRelations = Accommodation & {
   bedConfigs: BedConfiguration[];
   ratePlans: RatePlan[];
   restrictions: AccommodationRestriction[];
+  highlights: AccommodationHighlight[];
   media: AccommodationMedia[];
   units: AccommodationUnit[];
   categoryItems: AccommodationCategoryItem[];
