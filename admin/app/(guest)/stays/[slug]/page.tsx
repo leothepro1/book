@@ -126,9 +126,9 @@ export default async function RoomDetailPage({
   const locale = await getRequestLocale();
   const config = await getTenantConfig(tenant.id, { locale });
   const booking = await resolveBookingFromToken("preview");
-  const bookingStatus = booking ? getBookingStatus(booking) : { status: "none" as const, label: "" };
-
   if (!booking) return notFound();
+
+  const bookingStatus = getBookingStatus(booking);
 
   return (
     <GuestPageShell config={config}>
