@@ -6,12 +6,7 @@ import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { AppsClient } from "./AppsClient";
 
 // Force registration of all app definitions
-import "@/app/_lib/apps/definitions/google-ads";
-import "@/app/_lib/apps/definitions/meta-ads";
-import "@/app/_lib/apps/definitions/email-marketing";
-import "@/app/_lib/apps/definitions/channel-manager";
-import "@/app/_lib/apps/definitions/revenue-analytics";
-import "@/app/_lib/apps/definitions/guest-crm";
+import "@/app/_lib/apps/definitions";
 
 export const dynamic = "force-dynamic";
 

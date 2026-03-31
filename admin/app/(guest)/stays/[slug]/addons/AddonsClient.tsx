@@ -1,16 +1,36 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import type { AddonProduct, AddonVariant } from "@/app/_lib/accommodations/addons";
 import "./addons.css";
+import "./spot-booking-modal.css";
 
 // ── Types ─────────────────────────────────────────────────────
 
 type Selection = Map<string, Map<string | "__default", number>>;
 // Map<productId, Map<variantId | "__default", quantity>>
+
+export interface SpotAddon {
+  id: string;
+  type: "spot_map";
+  title: string;
+  description: string;
+  imageUrl: string;
+  addonPrice: number;
+  currency: string;
+  spotMapId: string;
+  accommodationCategoryId: string;
+}
+
+export interface SelectedSpot {
+  spotMarkerId: string;
+  accommodationId: string;
+  label: string;
+  addonPrice: number;
+}
 
 interface Snapshot {
   accommodationName: string;
@@ -29,6 +49,7 @@ interface Snapshot {
 interface Props {
   token: string;
   addons: AddonProduct[];
+  spotAddon: SpotAddon | null;
   snapshot: Snapshot;
   backUrl: string;
 }
@@ -235,19 +256,23 @@ function VariantModal({
 
 // ── Main component ────────────────────────────────────────────
 
-export function AddonsClient({ token, addons, snapshot, backUrl }: Props) {
+export function AddonsClient({ token, addons, spotAddon, snapshot, backUrl }: Props) {
   const router = useRouter();
   const [selections, setSelections] = useState<Selection>(new Map());
   const [modalAddon, setModalAddon] = useState<AddonProduct | null>(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedSpot, setSelectedSpot] = useState<SelectedSpot | null>(null);
+  const [spotModalOpen, setSpotModalOpen] = useState(false);
+  const [spotError, setSpotError] = useState<string | null>(null);
 
   const addonTotal = useMemo(
     () => computeAddonTotal(addons, selections, snapshot),
     [addons, selections, snapshot],
   );
-  const grandTotal = snapshot.accommodationTotal + addonTotal;
-  const hasSelections = addonTotal > 0;
+  const spotTotal = selectedSpot ? selectedSpot.addonPrice : 0;
+  const grandTotal = snapshot.accommodationTotal + addonTotal + spotTotal;
+  const hasSelections = addonTotal > 0 || selectedSpot !== null;
 
   // Single-variant inline toggle
   const toggleSingleVariant = useCallback((addon: AddonProduct) => {
@@ -301,7 +326,8 @@ export function AddonsClient({ token, addons, snapshot, backUrl }: Props) {
   // Submit
   const handleContinue = useCallback(async () => {
     setSubmitting(true);
-    const addonPayload: Array<{ productId: string; variantId: string | null; quantity: number }> = [];
+    setSpotError(null);
+    const addonPayload: Array<Record<string, unknown>> = [];
 
     for (const [productId, variantMap] of selections) {
       for (const [key, qty] of variantMap) {
@@ -314,6 +340,17 @@ export function AddonsClient({ token, addons, snapshot, backUrl }: Props) {
       }
     }
 
+    // Include spot selection as special entry
+    if (selectedSpot) {
+      addonPayload.push({
+        type: "spot_map",
+        spotMarkerId: selectedSpot.spotMarkerId,
+        accommodationId: selectedSpot.accommodationId,
+        label: selectedSpot.label,
+        quantity: 1,
+      });
+    }
+
     try {
       const res = await fetch(`/api/portal/checkout/session/${token}/addons`, {
         method: "PATCH",
@@ -323,6 +360,10 @@ export function AddonsClient({ token, addons, snapshot, backUrl }: Props) {
 
       const data = await res.json();
       if (!res.ok) {
+        if (data.code === "SPOT_UNAVAILABLE") {
+          setSpotError(`Plats ${data.label} ar inte langre tillganglig. Valj en annan plats.`);
+          setSelectedSpot(null);
+        }
         setSubmitting(false);
         return;
       }
@@ -330,7 +371,7 @@ export function AddonsClient({ token, addons, snapshot, backUrl }: Props) {
     } catch {
       setSubmitting(false);
     }
-  }, [selections, token, router]);
+  }, [selections, selectedSpot, token, router]);
 
   return (
     <div className="ao">
@@ -361,7 +402,60 @@ export function AddonsClient({ token, addons, snapshot, backUrl }: Props) {
             <p className="ao__empty">Inga tillägg tillgängliga för detta boende.</p>
           )}
 
+          {spotError && (
+            <div className="ao__spot-error">
+              <span className="material-symbols-rounded" style={{ fontSize: 18 }}>error</span>
+              {spotError}
+            </div>
+          )}
+
           <div className="ao__grid">
+            {/* Spot booking virtual card — first in list */}
+            {spotAddon && (
+              <div className={`ao__card${selectedSpot ? " ao__card--selected" : ""}`}>
+                <div className="ao__card-img-wrap" onClick={() => setSpotModalOpen(true)} role="button" tabIndex={0} style={{ cursor: "pointer" }}>
+                  <img src={spotAddon.imageUrl} alt="" className="ao__card-img" style={{ objectFit: "cover" }} />
+                </div>
+                <div className="ao__card-body">
+                  <h3 className="ao__card-title">{spotAddon.title}</h3>
+                  <p className="ao__card-desc">{spotAddon.description}</p>
+                  <div className="ao__card-price">
+                    +{formatPriceDisplay(spotAddon.addonPrice, spotAddon.currency)} {spotAddon.currency} / vistelse
+                  </div>
+
+                  {selectedSpot ? (
+                    <div className="ao__card-selected-row">
+                      <span className="ao__card-selected-count">
+                        Plats {selectedSpot.label} vald ✓
+                      </span>
+                      <button
+                        type="button"
+                        className="ao__card-edit"
+                        onClick={() => setSpotModalOpen(true)}
+                      >
+                        Byt plats
+                      </button>
+                      <button
+                        type="button"
+                        className="ao__card-remove"
+                        onClick={() => setSelectedSpot(null)}
+                      >
+                        Ta bort
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ao__card-add"
+                      onClick={() => setSpotModalOpen(true)}
+                    >
+                      Valj plats
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {addons.map((addon) => {
               const count = getSelectedCount(selections, addon.productId);
               const isSelected = count > 0;
@@ -483,10 +577,17 @@ export function AddonsClient({ token, addons, snapshot, backUrl }: Props) {
                   <span>{formatPriceDisplay(snapshot.accommodationTotal, snapshot.currency)} {snapshot.currency}</span>
                 </div>
 
-                {hasSelections && (
+                {addonTotal > 0 && (
                   <div className="ao__summary-modal-row">
-                    <span>Tillägg</span>
+                    <span>Tillagg</span>
                     <span>{formatPriceDisplay(addonTotal, snapshot.currency)} {snapshot.currency}</span>
+                  </div>
+                )}
+
+                {selectedSpot && spotAddon && (
+                  <div className="ao__summary-modal-row">
+                    <span>Plats {selectedSpot.label}</span>
+                    <span>+{formatPriceDisplay(spotAddon.addonPrice, spotAddon.currency)} {spotAddon.currency}</span>
                   </div>
                 )}
 
@@ -511,6 +612,287 @@ export function AddonsClient({ token, addons, snapshot, backUrl }: Props) {
           onConfirm={(sel) => handleVariantConfirm(modalAddon, sel)}
           onClose={() => setModalAddon(null)}
         />
+      )}
+
+      {/* ── Spot selection modal ──────────────────── */}
+      {spotModalOpen && spotAddon && (
+        <SpotSelectionModal
+          spotAddon={spotAddon}
+          snapshot={snapshot}
+          onSelect={(spot) => {
+            setSelectedSpot(spot);
+            setSpotModalOpen(false);
+            setSpotError(null);
+          }}
+          onClose={() => setSpotModalOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Spot Selection Modal ─────────────────────────────────────
+
+type SpotMarkerData = {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  accommodationId: string;
+  available: boolean;
+};
+
+function SpotSelectionModal({
+  spotAddon,
+  snapshot,
+  onSelect,
+  onClose,
+}: {
+  spotAddon: SpotAddon;
+  snapshot: Snapshot;
+  onSelect: (spot: SelectedSpot) => void;
+  onClose: () => void;
+}) {
+  const [markers, setMarkers] = useState<SpotMarkerData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Pan/zoom state
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const mapRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+
+  // Touch state for pinch-to-zoom
+  const lastTouchDist = useRef<number | null>(null);
+  const lastTouchCenter = useRef<{ x: number; y: number } | null>(null);
+
+  // Fetch map data
+  useEffect(() => {
+    let cancelled = false;
+    const params = new URLSearchParams({
+      accommodationCategoryId: spotAddon.accommodationCategoryId,
+      checkIn: snapshot.checkIn,
+      checkOut: snapshot.checkOut,
+      adults: String(snapshot.adults),
+    });
+
+    fetch(`/api/portal/spot-booking/map?${params}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.spotMap?.markers) {
+          setMarkers(data.spotMap.markers);
+        } else {
+          setError("Kunde inte ladda kartan");
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setError("Natverksfel — forsok igen");
+        setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [spotAddon.accommodationCategoryId, snapshot.checkIn, snapshot.checkOut, snapshot.adults]);
+
+  // Mouse pan
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+      setIsDragging(true);
+      dragStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+    },
+    [pan],
+  );
+
+  useEffect(() => {
+    if (!isDragging) return;
+    const handleMove = (e: globalThis.MouseEvent) => {
+      const dx = e.clientX - dragStart.current.x;
+      const dy = e.clientY - dragStart.current.y;
+      setPan({ x: dragStart.current.panX + dx / zoom, y: dragStart.current.panY + dy / zoom });
+    };
+    const handleUp = () => setIsDragging(false);
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+    return () => { window.removeEventListener("mousemove", handleMove); window.removeEventListener("mouseup", handleUp); };
+  }, [isDragging, zoom]);
+
+  // Scroll zoom
+  useEffect(() => {
+    const el = mapRef.current;
+    if (!el) return;
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      setZoom((z) => Math.min(4, Math.max(1, z * delta)));
+    };
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, []);
+
+  // Touch handlers for pan + pinch-to-zoom
+  useEffect(() => {
+    const el = mapRef.current;
+    if (!el) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        const t = e.touches[0];
+        dragStart.current = { x: t.clientX, y: t.clientY, panX: pan.x, panY: pan.y };
+        setIsDragging(true);
+      } else if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        lastTouchDist.current = Math.hypot(dx, dy);
+        lastTouchCenter.current = {
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+        };
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      if (e.touches.length === 1 && isDragging) {
+        const t = e.touches[0];
+        const dx = t.clientX - dragStart.current.x;
+        const dy = t.clientY - dragStart.current.y;
+        setPan({ x: dragStart.current.panX + dx / zoom, y: dragStart.current.panY + dy / zoom });
+      } else if (e.touches.length === 2 && lastTouchDist.current !== null) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        const scale = dist / lastTouchDist.current;
+        setZoom((z) => Math.min(4, Math.max(1, z * scale)));
+        lastTouchDist.current = dist;
+      }
+    };
+
+    const handleTouchEnd = () => {
+      setIsDragging(false);
+      lastTouchDist.current = null;
+      lastTouchCenter.current = null;
+    };
+
+    el.addEventListener("touchstart", handleTouchStart, { passive: false });
+    el.addEventListener("touchmove", handleTouchMove, { passive: false });
+    el.addEventListener("touchend", handleTouchEnd);
+    return () => {
+      el.removeEventListener("touchstart", handleTouchStart);
+      el.removeEventListener("touchmove", handleTouchMove);
+      el.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [isDragging, zoom, pan]);
+
+  const availableCount = markers.filter((m) => m.available).length;
+  const selectedMarker = markers.find((m) => m.id === selectedId);
+
+  return (
+    <div className="sbm__overlay">
+      <div className="sbm__header">
+        <div className="sbm__header-info">
+          <h2 className="sbm__title">Valj din plats</h2>
+          {!loading && !error && (
+            <p className="sbm__subtitle">
+              {availableCount} av {markers.length} platser lediga
+            </p>
+          )}
+        </div>
+        <button className="sbm__close" onClick={onClose} aria-label="Stang">
+          <span className="material-symbols-rounded" style={{ fontSize: 22 }}>close</span>
+        </button>
+      </div>
+
+      {error && <div className="sbm__error">{error}</div>}
+
+      {loading ? (
+        <div className="sbm__loading">
+          <div className="sbm__spinner" />
+          <span className="sbm__loading-text">Laddar karta...</span>
+        </div>
+      ) : (
+        <div
+          ref={mapRef}
+          className={`sbm__map${isDragging ? " sbm__map--dragging" : ""}`}
+          onMouseDown={handleMouseDown}
+        >
+          <div className="sbm__zoom">{Math.round(zoom * 100)}%</div>
+
+          <div
+            className="sbm__map-inner"
+            style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              ref={imageRef}
+              src={spotAddon.imageUrl}
+              alt="Karta"
+              className="sbm__map-image"
+              draggable={false}
+            />
+
+            {markers.map((m) => {
+              const isSelected = selectedId === m.id;
+              let cls = "sbm__marker";
+              if (!m.available) cls += " sbm__marker--unavailable";
+              if (isSelected) cls += " sbm__marker--selected";
+
+              return (
+                <div
+                  key={m.id}
+                  className={cls}
+                  style={{ left: `${m.x}%`, top: `${m.y}%` }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (m.available) setSelectedId(isSelected ? null : m.id);
+                  }}
+                >
+                  <div className="sbm__marker-dot">{m.label.slice(0, 3)}</div>
+                  <div className="sbm__marker-label">{m.label}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Confirmation panel */}
+          {selectedMarker && selectedMarker.available && (
+            <div className="sbm__confirm">
+              <div className="sbm__confirm-info">
+                <p className="sbm__confirm-label">Plats {selectedMarker.label}</p>
+                <p className="sbm__confirm-price">
+                  +{formatPriceDisplay(spotAddon.addonPrice, spotAddon.currency)} {spotAddon.currency}
+                </p>
+              </div>
+              <div className="sbm__confirm-actions">
+                <button
+                  className="sbm__confirm-cancel"
+                  onClick={() => setSelectedId(null)}
+                >
+                  Avbryt
+                </button>
+                <button
+                  className="sbm__confirm-btn"
+                  onClick={() =>
+                    onSelect({
+                      spotMarkerId: selectedMarker.id,
+                      accommodationId: selectedMarker.accommodationId,
+                      label: selectedMarker.label,
+                      addonPrice: spotAddon.addonPrice,
+                    })
+                  }
+                >
+                  Valj denna plats
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

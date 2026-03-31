@@ -14,6 +14,7 @@ import { requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { getApp } from "./registry";
 import { getSetupStatus } from "./setup";
+import { startWizard } from "./wizard";
 import type { InstallResult, AppStatus } from "./types";
 import { log } from "@/app/_lib/logger";
 
@@ -148,6 +149,11 @@ export async function installApp(appId: string): Promise<InstallResult> {
 
     return { tenantApp, isNew: true };
   });
+
+  // Auto-create wizard record so setup page can render immediately
+  if (result.isNew) {
+    await startWizard(appId);
+  }
 
   return { ok: true, tenantAppId: result.tenantApp.id };
 }

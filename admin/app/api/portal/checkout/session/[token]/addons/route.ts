@@ -14,6 +14,7 @@ import { z } from "zod";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { resolveAddonsForAccommodation } from "@/app/_lib/accommodations/addons";
+import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { log } from "@/app/_lib/logger";
 import type { SelectedAddon } from "@/app/_lib/checkout/session-types";
 
@@ -21,12 +22,24 @@ const SESSION_TTL_MS = 30 * 60 * 1000;
 const MAX_ADDON_LINE_ITEMS = 20;
 const MAX_QUANTITY_PER_VARIANT = 10;
 
+const regularAddonSchema = z.object({
+  productId: z.string().min(1),
+  variantId: z.string().nullable(),
+  quantity: z.number().int().min(0).max(MAX_QUANTITY_PER_VARIANT),
+});
+
+const spotAddonSchema = z.object({
+  type: z.literal("spot_map"),
+  spotMarkerId: z.string().min(1),
+  accommodationId: z.string().min(1),
+  label: z.string().min(1),
+  quantity: z.literal(1),
+});
+
+const addonEntrySchema = z.union([spotAddonSchema, regularAddonSchema]);
+
 const inputSchema = z.object({
-  addons: z.array(z.object({
-    productId: z.string().min(1),
-    variantId: z.string().nullable(),
-    quantity: z.number().int().min(0).max(MAX_QUANTITY_PER_VARIANT),
-  })),
+  addons: z.array(addonEntrySchema),
 });
 
 export async function PATCH(
@@ -50,10 +63,22 @@ export async function PATCH(
     return NextResponse.json({ error: "INVALID_PARAMS" }, { status: 400 });
   }
 
-  // Filter out quantity 0 selections
-  const selections = body.addons.filter((a) => a.quantity > 0);
+  // Separate regular addons and spot map entries
+  const regularSelections: z.infer<typeof regularAddonSchema>[] = [];
+  const spotSelections: z.infer<typeof spotAddonSchema>[] = [];
 
-  if (selections.length > MAX_ADDON_LINE_ITEMS) {
+  for (const entry of body.addons) {
+    if ("type" in entry && entry.type === "spot_map") {
+      spotSelections.push(entry as z.infer<typeof spotAddonSchema>);
+    } else {
+      const reg = entry as z.infer<typeof regularAddonSchema>;
+      if (reg.quantity > 0) regularSelections.push(reg);
+    }
+  }
+
+  const selections = regularSelections;
+
+  if (selections.length + spotSelections.length > MAX_ADDON_LINE_ITEMS) {
     return NextResponse.json(
       { error: "TOO_MANY_ADDONS", message: `Maximalt ${MAX_ADDON_LINE_ITEMS} tillägg.` },
       { status: 400 },
@@ -72,6 +97,8 @@ export async function PATCH(
       totalNights: true,
       adults: true,
       currency: true,
+      checkIn: true,
+      checkOut: true,
     },
   });
 
@@ -176,6 +203,100 @@ export async function PATCH(
         currency: addon.currency,
       });
     }
+  }
+
+  // ── Validate spot_map selections ─────────────────────────────
+  for (const spotSel of spotSelections) {
+    // Load marker + spot map with tenant isolation
+    const marker = await prisma.spotMarker.findFirst({
+      where: { id: spotSel.spotMarkerId, tenantId },
+      select: {
+        id: true,
+        label: true,
+        accommodationId: true,
+        accommodation: { select: { externalId: true } },
+        spotMap: {
+          select: {
+            id: true,
+            isActive: true,
+            addonPrice: true,
+            currency: true,
+            accommodationCategoryId: true,
+          },
+        },
+      },
+    });
+
+    if (!marker || !marker.spotMap.isActive) {
+      return NextResponse.json(
+        { error: "SPOT_NOT_FOUND", code: "SPOT_UNAVAILABLE", label: spotSel.label },
+        { status: 409 },
+      );
+    }
+
+    // Verify the spot map's category matches the session's accommodation
+    const accCategory = await prisma.accommodationCategoryItem.findFirst({
+      where: {
+        categoryId: marker.spotMap.accommodationCategoryId,
+        accommodation: { id: session.accommodationId },
+      },
+      select: { id: true },
+    });
+
+    if (!accCategory) {
+      return NextResponse.json(
+        { error: "SPOT_CATEGORY_MISMATCH", code: "SPOT_UNAVAILABLE", label: marker.label },
+        { status: 409 },
+      );
+    }
+
+    // Re-validate availability from PMS
+    if (marker.accommodation.externalId) {
+      try {
+        const adapter = await resolveAdapter(tenantId);
+        const result = await adapter.getAvailability(tenantId, {
+          checkIn: session.checkIn,
+          checkOut: session.checkOut,
+          guests: session.adults,
+        });
+
+        const availableIds = new Set(
+          result.categories
+            .filter((e) => e.availableUnits > 0 && e.ratePlans.length > 0)
+            .map((e) => e.category.externalId),
+        );
+
+        if (!availableIds.has(marker.accommodation.externalId)) {
+          return NextResponse.json(
+            { error: "SPOT_UNAVAILABLE", code: "SPOT_UNAVAILABLE", label: marker.label },
+            { status: 409 },
+          );
+        }
+      } catch (err) {
+        log("error", "checkout_session.spot_availability_check_failed", {
+          tenantId,
+          markerId: marker.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return NextResponse.json(
+          { error: "SPOT_UNAVAILABLE", code: "SPOT_UNAVAILABLE", label: marker.label },
+          { status: 409 },
+        );
+      }
+    }
+
+    // Build SelectedAddon snapshot for spot
+    selectedAddons.push({
+      productId: `spot-map:${marker.spotMap.id}`,
+      variantId: marker.id,
+      title: `Plats ${marker.label}`,
+      variantTitle: null,
+      quantity: 1,
+      unitAmount: marker.spotMap.addonPrice,
+      totalAmount: marker.spotMap.addonPrice, // PER_STAY — fixed fee
+      pricingMode: "PER_STAY",
+      currency: marker.spotMap.currency,
+    });
   }
 
   // ── Update session atomically ────────────────────────────────

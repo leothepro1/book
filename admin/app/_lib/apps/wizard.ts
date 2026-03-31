@@ -72,8 +72,8 @@ export async function startWizard(appId: string): Promise<ActionResult<{ wizardI
     return { ok: false, error: "Appen är inte installerad" };
   }
 
-  // If app has no setup steps, finalize immediately
-  if (app.setupSteps.length === 0) {
+  // If app has no setup steps AND no custom wizard, finalize immediately
+  if (app.setupSteps.length === 0 && !app.wizardComponent) {
     await prisma.tenantApp.update({
       where: { id: tenantApp.id },
       data: { status: "ACTIVE", activatedAt: new Date() },
@@ -391,9 +391,22 @@ export async function getWizardState(appId: string): Promise<WizardState | null>
 
   const completedSteps = (wizard.completedSteps as string[]) ?? [];
   const currentStep = app.setupSteps.find((s) => s.id === wizard.currentStepId);
-  if (!currentStep) return null;
 
-  const currentStepIndex = app.setupSteps.findIndex((s) => s.id === wizard.currentStepId) + 1;
+  // Custom wizard apps may have no setupSteps — still return state
+  if (!currentStep && !app.wizardComponent) return null;
+
+  const currentStepIndex = currentStep
+    ? app.setupSteps.findIndex((s) => s.id === wizard.currentStepId) + 1
+    : 0;
+
+  // Placeholder step for custom wizards with no setupSteps
+  const resolvedStep = currentStep ?? {
+    id: "__custom__",
+    type: "config" as const,
+    title: app.name,
+    description: "",
+    required: false,
+  };
 
   return {
     wizard: {
@@ -411,7 +424,7 @@ export async function getWizardState(appId: string): Promise<WizardState | null>
       abandonedAt: wizard.abandonedAt,
     },
     app,
-    currentStep,
+    currentStep: resolvedStep,
     completedStepIds: completedSteps,
     totalSteps: app.setupSteps.length,
     currentStepIndex,

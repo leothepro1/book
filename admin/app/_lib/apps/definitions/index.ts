@@ -13,3 +13,4 @@ import "./email-marketing";
 import "./guest-crm";
 import "./channel-manager";
 import "./revenue-analytics";
+import "./spot-booking";

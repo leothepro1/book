@@ -630,3 +630,17 @@
 .ao__modal-confirm:hover {
   opacity: 0.88;
 }
+
+/* ── Spot booking error ── */
+
+.ao__spot-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: color-mix(in srgb, #ef4444 10%, var(--background, #fff));
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  color: #ef4444;
+}

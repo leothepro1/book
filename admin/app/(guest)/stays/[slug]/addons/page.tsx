@@ -7,6 +7,7 @@ import GuestPageShell from "@/app/(guest)/_components/GuestPageShell";
 import { resolveAddonsForAccommodation } from "@/app/_lib/accommodations/addons";
 import type { AddonProduct } from "@/app/_lib/accommodations/addons";
 import { AddonsClient } from "./AddonsClient";
+import type { SpotAddon } from "./AddonsClient";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,46 @@ export default async function AddonsPage({
     session.tenantId,
   );
 
+  // ── Check for active SpotMap for this accommodation's category ──
+  const accWithCategories = await prisma.accommodation.findFirst({
+    where: { id: session.accommodationId, tenantId: session.tenantId },
+    select: { categoryItems: { select: { categoryId: true } } },
+  });
+
+  let spotAddon: SpotAddon | null = null;
+
+  if (accWithCategories && accWithCategories.categoryItems.length > 0) {
+    const categoryIds = accWithCategories.categoryItems.map((i) => i.categoryId);
+    const activeSpotMap = await prisma.spotMap.findFirst({
+      where: {
+        tenantId: session.tenantId,
+        accommodationCategoryId: { in: categoryIds },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        imageUrl: true,
+        addonPrice: true,
+        currency: true,
+        accommodationCategoryId: true,
+      },
+    });
+
+    if (activeSpotMap) {
+      spotAddon = {
+        id: "spot-booking-virtual",
+        type: "spot_map" as const,
+        title: "Valj din plats",
+        description: "Valj exakt var du vill bo pa omradet",
+        imageUrl: activeSpotMap.imageUrl,
+        addonPrice: activeSpotMap.addonPrice,
+        currency: activeSpotMap.currency,
+        spotMapId: activeSpotMap.id,
+        accommodationCategoryId: activeSpotMap.accommodationCategoryId,
+      };
+    }
+  }
+
   // Serialize for client
   const serializedAddons: AddonProduct[] = JSON.parse(JSON.stringify(addonProducts));
 
@@ -110,6 +151,7 @@ export default async function AddonsPage({
     <AddonsClient
       token={session.token}
       addons={serializedAddons}
+      spotAddon={spotAddon}
       snapshot={{
         accommodationName: session.accommodationName,
         accommodationSlug: session.accommodationSlug,

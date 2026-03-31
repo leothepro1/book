@@ -39,6 +39,8 @@ export const AppPermissionSchema = z.enum([
   "guests:write",
   "products:read",
   "analytics:read",
+  "accommodations:read",
+  "accommodations:write",
 ]);
 
 export type AppPermission = z.infer<typeof AppPermissionSchema>;
@@ -225,7 +227,7 @@ export const AppDefinitionSchema = z.object({
   setupSteps: z.array(SetupStepSchema),
   termsUrl: z.string().url().optional(),
   healthCheck: HealthCheckConfigSchema.optional(),
-  wizardComponent: z.enum(["google-ads", "meta-ads", "mailchimp"]).optional(),
+  wizardComponent: z.enum(["google-ads", "meta-ads", "mailchimp", "spot-booking"]).optional(),
 
   // Hero content — displayed below header, above screenshots
   heroHeading: z.string().optional(),

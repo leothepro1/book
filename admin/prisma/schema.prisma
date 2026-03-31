@@ -534,6 +534,8 @@ model Tenant {
   discounts           Discount[]
   accommodations      Accommodation[]
   accommodationCategories AccommodationCategory[]
+  spotMaps            SpotMap[]
+  spotMarkers         SpotMarker[]
 
   // Feature toggle — tenant can disable all discount functionality
   discountsEnabled    Boolean              @default(true)
@@ -1619,6 +1621,9 @@ model Accommodation {
   accommodationType AccommodationType
   status            AccommodationStatus @default(ACTIVE)
 
+  // Search visibility — false for spot-booking accommodations (not shown in guest search)
+  visibleInSearch Boolean @default(true)
+
   // Content — override pattern: resolveAccommodation() always reads nameOverride ?? pmsName ?? name
   nameOverride        String?
   descriptionOverride String? @db.Text
@@ -1674,6 +1679,7 @@ model Accommodation {
   checkoutSessions CheckoutSession[]
   bookings         Booking[]
   categoryItems AccommodationCategoryItem[]
+  spotMarkers   SpotMarker[]
 
   @@unique([tenantId, slug])
   @@unique([tenantId, externalId, pmsProvider])
@@ -1683,6 +1689,7 @@ model Accommodation {
   @@index([tenantId, sortOrder])
   @@index([tenantId, archivedAt])
   @@index([tenantId, pmsProvider, externalId])
+  @@index([tenantId, visibleInSearch])
 }
 
 /// Highlight / selling point on an accommodation.
@@ -1860,6 +1867,7 @@ model AccommodationCategory {
   tenant Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   items  AccommodationCategoryItem[]
   addonCollections AccommodationCategoryAddon[]
+  spotMaps SpotMap[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -2712,6 +2720,7 @@ model TenantApp {
   webhookDeliveries AppWebhookDelivery[]
   emailSyncs    EmailMarketingSync[]
   attributions  EmailAttribution[]
+  spotMap       SpotMap?
 
   @@unique([tenantId, appId])
   @@index([tenantId, status])
@@ -3239,4 +3248,51 @@ model AnalyticsDailyMetric {
   @@index([tenantId, date])
   @@index([tenantId, metric, date])
   @@index([tenantId, dimension, date])
+}
+
+// ── Spot Booking (Platsbokning) ────────────────────────────────
+
+/// Interactive map for spot-based booking. One map per TenantApp installation.
+model SpotMap {
+  id                      String   @id @default(cuid())
+  tenantId                String
+  tenantAppId             String   // FK → TenantApp (the installation)
+  accommodationCategoryId String   // FK → AccommodationCategory
+  imageUrl                String   // Cloudinary URL
+  imagePublicId           String   // Cloudinary public_id (for deletion)
+  addonPrice              Int      // fixed surcharge in öre
+  currency                String   @default("SEK")
+  isActive                Boolean  @default(false) // activated on wizard completion
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  tenant                Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantApp             TenantApp             @relation(fields: [tenantAppId], references: [id], onDelete: Cascade)
+  accommodationCategory AccommodationCategory @relation(fields: [accommodationCategoryId], references: [id])
+  markers               SpotMarker[]
+
+  @@unique([tenantAppId]) // one map per installation
+  @@index([tenantId])
+  @@index([accommodationCategoryId])
+}
+
+/// A bookable spot on a SpotMap — pinned to an Accommodation unit.
+model SpotMarker {
+  id              String   @id @default(cuid())
+  tenantId        String
+  spotMapId       String
+  accommodationId String   // FK → Accommodation — this is the bookable unit
+  label           String   // "32a", "Sjöutsikt" etc
+  x               Float    // 0.0–100.0, percentage of image width
+  y               Float    // 0.0–100.0, percentage of image height
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  spotMap       SpotMap       @relation(fields: [spotMapId], references: [id], onDelete: Cascade)
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+
+  @@unique([spotMapId, accommodationId]) // one marker per accommodation per map
+  @@index([tenantId])
+  @@index([spotMapId])
 }

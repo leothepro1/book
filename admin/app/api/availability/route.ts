@@ -84,6 +84,7 @@ export async function GET(req: Request) {
         where: {
           tenantId,
           status: "ACTIVE",
+          visibleInSearch: true,
           accommodationType: typeId as AccommodationType,
         },
         select: { externalId: true },
@@ -104,6 +105,7 @@ export async function GET(req: Request) {
         where: {
           tenantId,
           status: "ACTIVE",
+          visibleInSearch: true,
           accommodationType: { in: validTypes as AccommodationType[] },
         },
         select: { externalId: true },
@@ -181,6 +183,7 @@ export async function GET(req: Request) {
           tenantId,
           externalId: { in: categoryExternalIds },
           status: "ACTIVE",
+          visibleInSearch: true,
         },
         select: { id: true, externalId: true },
       })
@@ -193,8 +196,37 @@ export async function GET(req: Request) {
     }
   }
 
+  // ── Exclude hidden accommodations (visibleInSearch = false) ────
+  // The batch lookup only returned visible accommodations. When no
+  // externalIdFilter was applied, we also need to exclude entries
+  // that map to hidden accommodations. We query for hidden ones and
+  // remove them from the results.
+  let hiddenExternalIds: Set<string> | null = null;
+  if (!externalIdFilter && categoryExternalIds.length > 0) {
+    const hiddenRows = await prisma.accommodation.findMany({
+      where: {
+        tenantId,
+        externalId: { in: categoryExternalIds },
+        status: "ACTIVE",
+        visibleInSearch: false,
+      },
+      select: { externalId: true },
+    });
+    if (hiddenRows.length > 0) {
+      hiddenExternalIds = new Set(
+        hiddenRows.map((r) => r.externalId).filter((id): id is string => id != null),
+      );
+    }
+  }
+
+  const visibleCategories = hiddenExternalIds
+    ? filteredCategories.filter(
+        (entry: AvailabilityEntry) => !hiddenExternalIds!.has(entry.category.externalId),
+      )
+    : filteredCategories;
+
   // ── Build results ───────────────────────────────────────────────
-  const results = filteredCategories.map((entry: AvailabilityEntry) => {
+  const results = visibleCategories.map((entry: AvailabilityEntry) => {
     const catRestrictions = [
       ...(restrictionMap.get(entry.category.externalId) ?? []),
       ...(restrictionMap.get("__all") ?? []),

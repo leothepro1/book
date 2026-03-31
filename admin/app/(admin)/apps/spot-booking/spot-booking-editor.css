@@ -1,0 +1,525 @@
+/* Spot Booking Map Editor */
+
+.sbe__layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+  background: var(--admin-bg);
+  overflow: hidden;
+}
+
+/* ── Top bar ── */
+
+.sbe__topbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  background: var(--admin-surface);
+  border-bottom: 1px solid var(--admin-border);
+  min-height: 52px;
+}
+
+.sbe__topbar-back {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--admin-text-secondary);
+  text-decoration: none;
+  transition: color var(--duration-normal) var(--ease-default);
+}
+
+.sbe__topbar-back:hover { color: var(--admin-text); }
+
+.sbe__topbar-title {
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--admin-text);
+  margin: 0;
+}
+
+.sbe__topbar-meta {
+  font-size: var(--font-xs);
+  color: var(--admin-text-tertiary);
+  margin-left: auto;
+}
+
+/* ── Map canvas ── */
+
+.sbe__canvas {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--admin-text) 4%, var(--admin-bg));
+  cursor: grab;
+  user-select: none;
+}
+
+.sbe__canvas--placing {
+  cursor: crosshair;
+}
+
+.sbe__canvas--dragging {
+  cursor: grabbing;
+}
+
+.sbe__canvas-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.sbe__canvas-image {
+  display: block;
+  pointer-events: none;
+}
+
+/* ── Canvas toolbar ── */
+
+.sbe__canvas-toolbar {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  display: flex;
+  gap: var(--space-2);
+  z-index: 10;
+}
+
+.sbe__toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--admin-text-secondary);
+  cursor: pointer;
+  box-shadow: var(--admin-shadow-sm);
+  transition: all var(--duration-normal) var(--ease-default);
+}
+
+.sbe__toolbar-btn:hover {
+  border-color: var(--admin-border-focus);
+  color: var(--admin-text);
+}
+
+.sbe__toolbar-btn--active {
+  border-color: var(--admin-accent);
+  background: color-mix(in srgb, var(--admin-accent) 8%, var(--admin-surface));
+  color: var(--admin-accent);
+}
+
+/* Zoom indicator */
+.sbe__zoom-indicator {
+  position: absolute;
+  bottom: var(--space-3);
+  left: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  color: var(--admin-text-tertiary);
+  box-shadow: var(--admin-shadow-sm);
+  z-index: 10;
+}
+
+/* ── Markers on map ── */
+
+.sbe__marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-default);
+}
+
+.sbe__marker:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+  z-index: 6;
+}
+
+.sbe__marker--selected {
+  z-index: 7;
+}
+
+.sbe__marker-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--admin-accent);
+  border: 2px solid var(--admin-surface);
+  box-shadow: var(--admin-shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  color: var(--admin-accent-text);
+  transition: box-shadow var(--duration-normal) var(--ease-default);
+}
+
+.sbe__marker--selected .sbe__marker-dot {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--admin-accent) 30%, transparent),
+              var(--admin-shadow-md);
+}
+
+.sbe__marker--pending .sbe__marker-dot {
+  background: transparent;
+  border: 2px dashed var(--admin-accent);
+  color: var(--admin-accent);
+}
+
+.sbe__marker-label {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 2px;
+  padding: 1px var(--space-2);
+  background: var(--admin-surface);
+  border-radius: var(--radius-xs);
+  font-size: 10px;
+  font-weight: var(--font-weight-medium);
+  color: var(--admin-text);
+  white-space: nowrap;
+  box-shadow: var(--admin-shadow-sm);
+  pointer-events: none;
+}
+
+/* ── Right panel ── */
+
+.sbe__panel {
+  background: var(--admin-surface);
+  border-left: 1px solid var(--admin-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sbe__panel-header {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.sbe__panel-title {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--admin-text);
+  margin: 0;
+}
+
+.sbe__panel-subtitle {
+  font-size: var(--font-xs);
+  color: var(--admin-text-tertiary);
+  margin: var(--space-1) 0 0;
+}
+
+.sbe__panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5);
+}
+
+.sbe__panel-footer {
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--admin-border);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
+/* ── Marker list ── */
+
+.sbe__marker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sbe__marker-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--duration-normal) var(--ease-default);
+}
+
+.sbe__marker-row:hover {
+  background: color-mix(in srgb, var(--admin-text) 4%, var(--admin-surface));
+}
+
+.sbe__marker-row--selected {
+  background: color-mix(in srgb, var(--admin-accent) 8%, var(--admin-surface));
+}
+
+.sbe__marker-row-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: var(--admin-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  color: var(--admin-accent-text);
+}
+
+.sbe__marker-row-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sbe__marker-row-label {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--admin-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sbe__marker-row-acc {
+  font-size: var(--font-xs);
+  color: var(--admin-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sbe__marker-row-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-default);
+}
+
+.sbe__marker-row:hover .sbe__marker-row-actions {
+  opacity: 1;
+}
+
+.sbe__action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--admin-text-tertiary);
+  transition: all var(--duration-normal) var(--ease-default);
+}
+
+.sbe__action-btn:hover {
+  background: color-mix(in srgb, var(--admin-text) 8%, transparent);
+  color: var(--admin-text);
+}
+
+.sbe__action-btn--danger:hover {
+  background: var(--admin-danger-tint);
+  color: var(--admin-danger);
+}
+
+/* ── Configure / Edit form ── */
+
+.sbe__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sbe__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.sbe__field-label {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--admin-text);
+}
+
+.sbe__field-hint {
+  font-size: var(--font-xs);
+  color: var(--admin-text-tertiary);
+}
+
+/* Searchable select */
+.sbe__search-select {
+  position: relative;
+}
+
+.sbe__search-input {
+  width: 100%;
+}
+
+.sbe__search-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-1);
+  background: var(--admin-surface);
+}
+
+.sbe__search-item {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-sm);
+  color: var(--admin-text);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-default);
+}
+
+.sbe__search-item:hover {
+  background: color-mix(in srgb, var(--admin-accent) 8%, var(--admin-surface));
+}
+
+.sbe__search-item--selected {
+  background: color-mix(in srgb, var(--admin-accent) 12%, var(--admin-surface));
+  font-weight: var(--font-weight-medium);
+}
+
+.sbe__search-empty {
+  padding: var(--space-3);
+  font-size: var(--font-xs);
+  color: var(--admin-text-tertiary);
+  text-align: center;
+}
+
+/* ── Empty state ── */
+
+.sbe__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+}
+
+.sbe__empty-icon {
+  color: var(--admin-text-tertiary);
+}
+
+.sbe__empty-text {
+  font-size: var(--font-sm);
+  color: var(--admin-text-tertiary);
+  line-height: var(--line-height-relaxed);
+}
+
+/* ── Inline error ── */
+
+.sbe__error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--admin-danger-tint);
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  color: var(--admin-danger);
+}
+
+/* ── Confirm dialog ── */
+
+.sbe__confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.sbe__confirm-card {
+  background: var(--admin-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  max-width: 380px;
+  width: 90%;
+  box-shadow: var(--shadow-modal);
+}
+
+.sbe__confirm-title {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--admin-text);
+  margin: 0 0 var(--space-2);
+}
+
+.sbe__confirm-text {
+  font-size: var(--font-sm);
+  color: var(--admin-text-secondary);
+  line-height: var(--line-height-relaxed);
+  margin: 0 0 var(--space-5);
+}
+
+.sbe__confirm-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
+/* ── Toast ── */
+
+.sbe__toast {
+  position: fixed;
+  bottom: var(--space-6);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--space-3) var(--space-5);
+  background: var(--admin-text);
+  color: var(--admin-bg);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  box-shadow: var(--admin-shadow-md);
+  z-index: 200;
+  animation: sbe-toast-in var(--duration-normal) var(--ease-default);
+}
+
+@keyframes sbe-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(var(--space-3)); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ── Inline label edit ── */
+
+.sbe__inline-edit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sbe__inline-edit-input {
+  width: 100px;
+}
+
+@media (max-width: 768px) {
+  .sbe__layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 50vh 1fr;
+  }
+
+  .sbe__panel {
+    border-left: none;
+    border-top: 1px solid var(--admin-border);
+  }
+}
