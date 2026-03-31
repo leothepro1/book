@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { parseISO, startOfMonth, format } from "date-fns";
 import { sv } from "date-fns/locale";
 import { DateRangePicker, getNightCount } from "./DateRangePicker";
@@ -32,6 +32,8 @@ function CounterControl({ value, min, max, onChange }: { value: number; min: num
 export function ProductBookingSidebar() {
   const product = useProduct();
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
 
   const [checkIn, setCheckIn] = useState<Date | null>(() => {
     const v = searchParams.get("checkIn");
@@ -47,26 +49,36 @@ export function ProductBookingSidebar() {
   });
   const [children_, setChildren] = useState(0);
 
-  const [popupOpen, setPopupOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalClosing, setModalClosing] = useState(false);
   const [guestDropdownOpen, setGuestDropdownOpen] = useState(false);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(checkIn ?? new Date()));
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const guestRef = useRef<HTMLDivElement>(null);
 
   const nights = getNightCount(checkIn, checkOut);
-  const price = product?.price ?? 0;
   const totalGuests = adults + children_;
 
-  // Close date popup on outside click
+  const ratePlans = product?.ratePlans ?? [];
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(
+    () => ratePlans[0]?.externalId ?? null,
+  );
+  const selectedPlan = ratePlans.find((rp) => rp.externalId === selectedPlanId) ?? ratePlans[0] ?? null;
+  const price = selectedPlan ? selectedPlan.totalPrice : (product?.price ?? 0);
+
+  const prevGuestsRef = useRef(totalGuests);
+
+  // Sync guest count changes to URL + refresh server data
   useEffect(() => {
-    if (!popupOpen) return;
-    const handle = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setPopupOpen(false);
-    };
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
-  }, [popupOpen]);
+    if (totalGuests === prevGuestsRef.current) return;
+    prevGuestsRef.current = totalGuests;
+    const params = new URLSearchParams(window.location.search);
+    params.set("guests", String(totalGuests));
+    if (checkIn) params.set("checkIn", format(checkIn, "yyyy-MM-dd"));
+    if (checkOut) params.set("checkOut", format(checkOut, "yyyy-MM-dd"));
+    window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
+    router.refresh();
+  }, [totalGuests, checkIn, checkOut, pathname, router]);
 
   // Close guest dropdown on outside click
   useEffect(() => {
@@ -79,11 +91,11 @@ export function ProductBookingSidebar() {
   }, [guestDropdownOpen]);
 
   useEffect(() => {
-    if (!popupOpen && !guestDropdownOpen) return;
-    const handle = (e: KeyboardEvent) => { if (e.key === "Escape") { setPopupOpen(false); setGuestDropdownOpen(false); } };
+    if (!guestDropdownOpen) return;
+    const handle = (e: KeyboardEvent) => { if (e.key === "Escape") setGuestDropdownOpen(false); };
     document.addEventListener("keydown", handle);
     return () => document.removeEventListener("keydown", handle);
-  }, [popupOpen, guestDropdownOpen]);
+  }, [guestDropdownOpen]);
 
   const handleRangeChange = useCallback((ci: Date | null, co: Date | null) => {
     setCheckIn(ci);
@@ -92,42 +104,103 @@ export function ProductBookingSidebar() {
 
   const handleClear = () => { setCheckIn(null); setCheckOut(null); setHoverDate(null); };
 
-  const handleClose = () => {
-    setPopupOpen(false);
-    if (checkIn && checkOut) {
-      const params = new URLSearchParams(window.location.search);
-      params.set("checkIn", format(checkIn, "yyyy-MM-dd"));
-      params.set("checkOut", format(checkOut, "yyyy-MM-dd"));
-      params.set("guests", String(totalGuests));
-      window.location.search = params.toString();
-    }
+  const openModal = () => {
+    setModalOpen(true);
+    setModalClosing(false);
+    setGuestDropdownOpen(false);
+  };
+
+  const closeModal = () => {
+    setModalClosing(true);
+    setTimeout(() => {
+      setModalOpen(false);
+      setModalClosing(false);
+    }, 200);
+  };
+
+  // Escape closes modal
+  useEffect(() => {
+    if (!modalOpen) return;
+    const handle = (e: KeyboardEvent) => { if (e.key === "Escape") closeModal(); };
+    document.addEventListener("keydown", handle);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handle);
+      document.body.style.overflow = "";
+    };
+  }, [modalOpen]);
+
+  const handleSave = () => {
+    if (!checkIn || !checkOut) return;
+    closeModal();
+    // Update URL without navigation, then refresh server data
+    const params = new URLSearchParams(window.location.search);
+    params.set("checkIn", format(checkIn, "yyyy-MM-dd"));
+    params.set("checkOut", format(checkOut, "yyyy-MM-dd"));
+    params.set("guests", String(totalGuests));
+    const newUrl = `${pathname}?${params.toString()}`;
+    window.history.replaceState(null, "", newUrl);
+    router.refresh();
   };
 
   const fmtDate = (d: Date | null, ph: string) => d ? format(d, "d MMM yyyy", { locale: sv }) : ph;
 
-  const handleBook = () => {
-    if (!checkIn || !checkOut) { setPopupOpen(true); return; }
-    const params = new URLSearchParams();
-    params.set("checkIn", format(checkIn, "yyyy-MM-dd"));
-    params.set("checkOut", format(checkOut, "yyyy-MM-dd"));
-    params.set("guests", String(totalGuests));
-    window.location.href = `/stays/${product?.id}?${params.toString()}`;
+  const [isBooking, setIsBooking] = useState(false);
+
+  const handleBook = async () => {
+    if (!checkIn || !checkOut) { openModal(); return; }
+    if (!selectedPlan || !product?.id) return;
+
+    setIsBooking(true);
+    try {
+      const res = await fetch("/api/portal/checkout/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accommodationId: product.id,
+          ratePlanId: selectedPlan.externalId,
+          checkIn: format(checkIn, "yyyy-MM-dd"),
+          checkOut: format(checkOut, "yyyy-MM-dd"),
+          adults: totalGuests,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setIsBooking(false);
+        return;
+      }
+
+      const url = data.redirect.includes("?")
+        ? `${data.redirect}&session=${data.token}`
+        : `${data.redirect}?session=${data.token}`;
+      router.push(url);
+    } catch {
+      setIsBooking(false);
+    }
   };
 
   const guestText = children_ === 0 ? `${adults} gäster` : `${adults} vuxna, ${children_} barn`;
 
   return (
-    <div className="pbs" ref={containerRef}>
+    <div className="pbs">
       {/* Price */}
       <div className="pbs__price">
-        Totalt: {price > 0 ? `${formatPriceDisplay(price)} kr` : "—"}
+        {selectedPlan ? (
+          <>
+            {formatPriceDisplay(selectedPlan.pricePerNight)} kr
+            <span className="pbs__price-suffix"> / natt</span>
+          </>
+        ) : (
+          price > 0 ? `${formatPriceDisplay(price)} kr` : "—"
+        )}
       </div>
 
       {/* Triggers + guest dropdown wrapper */}
       <div className="pbs__triggers-wrap" ref={guestRef}>
         <div className={`pbs__triggers${guestDropdownOpen ? " pbs__triggers--guest-open" : ""}`}>
           {/* Row 1: Check-in | Check-out */}
-          <div className="pbs__trigger-row" onClick={() => { setPopupOpen(!popupOpen); setGuestDropdownOpen(false); }}>
+          <div className="pbs__trigger-row" onClick={openModal}>
             <div className="pbs__trigger">
               <span className="pbs__trigger-label">Incheckning</span>
               <span className={`pbs__trigger-value${!checkIn ? " pbs__trigger-value--placeholder" : ""}`}>
@@ -146,7 +219,7 @@ export function ProductBookingSidebar() {
           <div className="pbs__trigger-divider-h" />
 
           {/* Row 2: Guests */}
-          <div className="pbs__trigger-row" onClick={() => { setGuestDropdownOpen(!guestDropdownOpen); setPopupOpen(false); }}>
+          <div className="pbs__trigger-row" onClick={() => { setGuestDropdownOpen(!guestDropdownOpen); }}>
             <div className="pbs__trigger pbs__trigger--full">
               <span className="pbs__trigger-label">Gäster</span>
               <span className="pbs__trigger-value">{guestText}</span>
@@ -155,7 +228,7 @@ export function ProductBookingSidebar() {
           </div>
         </div>
 
-        {/* Guest dropdown — absolute, below triggers */}
+        {/* Guest dropdown */}
         {guestDropdownOpen && (
           <div className="pbs__guest-dropdown">
             <div className="flex items-center justify-between gap-8 py-[14px]">
@@ -177,35 +250,80 @@ export function ProductBookingSidebar() {
         )}
       </div>
 
-      {/* Date popup */}
-      {popupOpen && (
-        <div className="pbs__popup">
-          <div className="pbs__popup-header">
-            <div className="pbs__popup-header-info">
-              <div className="pbs__popup-nights">{nights != null ? `${nights} nätter` : "Välj datum"}</div>
-              {checkIn && checkOut && (
-                <div className="pbs__popup-dates">
-                  {format(checkIn, "d MMMM yyyy", { locale: sv })} – {format(checkOut, "d MMMM yyyy", { locale: sv })}
+      {/* Rate plans */}
+      {ratePlans.length > 0 && (
+        <div className="pbs__plans">
+          {ratePlans.map((rp) => {
+            const isSelected = rp.externalId === selectedPlanId;
+            return (
+              <button
+                key={rp.externalId}
+                type="button"
+                className={`pbs__plan${isSelected ? " pbs__plan--selected" : ""}`}
+                onClick={() => setSelectedPlanId(rp.externalId)}
+              >
+                <div className="pbs__plan-radio">
+                  <span className="pbs__plan-radio-dot" />
                 </div>
-              )}
+                <div className="pbs__plan-info">
+                  <span className="pbs__plan-name">{rp.name}</span>
+                  <span className="pbs__plan-desc">{rp.cancellationDescription}</span>
+                  {rp.includedAddons.length > 0 && (
+                    <span className="pbs__plan-includes">
+                      Inkl: {rp.includedAddons.map((a) => a.name).join(", ")}
+                    </span>
+                  )}
+                </div>
+                <div className="pbs__plan-price">
+                  <span className="pbs__plan-price-total">{formatPriceDisplay(rp.totalPrice)} kr</span>
+                  <span className="pbs__plan-price-nightly">{formatPriceDisplay(rp.pricePerNight)} kr/natt</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Date modal */}
+      {modalOpen && (
+        <div className={`pbs__modal-overlay${modalClosing ? " pbs__modal-overlay--closing" : ""}`} onClick={closeModal}>
+          <div className="pbs__modal" onClick={(e) => e.stopPropagation()}>
+            <div className="pbs__modal-header">
+              <div className="pbs__modal-header-info">
+                <div className="pbs__modal-nights">{nights != null ? `${nights} nätter` : "Välj datum"}</div>
+                {checkIn && checkOut && (
+                  <div className="pbs__modal-dates">
+                    {format(checkIn, "d MMMM yyyy", { locale: sv })} – {format(checkOut, "d MMMM yyyy", { locale: sv })}
+                  </div>
+                )}
+              </div>
+              <button className="pbs__modal-close" onClick={closeModal} aria-label="Stäng">
+                <span className="material-symbols-rounded" style={{ fontSize: 20 }}>close</span>
+              </button>
             </div>
-          </div>
-          <div className="pbs__popup-calendar">
-            <DateRangePicker
-              checkIn={checkIn} checkOut={checkOut} onRangeChange={handleRangeChange}
-              viewMonth={viewMonth} onViewMonthChange={setViewMonth}
-              hoverDate={hoverDate} onHoverDateChange={setHoverDate}
-            />
-          </div>
-          <div className="pbs__popup-footer">
-            <button type="button" className="pbs__popup-btn pbs__popup-btn--ghost" onClick={handleClear}>Rensa datum</button>
-            <button type="button" className="pbs__popup-btn pbs__popup-btn--solid" onClick={handleClose}>Stäng</button>
+
+            <div className="pbs__modal-calendar">
+              <DateRangePicker
+                checkIn={checkIn} checkOut={checkOut} onRangeChange={handleRangeChange}
+                viewMonth={viewMonth} onViewMonthChange={setViewMonth}
+                hoverDate={hoverDate} onHoverDateChange={setHoverDate}
+              />
+            </div>
+
+            <div className="pbs__modal-footer">
+              <button type="button" className="pbs__modal-btn pbs__modal-btn--ghost" onClick={handleClear}>Rensa datum</button>
+              <button type="button" className="pbs__modal-btn pbs__modal-btn--solid" onClick={handleSave} disabled={!checkIn || !checkOut}>
+                Spara
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* Buy button */}
-      <button type="button" className="pbs__buy-btn" onClick={handleBook}>Boka nu</button>
+      <button type="button" className="pbs__buy-btn" onClick={handleBook} disabled={isBooking || !selectedPlan}>
+        {isBooking ? "Skapar bokning..." : "Boka nu"}
+      </button>
     </div>
   );
 }

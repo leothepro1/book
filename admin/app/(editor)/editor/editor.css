@@ -2377,7 +2377,7 @@
     border-radius: var(--admin-dropdown-list-radius);
     margin: 0;
     flex-direction: column;
-    gap: 6px;
+    gap: 0px;
     width: 100%;
     min-width: 200px;
     margin-inline: auto;

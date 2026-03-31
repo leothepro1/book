@@ -17,8 +17,20 @@ const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "",
 );
 
+interface CheckoutAddon {
+  productId: string;
+  variantId: string | null;
+  title: string;
+  variantTitle: string | null;
+  quantity: number;
+  unitAmount: number;
+  totalAmount: number;
+  pricingMode: string;
+  currency: string;
+}
+
 interface CheckoutProps {
-  tenantId: string;
+  sessionToken: string;
   product: {
     title: string;
     image: string | null;
@@ -26,17 +38,17 @@ interface CheckoutProps {
     currency: string;
     ratePlanName: string | null;
   } | null;
-  productSlug: string;
   checkIn: string | null;
   checkOut: string | null;
   guests: number;
   nights: number;
+  addons: CheckoutAddon[];
+  accommodationTotal: number;
   bookingTerms: string | null;
   header: {
     logoUrl: string | null;
     logoWidth: number;
   };
-  ratePlanId: string | null;
   /** Payment methods enabled for this tenant (from server) */
   availableMethods?: string[];
   /** Whether wallet detection should run */
@@ -45,7 +57,6 @@ interface CheckoutProps {
   klarnaEnabled?: boolean;
 }
 
-type StepId = 1 | 2 | 3 | 4;
 type PaymentType = "full" | "klarna";
 type PaymentMethod = "card" | "paypal" | "gpay" | "applepay";
 
@@ -104,7 +115,6 @@ function KlarnaAutoAdvance({ onAdvance }: { onAdvance: () => void }) {
   useEffect(() => {
     if (advancedRef.current) return;
     advancedRef.current = true;
-    // Micro-delay so the step morphs open briefly, then auto-advances
     const t = setTimeout(onAdvance, 80);
     return () => clearTimeout(t);
   }, [onAdvance]);
@@ -212,7 +222,7 @@ function CardInputs({
   );
 }
 
-// ── Step 2: Payment Method Accordion ───────────────────────
+// ── Payment Method Accordion ───────────────────────
 
 interface CardInfo {
   brand: string;
@@ -293,7 +303,7 @@ function PaymentMethodAccordion({
   );
 }
 
-// ── Step 3: Confirm Button (inside Elements provider) ──────
+// ── Confirm Button (inside Elements provider) ──────
 
 function ConfirmButton({
   paymentMethod,
@@ -348,14 +358,12 @@ function ConfirmButton({
         else setProcessing(false);
 
       } else if (paymentMethod === "paypal") {
-        // PayPal: redirect flow via Stripe
         const result = await stripe.confirmPayPalPayment(clientSecret, {
           return_url: returnUrl,
         });
         if (result.error) { setError(result.error.message ?? "PayPal-betalningen misslyckades."); setProcessing(false); }
 
       } else if (paymentType === "klarna") {
-        // Klarna: redirect flow via Stripe
         const result = await stripe.confirmKlarnaPayment(clientSecret, {
           payment_method: { billing_details: { email: "", address: { country: "SE" } } },
           return_url: returnUrl,
@@ -363,8 +371,6 @@ function ConfirmButton({
         if (result.error) { setError(result.error.message ?? "Klarna-betalningen misslyckades."); setProcessing(false); }
 
       } else {
-        // Google Pay / Apple Pay — handled via Payment Request API
-        // For now, fallback to generic confirm
         onSuccess();
       }
     } catch (err) {
@@ -385,7 +391,7 @@ function ConfirmButton({
     const pr = stripe.paymentRequest({
       country: "SE",
       currency: "sek",
-      total: { label: "Totalt", amount: 100 }, // Updated by parent — placeholder
+      total: { label: "Totalt", amount: 100 },
       requestPayerName: true,
       requestPayerEmail: true,
     });
@@ -498,29 +504,8 @@ function FieldError({ error }: { error?: string }) {
 
 // ── Main Checkout ──────────────────────────────────────────
 
-export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkOut, guests, nights, bookingTerms, header, ratePlanId, availableMethods, walletsEnabled = true, klarnaEnabled = true }: CheckoutProps) {
+export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guests, nights, addons: addonSnapshots, accommodationTotal, bookingTerms, header, availableMethods, walletsEnabled = true, klarnaEnabled = true }: CheckoutProps) {
   const router = useRouter();
-  const [activeStep, setActiveStep] = useState<StepId>(1);
-  const [visibleStep, setVisibleStep] = useState<StepId>(1); // which body is expanded (lags activeStep for stagger)
-  const [leavingStep, setLeavingStep] = useState<StepId | null>(null); // card losing focus
-  const [completedSteps, setCompletedSteps] = useState<Set<StepId>>(new Set());
-  const [hasTransitioned, setHasTransitioned] = useState(false); // enables content animation after first step change
-  const staggerTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  // Orchestrated step transition: collapse old while expanding new
-  const transitionToStep = useCallback((nextStep: StepId) => {
-    if (staggerTimerRef.current) clearTimeout(staggerTimerRef.current);
-
-    if (!hasTransitioned) setHasTransitioned(true);
-    setLeavingStep(activeStep);
-    setActiveStep(nextStep);
-    // Open new step immediately — old collapses at the same time via CSS
-    setVisibleStep(nextStep);
-
-    staggerTimerRef.current = setTimeout(() => {
-      setLeavingStep(null);
-    }, 200);
-  }, [activeStep, hasTransitioned]);
 
   const [paymentType, setPaymentType] = useState<PaymentType>("full");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
@@ -532,10 +517,10 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
   // ── Analytics: CHECKOUT_STARTED on mount ──
   useEffect(() => {
     track({
-      tenantId,
+      tenantId: "",
       eventType: "CHECKOUT_STARTED",
       payload: {
-        productSlug,
+        sessionToken,
         checkIn,
         checkOut,
         guests,
@@ -544,7 +529,7 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Contact info (step 1) ───────────────────────────────────
+  // ── Contact info ───────────────────────────────────
   const [contactEmail, setContactEmail] = useState("");
   const [contactCountry, setContactCountry] = useState("SE");
   const [contactFirstName, setContactFirstName] = useState("");
@@ -552,9 +537,6 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
   const [contactAddress, setContactAddress] = useState("");
   const [contactPostalCode, setContactPostalCode] = useState("");
   const [contactCity, setContactCity] = useState("");
-  // Validation state: "dirty" = field has had content at some point.
-  // "touched" = blur after dirty, OR submit attempted.
-  // Errors only show for touched fields — never for fields the user hasn't interacted with yet.
   const [contactDirty, setContactDirty] = useState<Record<string, boolean>>({});
   const [contactTouched, setContactTouched] = useState<Record<string, boolean>>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -563,7 +545,7 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
 
   const guestName = `${contactFirstName} ${contactLastName}`.trim();
   const guestEmail = contactEmail;
-  const guestPhone = ""; // Phone not collected in this flow
+  const guestPhone = "";
 
   const [piError, setPiError] = useState<string | null>(null);
   const [priceBreakdownOpen, setPriceBreakdownOpen] = useState(false);
@@ -573,16 +555,14 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
   const [availableWallets, setAvailableWallets] = useState<{ gpay: boolean; applepay: boolean }>({ gpay: false, applepay: false });
   const [ready, setReady] = useState(false);
 
-  // Mark ready after hydration — product data is already in props
   useEffect(() => { setReady(true); }, []);
 
   // ── Google Places Autocomplete ──────────────────────────────
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!apiKey || !addressInputRef.current) return;
-    if (autocompleteRef.current) return; // Already initialized
+    if (autocompleteRef.current) return;
 
-    // Load Google Maps script if not already loaded
     const scriptId = "google-maps-places";
     if (!document.getElementById(scriptId)) {
       const script = document.createElement("script");
@@ -627,7 +607,6 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
     }
   }, [contactCountry]);
 
-  // Update autocomplete country restriction when country changes
   useEffect(() => {
     if (autocompleteRef.current) {
       autocompleteRef.current.setComponentRestrictions({
@@ -636,12 +615,7 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
     }
   }, [contactCountry]);
 
-  // ── Contact validation helpers ────────────────────────────────
-  // ── Validation: errors only show for touched fields ──────────
-  // "touched" = (field was dirty AND blurred) OR (submit was attempted)
-  // This means: tabbing through empty fields shows nothing.
-  // Clearing a field you typed in and leaving → shows error.
-  // Clicking "Nästa" with empty fields → shows all errors at once.
+  // ── Contact validation ────────────────────────────────
   const isTouched = (f: string) => contactTouched[f] || submitAttempted;
 
   const contactErrors: Record<string, string> = {};
@@ -661,7 +635,7 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
     contactPostalCode.trim().length > 0 &&
     contactCity.trim().length > 0;
 
-  // Detect available wallets on mount via Stripe PaymentRequest
+  // Detect available wallets on mount
   useEffect(() => {
     if (!walletsEnabled || !stripePromise) return;
     stripePromise.then((stripe) => {
@@ -682,11 +656,9 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
     });
   }, [walletsEnabled]);
 
-  // Filter payment methods based on wallet availability + tenant config
+  // Filter payment methods
   const paymentMethods = ALL_PAYMENT_METHODS.filter((m) => {
-    // If tenant has configured available methods, respect that
     if (availableMethods && !availableMethods.includes(m.id)) {
-      // Map wallet IDs: CheckoutClient uses "gpay"/"applepay", registry uses "google_pay"/"apple_pay"
       const registryId = m.id === "gpay" ? "google_pay" : m.id === "applepay" ? "apple_pay" : m.id;
       if (!availableMethods.includes(registryId)) return false;
     }
@@ -695,37 +667,36 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
     return true;
   });
 
-  // Idempotency key — stable per component mount (one checkout session)
+  // Idempotency key — stable per component mount
   const checkoutIdempotencyKey = useRef<string>(crypto.randomUUID());
   const piIsLoading = useRef(false);
 
-  // Create Order + PaymentIntent after step 2 (payment type choice) is completed
-  // Step 1 = contact, Step 2 = payment type, Step 3 = payment method, Step 4 = review
+  // Create Order + PaymentIntent on mount (no step gating)
   useEffect(() => {
-    if (!clientSecret && orderId) return;
-    if (clientSecret || !product || !checkIn || !checkOut) return;
-    if (!completedSteps.has(2 as StepId)) return;
+    if (clientSecret || orderId || !product || !checkIn || !checkOut) return;
     if (piIsLoading.current) return;
 
     piIsLoading.current = true;
     setPiError(null);
+    const key = checkoutIdempotencyKey.current;
     fetch("/api/checkout/payment-intent", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-idempotency-key": checkoutIdempotencyKey.current,
+        "x-idempotency-key": key,
       },
       body: JSON.stringify({
-        productSlug,
-        checkIn,
-        checkOut,
-        guests,
-        ratePlanId: ratePlanId ?? null,
+        sessionToken,
         paymentType,
       }),
     })
-      .then((res) => res.json())
-      .then((data) => {
+      .then(async (res) => {
+        const data = await res.json();
+        if (res.status === 409) {
+          // Idempotency conflict — generate new key for next attempt
+          checkoutIdempotencyKey.current = crypto.randomUUID();
+          return;
+        }
         if (data.error) {
           setPiError(data.message ?? "Kunde inte skapa betalning.");
           return;
@@ -735,23 +706,7 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
       })
       .catch(() => setPiError("Nätverksfel — försök igen."))
       .finally(() => { piIsLoading.current = false; });
-  }, [completedSteps, clientSecret, orderId, product, productSlug, checkIn, checkOut, guests, ratePlanId, paymentType]);
-
-  const handleNext = (step: StepId) => {
-    // When completing step 2 with Klarna, skip step 3 entirely —
-    // mark both 2 and 3 as completed, jump straight to step 4
-    if (step === 2 && paymentType === "klarna") {
-      setCompletedSteps((prev) => { const next = new Set(prev); next.add(2 as StepId); next.add(3 as StepId); return next; });
-      transitionToStep(4 as StepId);
-      return;
-    }
-    setCompletedSteps((prev) => new Set(prev).add(step));
-    if (step < 4) transitionToStep((step + 1) as StepId);
-  };
-
-  const handleEdit = (step: StepId) => {
-    transitionToStep(step);
-  };
+  }, [clientSecret, orderId, product, sessionToken, checkIn, checkOut, guests, paymentType]);
 
   const handlePaymentSuccess = () => {
     if (orderId) {
@@ -761,12 +716,24 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
 
   // Submit guest info before payment confirmation
   const submitGuestInfo = async (): Promise<boolean> => {
-    if (!orderId || !guestName || !guestEmail) return false;
+    if (!orderId || !contactFirstName || !contactLastName || !contactEmail) return false;
     try {
       const res = await fetch("/api/checkout/update-guest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId, guestName, guestEmail, guestPhone: guestPhone || undefined }),
+        body: JSON.stringify({
+          orderId,
+          guestEmail: contactEmail,
+          guestFirstName: contactFirstName,
+          guestLastName: contactLastName,
+          guestPhone: guestPhone || undefined,
+          billingAddress: contactAddress ? {
+            address1: contactAddress,
+            city: contactCity,
+            postalCode: contactPostalCode,
+            country: contactCountry,
+          } : undefined,
+        }),
       });
       return res.ok;
     } catch {
@@ -774,77 +741,12 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
     }
   };
 
-  const getStepSummary = (stepId: StepId): React.ReactNode | null => {
-    if (!completedSteps.has(stepId)) return null;
-    switch (stepId) {
-      case 1:
-        return contactEmail ? `${contactFirstName} ${contactLastName} · ${contactEmail}` : null;
-      case 2:
-        return paymentType === "full"
-          ? `Betala ${product ? `${formatPriceDisplay(product.price, product.currency)} kr` : "—"} nu`
-          : "Betala över tid med Klarna";
-      case 3: {
-        if (paymentType === "klarna") {
-          return (
-            <div className="co__klarna-step2" style={{ marginTop: 4 }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="https://res.cloudinary.com/dmgmoisae/image/upload/v1774386014/klarna_black.d9f77175f9bc7a0600aef2215118c7f5_gnatss.svg"
-                alt="Klarna"
-                className="co__klarna-step2-logo"
-              />
-              <p className="co__klarna-step2-legal">
-                Genom att fortsätta godkänner du{" "}
-                <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/user" target="_blank" rel="noopener noreferrer">Klarnas köpvillkor</a>
-                {" "}och bekräftar att du har läst{" "}
-                <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/privacy" target="_blank" rel="noopener noreferrer">Klarnas sekretessmeddelande</a>
-                {" "}och{" "}
-                <a href="https://cdn.klarna.com/1.0/shared/content/legal/terms/0/sv_se/cookie_purchase" target="_blank" rel="noopener noreferrer">Klarnas cookie-meddelande</a>.
-              </p>
-            </div>
-          );
-        }
-        if (paymentMethod === "card" && cardInfo) {
-          const brandSvg = BRAND_SVGS[cardInfo.brand] ?? null;
-          const brandLabel = cardInfo.brand.charAt(0).toUpperCase() + cardInfo.brand.slice(1);
-          return (
-            <span className="co__step-summary-card">
-              {brandSvg && <span dangerouslySetInnerHTML={{ __html: brandSvg }} />}
-              <span>{brandLabel}</span>
-            </span>
-          );
-        }
-        const method = ALL_PAYMENT_METHODS.find((m) => m.id === paymentMethod);
-        if (!method) return null;
-        return (
-          <span className="co__step-summary-method">
-            <span dangerouslySetInnerHTML={{ __html: method.svg }} />
-            <span>{method.title}</span>
-          </span>
-        );
-      }
-      default:
-        return null;
-    }
-  };
-
-  const STEP_TITLES: Record<StepId, string> = {
-    1: "Kontaktuppgifter",
-    2: "Välj hur du vill betala",
-    3: "Lägg till betalningsmetod",
-    4: "Granska din bokning",
-  };
-
-
-  // Mark dirty on change (field has had content), touched on blur (only if dirty)
   const markDirty = (field: string) => {
     if (!contactDirty[field]) setContactDirty((p) => ({ ...p, [field]: true }));
   };
   const markTouched = (field: string) => {
-    // Only show error on blur if user actually typed something at some point
     if (contactDirty[field]) setContactTouched((p) => ({ ...p, [field]: true }));
   };
-
 
   const COUNTRIES = [
     { code: "SE", name: "Sverige" }, { code: "NO", name: "Norge" }, { code: "DK", name: "Danmark" },
@@ -855,27 +757,49 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
     { code: "US", name: "USA" }, { code: "CA", name: "Kanada" },
   ];
 
-  const renderStepContent = (stepId: StepId) => {
-    switch (stepId) {
-      case 1:
-        return (
-          <>
-            <div
-              className="co__contact-form"
-              onKeyDown={(e) => {
-                if (e.key !== "Enter") return;
-                const form = e.currentTarget;
-                const focusable = Array.from(form.querySelectorAll<HTMLElement>("input, select"));
-                const idx = focusable.indexOf(e.target as HTMLElement);
-                if (idx >= 0 && idx < focusable.length - 1) {
-                  e.preventDefault();
-                  focusable[idx + 1].focus();
-                } else if (idx === focusable.length - 1) {
-                  e.preventDefault();
-                  if (contactValid) handleNext(1); else setSubmitAttempted(true);
-                }
-              }}
-            >
+  if (!ready) {
+    return <LoadingScreen fixed />;
+  }
+
+  return (
+    <>
+    {/* ── Checkout header ──────────────────────────── */}
+    <header className="co-header">
+      <div className="co-header__inner">
+        <a href="/" className="co-header__logo">
+          {header.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={header.logoUrl} alt="Logo" style={{ width: header.logoWidth, height: "auto" }} />
+          ) : (
+            <div className="co-header__logo-placeholder" style={{ width: header.logoWidth }} />
+          )}
+        </a>
+        <span
+          className="material-symbols-rounded"
+          style={{ fontSize: 23, color: "#1a1a1a", fontVariationSettings: "'wght' 300" }}
+        >
+          shopping_bag
+        </span>
+      </div>
+    </header>
+
+    <div className="co">
+      {/* Column 1: Back button */}
+      <div className="co__back-col">
+        <button type="button" className="co__back-btn" onClick={() => router.back()} aria-label="Tillbaka">
+          <span className="material-symbols-rounded" style={{ fontSize: 20 }}>arrow_back</span>
+        </button>
+      </div>
+
+      {/* Column 2: Main */}
+      <div className="co__main-col">
+        <h1 className="co__title">Bekräfta och betala</h1>
+
+        <div className="co__sections">
+          {/* ── Contact info ────────────────────────── */}
+          <section className="co__section">
+            <h2 className="co__section-title">Kontaktuppgifter</h2>
+            <div className="co__contact-form">
               {/* Email */}
               <div className="co__contact-field">
                 <div className="co__float" data-filled={contactEmail ? "" : undefined}>
@@ -944,7 +868,7 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
                 </div>
               </div>
 
-              {/* Address with Google autocomplete */}
+              {/* Address */}
               <div className="co__contact-field">
                 <div className="co__float" data-filled={contactAddress ? "" : undefined}>
                   <input
@@ -997,15 +921,11 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
                 </div>
               </div>
             </div>
-            <div className="co__step-footer">
-              <button type="button" className="co__next-btn" onClick={() => { if (contactValid) { handleNext(1); } else { setSubmitAttempted(true); } }}>Nästa</button>
-            </div>
-          </>
-        );
+          </section>
 
-      case 2:
-        return (
-          <>
+          {/* ── Payment type ────────────────────────── */}
+          <section className="co__section">
+            <h2 className="co__section-title">Välj hur du vill betala</h2>
             <div className="co__methods">
               {([
                 { id: "full" as PaymentType, title: `Betala ${product ? `${formatPriceDisplay(product.price, product.currency)} kr` : "—"} nu` },
@@ -1017,7 +937,7 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
                     <button
                       type="button"
                       className="co__method-header"
-                      onClick={() => { setPaymentType(opt.id); setClientSecret(null); setCompletedSteps((prev) => { const next = new Set(prev); next.delete(3 as StepId); next.delete(4 as StepId); return next; }); }}
+                      onClick={() => setPaymentType(opt.id)}
                     >
                       <span className="co__method-info">
                         <span className="co__method-title">{opt.title}</span>
@@ -1039,161 +959,78 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
                 );
               })}
             </div>
-            <div className="co__step-footer">
-              <button type="button" className="co__next-btn" onClick={() => handleNext(2)}>Nästa</button>
-            </div>
-          </>
-        );
+          </section>
 
-      case 3:
-        return paymentType === "klarna" ? null : (
-          <>
-            {clientSecret ? (
-              <Elements stripe={stripePromise} options={{ clientSecret }}>
-                <PaymentMethodAccordion
-                  methods={paymentMethods}
-                  onReady={() => setPaymentReady(true)}
-                  selectedMethod={paymentMethod}
-                  onMethodChange={setPaymentMethod}
-                  onCardChange={setCardInfo}
-                  cardName={cardName}
-                  onCardNameChange={setCardName}
-                />
-              </Elements>
-            ) : (
-              <div className="co__payment-skeleton">
-                <div className="co__skel-method" />
-                <div className="co__skel-method" />
-                <div className="co__skel-method" />
-              </div>
-            )}
-            <div className="co__step-footer">
-              <button type="button" className="co__next-btn" onClick={() => handleNext(3)}>
-                Nästa
-              </button>
-            </div>
-          </>
-        );
+          {clientSecret ? (
+            <Elements stripe={stripePromise} options={{ clientSecret }}>
+              {/* ── Payment method (card/paypal/wallet) — hidden for Klarna ── */}
+              {paymentType !== "klarna" && (
+                <section className="co__section">
+                  <h2 className="co__section-title">Lägg till betalningsmetod</h2>
+                  <PaymentMethodAccordion
+                    methods={paymentMethods}
+                    onReady={() => setPaymentReady(true)}
+                    selectedMethod={paymentMethod}
+                    onMethodChange={setPaymentMethod}
+                    onCardChange={setCardInfo}
+                    cardName={cardName}
+                    onCardNameChange={setCardName}
+                  />
+                </section>
+              )}
 
-      case 4:
-        return (
-          <>
-            <p className="co__terms">
-              Genom att trycka på knappen godkänner jag dessa{" "}
-              <button type="button" className="co__terms-link" onClick={() => setTermsOpen(true)}>
-                bokningsvillkor
-              </button>.
-            </p>
-            {clientSecret ? (
-              <Elements stripe={stripePromise} options={{ clientSecret }}>
+              {/* ── Klarna legal (shown when Klarna selected) ── */}
+              {paymentType === "klarna" && (
+                <section className="co__section">
+                  <KlarnaAutoAdvance onAdvance={() => {}} />
+                </section>
+              )}
+
+              {/* ── Confirm & pay ────────────────────────── */}
+              <section className="co__section">
+                <p className="co__terms">
+                  Genom att trycka på knappen godkänner jag dessa{" "}
+                  <button type="button" className="co__terms-link" onClick={() => setTermsOpen(true)}>
+                    bokningsvillkor
+                  </button>.
+                </p>
+                {piError && <div className="co__payment-error">{piError}</div>}
                 <ConfirmButton
                   paymentMethod={paymentMethod}
                   paymentType={paymentType}
-                  disabled={false}
+                  disabled={!contactValid}
                   onSuccess={handlePaymentSuccess}
                   clientSecret={clientSecret}
-                  onBeforeConfirm={submitGuestInfo}
+                  onBeforeConfirm={async () => {
+                    if (!contactValid) {
+                      setSubmitAttempted(true);
+                      return false;
+                    }
+                    return submitGuestInfo();
+                  }}
                 />
-              </Elements>
-            ) : (
-              <button type="button" className="co__confirm-btn" disabled>
-                Bekräfta och betala
-              </button>
-            )}
-          </>
-        );
-    }
-  };
-
-  if (!ready) {
-    return <LoadingScreen fixed />;
-  }
-
-  return (
-    <>
-    {/* ── Checkout header ──────────────────────────── */}
-    <header className="co-header">
-      <div className="co-header__inner">
-        <a href="/" className="co-header__logo">
-          {header.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={header.logoUrl} alt="Logo" style={{ width: header.logoWidth, height: "auto" }} />
+              </section>
+            </Elements>
           ) : (
-            <div className="co-header__logo-placeholder" style={{ width: header.logoWidth }} />
+            <>
+              {/* ── Skeleton while loading ── */}
+              {paymentType !== "klarna" && (
+                <section className="co__section">
+                  <h2 className="co__section-title">Lägg till betalningsmetod</h2>
+                  <div className="co__payment-skeleton">
+                    <div className="co__skel-method" />
+                    <div className="co__skel-method" />
+                    <div className="co__skel-method" />
+                  </div>
+                </section>
+              )}
+              <section className="co__section">
+                <button type="button" className="co__confirm-btn" disabled>
+                  Bekräfta och betala
+                </button>
+              </section>
+            </>
           )}
-        </a>
-        <span
-          className="material-symbols-rounded"
-          style={{ fontSize: 23, color: "#1a1a1a", fontVariationSettings: "'wght' 300" }}
-        >
-          shopping_bag
-        </span>
-      </div>
-    </header>
-
-    <div className="co">
-      {/* Column 1: Back button */}
-      <div className="co__back-col">
-        <button type="button" className="co__back-btn" onClick={() => router.back()} aria-label="Tillbaka">
-          <span className="material-symbols-rounded" style={{ fontSize: 20 }}>arrow_back</span>
-        </button>
-      </div>
-
-      {/* Column 2: Main */}
-      <div className="co__main-col">
-        <h1 className="co__title">Bekräfta och betala</h1>
-
-        <div className="co__steps">
-          {([1, 2, 3, 4] as StepId[]).map((stepId) => {
-            const isActive = activeStep === stepId;
-            const isBodyOpen = visibleStep === stepId;
-            const isLeaving = leavingStep === stepId;
-            const isCompleted = completedSteps.has(stepId) && !isActive;
-            const summary = getStepSummary(stepId);
-            const showSummary = isCompleted && summary;
-
-            return (
-              <div
-                key={stepId}
-                className={[
-                  "co__step",
-                  isActive && !isLeaving ? "co__step--active" : "",
-                  isLeaving ? "co__step--leaving" : "",
-                ].filter(Boolean).join(" ")}
-              >
-                <div className="co__step-header">
-                  <div className="co__step-header-left">
-                    <div className="co__step-title">{stepId}. {STEP_TITLES[stepId]}</div>
-                    <div className={`co__step-summary${showSummary ? " co__step-summary--visible" : ""}`}>
-                      <div className="co__step-summary-inner">
-                        {summary ?? "\u00A0"}
-                      </div>
-                    </div>
-                  </div>
-                  {/* Hide edit button on step 3 when Klarna — step is auto-completed, not editable */}
-                  {!(stepId === 3 && paymentType === "klarna") && (
-                    <button
-                      type="button"
-                      className={`co__step-edit${isCompleted ? " co__step-edit--visible" : ""}`}
-                      onClick={() => handleEdit(stepId)}
-                      tabIndex={isCompleted ? 0 : -1}
-                    >
-                      Ändra
-                    </button>
-                  )}
-                </div>
-
-                <div className={`co__step-body${isBodyOpen ? " co__step-body--open" : ""}`}>
-                  <div className="co__step-inner">
-                    <div className="co__step-content" {...(hasTransitioned ? { "data-animate": "" } : {})}>
-                      {renderStepContent(stepId)}
-                    </div>
-                  </div>
-                </div>
-                <div className="co__step-spacer" />
-              </div>
-            );
-          })}
         </div>
       </div>
 
@@ -1232,17 +1069,23 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
 
           {/* Prisuppgifter */}
           {product && nights != null && nights > 0 && (() => {
-            const subtotal = product.price;
+            const addonSum = addonSnapshots.reduce((sum, a) => sum + a.totalAmount, 0);
+            const subtotal = accommodationTotal + addonSum;
             const taxAmount = Math.round(subtotal * 0.25);
             const total = subtotal + taxAmount;
-            const nightlyPrice = Math.round(subtotal / nights);
             return (
               <>
                 <div className="co__summary-prices">
                   <div className="co__summary-price-row">
-                    <span>{nights} nätter x {formatPriceDisplay(nightlyPrice, product.currency)} kr</span>
-                    <span>{formatPriceDisplay(subtotal, product.currency)} kr</span>
+                    <span>Boende ({nights} nätter)</span>
+                    <span>{formatPriceDisplay(accommodationTotal, product.currency)} kr</span>
                   </div>
+                  {addonSnapshots.map((addon, i) => (
+                    <div key={i} className="co__summary-price-row">
+                      <span>{addon.title}{addon.quantity > 1 ? ` x${addon.quantity}` : ""}</span>
+                      <span>{formatPriceDisplay(addon.totalAmount, addon.currency)} kr</span>
+                    </div>
+                  ))}
                   <div className="co__summary-price-row">
                     <span>Skatter</span>
                     <span>{formatPriceDisplay(taxAmount, product.currency)} kr</span>
@@ -1259,7 +1102,6 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
             );
           })()}
 
-          {/* Fallback totalt when no product/nights */}
           {(!product || nights == null || nights <= 0) && (
             <>
               <div className="co__summary-divider" />
@@ -1270,7 +1112,6 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
             </>
           )}
 
-          {/* Prisspecifikation */}
           <button
             type="button"
             className="co__summary-breakdown-btn"
@@ -1283,7 +1124,8 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
 
       {/* Prisspecifikation modal */}
       {product && nights != null && nights > 0 && (() => {
-        const subtotal = product.price;
+        const addonSum = addonSnapshots.reduce((sum, a) => sum + a.totalAmount, 0);
+        const subtotal = accommodationTotal + addonSum;
         const taxAmount = Math.round(subtotal * 0.25);
         const total = subtotal + taxAmount;
         return (
@@ -1294,9 +1136,15 @@ export function CheckoutClient({ tenantId, product, productSlug, checkIn, checkO
           >
             <div className="co__breakdown">
               <div className="co__breakdown-row">
-                <span>{nights} nätter · {checkIn && checkOut ? `${format(parseISO(checkIn), "d", { locale: sv })}–${format(parseISO(checkOut), "d MMM", { locale: sv })}` : ""}</span>
-                <span>{formatPriceDisplay(subtotal, product.currency)} kr</span>
+                <span>Boende · {nights} nätter · {checkIn && checkOut ? `${format(parseISO(checkIn), "d", { locale: sv })}–${format(parseISO(checkOut), "d MMM", { locale: sv })}` : ""}</span>
+                <span>{formatPriceDisplay(accommodationTotal, product.currency)} kr</span>
               </div>
+              {addonSnapshots.map((addon, i) => (
+                <div key={i} className="co__breakdown-row">
+                  <span>{addon.title}{addon.quantity > 1 ? ` x${addon.quantity}` : ""}</span>
+                  <span>{formatPriceDisplay(addon.totalAmount, addon.currency)} kr</span>
+                </div>
+              ))}
               <div className="co__breakdown-row">
                 <span>Skatter</span>
                 <span>{formatPriceDisplay(taxAmount, product.currency)} kr</span>

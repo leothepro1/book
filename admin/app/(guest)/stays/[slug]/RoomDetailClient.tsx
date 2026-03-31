@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { formatDateRange } from "@/app/_lib/search/dates";
-import { saveBookingSelection } from "@/app/(guest)/_lib/booking/booking-selection";
 import { track } from "@/app/_lib/analytics/client";
 import "./room-detail.css";
 
@@ -52,6 +51,7 @@ interface SearchParams {
 }
 
 interface RoomDetailClientProps {
+  accommodationId: string | null;
   category: Category | null;
   ratePlans: RatePlan[];
   addons: Addon[];
@@ -60,9 +60,75 @@ interface RoomDetailClientProps {
   error?: string;
 }
 
+// ── Lightbox ──────────────────────────────────────────────────
+
+function Lightbox({
+  images,
+  initialIndex,
+  onClose,
+}: {
+  images: string[];
+  initialIndex: number;
+  onClose: () => void;
+}) {
+  const [idx, setIdx] = useState(initialIndex);
+  const [closing, setClosing] = useState(false);
+
+  const close = useCallback(() => {
+    setClosing(true);
+    setTimeout(onClose, 200);
+  }, [onClose]);
+
+  const prev = useCallback(() => setIdx((i) => (i - 1 + images.length) % images.length), [images.length]);
+  const next = useCallback(() => setIdx((i) => (i + 1) % images.length), [images.length]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+      if (e.key === "ArrowLeft") prev();
+      if (e.key === "ArrowRight") next();
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [close, prev, next]);
+
+  return (
+    <div className={`rd-lb${closing ? " rd-lb--closing" : ""}`} onClick={close}>
+      <div className="rd-lb__content" onClick={(e: MouseEvent) => e.stopPropagation()}>
+        <button className="rd-lb__close" onClick={close} aria-label="Stäng">
+          <span className="material-symbols-rounded">close</span>
+        </button>
+
+        {images.length > 1 && (
+          <button className="rd-lb__arrow rd-lb__arrow--prev" onClick={prev} aria-label="Föregående">
+            <span className="material-symbols-rounded">chevron_left</span>
+          </button>
+        )}
+
+        <img src={images[idx]} alt="" className="rd-lb__img" />
+
+        {images.length > 1 && (
+          <button className="rd-lb__arrow rd-lb__arrow--next" onClick={next} aria-label="Nästa">
+            <span className="material-symbols-rounded">chevron_right</span>
+          </button>
+        )}
+
+        {images.length > 1 && (
+          <div className="rd-lb__counter">{idx + 1} / {images.length}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────
 
 export function RoomDetailClient({
+  accommodationId,
   category,
   ratePlans,
   addons,
@@ -76,6 +142,8 @@ export function RoomDetailClient({
   );
   const [selectedAddons, setSelectedAddons] = useState<Map<string, number>>(new Map());
   const [activeImage, setActiveImage] = useState(0);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [isBooking, setIsBooking] = useState(false);
 
   const currentRatePlan = ratePlans.find((rp) => rp.externalId === selectedRatePlan);
 
@@ -143,39 +211,38 @@ export function RoomDetailClient({
     );
   }
 
-  const handleBook = () => {
-    if (!selectedRatePlan || !category) return;
-    const rpName = ratePlans.find((rp) => rp.externalId === selectedRatePlan)?.name ?? "";
-    const addonEntries = Array.from(selectedAddons.entries())
-      .filter(([, q]) => q > 0)
-      .map(([id, qty]) => {
-        const addon = addons.find((a) => a.externalId === id);
-        return { addonId: id, quantity: qty, unitAmount: addon?.price ?? 0 };
+  const handleBook = async () => {
+    if (!selectedRatePlan || !category || !accommodationId) return;
+    setIsBooking(true);
+
+    try {
+      const res = await fetch("/api/portal/checkout/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accommodationId,
+          ratePlanId: selectedRatePlan,
+          checkIn: searchParams.checkIn,
+          checkOut: searchParams.checkOut,
+          adults: searchParams.guests,
+        }),
       });
 
-    // Save to sessionStorage for the booking form page
-    saveBookingSelection({
-      tenantId: searchParams.tenantId,
-      categoryId: category.externalId,
-      categoryName: category.name,
-      ratePlanId: selectedRatePlan,
-      ratePlanName: rpName,
-      checkIn: searchParams.checkIn,
-      checkOut: searchParams.checkOut,
-      guests: searchParams.guests,
-      nights: searchParams.nights,
-      addons: addonEntries,
-      totalAmount,
-      currency: ratePlans[0]?.currency ?? "SEK",
-      savedAt: new Date().toISOString(),
-    });
+      const data = await res.json();
 
-    const params = new URLSearchParams();
-    params.set("checkIn", searchParams.checkIn);
-    params.set("checkOut", searchParams.checkOut);
-    params.set("guests", String(searchParams.guests));
-    params.set("ratePlanId", selectedRatePlan);
-    router.push(`/stays/${category.externalId}/book?${params.toString()}`);
+      if (!res.ok) {
+        setIsBooking(false);
+        return;
+      }
+
+      // Redirect to addon page or checkout — server decides
+      const url = data.redirect.includes("?")
+        ? `${data.redirect}&session=${data.token}`
+        : `${data.redirect}?session=${data.token}`;
+      router.push(url);
+    } catch {
+      setIsBooking(false);
+    }
   };
 
   const toggleAddon = (addonId: string) => {
@@ -221,7 +288,7 @@ export function RoomDetailClient({
           {/* Image gallery */}
           {category.imageUrls.length > 0 && (
             <div className="rd__gallery">
-              <div className="rd__gallery-main">
+              <div className="rd__gallery-main" onClick={() => setLightboxIdx(activeImage)} role="button" tabIndex={0}>
                 <img src={category.imageUrls[activeImage]} alt={category.name} />
               </div>
               {category.imageUrls.length > 1 && (
@@ -238,6 +305,14 @@ export function RoomDetailClient({
                 </div>
               )}
             </div>
+          )}
+
+          {lightboxIdx !== null && (
+            <Lightbox
+              images={category.imageUrls}
+              initialIndex={lightboxIdx}
+              onClose={() => setLightboxIdx(null)}
+            />
           )}
 
           <h1 className="rd__title">{category.name}</h1>
@@ -352,9 +427,9 @@ export function RoomDetailClient({
             <button
               className="rd__book-btn"
               onClick={handleBook}
-              disabled={!available || !selectedRatePlan}
+              disabled={!available || !selectedRatePlan || isBooking}
             >
-              {available ? "Välj detta alternativ" : "Ej tillgängligt"}
+              {isBooking ? "Skapar bokning..." : available ? "Välj detta alternativ" : "Ej tillgängligt"}
             </button>
           </div>
         </div>

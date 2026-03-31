@@ -44,7 +44,6 @@ import { ProductGalleryDefaultRenderer } from "./renderers/ProductGalleryRendere
 import { ProductContentDefaultRenderer } from "./renderers/ProductContentRenderer";
 import { SearchResultsDefaultRenderer } from "./renderers/SearchResultsRenderer";
 import { PurchaseBlockDefaultRenderer } from "./renderers/PurchaseBlockRenderer";
-
 const RENDERER_MAP: Record<string, React.ComponentType<SectionRendererProps>> = {
   "tabs/underline": TabsUnderlineRenderer,
   "tabs/pill": TabsPillRenderer,

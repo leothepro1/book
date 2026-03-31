@@ -11,6 +11,24 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 
+export interface ProductHighlight {
+  icon: string;
+  text: string;
+  description: string;
+}
+
+export interface ProductRatePlan {
+  externalId: string;
+  name: string;
+  description: string;
+  cancellationPolicy: string;
+  cancellationDescription: string;
+  pricePerNight: number;
+  totalPrice: number;
+  currency: string;
+  includedAddons: Array<{ addonId: string; name: string; quantity: number }>;
+}
+
 export interface ProductContextData {
   id: string;
   title: string;
@@ -21,7 +39,13 @@ export interface ProductContextData {
   currency: string;
   productType: string;
   facilities: string[];
+  highlights: ProductHighlight[];
+  ratePlans: ProductRatePlan[];
   maxGuests: number | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  roomSizeSqm: number | null;
+  extraBeds: number;
 }
 
 const ProductContext = createContext<ProductContextData | null>(null);

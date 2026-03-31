@@ -104,6 +104,7 @@ export type ResolvedAccommodation = {
   ratePlans: ResolvedRatePlan[];
   restrictions: ResolvedRestriction[];
   media: ResolvedMedia[];
+  highlights: ResolvedHighlight[];
   units: ResolvedUnit[];
 
   // Category membership
@@ -158,6 +159,14 @@ export type ResolvedMedia = {
   altText: string | null;
   sortOrder: number;
   source: PrismaFacilitySource;
+};
+
+export type ResolvedHighlight = {
+  id: string;
+  icon: string;
+  text: string;
+  description: string;
+  sortOrder: number;
 };
 
 export type ResolvedUnit = {
@@ -257,6 +266,16 @@ export const ACCOMMODATION_SELECT = {
       altText: true,
       sortOrder: true,
       source: true,
+    },
+    orderBy: { sortOrder: "asc" as const },
+  },
+  highlights: {
+    select: {
+      id: true,
+      icon: true,
+      text: true,
+      description: true,
+      sortOrder: true,
     },
     orderBy: { sortOrder: "asc" as const },
   },

@@ -2,7 +2,8 @@
  * FakeAdapter — Development PMS Adapter
  *
  * Simulates a Swedish camping/hotel property with 8 room categories,
- * 3 accommodation types, and realistic rate plans.
+ * 3 accommodation types, realistic rate plans, and deterministic
+ * blocked dates for partial availability.
  * Used for UI development and edge case testing.
  * Never used in production.
  */
@@ -34,6 +35,205 @@ export type FakeCredentials = z.infer<typeof FakeCredentialsSchema>;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ── Deterministic hash — simple FNV-1a 32-bit ─────────────────
+
+function fnv1a(str: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = (hash * 0x01000193) >>> 0;
+  }
+  return hash;
+}
+
+// ── Blocked dates generator ───────────────────────────────────
+
+/** Known busy periods (month 0-indexed, day 1-indexed) */
+const KNOWN_BUSY_PERIODS: Array<{ month: number; day: number; length: number }> = [
+  { month: 1, day: 17, length: 5 },  // Sportlov (v8)
+  { month: 3, day: 14, length: 5 },  // Påsk
+  { month: 5, day: 20, length: 5 },  // Midsommar
+  { month: 6, day: 10, length: 4 },  // Högsommar 1
+  { month: 7, day: 5, length: 4 },   // Högsommar 2
+  { month: 9, day: 28, length: 3 },  // Höstlov
+  { month: 11, day: 23, length: 4 }, // Jul
+];
+
+type BlockedPeriod = { start: number; end: number }; // epoch ms
+
+function generateBlockedPeriods(externalId: string, year: number): BlockedPeriod[] {
+  const periods: BlockedPeriod[] = [];
+  const seed = fnv1a(externalId);
+
+  // Each accommodation blocks a subset of the known busy periods (seeded)
+  for (let i = 0; i < KNOWN_BUSY_PERIODS.length; i++) {
+    // Use seed + index to decide if this accommodation is blocked
+    if ((seed + i * 7) % 3 === 0) continue; // ~1/3 chance to skip
+    const bp = KNOWN_BUSY_PERIODS[i];
+    const start = new Date(year, bp.month, bp.day).getTime();
+    const end = start + bp.length * 86400000;
+    periods.push({ start, end });
+  }
+
+  // Generate 2–3 "random" blocked periods per accommodation using hash
+  const extraCount = 2 + (seed % 2); // 2 or 3
+  for (let i = 0; i < extraCount; i++) {
+    const monthOffset = ((seed >>> (i * 4)) % 10) + 1; // month 1–10
+    const dayOffset = ((seed >>> (i * 3 + 2)) % 20) + 3; // day 3–22
+    const length = 2 + ((seed >>> (i * 5 + 1)) % 4); // 2–5 nights
+    const start = new Date(year, monthOffset, dayOffset).getTime();
+    const end = start + length * 86400000;
+    periods.push({ start, end });
+  }
+
+  return periods;
+}
+
+function isAvailableForDates(externalId: string, checkIn: Date, checkOut: Date): boolean {
+  const year = checkIn.getFullYear();
+  const periods = [
+    ...generateBlockedPeriods(externalId, year),
+    ...generateBlockedPeriods(externalId, year + 1), // handle year boundary
+  ];
+
+  const searchStart = checkIn.getTime();
+  const searchEnd = checkOut.getTime();
+
+  // Unavailable if any night in range overlaps a blocked period
+  for (const bp of periods) {
+    if (searchStart < bp.end && searchEnd > bp.start) return false;
+  }
+  return true;
+}
+
+// ── Rate plan builders ────────────────────────────────────────
+
+function buildRatePlans(
+  cat: RoomCategory,
+  nights: number,
+  guests: number,
+): Array<{
+  externalId: string;
+  name: string;
+  description: string;
+  cancellationPolicy: "FLEXIBLE" | "MODERATE" | "NON_REFUNDABLE";
+  cancellationDescription: string;
+  pricePerNight: number;
+  totalPrice: number;
+  currency: string;
+  validFrom: null;
+  validTo: null;
+  includedAddons: Array<{ addonId: string; name: string; quantity: number }>;
+}> {
+  switch (cat.type) {
+    case "HOTEL": {
+      const flexPrice = cat.basePricePerNight;
+      const packagePrice = Math.round(cat.basePricePerNight * 0.85);
+      return [
+        {
+          externalId: `${cat.externalId}_flex_hotell`,
+          name: "Flex Hotell",
+          description: "Linneset, Avresestäd, 90% åter vid avbokning senast 2 dygn före ankomst, Frukostbuffé inkluderad",
+          cancellationPolicy: "FLEXIBLE",
+          cancellationDescription: "90% åter vid avbokning senast 2 dygn före ankomst",
+          pricePerNight: flexPrice,
+          totalPrice: flexPrice * nights,
+          currency: "SEK",
+          validFrom: null,
+          validTo: null,
+          includedAddons: [
+            { addonId: "addon-breakfast", name: "Frukostbuffé", quantity: guests },
+            { addonId: "addon-cleaning", name: "Avresestäd", quantity: 1 },
+          ],
+        },
+        {
+          externalId: `${cat.externalId}_weekend_paket`,
+          name: "Weekendpaket",
+          description: "Frukostbuffé, Spabesök 60 min, Sen utcheckning kl 13. Ej återbetalningsbar.",
+          cancellationPolicy: "NON_REFUNDABLE",
+          cancellationDescription: "Ej återbetalningsbar",
+          pricePerNight: packagePrice,
+          totalPrice: packagePrice * nights,
+          currency: "SEK",
+          validFrom: null,
+          validTo: null,
+          includedAddons: [
+            { addonId: "addon-breakfast", name: "Frukostbuffé", quantity: guests },
+            { addonId: "addon-spa", name: "Spabesök 60 min", quantity: guests },
+          ],
+        },
+      ];
+    }
+
+    case "CAMPING": {
+      const flexPrice = cat.basePricePerNight;
+      const sparPrice = Math.round(cat.basePricePerNight * 0.80);
+      return [
+        {
+          externalId: `${cat.externalId}_flex_camping`,
+          name: "Flex Camping",
+          description: "Inkluderar: 80% åter vid avbokning senast 2 dygn före ankomst",
+          cancellationPolicy: "FLEXIBLE",
+          cancellationDescription: "80% åter vid avbokning senast 2 dygn före ankomst",
+          pricePerNight: flexPrice,
+          totalPrice: flexPrice * nights,
+          currency: "SEK",
+          validFrom: null,
+          validTo: null,
+          includedAddons: [],
+        },
+        {
+          externalId: `${cat.externalId}_fast_pris`,
+          name: "Fast pris",
+          description: "Lägsta pris — bokningsvillkor utan avbokningsmöjlighet.",
+          cancellationPolicy: "NON_REFUNDABLE",
+          cancellationDescription: "Ej återbetalningsbar",
+          pricePerNight: sparPrice,
+          totalPrice: sparPrice * nights,
+          currency: "SEK",
+          validFrom: null,
+          validTo: null,
+          includedAddons: [],
+        },
+      ];
+    }
+
+    default: {
+      // CABIN and others
+      const flexPrice = cat.basePricePerNight;
+      const sparPrice = Math.round(cat.basePricePerNight * 0.85);
+      return [
+        {
+          externalId: `${cat.externalId}_flexibel`,
+          name: "Flexibel",
+          description: "Avbokning utan avgift upp till 48 timmar före ankomst.",
+          cancellationPolicy: "FLEXIBLE",
+          cancellationDescription: "Fri avbokning till 48h före ankomst",
+          pricePerNight: flexPrice,
+          totalPrice: flexPrice * nights,
+          currency: "SEK",
+          validFrom: null,
+          validTo: null,
+          includedAddons: [],
+        },
+        {
+          externalId: `${cat.externalId}_sparpris`,
+          name: "Sparpris",
+          description: "Lägre pris — ej återbetalningsbar.",
+          cancellationPolicy: "NON_REFUNDABLE",
+          cancellationDescription: "Ej återbetalningsbar",
+          pricePerNight: sparPrice,
+          totalPrice: sparPrice * nights,
+          currency: "SEK",
+          validFrom: null,
+          validTo: null,
+          includedAddons: [],
+        },
+      ];
+    }
+  }
 }
 
 // ── Room categories — Swedish camping/hotel property ────────
@@ -229,54 +429,32 @@ export class FakeAdapter implements PmsAdapter {
     await this.delay();
 
     if (this.config.scenario === "error") throw new Error("Fake PMS: Connection refused");
+
+    const nights = Math.round((params.checkOut.getTime() - params.checkIn.getTime()) / 86400000);
+
     if (this.config.scenario === "empty") {
-      const nights = Math.round((params.checkOut.getTime() - params.checkIn.getTime()) / 86400000);
       return { categories: [], checkIn: params.checkIn, checkOut: params.checkOut, nights, guests: params.guests, searchId: `fake_${Date.now()}` };
     }
 
-    const nights = Math.round((params.checkOut.getTime() - params.checkIn.getTime()) / 86400000);
     let categories = FAKE_CATEGORIES;
 
     if (params.types && params.types.length > 0) {
       categories = categories.filter((c) => params.types!.includes(c.type));
     }
 
+    // Filter out unavailable accommodations (blocked dates)
+    const available = categories.filter((cat) =>
+      isAvailableForDates(cat.externalId, params.checkIn, params.checkOut),
+    );
+
     return {
-      categories: categories.map((cat) => {
-        const sparPrice = Math.round(cat.basePricePerNight * 0.85);
+      categories: available.map((cat) => {
+        const plans = buildRatePlans(cat, nights, params.guests);
+        const lowestPrice = Math.min(...plans.map((p) => p.totalPrice));
         return {
           category: cat,
-          ratePlans: [
-            {
-              externalId: `${cat.externalId}_flexibel`,
-              name: "Flexibel",
-              description: "Avbokning utan avgift upp till 24 timmar före ankomst.",
-              cancellationPolicy: "FLEXIBLE" as const,
-              cancellationDescription: "Fri avbokning till 24h före ankomst",
-              pricePerNight: cat.basePricePerNight,
-              totalPrice: cat.basePricePerNight * nights,
-              currency: "SEK",
-              validFrom: null,
-              validTo: null,
-              includedAddons: cat.type === "HOTEL"
-                ? [{ addonId: "addon-breakfast", name: "Frukost", quantity: params.guests }]
-                : [],
-            },
-            {
-              externalId: `${cat.externalId}_sparpris`,
-              name: "Sparpris",
-              description: "Lägre pris — ej återbetalningsbar.",
-              cancellationPolicy: "NON_REFUNDABLE" as const,
-              cancellationDescription: "Ej återbetalningsbar",
-              pricePerNight: sparPrice,
-              totalPrice: sparPrice * nights,
-              currency: "SEK",
-              validFrom: null,
-              validTo: null,
-              includedAddons: [],
-            },
-          ],
-          lowestTotalPrice: sparPrice * nights,
+          ratePlans: plans,
+          lowestTotalPrice: lowestPrice,
           availableUnits: getAvailableUnits(cat.type),
         };
       }),
@@ -325,7 +503,7 @@ export class FakeAdapter implements PmsAdapter {
       status: "confirmed",
       totalAmount: 599600, // 4 nights × 1499 kr
       currency: "SEK",
-      ratePlanName: "Flexibel",
+      ratePlanName: "Flex Hotell",
       createdAt: new Date(Date.now() - 7 * 86400000),
     };
   }

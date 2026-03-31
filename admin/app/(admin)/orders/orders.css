@@ -1787,8 +1787,7 @@
 }
 
 .ord-payment__outstanding {
-  color: var(--admin-danger);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 /* ── Pagination — reuses .files-pagination from files.css ── */

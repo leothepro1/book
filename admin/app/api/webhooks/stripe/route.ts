@@ -295,6 +295,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         order.guestEmail,
         order.guestName || undefined,
         order.guestPhone || undefined,
+        order.billingAddress as Record<string, string> | null,
       );
     } catch (err) {
       log("warn", "webhook.guest_account_failed", { orderId: order.id, error: String(err) });
@@ -765,6 +766,7 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
         effectiveEmail,
         order.guestName || undefined,
         order.guestPhone || undefined,
+        order.billingAddress as Record<string, string> | null,
       );
     } catch (err) {
       log("warn", "webhook.guest_account_failed", { orderId: order.id, error: String(err) });

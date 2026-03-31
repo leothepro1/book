@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { effectivePrice, formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { useCart } from "@/app/(guest)/_lib/cart/CartContext";
 import "./product-detail.css";
@@ -50,6 +50,73 @@ type SerializedProduct = {
   variants: ProductVariant[];
 };
 
+// ── Lightbox ──────────────────────────────────────────────────
+
+function Lightbox({
+  images,
+  initialIndex,
+  onClose,
+}: {
+  images: ProductMedia[];
+  initialIndex: number;
+  onClose: () => void;
+}) {
+  const [idx, setIdx] = useState(initialIndex);
+  const [closing, setClosing] = useState(false);
+
+  const close = useCallback(() => {
+    setClosing(true);
+    setTimeout(onClose, 200);
+  }, [onClose]);
+
+  const prev = useCallback(() => setIdx((i) => (i - 1 + images.length) % images.length), [images.length]);
+  const next = useCallback(() => setIdx((i) => (i + 1) % images.length), [images.length]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+      if (e.key === "ArrowLeft") prev();
+      if (e.key === "ArrowRight") next();
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [close, prev, next]);
+
+  const img = images[idx];
+
+  return (
+    <div className={`pd-lb${closing ? " pd-lb--closing" : ""}`} onClick={close}>
+      <div className="pd-lb__content" onClick={(e) => e.stopPropagation()}>
+        <button className="pd-lb__close" onClick={close} aria-label="Stäng">
+          <span className="material-symbols-rounded">close</span>
+        </button>
+
+        {images.length > 1 && (
+          <button className="pd-lb__arrow pd-lb__arrow--prev" onClick={prev} aria-label="Föregående">
+            <span className="material-symbols-rounded">chevron_left</span>
+          </button>
+        )}
+
+        <img src={img.url} alt={img.alt || ""} className="pd-lb__img" />
+
+        {images.length > 1 && (
+          <button className="pd-lb__arrow pd-lb__arrow--next" onClick={next} aria-label="Nästa">
+            <span className="material-symbols-rounded">chevron_right</span>
+          </button>
+        )}
+
+        {images.length > 1 && (
+          <div className="pd-lb__counter">{idx + 1} / {images.length}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────
 
 export function ProductDetail({ product }: { product: SerializedProduct }) {
@@ -62,6 +129,7 @@ export function ProductDetail({ product }: { product: SerializedProduct }) {
     return initial;
   });
   const [activeMediaIdx, setActiveMediaIdx] = useState(0);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   // Find the matching variant based on selected options
   const selectedVariant = useMemo(() => {
@@ -117,7 +185,7 @@ export function ProductDetail({ product }: { product: SerializedProduct }) {
         {/* Media gallery */}
         <div className="pd__media">
           {activeImage && (
-            <div className="pd__main-image">
+            <div className="pd__main-image" onClick={() => setLightboxIdx(activeMediaIdx)} role="button" tabIndex={0}>
               <img
                 src={activeImage.url}
                 alt={activeImage.alt || product.title}
@@ -210,6 +278,14 @@ export function ProductDetail({ product }: { product: SerializedProduct }) {
           )}
         </div>
       </div>
+
+      {lightboxIdx !== null && (
+        <Lightbox
+          images={images}
+          initialIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
     </div>
   );
 }

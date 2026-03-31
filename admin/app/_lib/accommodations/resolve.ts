@@ -101,6 +101,14 @@ export function resolveAccommodation(
       source: r.source,
     })),
 
+    highlights: (accommodation.highlights ?? []).map((h) => ({
+      id: h.id,
+      icon: h.icon,
+      text: h.text,
+      description: h.description ?? "",
+      sortOrder: h.sortOrder,
+    })),
+
     media: accommodation.media.map((m) => ({
       id: m.id,
       url: m.url,

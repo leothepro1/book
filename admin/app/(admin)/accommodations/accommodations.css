@@ -243,3 +243,138 @@
   from { opacity: 0; transform: scale(0.97); }
   to   { opacity: 1; transform: scale(1); }
 }
+
+/* ── Highlights (ah-*) ─────────────────────────────── */
+
+.ah-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.ah-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border: none;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.ah-list .ah-row:last-child {
+  border-bottom: none;
+}
+
+.ah-row--dragging {
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-sm);
+  background: var(--admin-surface, #fff);
+  box-shadow: var(--admin-shadow-md);
+}
+
+.ah-row__drag {
+  cursor: grab;
+  color: var(--admin-text-tertiary);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.ah-row__icon-preview {
+  flex-shrink: 0;
+  color: var(--admin-text-secondary);
+  width: 24px;
+  text-align: center;
+}
+
+.ah-row__input {
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-xs);
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--admin-text);
+  background: transparent;
+  outline: none;
+  transition: border-color var(--duration-fast);
+}
+
+.ah-row__input:focus {
+  border-color: var(--admin-border-focus);
+}
+
+.ah-row__fields {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ah-row__top {
+  display: flex;
+  gap: 8px;
+}
+
+.ah-row__input--icon {
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.ah-row__input--text {
+  flex: 1;
+  min-width: 0;
+}
+
+.ah-row__input--desc {
+  width: 100%;
+}
+
+.ah-row__text-preview {
+  flex: 1;
+  font-size: var(--font-xs);
+  color: var(--admin-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ah-row__remove {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--admin-text-tertiary);
+  padding: 4px;
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  transition: color var(--duration-fast), background var(--duration-fast);
+}
+
+.ah-row__remove:hover {
+  color: var(--admin-danger);
+  background: color-mix(in srgb, var(--admin-danger) 8%, transparent);
+}
+
+.ah-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--admin-text-secondary);
+  font-size: 13px;
+  padding: 12px 0;
+  transition: color var(--duration-fast);
+}
+
+.ah-add:hover {
+  color: var(--admin-text);
+}
+
+.ah-add:hover {
+  background: var(--admin-surface);
+}

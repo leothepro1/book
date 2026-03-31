@@ -15,6 +15,12 @@
   color: var(--text, #1a1a1a);
 }
 
+.pbs__price-suffix {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--text, #000) 50%, transparent);
+}
+
 /* ── Triggers wrapper ───────────────────────────── */
 
 .pbs__triggers-wrap {
@@ -22,7 +28,7 @@
   z-index: 101;
 }
 
-/* ── Triggers — always on top of popup ─────────── */
+/* ── Triggers — always on top ────────────────────── */
 
 .pbs__triggers {
   border: 1px solid color-mix(in srgb, var(--text, #000) 15%, transparent);
@@ -43,6 +49,8 @@
 .pbs__trigger-row {
   display: flex;
   align-items: stretch;
+  position: relative;
+  cursor: pointer;
 }
 
 .pbs__trigger {
@@ -84,8 +92,6 @@
 
 .pbs__trigger--full { flex: 1; }
 
-.pbs__trigger-row { position: relative; cursor: pointer; }
-
 .pbs__chevron {
   position: absolute;
   right: 14px;
@@ -111,93 +117,255 @@
   box-shadow: 0 8px 24px color-mix(in srgb, var(--text, #000) 10%, transparent);
 }
 
-/* ── Popup — behind trigger, above page content ── */
+/* ── Rate plans ───────────────────────────────── */
 
-.pbs__popup {
-  position: absolute;
-  z-index: 100;
-  width: 661px;
-  right: -30px;
-  top: calc(1rem + 1.5rem + 1rem - 30px); /* offset up by popup padding so trigger aligns */
-  background: var(--background, #fff);
-  border: 1px solid color-mix(in srgb, var(--text, #000) 15%, transparent);
-  border-radius: 12px;
-  box-shadow: 0 16px 48px color-mix(in srgb, var(--text, #000) 12%, transparent);
-  padding: 30px;
-  /* Extra top padding to make room for the header behind trigger */
-  padding-top: 86px; /* 30px popup padding + 56px trigger height */
+.pbs__plans {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-/* ── Popup header — left of trigger ────────────── */
+.pbs__plan {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1.5px solid color-mix(in srgb, var(--text, #000) 12%, transparent);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s;
+}
 
-.pbs__popup-header {
-  position: absolute;
-  top: 30px;
-  left: 30px;
-  right: 30px;
-  height: 56px;
+.pbs__plan:hover {
+  border-color: color-mix(in srgb, var(--text, #000) 28%, transparent);
+}
+
+.pbs__plan--selected {
+  border-color: var(--text, #1a1a1a);
+}
+
+.pbs__plan-radio {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--text, #000) 25%, transparent);
   display: flex;
   align-items: center;
-  border-bottom: none;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: border-color 0.15s;
 }
 
-.pbs__popup-header-info {
+.pbs__plan--selected .pbs__plan-radio {
+  border-color: var(--text, #1a1a1a);
+}
+
+.pbs__plan-radio-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.pbs__plan--selected .pbs__plan-radio-dot {
+  background: var(--text, #1a1a1a);
+}
+
+.pbs__plan-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pbs__plan-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text, #1a1a1a);
+}
+
+.pbs__plan-desc {
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--text, #000) 50%, transparent);
+}
+
+.pbs__plan-includes {
+  font-size: 0.6875rem;
+  color: #16a34a;
+  margin-top: 2px;
+}
+
+.pbs__plan-price {
+  flex-shrink: 0;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pbs__plan-price-total {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text, #1a1a1a);
+}
+
+.pbs__plan-price-nightly {
+  font-size: 0.6875rem;
+  color: color-mix(in srgb, var(--text, #000) 45%, transparent);
+}
+
+/* ── Modal overlay ────────────────────────────── */
+
+.pbs__modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: pbs-overlay-in 0.2s ease-out both;
+}
+
+.pbs__modal-overlay--closing {
+  animation: pbs-overlay-out 0.2s ease-in both;
+}
+
+@keyframes pbs-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pbs-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* ── Modal ────────────────────────────────────── */
+
+.pbs__modal {
+  background: var(--background, #fff);
+  border-radius: 16px;
+  width: 680px;
+  max-width: 94vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  animation: pbs-modal-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+.pbs__modal-overlay--closing .pbs__modal {
+  animation: pbs-modal-out 0.2s ease-in both;
+}
+
+@keyframes pbs-modal-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes pbs-modal-out {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to { opacity: 0; transform: scale(0.96) translateY(8px); }
+}
+
+/* ── Modal header ─────────────────────────────── */
+
+.pbs__modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 28px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--text, #000) 8%, transparent);
+}
+
+.pbs__modal-header-info {
   flex: 1;
 }
 
-.pbs__popup-nights {
-  font-size: 1.45rem;
+.pbs__modal-nights {
+  font-size: 1.375rem;
   font-weight: 600;
   color: var(--text, #1a1a1a);
   line-height: 1.2;
 }
 
-.pbs__popup-dates {
-  font-size: 0.8875rem;
-  font-weight: 400;
-  font-family: 'Inter', sans-serif;
+.pbs__modal-dates {
+  font-size: 0.875rem;
   color: color-mix(in srgb, var(--text, #000) 50%, transparent);
   margin-top: 4px;
 }
 
-/* ── Popup calendar wrapper ─────────────────────── */
-
-.pbs__popup-calendar {
-  padding: 24px 0;
+.pbs__modal-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: color-mix(in srgb, var(--text, #000) 5%, transparent);
+  color: var(--text, #1a1a1a);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  flex-shrink: 0;
 }
 
-/* ── Popup footer ──────────────────────────────── */
+.pbs__modal-close:hover {
+  background: color-mix(in srgb, var(--text, #000) 10%, transparent);
+}
 
-.pbs__popup-footer {
+/* ── Modal calendar ───────────────────────────── */
+
+.pbs__modal-calendar {
+  padding: 24px 28px;
+  overflow-y: auto;
+}
+
+/* ── Modal footer ─────────────────────────────── */
+
+.pbs__modal-footer {
   display: flex;
-  justify-content: end;
-  padding: 12px 0 0;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 28px;
   border-top: 1px solid color-mix(in srgb, var(--text, #000) 8%, transparent);
 }
 
-.pbs__popup-btn {
-  padding: 8px 20px;
-  font-size: 0.8125rem;
+.pbs__modal-btn {
+  padding: 10px 24px;
+  font-size: 0.875rem;
   font-weight: 600;
   border-radius: 8px;
   cursor: pointer;
   border: none;
+  transition: opacity 0.15s;
 }
 
-.pbs__popup-btn--ghost {
+.pbs__modal-btn--ghost {
   background: transparent;
   color: var(--text, #1a1a1a);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.pbs__popup-btn--solid {
+.pbs__modal-btn--solid {
   background: var(--text, #1a1a1a);
   color: var(--background, #fff);
 }
 
-.pbs__popup-btn--solid:hover {
+.pbs__modal-btn--solid:hover:not(:disabled) {
   opacity: 0.88;
+}
+
+.pbs__modal-btn--solid:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ── Buy button ────────────────────────────────── */
@@ -215,6 +383,12 @@
   transition: opacity 0.15s;
 }
 
-.pbs__buy-btn:hover {
+.pbs__buy-btn:hover:not(:disabled) {
   opacity: 0.88;
 }
+
+.pbs__buy-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+

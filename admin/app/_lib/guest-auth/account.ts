@@ -19,6 +19,11 @@ export interface GuestAccountProfile {
   phone?: string;
   locale?: string;
   source?: string; // "booking" | "checkout" | "checkin" | "sync" | "order"
+  address1?: string;
+  address2?: string;
+  city?: string;
+  postalCode?: string;
+  country?: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -52,13 +57,21 @@ async function fillProfileFields(
   if (!profile) return;
 
   const updates: Record<string, string> = {};
-  if (profile.firstName && !account.firstName) updates.firstName = profile.firstName.trim();
-  if (profile.lastName && !account.lastName) updates.lastName = profile.lastName.trim();
+  // First-write-wins: fill null OR empty-string fields
+  if (profile.firstName && (!account.firstName || account.firstName === "")) updates.firstName = profile.firstName.trim();
+  if (profile.lastName && (!account.lastName || account.lastName === "")) updates.lastName = profile.lastName.trim();
   if (profile.phone && !account.phone) updates.phone = profile.phone.trim();
   if (profile.locale && !account.locale) updates.locale = profile.locale;
 
+  // Address fields — first-write-wins
+  if (profile.address1 && !account.address1) updates.address1 = profile.address1.trim();
+  if (profile.address2 && !account.address2) updates.address2 = profile.address2.trim();
+  if (profile.city && !account.city) updates.city = profile.city.trim();
+  if (profile.postalCode && !account.postalCode) updates.postalCode = profile.postalCode.trim();
+  if (profile.country && !account.country) updates.country = profile.country.trim();
+
   // Also fill legacy name field for backwards compat
-  if ((profile.firstName || profile.lastName) && !account.name) {
+  if ((profile.firstName || profile.lastName) && (!account.name || account.name === "")) {
     const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(" ").trim();
     if (fullName) updates.name = fullName;
   }
@@ -100,6 +113,11 @@ export async function upsertGuestAccount(
       phone: profile?.phone?.trim() || null,
       locale: profile?.locale || null,
       name: [profile?.firstName, profile?.lastName].filter(Boolean).join(" ").trim() || null,
+      address1: profile?.address1?.trim() || null,
+      address2: profile?.address2?.trim() || null,
+      city: profile?.city?.trim() || null,
+      postalCode: profile?.postalCode?.trim() || null,
+      country: profile?.country?.trim() || null,
     },
     update: {},
   });
@@ -125,19 +143,31 @@ export async function upsertGuestAccountFromOrder(
   email: string,
   name?: string | null,
   phone?: string | null,
+  billingAddress?: { address1?: string; address2?: string; city?: string; postalCode?: string; country?: string } | null,
 ): Promise<GuestAccount> {
   const normalizedEmail = email.trim().toLowerCase();
   const trimmedName = name?.trim() || null;
   const trimmedPhone = phone?.trim() || null;
 
+  // Split name into first/last if possible
+  const nameParts = trimmedName?.split(" ") ?? [];
+  const firstName = nameParts[0] ?? undefined;
+  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined;
+
   // Step 1: Ensure account exists with profile data
   const account = await upsertGuestAccount(tenantId, normalizedEmail, {
-    firstName: trimmedName ?? undefined, // legacy: name goes to firstName
+    firstName,
+    lastName,
     phone: trimmedPhone ?? undefined,
     source: "order",
+    address1: billingAddress?.address1 ?? undefined,
+    address2: billingAddress?.address2 ?? undefined,
+    city: billingAddress?.city ?? undefined,
+    postalCode: billingAddress?.postalCode ?? undefined,
+    country: billingAddress?.country ?? undefined,
   });
 
-  // Step 2+3: Link order + emit ORDER_PLACED atomically
+  // Step 2+3: Link order + emit ORDER_PLACED atomically (idempotent)
   const order = await prisma.$transaction(async (tx) => {
     const o = await tx.order.update({
       where: { id: orderId },
@@ -145,14 +175,22 @@ export async function upsertGuestAccountFromOrder(
       select: { orderNumber: true, totalAmount: true },
     });
 
-    await createGuestAccountEventInTx(tx, {
-      guestAccountId: account.id,
-      tenantId,
-      type: "ORDER_PLACED",
-      message: `Bokning #${o.orderNumber} skapad`,
-      metadata: { orderId, orderNumber: o.orderNumber, amount: o.totalAmount },
-      orderId,
+    // Dedup: only create ORDER_PLACED if one doesn't already exist for this orderId
+    const existing = await tx.guestAccountEvent.findFirst({
+      where: { guestAccountId: account.id, type: "ORDER_PLACED", orderId },
+      select: { id: true },
     });
+
+    if (!existing) {
+      await createGuestAccountEventInTx(tx, {
+        guestAccountId: account.id,
+        tenantId,
+        type: "ORDER_PLACED",
+        message: `Bokning #${o.orderNumber} skapad`,
+        metadata: { orderId, orderNumber: o.orderNumber, amount: o.totalAmount },
+        orderId,
+      });
+    }
 
     return o;
   });

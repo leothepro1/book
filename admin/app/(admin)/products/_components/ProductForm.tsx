@@ -101,8 +101,9 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
   // ── Core fields (pre-populated from product when editing) ──
   const [title, setTitle] = useState(product?.title ?? "");
   const [description, setDescription] = useState(product?.description ?? "");
-  const [price, setPrice] = useState<number>(product?.price ?? 0);
-  const [compareAtPrice, setCompareAtPrice] = useState<number>(product?.compareAtPrice ?? 0);
+  // Display in kronor (DB stores öre — divide by 100 for display, multiply by 100 for save)
+  const [price, setPrice] = useState<number>(Math.round((product?.price ?? 0) / 100));
+  const [compareAtPrice, setCompareAtPrice] = useState<number>(Math.round((product?.compareAtPrice ?? 0) / 100));
   const [taxable, setTaxable] = useState(product?.taxable ?? true);
   const [priceExtrasOpen, setPriceExtrasOpen] = useState(false);
   const [status, setStatus] = useState<"ACTIVE" | "DRAFT">(product?.status === "ACTIVE" ? "ACTIVE" : "DRAFT");
@@ -156,8 +157,8 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
       option2: v.option2 ?? null,
       option3: v.option3 ?? null,
       imageUrl: v.imageUrl ?? null,
-      price: v.price,
-      compareAtPrice: v.compareAtPrice ?? undefined,
+      price: Math.round(v.price / 100),
+      compareAtPrice: v.compareAtPrice ? Math.round(v.compareAtPrice / 100) : undefined,
       sku: v.sku ?? undefined,
       trackInventory: v.trackInventory,
       inventoryQuantity: v.inventoryQuantity,
@@ -362,10 +363,14 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
             description,
             media: media.map(({ _id, ...m }) => m),
             options: options.filter((o) => o.name && o.values.length > 0),
-            variants,
+            variants: variants.map((v) => ({
+              ...v,
+              price: Math.round(v.price * 100),
+              compareAtPrice: v.compareAtPrice ? Math.round(v.compareAtPrice * 100) : undefined,
+            })),
             status,
-            price,
-            compareAtPrice: compareAtPrice || undefined,
+            price: Math.round(price * 100),
+            compareAtPrice: compareAtPrice ? Math.round(compareAtPrice * 100) : undefined,
             currency: product?.currency ?? "SEK",
             taxable,
             trackInventory: product?.trackInventory ?? false,
@@ -403,8 +408,8 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
     setIsDiscarding(true);
     setTitle(product?.title ?? "");
     setDescription(product?.description ?? "");
-    setPrice(product?.price ?? 0);
-    setCompareAtPrice(product?.compareAtPrice ?? 0);
+    setPrice(Math.round((product?.price ?? 0) / 100));
+    setCompareAtPrice(Math.round((product?.compareAtPrice ?? 0) / 100));
     setTaxable(product?.taxable ?? true);
     setStatus(product?.status === "ACTIVE" ? "ACTIVE" : "DRAFT");
     setMedia(product?.media

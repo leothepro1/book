@@ -24,6 +24,7 @@ const isPublicRoute = createRouteMatcher([
   '/auth/(.*)',
   '/unsubscribe(.*)',
   '/api/guest-auth/(.*)',
+  '/api/portal/(.*)',
   '/login(.*)',
   '/no-booking(.*)',
   // Session-gated guest portal pages — public for Clerk (guests don't have Clerk accounts),

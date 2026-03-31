@@ -39,7 +39,14 @@ const SUPPORTED_CURRENCIES = ["SEK", "EUR", "NOK", "DKK"] as const;
 const MIN_AMOUNT = 1000;   // 10 SEK — below this, price data is wrong
 const MAX_AMOUNT = 10_000_000; // 100,000 SEK — requires manual review
 
-const inputSchema = z.object({
+/** Session-based input: CheckoutSession token is the only required field */
+const sessionInputSchema = z.object({
+  sessionToken: z.string().min(1),
+  paymentType: z.enum(["full", "klarna"]),
+});
+
+/** Legacy input: used by shop/cart flow — retained for backward compatibility */
+const legacyInputSchema = z.object({
   productSlug: z.string().min(1).max(100),
   accommodationId: z.string().min(1).max(100).optional(),
   checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -85,10 +92,25 @@ export async function POST(req: Request) {
     );
   }
 
-  // ── Parse + validate input ──────────────────────────────────
-  let body: z.infer<typeof inputSchema>;
+  // ── Parse body once ─────────────────────────────────────────
+  let rawBody: unknown;
   try {
-    body = inputSchema.parse(await req.json());
+    rawBody = await req.json();
+  } catch {
+    await failIdempotencyKey(tenant.id, idempotencyKey, "payment-intent");
+    return NextResponse.json({ error: "INVALID_PARAMS" }, { status: 400 });
+  }
+
+  // ── Session-based flow (CheckoutSession) ───────────────────
+  const sessionParsed = sessionInputSchema.safeParse(rawBody);
+  if (sessionParsed.success) {
+    return handleSessionPaymentIntent(req, tenant.id, sessionParsed.data, idempotencyKey);
+  }
+
+  // ── Legacy flow (shop/cart — productSlug-based) ────────────
+  let body: z.infer<typeof legacyInputSchema>;
+  try {
+    body = legacyInputSchema.parse(rawBody);
   } catch {
     await failIdempotencyKey(tenant.id, idempotencyKey, "payment-intent");
     return NextResponse.json({ error: "INVALID_PARAMS" }, { status: 400 });
@@ -115,7 +137,8 @@ export async function POST(req: Request) {
   const resolved = resolveProduct(product);
 
   // ── Derive price server-side — NEVER trust client ───────────
-  let totalPrice = resolved.price;
+  // DEV fallback: use product base price even if 0, PMS will override
+  let totalPrice = resolved.price || (process.env.NODE_ENV === "development" ? product.price : 0);
   let currency = resolved.currency;
   let ratePlanName: string | null = null;
   let accommodationExternalId: string | null = null;
@@ -399,6 +422,265 @@ export async function POST(req: Request) {
     });
 
     await failIdempotencyKey(tenant.id, idempotencyKey, "payment-intent");
+    return NextResponse.json(
+      { error: "PAYMENT_FAILED", message: err instanceof Error ? err.message : "Betalning misslyckades" },
+      { status: 503 },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SESSION-BASED PAYMENT INTENT
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Creates an Order + PaymentIntent entirely from CheckoutSession snapshot.
+ * No prices from client. No PMS re-fetch. Session is the source of truth.
+ */
+async function handleSessionPaymentIntent(
+  req: Request,
+  tenantId: string,
+  input: { sessionToken: string; paymentType: string },
+  idempotencyKey: string,
+) {
+  const session = await prisma.checkoutSession.findUnique({
+    where: { token: input.sessionToken },
+    select: {
+      id: true,
+      tenantId: true,
+      status: true,
+      expiresAt: true,
+      accommodationId: true,
+      accommodationName: true,
+      accommodationSlug: true,
+      ratePlanId: true,
+      ratePlanName: true,
+      pricePerNight: true,
+      totalNights: true,
+      accommodationTotal: true,
+      currency: true,
+      checkIn: true,
+      checkOut: true,
+      adults: true,
+      selectedAddons: true,
+      accommodation: {
+        select: {
+          id: true,
+          slug: true,
+          externalId: true,
+          media: { select: { url: true }, orderBy: { sortOrder: "asc" }, take: 1 },
+        },
+      },
+    },
+  });
+
+  if (!session || session.tenantId !== tenantId) {
+    await failIdempotencyKey(tenantId, idempotencyKey, "payment-intent");
+    return NextResponse.json({ error: "SESSION_NOT_FOUND" }, { status: 404 });
+  }
+
+  if (session.expiresAt < new Date()) {
+    await failIdempotencyKey(tenantId, idempotencyKey, "payment-intent");
+    return NextResponse.json({ error: "SESSION_EXPIRED" }, { status: 409 });
+  }
+
+  if (session.status !== "CHECKOUT") {
+    await failIdempotencyKey(tenantId, idempotencyKey, "payment-intent");
+    return NextResponse.json(
+      { error: "INVALID_SESSION_STATUS", message: `Session har status ${session.status}` },
+      { status: 409 },
+    );
+  }
+
+  // ── Compute totals from frozen snapshot ──────────────────────
+  const addons = (session.selectedAddons ?? []) as Array<{
+    productId: string; variantId: string | null; title: string; variantTitle: string | null;
+    quantity: number; unitAmount: number; totalAmount: number; pricingMode: string; currency: string;
+  }>;
+  const addonTotal = addons.reduce((sum, a) => sum + a.totalAmount, 0);
+  const totalPrice = session.accommodationTotal + addonTotal;
+  const currency = session.currency;
+
+  if (totalPrice < MIN_AMOUNT || totalPrice > MAX_AMOUNT) {
+    log("error", "checkout.session_amount_out_of_bounds", { amount: totalPrice, tenantId });
+    await failIdempotencyKey(tenantId, idempotencyKey, "payment-intent");
+    return NextResponse.json(
+      { error: "INVALID_PRICE", message: "Ogiltigt belopp." },
+      { status: 400 },
+    );
+  }
+
+  // ── Create Order from session snapshot ──────────────────────
+  const orderNumber = await nextOrderNumber(tenantId);
+  const taxRate = getTaxRate("PMS_ACCOMMODATION", "SE");
+  const taxAmount = taxRate > 0 ? Math.round(totalPrice * taxRate / 10000) : 0;
+
+  const order = await prisma.$transaction(async (tx) => {
+    const newOrder = await tx.order.create({
+      data: {
+        tenantId,
+        orderNumber,
+        status: "PENDING",
+        paymentMethod: "STRIPE_ELEMENTS",
+        guestEmail: "",
+        guestName: "",
+        subtotalAmount: totalPrice,
+        taxRate,
+        taxAmount,
+        totalAmount: totalPrice + taxAmount,
+        currency,
+        sourceChannel: "direct",
+        metadata: {
+          sessionToken: input.sessionToken,
+          checkIn: session.checkIn.toISOString().split("T")[0],
+          checkOut: session.checkOut.toISOString().split("T")[0],
+          guests: session.adults,
+          nights: session.totalNights,
+          ratePlanId: session.ratePlanId,
+          ratePlanName: session.ratePlanName,
+          accommodationSlug: session.accommodationSlug,
+        },
+        lineItems: {
+          create: [
+            // Accommodation line item
+            {
+              productId: session.accommodation.id,
+              variantId: null,
+              title: session.accommodationName,
+              variantTitle: session.ratePlanName,
+              sku: null,
+              imageUrl: session.accommodation.media[0]?.url ?? null,
+              quantity: 1,
+              unitAmount: session.accommodationTotal,
+              totalAmount: session.accommodationTotal,
+              currency,
+            },
+            // Addon line items from frozen snapshots
+            ...addons.map((addon) => ({
+              productId: addon.productId,
+              variantId: addon.variantId,
+              title: addon.title,
+              variantTitle: addon.variantTitle,
+              sku: null,
+              imageUrl: null,
+              quantity: addon.quantity,
+              unitAmount: addon.unitAmount,
+              totalAmount: addon.totalAmount,
+              currency: addon.currency,
+            })),
+          ],
+        },
+      },
+    });
+
+    await tx.orderEvent.create({
+      data: {
+        orderId: newOrder.id,
+        tenantId,
+        type: "ORDER_CREATED",
+        message: `Order #${orderNumber} — ${session.accommodationName}, ${session.totalNights} nätter`,
+        metadata: {
+          sessionToken: input.sessionToken,
+          checkIn: session.checkIn.toISOString().split("T")[0],
+          checkOut: session.checkOut.toISOString().split("T")[0],
+        },
+      },
+    });
+
+    // Create linked Booking
+    await tx.booking.create({
+      data: {
+        tenantId,
+        orderId: newOrder.id,
+        accommodationId: session.accommodationId,
+        firstName: "",
+        lastName: "",
+        guestEmail: "",
+        arrival: session.checkIn,
+        departure: session.checkOut,
+        checkIn: session.checkIn,
+        checkOut: session.checkOut,
+        guestCount: session.adults,
+        ratePlanId: session.ratePlanId,
+        unit: session.accommodation.externalId ?? session.accommodationSlug,
+        status: "PRE_CHECKIN",
+      },
+    });
+
+    // Transition session to COMPLETED — release dedupKey so same booking can be made again
+    await tx.checkoutSession.update({
+      where: { id: session.id },
+      data: { status: "COMPLETED", dedupKey: null },
+    });
+
+    return newOrder;
+  });
+
+  log("info", "checkout.session_order_created", {
+    tenantId,
+    sessionId: session.id,
+    orderId: order.id,
+    orderNumber,
+    amount: totalPrice + taxAmount,
+    currency,
+    addonCount: addons.length,
+  });
+
+  // ── Calculate platform fee ────────────────────────────────────
+  const tenantStripe = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { stripeAccountId: true, subscriptionPlan: true, platformFeeBps: true },
+  });
+
+  const feeBps = tenantStripe
+    ? getPlatformFeeBps(tenantStripe.subscriptionPlan, tenantStripe.platformFeeBps)
+    : 500;
+
+  await prisma.order.update({
+    where: { id: order.id },
+    data: { platformFeeBps: feeBps },
+  });
+
+  // ── Initiate payment ──────────────────────────────────────────
+  try {
+    const init = await initiateOrderPayment({
+      order: {
+        id: order.id,
+        tenantId,
+        totalAmount: totalPrice + taxAmount,
+        currency,
+      },
+      guest: { email: "", name: "" },
+      locale: "sv-SE",
+      returnUrl: `${new URL(req.url).origin}/checkout/success`,
+      platformFeeBps: feeBps,
+      metadata: {
+        orderNumber: String(orderNumber),
+        sessionToken: input.sessionToken,
+        orderType: "ACCOMMODATION",
+      },
+    });
+
+    if (init.mode !== "embedded") {
+      throw new Error("Expected embedded payment mode");
+    }
+
+    const successPayload = { clientSecret: init.clientSecret, orderId: order.id };
+    await completeIdempotencyKey(tenantId, idempotencyKey, "payment-intent", successPayload);
+    return NextResponse.json(successPayload);
+  } catch (err) {
+    log("error", "checkout.session_payment_failed", {
+      tenantId,
+      orderId: order.id,
+      error: String(err),
+    });
+
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: "CANCELLED", financialStatus: "VOIDED", fulfillmentStatus: "CANCELLED", cancelledAt: new Date() },
+    });
+
+    await failIdempotencyKey(tenantId, idempotencyKey, "payment-intent");
     return NextResponse.json(
       { error: "PAYMENT_FAILED", message: err instanceof Error ? err.message : "Betalning misslyckades" },
       { status: 503 },

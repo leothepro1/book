@@ -25,6 +25,16 @@ export type {
   OrderFinancialStatus, OrderFulfillmentStatus,
 };
 
+// ── Billing address (frozen on Order at checkout time) ────────
+
+export type BillingAddress = {
+  address1: string;
+  address2?: string;
+  city: string;
+  postalCode: string;
+  country: string; // ISO 3166-1 alpha-2
+};
+
 // ── Composite types ────────────────────────────────────────────
 
 export type OrderWithLineItems = Order & {

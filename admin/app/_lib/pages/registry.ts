@@ -244,8 +244,8 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
   },
   {
     id: "product",
-    label: "Produkter",
-    icon: "sell",
+    label: "Boende",
+    icon: "bed",
     layout: { header: true, body: "sections", footer: true },
     editorMode: "full",
     availableLayouts: [{ id: "default", label: "Standard" }],

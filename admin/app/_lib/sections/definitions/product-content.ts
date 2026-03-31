@@ -30,27 +30,20 @@ const defaultPreset: SectionPreset = {
         {
           key: "main",
           name: "Huvudinnehåll",
-          description: "Vänster kolumn — produktinformation.",
+          description: "Vänster kolumn — fritt innehåll.",
           allowedElements: [
             "product-title",
             "product-description",
             "product-highlights",
             "product-features",
+            "accommodation-highlights",
             "divider",
             "heading",
             "text",
           ],
-          minElements: 1,
+          minElements: 0,
           maxElements: 20,
-          defaultElements: [
-            { type: "product-title", settings: { size: "lg", alignment: "left" }, action: NO_ACTION, sortOrder: 0 },
-            { type: "divider", settings: { thickness: 1, style: "solid" }, action: NO_ACTION, sortOrder: 1 },
-            { type: "product-highlights", settings: { iconSize: 24 }, action: NO_ACTION, sortOrder: 2 },
-            { type: "divider", settings: { thickness: 1, style: "solid" }, action: NO_ACTION, sortOrder: 3 },
-            { type: "product-description", settings: { size: "md", alignment: "left" }, action: NO_ACTION, sortOrder: 4 },
-            { type: "divider", settings: { thickness: 1, style: "solid" }, action: NO_ACTION, sortOrder: 5 },
-            { type: "product-features", settings: { columns: "3", iconSize: 20 }, action: NO_ACTION, sortOrder: 6 },
-          ],
+          defaultElements: [],
         },
         {
           key: "sidebar",
@@ -88,15 +81,7 @@ const defaultPreset: SectionPreset = {
       type: "content-block" as const,
       settings: {},
       slots: {
-        main: [
-          { id: "", type: "product-title" as const, settings: { size: "lg", alignment: "left" }, action: NO_ACTION, sortOrder: 0 },
-          { id: "", type: "divider" as const, settings: { thickness: 1, style: "solid" }, action: NO_ACTION, sortOrder: 1 },
-          { id: "", type: "product-highlights" as const, settings: { iconSize: 24 }, action: NO_ACTION, sortOrder: 2 },
-          { id: "", type: "divider" as const, settings: { thickness: 1, style: "solid" }, action: NO_ACTION, sortOrder: 3 },
-          { id: "", type: "product-description" as const, settings: { size: "md", alignment: "left" }, action: NO_ACTION, sortOrder: 4 },
-          { id: "", type: "divider" as const, settings: { thickness: 1, style: "solid" }, action: NO_ACTION, sortOrder: 5 },
-          { id: "", type: "product-features" as const, settings: { columns: "3", iconSize: 20 }, action: NO_ACTION, sortOrder: 6 },
-        ],
+        main: [],
         sidebar: [
           { id: "", type: "product-price" as const, settings: { size: "lg" }, action: NO_ACTION, sortOrder: 0 },
           { id: "", type: "product-booking-form" as const, settings: {}, action: NO_ACTION, sortOrder: 1 },

@@ -13,6 +13,9 @@ const cache = new Map<string, { chargesEnabled: boolean; ts: number }>();
 const TTL = 60_000; // 60 seconds
 
 export async function verifyChargesEnabled(stripeAccountId: string): Promise<boolean> {
+  // DEV: skip Stripe verification — always allow charges
+  if (process.env.NODE_ENV === "development") return true;
+
   const cached = cache.get(stripeAccountId);
   if (cached && Date.now() - cached.ts < TTL) {
     return cached.chargesEnabled;

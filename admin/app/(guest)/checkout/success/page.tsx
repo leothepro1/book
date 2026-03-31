@@ -1,22 +1,16 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "../../_lib/tenant/resolveTenantFromHost";
+import { getTenantConfig } from "../../_lib/tenant/getTenantConfig";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { format, parseISO } from "date-fns";
 import { sv } from "date-fns/locale";
 import { CheckoutCompletedTracker } from "./CheckoutCompletedTracker";
+import type { SelectedAddon } from "@/app/_lib/checkout/session-types";
+import "../checkout.css";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Unified checkout success page.
- *
- * Accepts ?orderId=xxx — looks up Order, verifies tenant ownership,
- * displays confirmation with order details.
- *
- * If the order is still PENDING (webhook hasn't fired yet), shows
- * a "confirming payment" state — the guest can refresh.
- */
 export default async function CheckoutSuccessPage({
   searchParams,
 }: {
@@ -34,13 +28,46 @@ export default async function CheckoutSuccessPage({
     include: { lineItems: true },
   });
 
-  // Verify order exists and belongs to this tenant
   if (!order || order.tenantId !== tenant.id) return notFound();
 
   const isPending = order.status === "PENDING";
   const meta = order.metadata as Record<string, unknown> | null;
+  const checkIn = meta?.checkIn as string | undefined;
+  const checkOut = meta?.checkOut as string | undefined;
+  const guests = meta?.guests as number | undefined;
+  const sessionToken = meta?.sessionToken as string | undefined;
 
-  // Track CHECKOUT_COMPLETED (client-side, fires once on mount)
+  // Load session for addon breakdown
+  let addons: SelectedAddon[] = [];
+  let accommodationTotal = order.totalAmount;
+  if (sessionToken) {
+    const session = await prisma.checkoutSession.findUnique({
+      where: { token: sessionToken },
+      select: { accommodationTotal: true, selectedAddons: true },
+    });
+    if (session) {
+      addons = (session.selectedAddons ?? []) as unknown as SelectedAddon[];
+      accommodationTotal = session.accommodationTotal;
+    }
+  }
+  const addonTotal = addons.reduce((sum, a) => sum + a.totalAmount, 0);
+  const subtotal = accommodationTotal + addonTotal;
+  const nights = checkIn && checkOut
+    ? Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000)
+    : 0;
+
+  // Tenant contact email
+  const tenantData = await prisma.tenant.findUnique({
+    where: { id: tenant.id },
+    select: { emailFrom: true, name: true },
+  });
+  const contactEmail = tenantData?.emailFrom ?? null;
+
+  // Header config
+  const config = await getTenantConfig(tenant.id);
+  const logoUrl = (config.theme?.header?.logoUrl as string) ?? null;
+  const logoWidth = (config.theme?.header?.logoWidth as number) ?? 120;
+
   const trackerElement = !isPending ? (
     <CheckoutCompletedTracker
       tenantId={tenant.id}
@@ -49,159 +76,238 @@ export default async function CheckoutSuccessPage({
       totalAmount={order.totalAmount}
     />
   ) : null;
-  const checkIn = meta?.checkIn as string | undefined;
-  const checkOut = meta?.checkOut as string | undefined;
-  const guests = meta?.guests as number | undefined;
 
   return (
     <>
     {trackerElement}
-    <div style={{ maxWidth: 600, margin: "0 auto", padding: "clamp(2rem, 5vw, 4rem) 1.5rem", fontFamily: '"Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif' }}>
-      <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
-        {isPending ? (
-          <>
-            <span
-              className="material-symbols-rounded"
-              style={{ fontSize: 56, color: "#d97706", fontVariationSettings: "'FILL' 1, 'wght' 400" }}
-            >
-              schedule
-            </span>
-            <h1 style={{ fontSize: "clamp(1.5rem, 1.25rem + 1vw, 2rem)", fontWeight: 600, margin: "1rem 0 0.5rem" }}>
-              Betalning bekräftas...
-            </h1>
-            <p style={{ fontSize: "0.9375rem", color: "#666", margin: 0 }}>
-              Vi verifierar din betalning. Du får en bekräftelse via e-post strax.
-            </p>
-          </>
-        ) : (
-          <>
-            <span
-              className="material-symbols-rounded"
-              style={{ fontSize: 56, color: "#16a34a", fontVariationSettings: "'FILL' 1, 'wght' 400" }}
-            >
-              check_circle
-            </span>
-            <h1 style={{ fontSize: "clamp(1.5rem, 1.25rem + 1vw, 2rem)", fontWeight: 600, margin: "1rem 0 0.5rem" }}>
-              Tack för din bokning!
-            </h1>
-            <p style={{ fontSize: "0.9375rem", color: "#666", margin: 0 }}>
-              Ordernummer: <strong>#{order.orderNumber}</strong>
-            </p>
-          </>
-        )}
-      </div>
 
-      {/* Order summary card */}
-      <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, overflow: "hidden" }}>
-        <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid #e5e5e5" }}>
-          <h2 style={{ fontSize: "0.875rem", fontWeight: 600, margin: 0 }}>Sammanfattning</h2>
-        </div>
-        <div>
-          {order.lineItems.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-                padding: "0.75rem 1.25rem",
-                borderBottom: "1px solid #f0f0f0",
-              }}
-            >
-              {item.imageUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={item.imageUrl}
-                  alt={item.title}
-                  style={{ width: 48, height: 48, borderRadius: 8, objectFit: "cover" }}
-                />
-              )}
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: "0.8125rem", fontWeight: 500 }}>{item.title}</div>
-                {item.variantTitle && (
-                  <div style={{ fontSize: "0.75rem", color: "#888" }}>{item.variantTitle}</div>
-                )}
-              </div>
-              <div style={{ fontSize: "0.8125rem", color: "#666" }}>
-                {formatPriceDisplay(item.totalAmount, item.currency)} kr
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Dates + guests for accommodation */}
-        {checkIn && checkOut && (
-          <div style={{ padding: "0.75rem 1.25rem", borderBottom: "1px solid #f0f0f0", display: "flex", gap: "2rem", fontSize: "0.8125rem" }}>
-            <div>
-              <div style={{ color: "#888", fontSize: "0.6875rem", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em" }}>Incheckning</div>
-              <div style={{ fontWeight: 500 }}>{format(parseISO(checkIn), "d MMMM yyyy", { locale: sv })}</div>
-            </div>
-            <div>
-              <div style={{ color: "#888", fontSize: "0.6875rem", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em" }}>Utcheckning</div>
-              <div style={{ fontWeight: 500 }}>{format(parseISO(checkOut), "d MMMM yyyy", { locale: sv })}</div>
-            </div>
-            {guests && (
-              <div>
-                <div style={{ color: "#888", fontSize: "0.6875rem", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em" }}>Gäster</div>
-                <div style={{ fontWeight: 500 }}>{guests}</div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Total */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            padding: "1rem 1.25rem",
-            fontWeight: 600,
-            fontSize: "0.9375rem",
-          }}
+    {/* ── Checkout header (identical to checkout) ── */}
+    <header className="co-header">
+      <div className="co-header__inner">
+        <a href="/" className="co-header__logo">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt="Logo" style={{ width: logoWidth, height: "auto" }} />
+          ) : (
+            <div className="co-header__logo-placeholder" style={{ width: logoWidth }} />
+          )}
+        </a>
+        <span
+          className="material-symbols-rounded"
+          style={{ fontSize: 23, color: "#1a1a1a", fontVariationSettings: "'wght' 300" }}
         >
-          <span>Totalt</span>
-          <span>{formatPriceDisplay(order.totalAmount, order.currency)} kr</span>
+          shopping_bag
+        </span>
+      </div>
+    </header>
+
+    <div className="co">
+      {/* Column 1: Back (empty on success) */}
+      <div className="co__back-col" />
+
+      {/* Column 2: Main — confirmation */}
+      <div className="co__main-col">
+        <div className="co__sections" style={{ gap: 0 }}>
+
+          {/* Confirmation header */}
+          <section className="co__section">
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
+              {isPending && (
+                <>
+                  <script src="https://unpkg.com/@lottiefiles/dotlottie-wc@0.7.1/dist/dotlottie-wc.js" type="module" />
+                  {/* @ts-expect-error — dotlottie-wc is a web component */}
+                  <dotlottie-wc
+                    src="https://lottie.host/cad7e099-f290-4f16-8367-be0894b75485/6vmxO7G18o.lottie"
+                    speed="1"
+                    style={{ width: 55, height: 55, flexShrink: 0 }}
+                    mode="forward"
+                    autoplay
+                  />
+                </>
+              )}
+              {!isPending && (
+                <span
+                  className="material-symbols-rounded"
+                  style={{ fontSize: 48, color: "#16a34a", fontVariationSettings: "'FILL' 1", flexShrink: 0 }}
+                >
+                  check_circle
+                </span>
+              )}
+              <div>
+                <p style={{ fontSize: "0.8125rem", color: "#6c6c6c", margin: "0 0 4px" }}>
+                  Bekräftelse #{order.orderNumber}
+                </p>
+                <h1 style={{ letterSpacing: "-.015em", color: "var(--text, #1a1a1a)", margin: 0, fontSize: 21, fontWeight: 600, lineHeight: 1.25 }}>
+                  Tack {(order.guestName || "").split(" ")[0] || ""}!
+                </h1>
+              </div>
+            </div>
+          </section>
+
+          {/* Booking confirmed card */}
+          <section className="co__section" style={{ borderTop: "none", paddingTop: 0 }}>
+            <div style={{
+              border: "1px solid color-mix(in srgb, var(--text, #000) 10%, transparent)",
+              borderRadius: 12,
+              padding: "20px 24px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                <h2 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text, #1a1a1a)", margin: 0 }}>
+                  Din bokning är bekräftad
+                </h2>
+              </div>
+              <p style={{ fontSize: "0.8125rem", color: "#303030", margin: 0, paddingLeft: 0 }}>
+                Du kommer snart att få en e-postbekräftelse
+              </p>
+            </div>
+          </section>
+
+          {/* Order details card */}
+          <section className="co__section" style={{ borderTop: "none", paddingTop: 16 }}>
+            <div style={{
+              border: "1px solid color-mix(in srgb, var(--text, #000) 10%, transparent)",
+              borderRadius: 12,
+              overflow: "hidden",
+            }}>
+              <div style={{ padding: "16px 24px", borderBottom: "1px solid color-mix(in srgb, var(--text, #000) 8%, transparent)" }}>
+                <h2 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text, #1a1a1a)", margin: 0 }}>
+                  Orderuppgifter
+                </h2>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                {/* Kontaktinformation */}
+                <div style={{ padding: "16px 24px", borderBottom: "1px solid color-mix(in srgb, var(--text, #000) 6%, transparent)" }}>
+                  <div style={{ fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "color-mix(in srgb, var(--text, #000) 45%, transparent)", marginBottom: 6 }}>
+                    Kontaktinformation
+                  </div>
+                  <div style={{ fontSize: "0.875rem", color: "var(--text, #1a1a1a)" }}>
+                    {order.guestName || "—"}
+                  </div>
+                  {order.guestEmail && (
+                    <div style={{ fontSize: "0.8125rem", color: "color-mix(in srgb, var(--text, #000) 55%, transparent)" }}>
+                      {order.guestEmail}
+                    </div>
+                  )}
+                  {order.guestPhone && (
+                    <div style={{ fontSize: "0.8125rem", color: "color-mix(in srgb, var(--text, #000) 55%, transparent)" }}>
+                      {order.guestPhone}
+                    </div>
+                  )}
+                </div>
+
+                {/* Betalningsmetod */}
+                <div style={{ padding: "16px 24px" }}>
+                  <div style={{ fontSize: "0.6875rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "color-mix(in srgb, var(--text, #000) 45%, transparent)", marginBottom: 6 }}>
+                    Betalningsmetod
+                  </div>
+                  <div style={{ fontSize: "0.875rem", color: "var(--text, #1a1a1a)" }}>
+                    {order.paymentMethod === "STRIPE_ELEMENTS" ? "Kontokort" : order.paymentMethod === "STRIPE_CHECKOUT" ? "Stripe" : order.paymentMethod ?? "—"}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Help + continue */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16 }}>
+              <p style={{ fontSize: "0.8125rem", color: "color-mix(in srgb, var(--text, #000) 55%, transparent)", margin: 0 }}>
+                Behöver du hjälp?{" "}
+                {contactEmail ? (
+                  <a href={`mailto:${contactEmail}`} style={{ color: "#207EA9", textDecoration: "underline", textUnderlineOffset: 2 }}>
+                    Kontakta oss
+                  </a>
+                ) : (
+                  <span>Kontakta oss</span>
+                )}
+              </p>
+              <a
+                href="/"
+                style={{
+                  display: "inline-block",
+                  padding: "14px 20px",
+                  fontSize: "0.8125rem",
+                  fontWeight: 600,
+                  color: "#fff",
+                  background: "#207EA9",
+                  border: "none",
+                  borderRadius: 8,
+                  textDecoration: "none",
+                }}
+              >
+                Fortsätt utforska
+              </a>
+            </div>
+          </section>
+
         </div>
       </div>
 
-      {order.guestEmail && (
-        <p style={{ textAlign: "center", fontSize: "0.8125rem", color: "#888", marginTop: "1.5rem" }}>
-          En bekräftelse har skickats till {order.guestEmail}
-        </p>
-      )}
+      {/* Column 3: Summary (identical to checkout) */}
+      <div className="co__summary-col">
+        <div className="co__summary">
+          {/* Product header */}
+          <div className="co__summary-header">
+            {order.lineItems[0]?.imageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={order.lineItems[0].imageUrl} alt={order.lineItems[0]?.title ?? ""} className="co__summary-image" />
+            )}
+            <h3 className="co__summary-title">{order.lineItems[0]?.title ?? "Boende"}</h3>
+          </div>
 
-      {/* Account CTA — guest account auto-created by webhook */}
-      {order.guestEmail && !isPending && (
-        <div style={{
-          marginTop: "2rem",
-          padding: "1.5rem",
-          border: "1px solid #e5e5e5",
-          borderRadius: 12,
-          textAlign: "center",
-        }}>
-          <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: "0 0 0.5rem" }}>
-            Ditt konto är redo
-          </h2>
-          <p style={{ fontSize: "0.8125rem", color: "#666", margin: "0 0 1rem" }}>
-            Vi har skapat ett konto åt dig. Logga in för att se alla dina beställningar och hantera dina uppgifter.
-          </p>
-          <a
-            href="/login"
-            style={{
-              display: "inline-block",
-              padding: "10px 24px",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              color: "#fff",
-              backgroundColor: "#1a1a1a",
-              borderRadius: 8,
-              textDecoration: "none",
-            }}
-          >
-            Gå till mitt konto →
-          </a>
+          <div className="co__summary-divider" />
+
+          {/* Datum */}
+          {checkIn && checkOut && (
+            <>
+              <div className="co__summary-section">
+                <span className="co__summary-label">Datum</span>
+                <span className="co__summary-value">
+                  {format(parseISO(checkIn), "EEE d", { locale: sv })} – {format(parseISO(checkOut), "EEE d MMM", { locale: sv })}
+                </span>
+              </div>
+              <div className="co__summary-divider" />
+            </>
+          )}
+
+          {/* Gäster */}
+          {guests && (
+            <>
+              <div className="co__summary-section">
+                <span className="co__summary-label">Gäster</span>
+                <span className="co__summary-value">{guests} {guests === 1 ? "vuxen" : "vuxna"}</span>
+              </div>
+              <div className="co__summary-divider" />
+            </>
+          )}
+
+          {/* Prisuppgifter */}
+          <div className="co__summary-prices">
+            <div className="co__summary-price-row">
+              <span>Boende{nights > 0 ? ` (${nights} nätter)` : ""}</span>
+              <span>{formatPriceDisplay(accommodationTotal, order.currency)} kr</span>
+            </div>
+            {addons.map((addon, i) => (
+              <div key={i} className="co__summary-price-row">
+                <span>{addon.title}{addon.quantity > 1 ? ` x${addon.quantity}` : ""}</span>
+                <span>{formatPriceDisplay(addon.totalAmount, addon.currency)} kr</span>
+              </div>
+            ))}
+            <div className="co__summary-price-row">
+              <span>Skatter</span>
+              <span>{formatPriceDisplay(Math.round(subtotal * 0.25), order.currency)} kr</span>
+            </div>
+          </div>
+
+          <div className="co__summary-divider" />
+
+          <div className="co__summary-row co__summary-row--total">
+            <span>Totalt</span>
+            <span>{formatPriceDisplay(order.totalAmount, order.currency)} kr</span>
+          </div>
+
         </div>
-      )}
+      </div>
     </div>
     </>
   );

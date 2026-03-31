@@ -375,24 +375,27 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
                   </button>
                 )}
               </div>
-              {order.lineItems.map((item) => {
+              {order.lineItems.map((item, itemIndex) => {
                 const meta = order.metadata;
+                const isAccommodation = itemIndex === 0; // First line item is always the accommodation
                 const checkIn = meta?.checkIn as string | undefined;
                 const checkOut = meta?.checkOut as string | undefined;
                 const guests = meta?.guests as number | undefined;
                 const nights = meta?.nights as number | undefined;
-                const ratePlanName = (meta?.ratePlanName as string) ?? item.variantTitle;
+                const ratePlanName = isAccommodation ? ((meta?.ratePlanName as string) ?? item.variantTitle) : item.variantTitle;
                 const isExpanded = expandedItems.has(item.id);
 
                 const details: { label: string; value: string }[] = [];
-                if (checkIn && checkOut) {
-                  details.push({
-                    label: "Datum",
-                    value: `${new Date(checkIn).toLocaleDateString("sv-SE", { day: "numeric", month: "short" })} – ${new Date(checkOut).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" })}`,
-                  });
+                if (isAccommodation) {
+                  if (checkIn && checkOut) {
+                    details.push({
+                      label: "Datum",
+                      value: `${new Date(checkIn).toLocaleDateString("sv-SE", { day: "numeric", month: "short" })} – ${new Date(checkOut).toLocaleDateString("sv-SE", { day: "numeric", month: "short", year: "numeric" })}`,
+                    });
+                  }
+                  if (nights != null) details.push({ label: "Nätter", value: String(nights) });
+                  if (guests != null) details.push({ label: "Gäster", value: String(guests) });
                 }
-                if (nights != null) details.push({ label: "Nätter", value: String(nights) });
-                if (guests != null) details.push({ label: "Gäster", value: String(guests) });
                 details.push({ label: "Antal", value: String(item.quantity) });
                 if (item.sku) details.push({ label: "SKU", value: item.sku });
 

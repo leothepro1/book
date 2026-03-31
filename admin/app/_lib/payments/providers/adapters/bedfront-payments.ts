@@ -129,18 +129,19 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
       },
     });
 
-    if (!tenant.stripeAccountId || !tenant.stripeOnboardingComplete) {
-      throw new Error("Stripe Connect not configured for tenant");
-    }
+    // If Connect onboarding is not complete, process on platform account directly
+    const useConnect = tenant.stripeAccountId && tenant.stripeOnboardingComplete;
 
-    const chargesOk = await verifyChargesEnabled(tenant.stripeAccountId);
-    if (!chargesOk) {
-      throw new Error("Stripe account cannot accept charges");
+    if (useConnect) {
+      const chargesOk = await verifyChargesEnabled(tenant.stripeAccountId!);
+      if (!chargesOk) {
+        throw new Error("Stripe account cannot accept charges");
+      }
     }
 
     const feeBps = request.platformFeeBps
       ?? getPlatformFeeBps(tenant.subscriptionPlan, tenant.platformFeeBps);
-    const applicationFeeAmount = calculateApplicationFee(amount, feeBps);
+    const applicationFeeAmount = useConnect ? calculateApplicationFee(amount, feeBps) : 0;
 
     const stripe = getStripe();
 
@@ -149,7 +150,7 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
         amount,
         currency: currency.toLowerCase(),
         payment_method_types: ["card"],
-        application_fee_amount: applicationFeeAmount,
+        ...(useConnect && { application_fee_amount: applicationFeeAmount }),
         receipt_email: request.guestEmail || undefined,
         metadata: {
           ...metadata,
@@ -158,9 +159,7 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
           feeBps: String(feeBps),
         },
       },
-      {
-        stripeAccount: tenant.stripeAccountId,
-      },
+      useConnect ? { stripeAccount: tenant.stripeAccountId! } : undefined,
     );
 
     await prisma.paymentSession.upsert({
@@ -213,15 +212,15 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
       },
     });
 
-    if (!tenant.stripeAccountId || !tenant.stripeOnboardingComplete) {
-      throw new Error("Stripe Connect not configured for tenant");
-    }
+    const useConnect = tenant.stripeAccountId && tenant.stripeOnboardingComplete;
 
-    await verifyChargesEnabled(tenant.stripeAccountId);
+    if (useConnect) {
+      await verifyChargesEnabled(tenant.stripeAccountId!);
+    }
 
     const feeBps = request.platformFeeBps
       ?? getPlatformFeeBps(tenant.subscriptionPlan, tenant.platformFeeBps);
-    const applicationFeeAmount = calculateApplicationFee(amount, feeBps);
+    const applicationFeeAmount = useConnect ? calculateApplicationFee(amount, feeBps) : 0;
 
     const stripe = getStripe();
 
@@ -229,7 +228,7 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
       {
         mode: "payment",
         payment_intent_data: {
-          application_fee_amount: applicationFeeAmount,
+          ...(useConnect && { application_fee_amount: applicationFeeAmount }),
           metadata: {
             sessionId,
             tenantId,
@@ -256,9 +255,7 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
           providerKey: this.providerKey,
         },
       },
-      {
-        stripeAccount: tenant.stripeAccountId,
-      },
+      useConnect ? { stripeAccount: tenant.stripeAccountId! } : undefined,
     );
 
     await prisma.paymentSession.upsert({

@@ -1,11 +1,18 @@
 import { notFound, redirect } from "next/navigation";
 import { resolveTenantFromHost } from "../../_lib/tenant/resolveTenantFromHost";
+import { getTenantConfig } from "../../_lib/tenant/getTenantConfig";
+import { resolveBookingFromToken } from "../../_lib/portal/resolveBooking";
+import { getBookingStatus } from "../../_lib/booking";
+import { ThemeRenderer } from "../../_lib/themes";
+import GuestPageShell from "../../_components/GuestPageShell";
+import { getRequestLocale } from "../../_lib/locale/getRequestLocale";
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { prisma } from "@/app/_lib/db/prisma";
 import { ACCOMMODATION_SELECT } from "@/app/_lib/accommodations/types";
 import { resolveAccommodation } from "@/app/_lib/accommodations/resolve";
 import type { AccommodationWithRelations } from "@/app/_lib/accommodations/types";
-import { RoomDetailClient } from "./RoomDetailClient";
+import { ProductProvider } from "@/app/(guest)/_lib/product-context/ProductContext";
+import type { ProductRatePlan } from "@/app/(guest)/_lib/product-context/ProductContext";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +20,12 @@ export const dynamic = "force-dynamic";
  * Accommodation Detail Page
  * ═════════════════════════
  *
- * /stays/[slug] — serves both new slug-based URLs and legacy
- * PMS externalId-based URLs.
+ * /stays/[slug] — renders the theme-based product page with
+ * ProductProvider for live accommodation data.
  *
- * Lookup order:
- * 1. Try Accommodation by slug (new canonical URLs)
- * 2. Try Accommodation by externalId (legacy /stays/{pmsExternalId} URLs)
- * 3. Fall back to PMS adapter for unsynced categories
+ * Lookup: Accommodation by slug → fallback by externalId.
+ * PMS availability fetched live for rate plans.
+ * Rendered via ThemeRenderer with templateKey="product".
  */
 export default async function RoomDetailPage({
   params,
@@ -41,13 +47,12 @@ export default async function RoomDetailPage({
     redirect("/search");
   }
 
-  // 1. Try Accommodation by slug (new canonical URLs like /stays/hotell-1-4-personer)
+  // ── Load accommodation ──────────────────────────────────────
   let accommodation = await prisma.accommodation.findFirst({
-    where: { tenantId: tenant.id, slug: slug, archivedAt: null, status: "ACTIVE" },
+    where: { tenantId: tenant.id, slug, archivedAt: null, status: "ACTIVE" },
     select: ACCOMMODATION_SELECT,
   });
 
-  // 2. If not found by slug, try by externalId (legacy /stays/room_hotel_standard URLs)
   if (!accommodation) {
     accommodation = await prisma.accommodation.findFirst({
       where: { tenantId: tenant.id, externalId: slug, archivedAt: null, status: "ACTIVE" },
@@ -55,146 +60,87 @@ export default async function RoomDetailPage({
     });
   }
 
-  // 3. If found an Accommodation, render with its data
-  if (accommodation) {
-    const resolved = resolveAccommodation(
-      accommodation as unknown as AccommodationWithRelations,
-    );
+  if (!accommodation) return notFound();
 
-    let adapter;
-    try {
-      adapter = await resolveAdapter(tenant.id);
-    } catch {
-      return (
-        <RoomDetailClient
-          category={null}
-          ratePlans={[]}
-          addons={[]}
-          searchParams={{ tenantId: tenant.id, checkIn, checkOut, guests, nights: 0 }}
-          available={false}
-          error="Bokningssystemet är tillfälligt otillgängligt."
-        />
-      );
-    }
+  const resolved = resolveAccommodation(
+    accommodation as unknown as AccommodationWithRelations,
+  );
 
-    const externalId = resolved.externalId;
-    if (!externalId) return notFound();
+  const externalId = resolved.externalId;
+  if (!externalId) return notFound();
 
-    let availabilityResult, addons;
-    try {
-      [availabilityResult, addons] = await Promise.all([
-        adapter.getAvailability(tenant.id, {
-          checkIn: new Date(checkIn),
-          checkOut: new Date(checkOut),
-          guests,
-        }),
-        adapter.getAddons(tenant.id, externalId),
-      ]);
-    } catch {
-      return (
-        <RoomDetailClient
-          category={null}
-          ratePlans={[]}
-          addons={[]}
-          searchParams={{ tenantId: tenant.id, checkIn, checkOut, guests, nights: 0 }}
-          available={false}
-          error="Kunde inte hämta tillgänglighet. Försök igen om en stund."
-        />
-      );
-    }
+  // ── Fetch PMS availability for rate plans ───────────────────
+  let ratePlans: ProductRatePlan[] = [];
+  try {
+    const adapter = await resolveAdapter(tenant.id);
+    const availabilityResult = await adapter.getAvailability(tenant.id, {
+      checkIn: new Date(checkIn),
+      checkOut: new Date(checkOut),
+      guests,
+    });
 
     const entry = availabilityResult.categories.find(
       (e) => e.category.externalId === externalId,
     );
 
-    const nights = Math.round(
-      (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000,
-    );
-
-    const category = {
-      externalId,
-      name: resolved.displayName,
-      shortDescription: resolved.displayDescription,
-      longDescription: resolved.displayDescription,
-      type: resolved.accommodationType,
-      imageUrls: resolved.media.map((m) => m.url),
-      maxGuests: resolved.maxGuests,
-      facilities: resolved.facilities.filter((f) => f.isVisible).map((f) => f.facilityType),
-      basePricePerNight: resolved.basePricePerNight,
-    };
-
-    return (
-      <RoomDetailClient
-        category={category}
-        ratePlans={entry?.ratePlans ?? []}
-        addons={addons}
-        searchParams={{ tenantId: tenant.id, checkIn, checkOut, guests, nights }}
-        available={(entry?.availableUnits ?? 0) > 0}
-        error={undefined}
-      />
-    );
-  }
-
-  // 4. Fall back: try PMS adapter directly (for categories not yet synced to Accommodation)
-  let adapter;
-  try {
-    adapter = await resolveAdapter(tenant.id);
+    ratePlans = (entry?.ratePlans ?? []).map((rp) => ({
+      externalId: rp.externalId,
+      name: rp.name,
+      description: rp.description,
+      cancellationPolicy: rp.cancellationPolicy,
+      cancellationDescription: rp.cancellationDescription,
+      pricePerNight: rp.pricePerNight,
+      totalPrice: rp.totalPrice,
+      currency: rp.currency,
+      includedAddons: rp.includedAddons,
+    }));
   } catch {
-    return (
-      <RoomDetailClient
-        category={null}
-        ratePlans={[]}
-        addons={[]}
-        searchParams={{ tenantId: tenant.id, checkIn, checkOut, guests, nights: 0 }}
-        available={false}
-        error="Bokningssystemet är tillfälligt otillgängligt."
-      />
-    );
+    // PMS unavailable — page renders with empty rate plans
   }
-
-  let availabilityResult, roomTypes, addons;
-  try {
-    [availabilityResult, roomTypes, addons] = await Promise.all([
-      adapter.getAvailability(tenant.id, {
-        checkIn: new Date(checkIn),
-        checkOut: new Date(checkOut),
-        guests,
-      }),
-      adapter.getRoomTypes(tenant.id),
-      adapter.getAddons(tenant.id, slug),
-    ]);
-  } catch {
-    return (
-      <RoomDetailClient
-        category={null}
-        ratePlans={[]}
-        addons={[]}
-        searchParams={{ tenantId: tenant.id, checkIn, checkOut, guests, nights: 0 }}
-        available={false}
-        error="Kunde inte hämta tillgänglighet. Försök igen om en stund."
-      />
-    );
-  }
-
-  const category = roomTypes.find((c) => c.externalId === slug);
-  if (!category) return notFound();
-
-  const entry = availabilityResult.categories.find(
-    (e) => e.category.externalId === slug,
-  );
 
   const nights = Math.round(
     (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000,
   );
 
+  // ── Build ProductContext data ───────────────────────────────
+  const productData = {
+    id: accommodation.id,
+    title: resolved.displayName,
+    description: resolved.displayDescription,
+    slug: resolved.slug,
+    images: resolved.media.map((m) => m.url),
+    price: ratePlans[0]?.pricePerNight ?? resolved.basePricePerNight,
+    currency: resolved.currency,
+    productType: "PMS_ACCOMMODATION",
+    facilities: resolved.facilities.filter((f) => f.isVisible).map((f) => f.facilityType),
+    highlights: resolved.highlights.map((h) => ({ icon: h.icon, text: h.text, description: h.description })),
+    ratePlans,
+    maxGuests: resolved.maxGuests,
+    bedrooms: resolved.bedrooms,
+    bathrooms: resolved.bathrooms,
+    roomSizeSqm: resolved.roomSizeSqm,
+    extraBeds: resolved.extraBeds,
+  };
+
+  // ── Load tenant config + theme ──────────────────────────────
+  const locale = await getRequestLocale();
+  const config = await getTenantConfig(tenant.id, { locale });
+  const booking = await resolveBookingFromToken("preview");
+  const bookingStatus = booking ? getBookingStatus(booking) : { status: "none" as const, label: "" };
+
+  if (!booking) return notFound();
+
   return (
-    <RoomDetailClient
-      category={category}
-      ratePlans={entry?.ratePlans ?? []}
-      addons={addons}
-      searchParams={{ tenantId: tenant.id, checkIn, checkOut, guests, nights }}
-      available={(entry?.availableUnits ?? 0) > 0}
-      error={undefined}
-    />
+    <GuestPageShell config={config}>
+      <ProductProvider product={productData}>
+        <ThemeRenderer
+          templateKey="product"
+          config={config}
+          booking={booking}
+          bookingStatus={bookingStatus}
+          token="preview"
+        />
+      </ProductProvider>
+    </GuestPageShell>
   );
 }

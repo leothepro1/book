@@ -1,0 +1,47 @@
+/* Accommodation Highlights Element — .ah-el namespace */
+
+.ah-el {
+  display: flex;
+  flex-direction: column;
+}
+
+.ah-el__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.ah-el__icon {
+  flex-shrink: 0;
+  color: var(--text);
+  opacity: 0.7;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.ah-el__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ah-el__title {
+  font-family: var(--font-heading, inherit);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.ah-el__desc {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--text, #000) 60%, transparent);
+  line-height: 1.5;
+}
+
+.ah-el__empty {
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--text, #000) 40%, transparent);
+}

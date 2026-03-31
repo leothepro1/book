@@ -20,6 +20,7 @@ import {
 import {
   SortableContext,
   rectSortingStrategy,
+  verticalListSortingStrategy,
   useSortable,
   arrayMove,
 } from "@dnd-kit/sortable";
@@ -31,6 +32,7 @@ import { listAccommodationCategories } from "@/app/(admin)/accommodation-categor
 import type { ResolvedAccommodation } from "@/app/_lib/accommodations/types";
 import type { AccommodationStatus, FacilityType, BedType } from "@prisma/client";
 import "../../products/_components/product-form.css";
+import "../accommodations.css";
 
 // ── Constants ────────────────────────────────────────────────
 
@@ -85,13 +87,12 @@ export default function AccommodationForm({
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // ── Editable fields ──
-  const [nameOverride, setNameOverride] = useState(accommodation.displayName !== accommodation.displayName ? "" : "");
-  const [nameInput, setNameInput] = useState("");
-  const [descInput, setDescInput] = useState("");
+  const [nameInput, setNameInput] = useState(accommodation.displayName ?? "");
+  const [descInput, setDescInput] = useState(accommodation.displayDescription ?? "");
   const [status, setStatus] = useState<AccommodationStatus>(accommodation.status as AccommodationStatus);
   const [statusOpen, setStatusOpen] = useState(false);
   const statusRef = useRef<HTMLDivElement>(null);
-  const [externalCode, setExternalCode] = useState("");
+  const [externalCode, setExternalCode] = useState(accommodation.externalCode ?? "");
 
   // Close status dropdown on outside click
   useEffect(() => {
@@ -135,6 +136,41 @@ export default function AccommodationForm({
     setMedia((prev) => {
       const oldIdx = prev.findIndex((m) => m._id === active.id);
       const newIdx = prev.findIndex((m) => m._id === over.id);
+      return arrayMove(prev, oldIdx, newIdx);
+    });
+    markDirty();
+  }, []);
+
+  // ── Highlights ──
+  type HighlightItem = { _id: string; icon: string; text: string; description: string };
+  const [highlights, setHighlights] = useState<HighlightItem[]>(
+    () => (accommodation.highlights ?? []).map((h) => ({ _id: makeMediaId(), icon: h.icon, text: h.text, description: h.description ?? "" })),
+  );
+  const [highlightDragId, setHighlightDragId] = useState<string | null>(null);
+  const highlightSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const addHighlight = useCallback(() => {
+    setHighlights((prev) => [...prev, { _id: makeMediaId(), icon: "", text: "", description: "" }]);
+    markDirty();
+  }, []);
+
+  const updateHighlight = useCallback((id: string, field: "icon" | "text" | "description", value: string) => {
+    setHighlights((prev) => prev.map((h) => h._id === id ? { ...h, [field]: value } : h));
+    markDirty();
+  }, []);
+
+  const removeHighlight = useCallback((id: string) => {
+    setHighlights((prev) => prev.filter((h) => h._id !== id));
+    markDirty();
+  }, []);
+
+  const handleHighlightDragEnd = useCallback((e: DragEndEvent) => {
+    setHighlightDragId(null);
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setHighlights((prev) => {
+      const oldIdx = prev.findIndex((h) => h._id === active.id);
+      const newIdx = prev.findIndex((h) => h._id === over.id);
       return arrayMove(prev, oldIdx, newIdx);
     });
     markDirty();
@@ -239,6 +275,7 @@ export default function AccommodationForm({
         status,
         externalCode: externalCode || null,
         media: media.map((m, i) => ({ url: m.url, altText: m.alt, sortOrder: i })),
+        highlights: highlights.filter((h) => h.icon.trim() || h.text.trim()).map((h, i) => ({ icon: h.icon.trim(), text: h.text.trim(), description: h.description.trim(), sortOrder: i })),
         bedConfigs: bedConfigs.filter((b) => b.quantity > 0),
         facilities: Array.from(selectedFacilities).map((ft) => ({
           facilityType: ft,
@@ -265,15 +302,16 @@ export default function AccommodationForm({
         setTimeout(() => setSaveError(null), 5000);
       }
     });
-  }, [nameInput, descInput, status, externalCode, bedConfigs, selectedFacilities, capMaxGuests, capMinGuests, capExtraBeds, capRoomSize, capBedrooms, capBathrooms, accommodation.id, router]);
+  }, [nameInput, descInput, status, externalCode, highlights, bedConfigs, selectedFacilities, capMaxGuests, capMinGuests, capExtraBeds, capRoomSize, capBedrooms, capBathrooms, accommodation.id, router]);
 
   const handleDiscard = useCallback(() => {
     setIsDiscarding(true);
-    setNameInput("");
-    setDescInput("");
+    setNameInput(accommodation.displayName ?? "");
+    setDescInput(accommodation.displayDescription ?? "");
     setStatus(accommodation.status as AccommodationStatus);
-    setExternalCode("");
+    setExternalCode(accommodation.externalCode ?? "");
     setMedia(accommodation.media.map((m) => ({ _id: makeMediaId(), url: m.url, alt: m.altText ?? "" })));
+    setHighlights((accommodation.highlights ?? []).map((h) => ({ _id: makeMediaId(), icon: h.icon, text: h.text, description: h.description ?? "" })));
     setBedConfigs(accommodation.bedConfigs.map((b) => ({ bedType: b.bedType as BedType, quantity: b.quantity })));
     setSelectedFacilities(new Set(accommodation.facilities.filter((f) => f.isVisible).map((f) => f.facilityType as FacilityType)));
     setCapMaxGuests(accommodation.maxGuests);
@@ -397,6 +435,56 @@ export default function AccommodationForm({
                   placeholder="T.ex. 101, A12"
                 />
               </div>
+
+            </div>
+
+            {/* ── Höjdpunkter (egen container) ── */}
+            <div style={CARD}>
+              <div className="pf-card-header" style={{ marginBottom: 12 }}>
+                <span className="pf-card-title">Höjdpunkter</span>
+              </div>
+              {highlights.length > 0 && (
+                <DndContext
+                  sensors={highlightSensors}
+                  onDragStart={(e) => setHighlightDragId(String(e.active.id))}
+                  onDragEnd={handleHighlightDragEnd}
+                >
+                  <SortableContext items={highlights.map((h) => h._id)} strategy={verticalListSortingStrategy}>
+                    <div className="ah-list">
+                      {highlights.map((h) => (
+                        <SortableHighlightRow
+                          key={h._id}
+                          id={h._id}
+                          icon={h.icon}
+                          text={h.text}
+                          description={h.description}
+                          onIconChange={(v) => updateHighlight(h._id, "icon", v)}
+                          onTextChange={(v) => updateHighlight(h._id, "text", v)}
+                          onDescriptionChange={(v) => updateHighlight(h._id, "description", v)}
+                          onRemove={() => removeHighlight(h._id)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                  <DragOverlay>
+                    {highlightDragId ? (() => {
+                      const h = highlights.find((x) => x._id === highlightDragId);
+                      if (!h) return null;
+                      return (
+                        <div className="ah-row ah-row--dragging">
+                          <span className="ah-row__drag"><EditorIcon name="drag_indicator" size={16} /></span>
+                          <span className="material-symbols-rounded ah-row__icon-preview" style={{ fontSize: 20 }}>{h.icon || "add"}</span>
+                          <span className="ah-row__text-preview">{h.text || "Höjdpunkt"}</span>
+                        </div>
+                      );
+                    })() : null}
+                  </DragOverlay>
+                </DndContext>
+              )}
+              <button type="button" className="ah-add" onClick={addHighlight}>
+                <EditorIcon name="add_circle" size={16} />
+                <span>Lägg till höjdpunkt</span>
+              </button>
             </div>
 
           </div>
@@ -878,6 +966,69 @@ function SortableMediaCell({ id, url, alt, size, onRemove }: {
         <EditorIcon name="drag_indicator" size={size === "featured" ? 16 : 14} />
       </span>
       <button type="button" className="pf-media-cell__remove" onClick={() => onRemove(id)} aria-label="Ta bort">
+        <EditorIcon name="close" size={14} />
+      </button>
+    </div>
+  );
+}
+
+function SortableHighlightRow({ id, icon, text, description, onIconChange, onTextChange, onDescriptionChange, onRemove }: {
+  id: string;
+  icon: string;
+  text: string;
+  description: string;
+  onIconChange: (v: string) => void;
+  onTextChange: (v: string) => void;
+  onDescriptionChange: (v: string) => void;
+  onRemove: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const [iconFocused, setIconFocused] = useState(false);
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition ?? "transform 200ms ease",
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="ah-row">
+      <span className="ah-row__drag" {...attributes} {...listeners}>
+        <EditorIcon name="drag_indicator" size={16} />
+      </span>
+      {icon && !iconFocused && (
+        <span className="material-symbols-rounded ah-row__icon-preview" style={{ fontSize: 20 }}>
+          {icon}
+        </span>
+      )}
+      <div className="ah-row__fields">
+        <div className="ah-row__top">
+          <input
+            type="text"
+            className="ah-row__input ah-row__input--icon"
+            value={icon}
+            onChange={(e) => onIconChange(e.target.value)}
+            onFocus={() => setIconFocused(true)}
+            onBlur={() => setIconFocused(false)}
+            placeholder="Ikon"
+          />
+          <input
+            type="text"
+            className="ah-row__input ah-row__input--text"
+            value={text}
+            onChange={(e) => onTextChange(e.target.value)}
+            placeholder="Rubrik"
+          />
+        </div>
+        <input
+          type="text"
+          className="ah-row__input ah-row__input--desc"
+          value={description}
+          onChange={(e) => onDescriptionChange(e.target.value)}
+          placeholder="Beskrivning"
+        />
+      </div>
+      <button type="button" className="ah-row__remove" onClick={onRemove} aria-label="Ta bort">
         <EditorIcon name="close" size={14} />
       </button>
     </div>

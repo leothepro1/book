@@ -3,35 +3,76 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { EditorIcon } from "@/app/_components/EditorIcon";
-import { getOrders, type OrderListItem } from "../actions";
+import { getAbandonedSessions, getAbandonedOrders } from "../actions";
+import type { AbandonedSession, AbandonedOrder } from "../actions";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import "../orders.css";
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const days = Math.floor(hours / 24);
-  if (days > 0) return `${days}d ${hours % 24}h sedan`;
-  return `${hours}h sedan`;
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  const day = d.getDate();
+  const month = d.toLocaleDateString("sv-SE", { month: "long" });
+  const year = d.getFullYear();
+  const time = d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+  return `${day} ${month} ${year} kl ${time}`;
 }
+
+type UnifiedRow = {
+  id: string;
+  source: "session" | "order";
+  label: string;
+  customer: string;
+  dates: string;
+  total: number;
+  currency: string;
+  createdAt: string;
+  status: string;
+  orderId?: string;
+};
 
 export default function AbandonedPage() {
   const router = useRouter();
-  const [orders, setOrders] = useState<OrderListItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  const [rows, setRows] = useState<UnifiedRow[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const limit = 25;
 
   useEffect(() => {
-    getOrders({ tab: "abandoned", page, limit, sortBy: "createdAt", sortDirection: "desc" }).then((result) => {
-      setOrders(result.orders);
-      setTotal(result.total);
+    Promise.all([
+      getAbandonedSessions({ page: 1, limit: 50 }),
+      getAbandonedOrders({ page: 1, limit: 50 }),
+    ]).then(([s, o]) => {
+      const sessionRows: UnifiedRow[] = s.sessions.map((sess) => ({
+        id: sess.id,
+        source: "session",
+        label: sess.accommodationName,
+        customer: `${sess.adults} gäster`,
+        dates: `${sess.checkIn} – ${sess.checkOut}`,
+        total: sess.accommodationTotal + sess.addonTotal,
+        currency: sess.currency,
+        createdAt: sess.createdAt,
+        status: sess.status === "EXPIRED" ? "Utgången" : "Övergiven",
+      }));
+
+      const orderRows: UnifiedRow[] = o.orders.map((ord) => ({
+        id: ord.id,
+        source: "order",
+        label: ord.lineItemTitle ?? "—",
+        customer: ord.guestName || ord.guestEmail || "—",
+        dates: formatDate(ord.createdAt),
+        total: ord.totalAmount,
+        currency: ord.currency,
+        createdAt: ord.createdAt,
+        status: "Avbruten betalning",
+        orderId: ord.id,
+      }));
+
+      const all = [...sessionRows, ...orderRows].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+
+      setRows(all);
       setLoaded(true);
     });
-  }, [page]);
-
-  const totalPages = Math.ceil(total / limit);
+  }, []);
 
   if (!loaded) return null;
 
@@ -45,88 +86,56 @@ export default function AbandonedPage() {
           </h1>
         </div>
         <div className="admin-content">
-          {total === 0 ? (
+          {rows.length === 0 ? (
             <div className="ord-empty">
               <div className="ord-empty__icon">
                 <EditorIcon name="shopping_cart_off" size={48} />
               </div>
               <h2 className="ord-empty__title">Inga övergivna kassor</h2>
               <p className="ord-empty__desc">
-                Kassor som inte slutförs inom 1 timme visas här.
+                Kassor som inte slutförs visas här.
               </p>
             </div>
           ) : (
             <>
               <div className="ord-column-headers">
-                <span className="ord-col ord-col--order">Kassa#</span>
-                <span className="ord-col ord-col--date">Datum</span>
-                <span className="ord-col ord-col--customer">Kund</span>
+                <span className="ord-col ord-col--order">Datum</span>
+                <span className="ord-col ord-col--customer">Boende</span>
+                <span className="ord-col ord-col--items">Kund / Gäster</span>
                 <span className="ord-col ord-col--total">Totalt</span>
-                <span className="ord-col ord-col--items">Tid sedan</span>
-                <span className="ord-col ord-col--payment">Återhämtning</span>
-                <span className="ord-col ord-col--channel" />
+                <span className="ord-col ord-col--payment">Status</span>
               </div>
 
-              {orders.map((order) => (
+              {rows.map((row) => (
                 <div
-                  key={order.id}
+                  key={`${row.source}-${row.id}`}
                   className="ord-row"
-                  onClick={() => router.push(`/orders/${order.id}`)}
+                  style={{ cursor: row.orderId ? "pointer" : "default" }}
+                  onClick={row.orderId ? () => router.push(`/orders/${row.orderId}`) : undefined}
                 >
                   <div className="ord-col ord-col--order">
-                    <span className="ord-row__order-number">#{order.orderNumber}</span>
-                  </div>
-                  <div className="ord-col ord-col--date">
-                    <span className="ord-row__date">{new Date(order.createdAt).toLocaleDateString("sv-SE")}</span>
+                    <span className="ord-row__date">{formatDate(row.createdAt)}</span>
                   </div>
                   <div className="ord-col ord-col--customer">
-                    <span className="ord-row__customer-name">{order.guestEmail || order.guestName || "—"}</span>
-                  </div>
-                  <div className="ord-col ord-col--total">
-                    <span className="ord-row__total">{formatPriceDisplay(order.totalAmount, order.currency)} kr</span>
+                    <span className="ord-row__customer-name">{row.label}</span>
                   </div>
                   <div className="ord-col ord-col--items">
-                    <span style={{ fontSize: 12, color: "var(--admin-text-secondary)" }}>{timeAgo(order.createdAt)}</span>
+                    <span style={{ fontSize: 13 }}>{row.customer}</span>
+                  </div>
+                  <div className="ord-col ord-col--total">
+                    <span className="ord-row__total">{formatPriceDisplay(row.total, row.currency)} kr</span>
                   </div>
                   <div className="ord-col ord-col--payment">
                     <span style={{
-                      background: order.recoveryStatus === "contacted" ? "#E8E8E8" : "#FFD6A4",
-                      color: order.recoveryStatus === "contacted" ? "#616161" : "#5E4200",
+                      background: row.status === "Avbruten betalning" ? "#FEE2E2" : row.status === "Utgången" ? "#F3F4F6" : "#FEF3C7",
+                      color: row.status === "Avbruten betalning" ? "#991B1B" : row.status === "Utgången" ? "#4B5563" : "#92400E",
                       borderRadius: 4, padding: "2px 8px", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", display: "inline-block",
                     }}>
-                      {order.recoveryStatus === "contacted" ? "Kontaktad" : "Ej kontaktad"}
+                      {row.status}
                     </span>
-                  </div>
-                  <div className="ord-col ord-col--channel">
-                    <button
-                      type="button"
-                      className="admin-btn admin-btn--ghost"
-                      style={{ fontSize: 12, padding: "3px 8px" }}
-                      disabled
-                      title="Kommer snart"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Skicka mail
-                    </button>
                   </div>
                 </div>
               ))}
-
-              {totalPages > 1 && (
-                <div className="files-pagination">
-                  <div className="files-pagination__nav">
-                    <button className="files-pagination__btn" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                      <EditorIcon name="chevron_left" size={20} />
-                    </button>
-                    <button className="files-pagination__btn" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
-                      <EditorIcon name="chevron_right" size={20} />
-                    </button>
-                  </div>
-                  <span className="files-pagination__label">
-                    {Math.min((page - 1) * limit + 1, total)} – {Math.min(page * limit, total)}
-                  </span>
-                </div>
-              )}
             </>
           )}
         </div>

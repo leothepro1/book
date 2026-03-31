@@ -106,7 +106,7 @@ export type OrderDetail = {
 
 // ── List orders ────────────────────────────────────────────────
 
-export type OrderTab = "all" | "unfulfilled" | "unpaid" | "open" | "closed" | "abandoned";
+export type OrderTab = "all" | "unfulfilled" | "unpaid" | "open" | "closed";
 export type OrderSortField = "orderNumber" | "createdAt" | "guestName" | "status" | "totalAmount";
 export type OrderSortDirection = "asc" | "desc";
 
@@ -116,7 +116,15 @@ function buildTabWhere(tab: OrderTab, tenantId: string) {
 
   switch (tab) {
     case "all":
-      return base;
+      // Exclude stale PENDING orders (> 1h old) — those belong in abandoned checkouts.
+      // Recent PENDING orders (< 1h) are active checkouts and should be visible.
+      return {
+        ...base,
+        OR: [
+          { financialStatus: { not: "PENDING" as const } },
+          { financialStatus: "PENDING" as const, createdAt: { gt: oneHourAgo } },
+        ],
+      };
 
     case "unfulfilled":
       // Paid but not yet delivered
@@ -143,10 +151,6 @@ function buildTabWhere(tab: OrderTab, tenantId: string) {
           { financialStatus: { in: ["REFUNDED" as const, "VOIDED" as const] } },
         ],
       };
-
-    case "abandoned":
-      // PENDING and older than 1h — abandoned checkouts
-      return { ...base, financialStatus: "PENDING" as const, createdAt: { lt: oneHourAgo } };
 
     default:
       return base;
@@ -200,20 +204,11 @@ export async function getOrders(opts?: {
     ...channelFilter,
   };
 
-  const isAbandoned = tab === "abandoned";
-
   const [orders, total] = await Promise.all([
     prisma.order.findMany({
       where,
       include: {
         lineItems: { select: { title: true, imageUrl: true } },
-        ...(isAbandoned && {
-          events: {
-            where: { type: { in: ["NOTE_ADDED", "EMAIL_SENT"] } },
-            select: { id: true },
-            take: 1,
-          },
-        }),
       },
       orderBy: { [sortBy]: sortDirection },
       skip,
@@ -239,11 +234,159 @@ export async function getOrders(opts?: {
       lineItems: o.lineItems.map((li) => ({ title: li.title, imageUrl: li.imageUrl })),
       sourceChannel: o.sourceChannel,
       tags: o.tags ? o.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
-      ...(isAbandoned && {
-        recoveryStatus: ((o as unknown as { events?: { id: string }[] }).events?.length ?? 0) > 0
-          ? "contacted" as const
-          : "not_contacted" as const,
-      }),
+    })),
+    total,
+  };
+}
+
+// ── Abandoned checkouts: CheckoutSessions ─────────────────────
+
+export type AbandonedSession = {
+  id: string;
+  accommodationName: string;
+  checkIn: string;
+  checkOut: string;
+  adults: number;
+  accommodationTotal: number;
+  addonTotal: number;
+  currency: string;
+  status: string;
+  createdAt: string;
+};
+
+export async function getAbandonedSessions(opts?: {
+  page?: number;
+  limit?: number;
+}): Promise<{ sessions: AbandonedSession[]; total: number }> {
+  const { orgId } = await getAuth();
+  if (!orgId) return { sessions: [], total: 0 };
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { clerkOrgId: orgId },
+    select: { id: true },
+  });
+  if (!tenant) return { sessions: [], total: 0 };
+
+  const page = opts?.page ?? 1;
+  const limit = opts?.limit ?? 25;
+
+  const where = {
+    tenantId: tenant.id,
+    status: { in: ["EXPIRED" as const, "ABANDONED" as const] },
+  };
+
+  const [sessions, total] = await Promise.all([
+    prisma.checkoutSession.findMany({
+      where,
+      select: {
+        id: true,
+        accommodationName: true,
+        checkIn: true,
+        checkOut: true,
+        adults: true,
+        accommodationTotal: true,
+        selectedAddons: true,
+        currency: true,
+        status: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.checkoutSession.count({ where }),
+  ]);
+
+  return {
+    sessions: sessions.map((s) => {
+      const addons = (s.selectedAddons ?? []) as Array<{ totalAmount?: number }>;
+      const addonTotal = addons.reduce((sum, a) => sum + (a.totalAmount ?? 0), 0);
+      return {
+        id: s.id,
+        accommodationName: s.accommodationName,
+        checkIn: s.checkIn.toISOString().split("T")[0],
+        checkOut: s.checkOut.toISOString().split("T")[0],
+        adults: s.adults,
+        accommodationTotal: s.accommodationTotal,
+        addonTotal,
+        currency: s.currency,
+        status: s.status,
+        createdAt: s.createdAt.toISOString(),
+      };
+    }),
+    total,
+  };
+}
+
+// ── Abandoned checkouts: Stale PENDING Orders ─────────────────
+
+export type AbandonedOrder = {
+  id: string;
+  orderNumber: number;
+  guestName: string;
+  guestEmail: string;
+  totalAmount: number;
+  currency: string;
+  createdAt: string;
+  lineItemTitle: string | null;
+  stripePaymentIntentId: string | null;
+};
+
+export async function getAbandonedOrders(opts?: {
+  page?: number;
+  limit?: number;
+}): Promise<{ orders: AbandonedOrder[]; total: number }> {
+  const { orgId } = await getAuth();
+  if (!orgId) return { orders: [], total: 0 };
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { clerkOrgId: orgId },
+    select: { id: true },
+  });
+  if (!tenant) return { orders: [], total: 0 };
+
+  const page = opts?.page ?? 1;
+  const limit = opts?.limit ?? 25;
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+  const where = {
+    tenantId: tenant.id,
+    financialStatus: "PENDING" as const,
+    createdAt: { lt: oneHourAgo },
+  };
+
+  const [orders, total] = await Promise.all([
+    prisma.order.findMany({
+      where,
+      select: {
+        id: true,
+        orderNumber: true,
+        guestName: true,
+        guestEmail: true,
+        totalAmount: true,
+        currency: true,
+        createdAt: true,
+        stripePaymentIntentId: true,
+        lineItems: { select: { title: true }, take: 1 },
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.order.count({ where }),
+  ]);
+
+  return {
+    orders: orders.map((o) => ({
+      id: o.id,
+      orderNumber: o.orderNumber,
+      guestName: o.guestName,
+      guestEmail: o.guestEmail,
+      totalAmount: o.totalAmount,
+      currency: o.currency,
+      createdAt: o.createdAt.toISOString(),
+      lineItemTitle: o.lineItems[0]?.title ?? null,
+      stripePaymentIntentId: o.stripePaymentIntentId,
     })),
     total,
   };

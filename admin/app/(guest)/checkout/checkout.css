@@ -121,213 +121,26 @@
   line-height: 1.25;
 }
 
-/* ── Steps accordion ───────────────────────────── */
+/* ── Sections (continuous flow) ─────────────────── */
 
-.co__steps {
+.co__sections {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 32px;
 }
 
-.co__step {
-  border: 1px solid #ddd;
-  border-radius: 24px;
-  transition: border-color 0.3s ease-out,
-              box-shadow 0.3s ease-out;
+.co__section + .co__section {
+  border-top: 1px solid color-mix(in srgb, var(--text, #000) 10%, transparent);
+  padding-top: 32px;
 }
 
-.co__step--active {
-  border-color: transparent;
-  box-shadow: 0px 0px 0px 1px rgba(0,0,0,0.02),
-              0px 2px 6px 0px rgba(0,0,0,0.04),
-              0px 4px 8px 0px rgba(0,0,0,0.10);
-}
-
-
-
-.co__step--leaving {
-  border-color: #ddd;
-  box-shadow: none;
-  transition: border-color 0.2s ease-out,
-              box-shadow 0.2s ease-out;
-}
-
-.co__step-header {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24px 24px 0;
-  border-radius: 12px;
-  text-align: left;
-}
-
-.co__step-header-left {
-  flex: 1;
-  min-width: 0;
-}
-.co__step-title {
-    color: var(--text, #1a1a1a);
-    letter-spacing: -.01em;
-    font-size: 1rem;
-    font-weight: 550;
-    line-height: 2em;
-}
-
-/* ── Summary — slides in from below with fade ──── */
-
-.co__step-summary {
-  font-size: 14px;
-  font-weight: 400;
-  color: color-mix(in srgb, var(--text, #000) 55%, transparent);
-  line-height: 1.5;
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  transition: grid-template-rows 0.2s ease-out,
-              opacity 0.15s ease-out;
-}
-
-.co__step-summary--visible {
-  grid-template-rows: 1fr;
-  opacity: 1;
-  transition: grid-template-rows 0.2s ease-out 0.05s,
-              opacity 0.18s ease-out 0.08s;
-}
-
-.co__step-summary-inner {
-  overflow: hidden;
-  min-height: 0;
-  padding-top: 0;
-  transition: padding-top 0.2s ease-out;
-}
-
-.co__step-summary--visible .co__step-summary-inner {
-  padding-top: 0px;
-  transition-delay: 0.05s;
-}
-
-.co__step-summary-card,
-.co__step-summary-method {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.co__step-summary-card svg,
-.co__step-summary-method svg {
-  flex-shrink: 0;
-}
-
-/* ── Edit button — fades in ────────────────────── */
-
-.co__step-edit {
+.co__section-title {
   color: var(--text, #1a1a1a);
-  text-underline-offset: 2px;
-  cursor: pointer;
-  background: #f2f2f2;
-  border: none;
-  border-radius: 10px;
-  flex-shrink: 0;
-  margin-left: 16px;
-  padding: 9px 17px;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1em;
-  text-decoration: none;
-  opacity: 0;
-  transition: opacity 0.15s ease-out,
-              background 0.12s;
-  pointer-events: none;
-}
-
-.co__step-edit--visible {
-  opacity: 1;
-  pointer-events: auto;
-  transition: opacity 0.15s ease-out 0.1s,
-              background 0.12s;
-}
-
-.co__step-edit:hover {
-  background: #e8e8e8;
-}
-
-/* ── Step footer (next button) ─────────────────── */
-
-.co__step-footer {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 24px;
-}
-
-.co__next-btn {
-  padding: 9px 26px;
-  font-size: 1rem;
+  letter-spacing: -.01em;
+  font-size: 1.125rem;
   font-weight: 600;
-  border: none;
-  border-radius: 8px;
-  background: var(--text, #1a1a1a);
-  color: var(--background, #fff);
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.co__next-btn:hover {
-  opacity: 0.88;
-}
-
-/* ── Step body — orchestrated morph ──────────────── */
-
-.co__step-body {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.18s ease-out;
-}
-
-.co__step-body--open {
-  grid-template-rows: 1fr;
-  transition: grid-template-rows 0.25s ease-out;
-}
-
-.co__step-inner {
-  overflow: hidden;
-  min-height: 0;
-}
-
-/*
- * Bottom spacer — lives OUTSIDE the body morph.
- * Always 24px. In closed state it looks like header bottom-padding.
- * In open state it sits below content — content lives between
- * title and spacer, with header bottom-padding morphed into content area.
- */
-.co__step-spacer {
-  height: 24px;
-}
-
-.co__step-content {
-  padding: 16px 24px 0px 24px;
-}
-
-/*
- * Content fade: only activates after first step change (data-animate).
- * Initial render shows content immediately.
- */
-.co__step-content[data-animate] {
-  opacity: 0;
-  transition: opacity 0.12s ease-out;
-}
-
-.co__step-body--open .co__step-content[data-animate] {
-  opacity: 1;
-  transition: opacity 0.18s ease-out 0.06s;
-}
-
-.co__step-desc {
-  font-size: 14px;
-  font-weight: 400;
-  color: color-mix(in srgb, var(--text, #000) 55%, transparent);
-  margin: 0 0 20px;
-  line-height: 1.5;
+  line-height: 1.4;
+  margin: 0 0 16px;
 }
 
 /* ── Payment methods (Step 2) ──────────────────── */
@@ -473,13 +286,13 @@
 /* ── Payment method accordion ──────────────────── */
 
 .co__methods {
-    border: none;
-    border-radius: 0;
+    border: 1px solid color-mix(in srgb, var(--text, #000) 12%, transparent);
+    border-radius: 10px;
     margin-bottom: 8px;
-    overflow: visible;
+    overflow: hidden;
 }
 
-.co__method { border-bottom: 1px solid #EBEBEB; }
+.co__method + .co__method { border-top: 1px solid color-mix(in srgb, var(--text, #000) 10%, transparent); }
 
 
 .co__method-header {
@@ -487,7 +300,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 20px 0px;
+  padding: 16px 20px;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -668,7 +481,8 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 0 0 20px;
+  padding: 20px 20px 20px;
+  background: #f3f3f4;
 }
 
 /* Stripe Element inside a floating label wrapper — matches co__float-input exactly */

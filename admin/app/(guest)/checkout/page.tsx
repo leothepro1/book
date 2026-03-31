@@ -1,22 +1,20 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { resolveTenantFromHost } from "../_lib/tenant/resolveTenantFromHost";
 import { getTenantConfig } from "../_lib/tenant/getTenantConfig";
 import { prisma } from "@/app/_lib/db/prisma";
-import { resolveProduct } from "@/app/_lib/products/resolve";
-import { resolveAccommodationPrice, AccommodationPriceError } from "@/app/_lib/accommodations";
 import { CheckoutClient } from "./CheckoutClient";
 import { resolvePaymentMethods } from "@/app/_lib/payments/resolve";
 import type { PaymentMethodConfig } from "@/app/_lib/payments/types";
+import type { SelectedAddon } from "@/app/_lib/checkout/session-types";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Checkout page — server-side price resolution.
+ * Checkout page — reads everything from CheckoutSession.
  *
- * Shopify pattern: the server fetches the authoritative price
- * from the PMS at render time. The client never supplies the price.
- *
- * URL: /checkout?product=slug&checkIn=2026-07-01&checkOut=2026-07-05&guests=2&ratePlan=flexibel
+ * URL: /checkout?session=[token]
+ * The session snapshot is the single source of truth.
+ * No prices from URL params. No PMS re-fetch.
  */
 export default async function CheckoutPage({
   searchParams,
@@ -27,67 +25,83 @@ export default async function CheckoutPage({
   if (!tenant) return notFound();
 
   const sp = await searchParams;
-  const productSlug = sp.product;
-  const accommodationId = sp.accommodationId ?? null;
-  const checkIn = sp.checkIn ?? null;
-  const checkOut = sp.checkOut ?? null;
-  const guests = sp.guests ? parseInt(sp.guests, 10) : 2;
-  const ratePlanId = sp.ratePlan ?? null;
+  const sessionToken = sp.session;
 
-  if (!productSlug || !checkIn || !checkOut) return notFound();
+  if (!sessionToken) redirect("/stays");
 
-  // Fetch product
-  const product = await prisma.product.findUnique({
-    where: { tenantId_slug: { tenantId: tenant.id, slug: productSlug } },
-    include: { media: { orderBy: { sortOrder: "asc" }, take: 1 } },
+  // ── Load + gate session ─────────────────────────────────────
+  const session = await prisma.checkoutSession.findUnique({
+    where: { token: sessionToken },
+    select: {
+      id: true,
+      tenantId: true,
+      token: true,
+      status: true,
+      expiresAt: true,
+      accommodationId: true,
+      accommodationName: true,
+      accommodationSlug: true,
+      ratePlanId: true,
+      ratePlanName: true,
+      ratePlanCancellationPolicy: true,
+      pricePerNight: true,
+      totalNights: true,
+      accommodationTotal: true,
+      currency: true,
+      checkIn: true,
+      checkOut: true,
+      adults: true,
+      selectedAddons: true,
+      accommodation: {
+        select: {
+          media: { select: { url: true }, orderBy: { sortOrder: "asc" }, take: 1 },
+        },
+      },
+    },
   });
 
-  if (!product || product.status !== "ACTIVE") return notFound();
+  // Session not found or wrong tenant → silent redirect
+  if (!session || session.tenantId !== tenant.id) redirect("/stays");
 
-  const resolved = resolveProduct(product);
-
-  // Resolve price — authoritative, never from client
-  let totalPrice = resolved.price; // fallback for STANDARD products
-  let currency = resolved.currency;
-  let ratePlanName: string | null = null;
-
-  if (accommodationId) {
-    try {
-      const priceResult = await resolveAccommodationPrice({
-        tenantId: tenant.id,
-        accommodationId,
-        ratePlanId: ratePlanId ?? undefined,
-        checkIn: new Date(checkIn),
-        checkOut: new Date(checkOut),
-        guests,
-      });
-      totalPrice = priceResult.totalPrice;
-      currency = priceResult.currency;
-      ratePlanName = priceResult.ratePlan.name;
-    } catch (err) {
-      if (!(err instanceof AccommodationPriceError)) {
-        // Unexpected — fall through with price = 0, UI will show error
-      }
-      // Known errors also fall through — price stays 0, UI shows error
-    }
+  // Expired or abandoned
+  if (session.status === "EXPIRED" || session.status === "ABANDONED") {
+    redirect("/stays?error=session_expired");
   }
 
-  const nights = Math.round(
-    (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000,
-  );
+  // Not yet at checkout
+  if (session.status === "PENDING" || session.status === "ADDON_SELECTION") {
+    redirect(`/stays/${session.accommodationSlug}/addons?session=${session.token}`);
+  }
 
-  // Fetch booking terms — server-side, never client
+  // Already completed
+  if (session.status === "COMPLETED") {
+    redirect(`/checkout/success?session=${session.token}`);
+  }
+
+  // Expired by time
+  if (session.expiresAt < new Date()) {
+    await prisma.checkoutSession.update({
+      where: { id: session.id },
+      data: { status: "EXPIRED" },
+    });
+    redirect("/stays?error=session_expired");
+  }
+
+  // ── Compute totals from session snapshot ────────────────────
+  const addons = (session.selectedAddons ?? []) as unknown as SelectedAddon[];
+  const addonTotal = addons.reduce((sum, a) => sum + a.totalAmount, 0);
+  const totalAmount = session.accommodationTotal + addonTotal;
+
+  // ── Fetch tenant config for header + payment methods ────────
+  const config = await getTenantConfig(tenant.id);
+  const logoUrl = (config.theme?.header?.logoUrl as string) ?? null;
+  const logoWidth = (config.theme?.header?.logoWidth as number) ?? 120;
+
   const bookingTerms = await prisma.tenantPolicy.findUnique({
     where: { tenantId_policyId: { tenantId: tenant.id, policyId: "booking-terms" } },
     select: { content: true },
   });
 
-  // Fetch tenant config for header (logo)
-  const config = await getTenantConfig(tenant.id);
-  const logoUrl = (config.theme?.header?.logoUrl as string) ?? null;
-  const logoWidth = (config.theme?.header?.logoWidth as number) ?? 120;
-
-  // Resolve payment methods from tenant config
   const tenantPayments = await prisma.tenant.findUnique({
     where: { id: tenant.id },
     select: { paymentMethodConfig: true },
@@ -98,25 +112,22 @@ export default async function CheckoutPage({
 
   return (
     <CheckoutClient
+      sessionToken={session.token}
       product={{
-        title: resolved.displayTitle,
-        image: product.media[0]?.url ?? null,
-        price: totalPrice,
-        currency,
-        ratePlanName,
+        title: session.accommodationName,
+        image: session.accommodation.media[0]?.url ?? null,
+        price: totalAmount,
+        currency: session.currency,
+        ratePlanName: session.ratePlanName,
       }}
-      tenantId={tenant.id}
-      productSlug={productSlug}
-      checkIn={checkIn}
-      checkOut={checkOut}
-      guests={guests}
-      nights={nights}
+      checkIn={session.checkIn.toISOString().split("T")[0]}
+      checkOut={session.checkOut.toISOString().split("T")[0]}
+      guests={session.adults}
+      nights={session.totalNights}
+      addons={addons}
+      accommodationTotal={session.accommodationTotal}
       bookingTerms={bookingTerms?.content ?? null}
-      header={{
-        logoUrl,
-        logoWidth,
-      }}
-      ratePlanId={ratePlanId}
+      header={{ logoUrl, logoWidth }}
       availableMethods={resolvedMethods.availableMethods}
       walletsEnabled={resolvedMethods.walletsEnabled}
       klarnaEnabled={resolvedMethods.klarnaEnabled}

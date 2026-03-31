@@ -24,3 +24,6 @@ import "./product-features";
 import "./product-price";
 import "./product-booking-form";
 import "./add-to-cart";
+import "./accommodation-highlights";
+import "./accommodation-capacity";
+import "./accommodation-facilities";

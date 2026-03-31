@@ -36,6 +36,12 @@ export type AccommodationUpdateInput = {
     altText: string | null;
     sortOrder: number;
   }>;
+  highlights?: Array<{
+    icon: string;
+    text: string;
+    description: string;
+    sortOrder: number;
+  }>;
 };
 
 export async function updateAccommodation(
@@ -82,23 +88,26 @@ export async function updateAccommodation(
       });
 
       // Update overrideHidden on PMS facilities
-      for (const f of data.facilities) {
-        if (f.source === "PMS") {
-          await tx.accommodationFacility.updateMany({
-            where: { accommodationId: id, facilityType: f.facilityType, source: "PMS" },
-            data: { overrideHidden: f.overrideHidden },
-          });
-        } else {
-          // Create MANUAL facility
-          await tx.accommodationFacility.create({
-            data: {
-              accommodationId: id,
-              facilityType: f.facilityType,
-              source: "MANUAL",
-              overrideHidden: false,
-            },
-          }).catch(() => {}); // Skip duplicates
-        }
+      const pmsFacilities = data.facilities.filter((f) => f.source === "PMS");
+      for (const f of pmsFacilities) {
+        await tx.accommodationFacility.updateMany({
+          where: { accommodationId: id, facilityType: f.facilityType, source: "PMS" },
+          data: { overrideHidden: f.overrideHidden },
+        });
+      }
+
+      // Create MANUAL facilities — skipDuplicates to avoid unique constraint errors in transaction
+      const manualFacilities = data.facilities.filter((f) => f.source !== "PMS");
+      if (manualFacilities.length > 0) {
+        await tx.accommodationFacility.createMany({
+          data: manualFacilities.map((f) => ({
+            accommodationId: id,
+            facilityType: f.facilityType,
+            source: "MANUAL" as const,
+            overrideHidden: false,
+          })),
+          skipDuplicates: true,
+        });
       }
     }
 
@@ -134,6 +143,25 @@ export async function updateAccommodation(
             altText: m.altText,
             sortOrder: m.sortOrder,
             source: "MANUAL" as const,
+          })),
+        });
+      }
+    }
+
+    // Sync highlights — delete all, recreate
+    if (data.highlights) {
+      await tx.accommodationHighlight.deleteMany({
+        where: { accommodationId: id },
+      });
+
+      if (data.highlights.length > 0) {
+        await tx.accommodationHighlight.createMany({
+          data: data.highlights.map((h) => ({
+            accommodationId: id,
+            icon: h.icon,
+            text: h.text,
+            description: h.description,
+            sortOrder: h.sortOrder,
           })),
         });
       }

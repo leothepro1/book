@@ -1670,7 +1670,9 @@ model Accommodation {
   ratePlans    RatePlan[]
   restrictions AccommodationRestriction[]
   media        AccommodationMedia[]
-  bookings     Booking[]
+  highlights       AccommodationHighlight[]
+  checkoutSessions CheckoutSession[]
+  bookings         Booking[]
   categoryItems AccommodationCategoryItem[]
 
   @@unique([tenantId, slug])
@@ -1681,6 +1683,24 @@ model Accommodation {
   @@index([tenantId, sortOrder])
   @@index([tenantId, archivedAt])
   @@index([tenantId, pmsProvider, externalId])
+}
+
+/// Highlight / selling point on an accommodation.
+/// e.g. icon "star" + text "Fem stjärnigt hotell"
+/// Tenant-managed, ordered by sortOrder.
+model AccommodationHighlight {
+  id              String @id @default(cuid())
+  accommodationId String
+
+  icon        String  // Material Symbols Rounded icon name, e.g. "star", "wifi"
+  text        String  // Heading, e.g. "Fem stjärnigt hotell"
+  description String  @default("") // Optional description below the heading
+  sortOrder   Int     @default(0)
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+
+  @@index([accommodationId])
+  @@index([accommodationId, sortOrder])
 }
 
 /// Physical room/unit within an accommodation category.
@@ -1881,6 +1901,65 @@ model AccommodationCategoryAddon {
 }
 
 // ============================================================================
+// CHECKOUT SESSION (Source of truth for the entire purchase flow)
+// ============================================================================
+
+/// Tracks a guest's journey from "Boka" click through addon selection
+/// to payment. URL params are NOT the source of truth — this is.
+/// Token is the only external identifier. Internal id never exposed.
+enum CheckoutSessionStatus {
+  PENDING           // Created, awaiting addon selection
+  ADDON_SELECTION   // Guest is selecting addons
+  CHECKOUT          // Ready for payment (or skipped addons)
+  COMPLETED         // Payment successful, order created
+  EXPIRED           // Timed out (30min TTL)
+  ABANDONED         // Guest navigated away
+}
+
+model CheckoutSession {
+  id       String @id @default(cuid())
+  token    String @unique                     // 32 random bytes, base64url — used in all URLs
+  tenantId String
+
+  status    CheckoutSessionStatus @default(PENDING)
+
+  // Accommodation reference
+  accommodationId   String
+  accommodation     Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+  ratePlanId        String         // PMS external ID — not a FK, rate plans are not persisted
+
+  // Stay details
+  checkIn   DateTime
+  checkOut  DateTime
+  adults    Int
+
+  // Frozen snapshot — prices from PMS at session creation time, all in öre (Int)
+  accommodationName               String
+  accommodationSlug               String
+  ratePlanName                     String
+  ratePlanCancellationPolicy       String   // "FLEXIBLE" | "MODERATE" | "NON_REFUNDABLE"
+  pricePerNight                    Int      // öre
+  totalNights                      Int
+  accommodationTotal               Int      // pricePerNight × totalNights, öre
+  currency                         String   @default("SEK")
+
+  // Addons — frozen at selection time
+  selectedAddons Json @default("[]")
+  // Shape: Array<{ productId, variantId, title, quantity, unitAmount, totalAmount, pricingMode }>
+
+  // Dedup: prevents rapid double-clicks from creating duplicate sessions
+  dedupKey   String?  @unique
+
+  // Lifecycle
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([expiresAt])
+}
+
+// ============================================================================
 // PRODUCT TAGS (Global tag registry + product-tag association)
 // ============================================================================
 
@@ -2063,6 +2142,7 @@ model Order {
   guestEmail              String         @default("")
   guestName               String         @default("")
   guestPhone              String?
+  billingAddress          Json?    // { address1, address2?, city, postalCode, country }
 
   // Guest account link — auto-created on payment
   guestAccountId          String?
