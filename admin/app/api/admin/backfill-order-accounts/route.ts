@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
  * Creates GuestAccount if needed, then sets order.guestAccountId.
  *
  * Usage:
- *   curl -X POST https://bedfront.com/api/admin/backfill-order-accounts \
+ *   curl -X POST https://rutgr.com/api/admin/backfill-order-accounts \
  *     -H "x-cron-secret: YOUR_CRON_SECRET"
  */
 

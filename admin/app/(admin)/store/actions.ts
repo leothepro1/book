@@ -67,7 +67,7 @@ export async function getStoreThemeData(): Promise<StoreThemeData | null> {
     }
   }
 
-  const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "bedfront.com";
+  const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
 
   return {
     tenantId: tenant.id,

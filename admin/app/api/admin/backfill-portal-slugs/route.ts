@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
  * Secured with CRON_SECRET — same pattern as cron endpoints.
  *
  * Usage:
- *   curl -X POST https://bedfront.com/api/admin/backfill-portal-slugs \
+ *   curl -X POST https://rutgr.com/api/admin/backfill-portal-slugs \
  *     -H "x-cron-secret: YOUR_CRON_SECRET"
  */
 

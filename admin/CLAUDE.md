@@ -57,7 +57,7 @@ Every feature ships at Shopify quality or not at all.
 - Cloudinary for media
 - Resend for transactional email
 - Material Symbols Rounded for icons
-- Deployed on Vercel (bedfront.com, *.bedfront.com wildcard)
+- Deployed on Vercel (rutgr.com, *.rutgr.com wildcard)
 
 ## Development
 
@@ -1198,18 +1198,18 @@ Shopify pattern: every tenant gets a unique subdomain automatically.
 
 ### URL structure
 
-  Admin app:       bedfront.com (Vercel, Clerk auth)
-  Booking engine:  {portalSlug}.bedfront.com (wildcard DNS)
-  Booking page:    {portalSlug}.bedfront.com/home/{portalToken}
+  Admin app:       rutgr.com (Vercel, Clerk auth)
+  Booking engine:  {portalSlug}.rutgr.com (wildcard DNS)
+  Booking page:    {portalSlug}.rutgr.com/home/{portalToken}
 
   Example:
-    Admin:   bedfront.com/design
-    Portal:  apelviken-dev-3vtczx.bedfront.com
-    Booking: apelviken-dev-3vtczx.bedfront.com/home/tok_abc123
+    Admin:   rutgr.com/design
+    Portal:  apelviken-dev-3vtczx.rutgr.com
+    Booking: apelviken-dev-3vtczx.rutgr.com/home/tok_abc123
 
 ### DNS & hosting
 
-  *.bedfront.com wildcard DNS on Vercel — automatic SSL for all subdomains.
+  *.rutgr.com wildcard DNS on Vercel — automatic SSL for all subdomains.
   Database: PostgreSQL on Render (external connection from Vercel).
   No per-tenant DNS configuration needed.
 
@@ -1249,10 +1249,10 @@ booking engine access. Different from the booking-scoped MagicLink model.
 
   nameToSlugBase(name)           — "Grand Hotel" → "grand-hotel"
   generatePortalSlug(name)       — "grand-hotel-x4k9mq" (async, checks DB)
-  portalSlugToUrl(slug)          — "https://{slug}.bedfront.com"
-  tenantDefaultEmailFrom(slug)   — "noreply@{slug}.bedfront.com"
+  portalSlugToUrl(slug)          — "https://{slug}.rutgr.com"
+  tenantDefaultEmailFrom(slug)   — "noreply@{slug}.rutgr.com"
   tenantFromAddress(name, slug, customFrom?, customFromName?)
-                                 — "Grand Hotel <noreply@{slug}.bedfront.com>"
+                                 — "Grand Hotel <noreply@{slug}.rutgr.com>"
 
 ---
 
@@ -1279,12 +1279,12 @@ identity, template customization, rate limiting, and delivery tracking.
 ### Sender identity
 
 Every tenant gets an automatic email address based on their subdomain:
-  noreply@{portalSlug}.bedfront.com
+  noreply@{portalSlug}.rutgr.com
 
   Priority chain for from-address:
     1. Custom emailFrom (tenant verified their own domain)
-    2. portalSlug-based: noreply@{slug}.bedfront.com
-    3. Fallback: noreply@bedfront.com (no portalSlug — edge case)
+    2. portalSlug-based: noreply@{slug}.rutgr.com
+    3. Fallback: noreply@rutgr.com (no portalSlug — edge case)
 
   Set atomically on tenant creation (Clerk webhook).
   Displayed read-only in admin settings (Portaladress + E-post).

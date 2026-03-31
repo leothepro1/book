@@ -63,7 +63,7 @@ describe("VerifySender email template", () => {
   it("renders confirm URL as a link", async () => {
     const html = await render(
       VerifySender({
-        confirmUrl: "https://bedfront.com/api/email-sender/verify/confirm?token=abc123",
+        confirmUrl: "https://rutgr.com/api/email-sender/verify/confirm?token=abc123",
         platformName: "Bedfront",
       }),
     );

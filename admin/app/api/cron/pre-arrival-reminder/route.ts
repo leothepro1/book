@@ -70,7 +70,7 @@ export async function GET(req: Request) {
     const property = (settings.property ?? {}) as Record<string, unknown>;
     const checkInTime = (property.checkInTime as string) ?? "14:00";
 
-    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "bedfront.com";
+    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
     const portalBase = booking.tenant.portalSlug
       ? `https://${booking.tenant.portalSlug}.${baseDomain}`
       : "";

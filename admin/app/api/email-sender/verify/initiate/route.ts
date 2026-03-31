@@ -95,7 +95,7 @@ export async function POST(req: Request) {
       );
     } else {
       await resendClient.emails.send({
-        from: "Bedfront <noreply@bedfront.com>",
+        from: "Rutgr <noreply@rutgr.com>",
         to: parsed.emailFrom,
         subject: `Verifiera din avsändare – ${parsed.emailFrom}`,
         html,

@@ -218,7 +218,7 @@ export async function handlePaymentWebhook(
       });
 
       if (order.guestEmail) {
-        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "bedfront.com";
+        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
         const portalBase = tenant?.portalSlug
           ? `https://${tenant.portalSlug}.${baseDomain}`
           : null;
@@ -321,7 +321,7 @@ export async function handlePaymentWebhook(
           where: { id: order.tenantId },
           select: { name: true, portalSlug: true },
         });
-        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "bedfront.com";
+        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
         const portalBase = tenant?.portalSlug ? `https://${tenant.portalSlug}.${baseDomain}` : "";
         await sendFailedEmail(
           order.tenantId,

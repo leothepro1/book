@@ -43,7 +43,7 @@ export async function GET(req: Request) {
     if (alreadySent) continue;
 
     const meta = (order.metadata ?? {}) as Record<string, unknown>;
-    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "bedfront.com";
+    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
     const portalBase = order.tenant.portalSlug
       ? `https://${order.tenant.portalSlug}.${baseDomain}`
       : "";

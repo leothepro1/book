@@ -14,7 +14,7 @@ const { resolveGuestTenant } = await import("@/app/_lib/guest-auth/resolve-tenan
 const mockSendOtp = sendOtp as ReturnType<typeof vi.fn>;
 const mockResolveTenant = resolveGuestTenant as ReturnType<typeof vi.fn>;
 
-function makeRequest(body: unknown, host = "hotel.bedfront.com") {
+function makeRequest(body: unknown, host = "hotel.rutgr.com") {
   return new Request("http://localhost:3000/api/guest-auth/request-otp", {
     method: "POST",
     headers: { "Content-Type": "application/json", host },
@@ -81,7 +81,7 @@ describe("POST /api/guest-auth/request-otp", () => {
   it("returns 400 when tenant cannot be resolved", async () => {
     mockResolveTenant.mockResolvedValue(null);
 
-    const res = await POST(makeRequest({ email: "guest@example.com" }, "bedfront.com"));
+    const res = await POST(makeRequest({ email: "guest@example.com" }, "rutgr.com"));
     const json = await res.json();
 
     expect(res.status).toBe(400);
@@ -93,7 +93,7 @@ describe("POST /api/guest-auth/request-otp", () => {
     mockResolveTenant.mockResolvedValue("t1");
     const req = new Request("http://localhost:3000/api/guest-auth/request-otp", {
       method: "POST",
-      headers: { "Content-Type": "application/json", host: "hotel.bedfront.com" },
+      headers: { "Content-Type": "application/json", host: "hotel.rutgr.com" },
       body: "not json",
     });
 

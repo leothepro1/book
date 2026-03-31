@@ -7,7 +7,7 @@ import { setSentryTenantContext } from "@/app/_lib/observability/sentry";
 /**
  * Resolve tenant from the request host header (subdomain).
  *
- * Production: {portalSlug}.bedfront.com → lookup by portalSlug
+ * Production: {portalSlug}.rutgr.com → lookup by portalSlug
  * Development: localhost → lookup by DEV_ORG_ID (Clerk org)
  *
  * Returns the tenant row or null if not found.
@@ -25,7 +25,7 @@ export async function resolveTenantFromHost() {
     return tenant;
   }
 
-  // Production: extract subdomain from {slug}.bedfront.com
+  // Production: extract subdomain from {slug}.rutgr.com
   const dotIndex = host.indexOf(".");
   if (dotIndex === -1) return null;
 

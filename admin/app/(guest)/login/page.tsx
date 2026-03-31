@@ -29,7 +29,7 @@ export default async function OtpLoginPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   // Resolve tenant: subdomain in production, DEV_ORG_ID in dev.
-  // In editor preview (bedfront.com/preview/login), Host is the admin domain —
+  // In editor preview (rutgr.com/preview/login), Host is the admin domain —
   // fall back to admin auth (Clerk orgId) so the preview iframe can render.
   let tenant = await resolveTenantFromHost();
   if (!tenant) {

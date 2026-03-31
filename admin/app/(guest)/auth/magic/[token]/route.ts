@@ -9,9 +9,9 @@ export const dynamic = "force-dynamic";
  * Legacy magic link callback — redirect shim.
  *
  * Existing magic links in already-sent emails point to /auth/magic/{token}
- * on bedfront.com. This route looks up which tenant the token belongs to
+ * on rutgr.com. This route looks up which tenant the token belongs to
  * and redirects to the tenant subdomain login page with the token as a
- * query param: https://{portalSlug}.bedfront.com/login?ml={token}
+ * query param: https://{portalSlug}.rutgr.com/login?ml={token}
  *
  * The /login page on the subdomain validates and consumes the token.
  * This shim does NOT mark the token as used — only reads tenantId.

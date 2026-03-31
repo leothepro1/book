@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
  * Secured with CRON_SECRET — same pattern as other backfill endpoints.
  *
  * Usage:
- *   curl -X POST https://bedfront.com/api/admin/backfill-payment-config \
+ *   curl -X POST https://rutgr.com/api/admin/backfill-payment-config \
  *     -H "x-cron-secret: YOUR_CRON_SECRET"
  */
 

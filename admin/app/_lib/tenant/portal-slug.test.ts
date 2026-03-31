@@ -45,14 +45,14 @@ describe("nameToSlugBase", () => {
 describe("portalSlugToUrl", () => {
   it("returns correct https URL", () => {
     expect(portalSlugToUrl("grand-hotel-x4k9mq")).toBe(
-      "https://grand-hotel-x4k9mq.bedfront.com",
+      "https://grand-hotel-x4k9mq.rutgr.com",
     );
   });
 
-  it("format is https://{slug}.bedfront.com", () => {
+  it("format is https://{slug}.rutgr.com", () => {
     const slug = "test-slug";
     const url = portalSlugToUrl(slug);
-    expect(url).toMatch(/^https:\/\/test-slug\.bedfront\.com$/);
+    expect(url).toMatch(/^https:\/\/test-slug\.rutgr\.com$/);
   });
 });
 
@@ -103,14 +103,14 @@ describe("generatePortalSlug", () => {
 // ── tenantDefaultEmailFrom ──────────────────────────────────────
 
 describe("tenantDefaultEmailFrom", () => {
-  it("returns noreply@{slug}.bedfront.com", () => {
+  it("returns noreply@{slug}.rutgr.com", () => {
     expect(tenantDefaultEmailFrom("grandhotel-x4k9mq")).toBe(
-      "noreply@grandhotel-x4k9mq.bedfront.com",
+      "noreply@grandhotel-x4k9mq.rutgr.com",
     );
   });
 
-  it("format is always noreply@{slug}.bedfront.com", () => {
-    expect(tenantDefaultEmailFrom("test")).toBe("noreply@test.bedfront.com");
+  it("format is always noreply@{slug}.rutgr.com", () => {
+    expect(tenantDefaultEmailFrom("test")).toBe("noreply@test.rutgr.com");
   });
 });
 
@@ -119,7 +119,7 @@ describe("tenantDefaultEmailFrom", () => {
 describe("tenantFromAddress", () => {
   it("uses slug-based address when no custom email", () => {
     const result = tenantFromAddress("Apelviken", "apelviken-dev-3vtczx", null, null);
-    expect(result).toBe("Apelviken <noreply@apelviken-dev-3vtczx.bedfront.com>");
+    expect(result).toBe("Apelviken <noreply@apelviken-dev-3vtczx.rutgr.com>");
   });
 
   it("uses custom emailFrom when set", () => {
@@ -129,7 +129,7 @@ describe("tenantFromAddress", () => {
 
   it("uses custom emailFromName when set", () => {
     const result = tenantFromAddress("Grand Hotel", "grand-x4k9mq", null, "GH Support");
-    expect(result).toBe("GH Support <noreply@grand-x4k9mq.bedfront.com>");
+    expect(result).toBe("GH Support <noreply@grand-x4k9mq.rutgr.com>");
   });
 
   it("uses both custom emailFrom and emailFromName", () => {
@@ -137,9 +137,9 @@ describe("tenantFromAddress", () => {
     expect(result).toBe("GH Support <info@gh.se>");
   });
 
-  it("falls back to noreply@bedfront.com when no portalSlug", () => {
+  it("falls back to noreply@rutgr.com when no portalSlug", () => {
     const result = tenantFromAddress("New Hotel", null, null, null);
-    expect(result).toBe("New Hotel <noreply@bedfront.com>");
+    expect(result).toBe("New Hotel <noreply@rutgr.com>");
   });
 
   it("returns correct Name <email> format", () => {

@@ -203,7 +203,7 @@ export function OrganisationContent({ onSubTitleChange }: OrganisationContentPro
               Gästerna når portalen på denna adress.
             </p>
             <a
-              href={`https://${data.tenant.portalSlug}.bedfront.com`}
+              href={`https://${data.tenant.portalSlug}.rutgr.com`}
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -212,7 +212,7 @@ export function OrganisationContent({ onSubTitleChange }: OrganisationContentPro
                 textDecoration: "none",
               }}
             >
-              {data.tenant.portalSlug}.bedfront.com
+              {data.tenant.portalSlug}.rutgr.com
               <EditorIcon name="open_in_new" size={14} style={{ opacity: 0.7 }} />
             </a>
           </div>

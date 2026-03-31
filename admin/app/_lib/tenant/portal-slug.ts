@@ -2,7 +2,7 @@
  * Portal Slug Generation
  * ══════════════════════
  *
- * Every tenant gets a unique subdomain: {slug}.bedfront.com
+ * Every tenant gets a unique subdomain: {slug}.rutgr.com
  * Generated once on creation, immutable after that.
  *
  * Format: "{name-base}-{random6}"
@@ -60,22 +60,22 @@ export async function generatePortalSlug(tenantName: string): Promise<string> {
  * Returns the full subdomain URL for a tenant.
  */
 export function portalSlugToUrl(slug: string): string {
-  return `https://${slug}.bedfront.com`;
+  return `https://${slug}.rutgr.com`;
 }
 
 /**
  * Returns the default noreply address for a tenant.
  * Uses their portalSlug subdomain — same as Shopify's pattern.
- * Example: "noreply@grandhotel-x4k9mq.bedfront.com"
+ * Example: "noreply@grandhotel-x4k9mq.rutgr.com"
  */
 export function tenantDefaultEmailFrom(portalSlug: string): string {
-  return `noreply@${portalSlug}.bedfront.com`;
+  return `noreply@${portalSlug}.rutgr.com`;
 }
 
 /**
  * Returns the formatted from address for use in emails.
  * Priority: custom emailFrom > portalSlug-based > fallback.
- * Example: "Grand Hotel <noreply@grandhotel-x4k9mq.bedfront.com>"
+ * Example: "Grand Hotel <noreply@grandhotel-x4k9mq.rutgr.com>"
  */
 export function tenantFromAddress(
   tenantName: string,
@@ -83,7 +83,7 @@ export function tenantFromAddress(
   customEmailFrom?: string | null,
   customEmailFromName?: string | null,
 ): string {
-  const email = customEmailFrom || (portalSlug ? tenantDefaultEmailFrom(portalSlug) : "noreply@bedfront.com");
+  const email = customEmailFrom || (portalSlug ? tenantDefaultEmailFrom(portalSlug) : "noreply@rutgr.com");
   const name = customEmailFromName || tenantName;
   return `${name} <${email}>`;
 }

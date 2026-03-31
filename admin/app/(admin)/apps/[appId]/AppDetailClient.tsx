@@ -863,7 +863,7 @@ function ErrorRecoveryBanner({
           </button>
         )}
         {!isTokenError && !isPermissionError && !isAccountError && (
-          <a href="mailto:support@bedfront.com" style={{ fontSize: "var(--font-xs)", color: "var(--admin-accent)", fontWeight: 500 }}>
+          <a href="mailto:support@rutgr.com" style={{ fontSize: "var(--font-xs)", color: "var(--admin-accent)", fontWeight: 500 }}>
             Kontakta support →
           </a>
         )}

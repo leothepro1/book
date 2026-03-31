@@ -317,7 +317,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       select: { name: true, portalSlug: true },
     });
 
-    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "bedfront.com";
+    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
     const portalBase = tenant?.portalSlug
       ? `https://${tenant.portalSlug}.${baseDomain}`
       : null;
@@ -781,7 +781,7 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
         select: { name: true, portalSlug: true },
       });
 
-      const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "bedfront.com";
+      const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
       const portalBase = tenant?.portalSlug
         ? `https://${tenant.portalSlug}.${baseDomain}`
         : null;
@@ -877,7 +877,7 @@ async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
         where: { id: order.tenantId },
         select: { name: true, portalSlug: true },
       });
-      const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "bedfront.com";
+      const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
       const portalBase = tenant?.portalSlug ? `https://${tenant.portalSlug}.${baseDomain}` : "";
       const { sendEmailEvent: sendPaymentFailedEmail } = await import("@/app/_lib/email/send");
       await sendPaymentFailedEmail(

@@ -86,8 +86,8 @@ async function getResolvedTemplate(
 
   // Resolve from address — priority:
   // 1. Custom emailFrom (tenant verified their own domain)
-  // 2. portalSlug-based: noreply@{slug}.bedfront.com
-  // 3. Fallback: noreply@bedfront.com (no portalSlug)
+  // 2. portalSlug-based: noreply@{slug}.rutgr.com
+  // 3. Fallback: noreply@rutgr.com (no portalSlug)
   const from = tenantFromAddress(
     tenant.name,
     tenant.portalSlug,

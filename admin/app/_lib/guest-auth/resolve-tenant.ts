@@ -3,7 +3,7 @@
  * ═══════════════════════
  *
  * Resolves the tenant from the request Host header (subdomain).
- * Guest portal runs on {portalSlug}.bedfront.com — the subdomain
+ * Guest portal runs on {portalSlug}.rutgr.com — the subdomain
  * is the portalSlug, and we look up the tenant by that slug.
  *
  * In dev (localhost), subdomain routing is not available.
@@ -13,7 +13,7 @@
 
 import { prisma } from "@/app/_lib/db/prisma";
 
-const BASE_DOMAIN = "bedfront.com";
+const BASE_DOMAIN = "rutgr.com";
 const IS_DEV = process.env.NODE_ENV === "development";
 
 /**
@@ -22,15 +22,15 @@ const IS_DEV = process.env.NODE_ENV === "development";
  * or if it doesn't match the expected pattern.
  *
  * Examples:
- *   "grand-hotel-x4k9mq.bedfront.com" → "grand-hotel-x4k9mq"
- *   "bedfront.com" → null
+ *   "grand-hotel-x4k9mq.rutgr.com" → "grand-hotel-x4k9mq"
+ *   "rutgr.com" → null
  *   "localhost:3000" → null
  */
 function extractPortalSlug(host: string): string | null {
   // Strip port if present
   const hostname = host.split(":")[0];
 
-  // Must be a subdomain of bedfront.com
+  // Must be a subdomain of rutgr.com
   if (!hostname.endsWith(`.${BASE_DOMAIN}`)) return null;
 
   const slug = hostname.slice(0, -(BASE_DOMAIN.length + 1));

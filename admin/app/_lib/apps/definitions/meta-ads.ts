@@ -65,8 +65,8 @@ const metaAds: AppDefinition = {
     "den löper ut så att du kan förnya utan avbrott.",
   worksWithApps: ["revenue-analytics"],
   worksWithServices: [{ name: "Meta Business Suite" }, { name: "Facebook Ads" }, { name: "Instagram Ads" }],
-  supportUrl: "https://bedfront.com/support/meta-ads",
-  documentationUrl: "https://bedfront.com/docs/meta-ads",
+  supportUrl: "https://rutgr.com/support/meta-ads",
+  documentationUrl: "https://rutgr.com/docs/meta-ads",
   changelog: [
     { version: "1.0.0", date: "2026-03-01", changes: ["Conversions API (CAPI) integration", "Förbättrad matchning med SHA-256", "Automatisk tokenförnyelse"] },
   ],

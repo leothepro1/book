@@ -297,7 +297,7 @@ export async function POST(req: Request) {
   const protocol = isDev ? "http" : "https";
   const baseUrl = isDev
     ? `${protocol}://${host}`
-    : `${protocol}://${tenant.portalSlug}.bedfront.com`;
+    : `${protocol}://${tenant.portalSlug}.rutgr.com`;
 
   // Initiate payment via adapter — checkoutMode: "session" triggers redirect mode
   try {

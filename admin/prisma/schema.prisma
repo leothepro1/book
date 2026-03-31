@@ -416,7 +416,7 @@ model Tenant {
   slug      String   @unique
 
   // Portal subdomain — e.g. "grand-hotel-stockholm-x4k9mq"
-  // Generates {name}-{random6}.bedfront.com automatically on creation.
+  // Generates {name}-{random6}.rutgr.com automatically on creation.
   // Immutable once set. Nullable for backfill of existing tenants.
   portalSlug   String?  @unique
   

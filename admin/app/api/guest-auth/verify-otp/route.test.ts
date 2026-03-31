@@ -33,7 +33,7 @@ const mockVerifyOtp = verifyOtp as ReturnType<typeof vi.fn>;
 const mockSetSession = setGuestSession as ReturnType<typeof vi.fn>;
 const mockResolveTenant = resolveGuestTenant as ReturnType<typeof vi.fn>;
 
-function makeRequest(body: unknown, host = "hotel.bedfront.com") {
+function makeRequest(body: unknown, host = "hotel.rutgr.com") {
   return new Request("http://localhost:3000/api/guest-auth/verify-otp", {
     method: "POST",
     headers: { "Content-Type": "application/json", host },
@@ -143,7 +143,7 @@ describe("POST /api/guest-auth/verify-otp", () => {
     const res = await POST(makeRequest({
       email: "guest@example.com",
       code: "123456",
-    }, "bedfront.com"));
+    }, "rutgr.com"));
     const json = await res.json();
 
     expect(res.status).toBe(400);

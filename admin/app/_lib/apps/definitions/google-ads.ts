@@ -36,7 +36,7 @@ const googleAds: AppDefinition = {
   heroDescription:
     "Få full koll på bokningar med avancerad spårning, samtidigt som du når fler gäster via Google och YouTube. " +
     "Optimera kampanjer och öka direktbokningar med datadrivna insikter.",
-  termsUrl: "https://bedfront.com/legal/google-ads-terms",
+  termsUrl: "https://rutgr.com/legal/google-ads-terms",
   healthCheck: {
     endpoint: "/api/apps/google-ads/health",
     intervalMinutes: 15,
@@ -65,9 +65,9 @@ const googleAds: AppDefinition = {
     "- Optimera dina annonser med Googles AI och nå rätt resenär vid rätt tillfälle",
   worksWithApps: ["revenue-analytics"],
   worksWithServices: [{ name: "Google Ads" }, { name: "Google Analytics" }],
-  supportUrl: "https://bedfront.com/support/google-ads",
-  documentationUrl: "https://bedfront.com/docs/google-ads",
-  privacyPolicyUrl: "https://bedfront.com/legal/google-ads-privacy",
+  supportUrl: "https://rutgr.com/support/google-ads",
+  documentationUrl: "https://rutgr.com/docs/google-ads",
+  privacyPolicyUrl: "https://rutgr.com/legal/google-ads-privacy",
   changelog: [
     { version: "1.0.0", date: "2026-03-01", changes: ["Första versionen med konverteringsspårning", "Förbättrad matchning med SHA-256", "GCLID-stöd"] },
   ],

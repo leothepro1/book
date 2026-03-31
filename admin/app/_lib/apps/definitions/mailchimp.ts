@@ -76,8 +76,8 @@ const mailchimp: AppDefinition = {
   worksWithApps: ["guest-crm", "revenue-analytics"],
   screenshots: [],
   worksWithServices: [{ name: "Mailchimp" }],
-  supportUrl: "https://bedfront.com/support/mailchimp",
-  documentationUrl: "https://bedfront.com/docs/mailchimp",
+  supportUrl: "https://rutgr.com/support/mailchimp",
+  documentationUrl: "https://rutgr.com/docs/mailchimp",
   changelog: [
     { version: "1.0.0", date: "2026-03-20", changes: ["Automatisk gästsynkronisering", "5 inbyggda segment", "Automationstriggers vid bokning och utcheckning"] },
   ],

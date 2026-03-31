@@ -159,7 +159,7 @@ export const cartCheckout: CheckoutType<CartInput> = {
     const protocol = isDev ? "http" : "https";
     const baseUrl = isDev
       ? `${protocol}://${host}`
-      : `${protocol}://${ctx.tenant.portalSlug}.bedfront.com`;
+      : `${protocol}://${ctx.tenant.portalSlug}.rutgr.com`;
 
     const validation = ctx.cache.get(VALIDATION_KEY) as {
       validatedItems: Array<{

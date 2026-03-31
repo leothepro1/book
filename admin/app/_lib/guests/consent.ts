@@ -73,7 +73,7 @@ export async function updateEmailConsent(
         select: { name: true, portalSlug: true },
       });
       if (guest && tenant) {
-        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "bedfront.com";
+        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
         const portalBase = tenant.portalSlug ? `https://${tenant.portalSlug}.${baseDomain}` : "";
         const { sendEmailEvent } = await import("@/app/_lib/email/send");
         await sendEmailEvent(
