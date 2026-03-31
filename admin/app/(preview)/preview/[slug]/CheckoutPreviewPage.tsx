@@ -62,13 +62,13 @@ export async function CheckoutPreviewPage() {
 
   return (
     <CheckoutClient
-      tenantId={tenantId}
+      sessionToken="preview"
       product={
         resolved
           ? {
               title: resolved.displayTitle,
               image: previewProduct!.media[0]?.url ?? null,
-              price: resolved.price || 259900, // fallback 2599 kr
+              price: resolved.price || 259900,
               currency: resolved.currency || "SEK",
               ratePlanName: null,
             }
@@ -80,14 +80,14 @@ export async function CheckoutPreviewPage() {
               ratePlanName: "Flexibel",
             }
       }
-      productSlug={resolved?.slug ?? "preview-product"}
       checkIn={checkInStr}
       checkOut={checkOutStr}
       guests={2}
       nights={3}
+      addons={[]}
+      accommodationTotal={259900 * 3}
       bookingTerms={bookingTerms?.content ?? null}
       header={{ logoUrl, logoWidth }}
-      ratePlanId={null}
       availableMethods={resolvedMethods.availableMethods}
       walletsEnabled={resolvedMethods.walletsEnabled}
       klarnaEnabled={resolvedMethods.klarnaEnabled}
