@@ -10,6 +10,7 @@ const bookingCom: AppDefinition = {
     "med full spårning per kanal. Se intäkter, konverteringar och gästdata " +
     "uppdelat per försäljningskanal.",
   icon: "hotel",
+  iconUrl: "https://res.cloudinary.com/dmgmoisae/image/upload/q_auto/f_auto/v1775065612/eJuvWSnbPwEWAQCYwl8i9nPJXRzTv94JSYGGrKIu0qeuG_5wgYtb982-2F_jOGtIytY_hl99f8.png",
   category: "channels",
   developer: "bedfront",
   pricing: [

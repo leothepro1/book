@@ -24,7 +24,7 @@ export async function getGuestStats(
     where: {
       tenantId,
       guestAccountId,
-      financialStatus: { in: ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"] },
+      financialStatus: { notIn: ["VOIDED"] },
     },
     select: {
       totalAmount: true,

@@ -10,6 +10,7 @@ const expedia: AppDefinition = {
     "Ordrar skapas automatiskt i Bedfront med full spårning per kanal. " +
     "Se intäkter, konverteringar och gästdata uppdelat per försäljningskanal.",
   icon: "flight",
+  iconUrl: "https://res.cloudinary.com/dmgmoisae/image/upload/q_auto/f_auto/v1775065614/C1LCYinwKsGIHkAx_NlXRr4SuwCq7CkdtqcOVtHWpoPbGM3NbG1IJf2rmu-pN9sjnfg_d4ksym.png",
   category: "channels",
   developer: "bedfront",
   pricing: [

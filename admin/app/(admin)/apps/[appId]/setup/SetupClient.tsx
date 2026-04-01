@@ -32,6 +32,11 @@ const MailchimpSetupWizard = dynamic(
   { loading: () => null },
 );
 
+const SpotBookingWizard = dynamic(
+  () => import("@/app/(admin)/apps/spot-booking/SpotBookingWizard").then((m) => m.SpotBookingWizard),
+  { loading: () => null },
+);
+
 // ── Props ────────────────────────────────────────────────────────
 
 type Props = {
@@ -50,6 +55,9 @@ export function SetupClient({ state }: Props) {
   }
   if (state.app.wizardComponent === "mailchimp") {
     return <MailchimpSetupWizard wizardState={state} />;
+  }
+  if (state.app.wizardComponent === "spot-booking") {
+    return <SpotBookingWizard wizardState={state} />;
   }
   return <GenericSetupWizard state={state} />;
 }

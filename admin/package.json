@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "dev:clean": "bash scripts/dev.sh",
     "prebuild": "bash scripts/download-geolite2.sh",
     "build": "prisma generate && next build",

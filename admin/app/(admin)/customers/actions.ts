@@ -96,7 +96,7 @@ export async function getCustomers(opts?: {
         tags: { select: { tag: true } },
         _count: { select: { orders: true } },
         orders: {
-          where: { financialStatus: { in: ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"] } },
+          where: { financialStatus: { notIn: ["VOIDED"] } },
           select: { totalAmount: true, currency: true },
         },
       },

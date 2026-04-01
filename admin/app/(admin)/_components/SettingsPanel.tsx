@@ -11,6 +11,7 @@ import { LanguagesContent } from '@/app/(admin)/settings/languages/LanguagesCont
 import { EmailContent } from '@/app/(admin)/settings/email/EmailContent';
 import { PaymentsContent } from '@/app/(admin)/settings/payments/PaymentsContent';
 import { BillingContent } from '@/app/(admin)/settings/billing/BillingContent';
+import { AppsContent } from '@/app/(admin)/settings/apps/AppsContent';
 import { useRole } from './RoleContext';
 import { useNavigationGuard } from './NavigationGuard';
 
@@ -42,6 +43,7 @@ const NAV_ITEMS: { items: SettingsNavItem[]; divider?: boolean }[] = [
       { id: 'billing', label: 'Fakturering', icon: 'contract', adminOnly: true },
       { id: 'payments', label: 'Betalningar', icon: 'payments', adminOnly: true },
       { id: 'general', label: 'Allmänt', icon: 'storefront' },
+      { id: 'apps', label: 'Appar', icon: 'home_storage', adminOnly: true },
       { id: 'integrations', label: 'Integrationer', icon: 'linked_services', adminOnly: true },
       { id: 'domains', label: 'Domäner', icon: 'travel_explore', adminOnly: true },
       { id: 'languages', label: 'Språk', icon: 'translate' },
@@ -278,6 +280,8 @@ export function SettingsPanel() {
                 <EmailContent key={resetKey} onSubTitleChange={setSubTitleWithFresh} onHeaderExtraChange={setHeaderExtra} />
               ) : activeItem === 'payments' ? (
                 <PaymentsContent key={resetKey} onSubTitleChange={setSubTitle} />
+              ) : activeItem === 'apps' ? (
+                <AppsContent key={resetKey} onSubTitleChange={setSubTitle} />
               ) : activeItem === 'billing' ? (
                 <BillingContent key={resetKey} onSubTitleChange={setSubTitle} />
               ) : (

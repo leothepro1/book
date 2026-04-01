@@ -9,6 +9,7 @@ import "./meta-ads";
 import "./mailchimp";
 import "./booking-com";
 import "./expedia";
+import "./email";
 import "./email-marketing";
 import "./guest-crm";
 import "./channel-manager";
