@@ -43,6 +43,15 @@ function emitIfNewAccount(account: GuestAccount, source: string): void {
         metadata: { source },
       }),
     ).catch((err) => log("error", "guest.account_created_event.failed", { guestAccountId: account.id, error: String(err) }));
+
+    // Enroll in GUEST_CREATED automations — fire and forget
+    import("@/app/_lib/email/enrollInAutomations").then(({ enrollInAutomations }) =>
+      enrollInAutomations({
+        tenantId: account.tenantId,
+        guestId: account.id,
+        trigger: "GUEST_CREATED",
+      }),
+    ).catch((err) => log("error", "guest.automation_enroll.failed", { guestAccountId: account.id, error: String(err) }));
   }
 }
 

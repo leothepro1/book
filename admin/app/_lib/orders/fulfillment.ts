@@ -130,6 +130,23 @@ export async function transitionFulfillmentStatus(
     });
   }
 
+  // Enroll in ORDER_COMPLETED automations when order is both PAID and FULFILLED
+  if (to === "FULFILLED" && order.guestAccountId) {
+    const fullOrder = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { financialStatus: true },
+    });
+    if (fullOrder?.financialStatus === "PAID") {
+      import("@/app/_lib/email/enrollInAutomations").then(({ enrollInAutomations }) =>
+        enrollInAutomations({
+          tenantId,
+          guestId: order.guestAccountId!,
+          trigger: "ORDER_COMPLETED",
+        }),
+      ).catch((err) => log("error", "order.automation_enroll.failed", { orderId, error: String(err) }));
+    }
+  }
+
   return {
     success: true,
     orderId: order.id,

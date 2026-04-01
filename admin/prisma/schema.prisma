@@ -536,6 +536,11 @@ model Tenant {
   accommodationCategories AccommodationCategory[]
   spotMaps            SpotMap[]
   spotMarkers         SpotMarker[]
+  emailAppInstallation  EmailAppInstallation?
+  emailAppTemplates     EmailAppTemplate[]
+  emailCampaigns        EmailCampaign[]
+  emailAutomations      EmailAutomation[]
+  emailSuppressions     EmailSuppression[]
 
   // Feature toggle — tenant can disable all discount functionality
   discountsEnabled    Boolean              @default(true)
@@ -1185,8 +1190,10 @@ model GuestAccount {
   notes            GuestNote[]
   events           GuestAccountEvent[]
   addresses        GuestAddress[]
-  segmentMemberships GuestSegmentMembership[]
-  discountTargets    DiscountCustomer[]
+  segmentMemberships   GuestSegmentMembership[]
+  discountTargets      DiscountCustomer[]
+  campaignRecipients   CampaignRecipient[]
+  automationEnrollments AutomationEnrollment[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -2992,6 +2999,7 @@ model GuestSegment {
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   memberships GuestSegmentMembership[]
   discountTargets DiscountSegment[]
+  emailCampaigns  EmailCampaign[]
 
   @@index([tenantId])
   @@index([tenantId, isDefault])
@@ -3295,4 +3303,243 @@ model SpotMarker {
   @@unique([spotMapId, accommodationId]) // one marker per accommodation per map
   @@index([tenantId])
   @@index([spotMapId])
+}
+
+// ============================================================================
+// EMAIL APP (App Store app — per-tenant marketing email)
+// ============================================================================
+
+enum EmailAppStatus {
+  ACTIVE
+  PAUSED
+  UNINSTALLED
+}
+
+enum EmailTemplateType {
+  CAMPAIGN
+  AUTOMATION
+  SYSTEM
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  CANCELLED
+}
+
+enum RecipientStatus {
+  PENDING
+  SENT
+  FAILED
+  SUPPRESSED
+}
+
+enum AutomationTrigger {
+  GUEST_CREATED
+  ORDER_COMPLETED
+  GUEST_INACTIVE
+}
+
+enum AutomationStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+}
+
+enum EnrollmentStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum SuppressionReason {
+  UNSUBSCRIBE
+  BOUNCE
+  COMPLAINT
+  MANUAL
+}
+
+model EmailAppInstallation {
+  id            String         @id @default(cuid())
+  tenantId      String         @unique
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  status        EmailAppStatus
+  installedAt   DateTime       @default(now())
+  uninstalledAt DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model EmailAppTemplate {
+  id          String            @id @default(cuid())
+  tenantId    String
+  tenant      Tenant            @relation(fields: [tenantId], references: [id])
+  name        String
+  subject     String
+  previewText String?
+  blocks      Json
+  type        EmailTemplateType
+  isArchived  Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  campaigns   EmailCampaign[]
+  steps       EmailAutomationStep[]
+
+  @@index([tenantId])
+}
+
+model EmailCampaign {
+  id             String                  @id @default(cuid())
+  tenantId       String
+  tenant         Tenant                  @relation(fields: [tenantId], references: [id])
+  templateId     String
+  template       EmailAppTemplate        @relation(fields: [templateId], references: [id])
+  segmentId      String?
+  segment        GuestSegment?           @relation(fields: [segmentId], references: [id])
+  status         CampaignStatus
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  recipientCount Int                     @default(0)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  recipients     CampaignRecipient[]
+  analytics      EmailCampaignAnalytics?
+
+  @@index([tenantId, status])
+}
+
+model CampaignRecipient {
+  id              String          @id @default(cuid())
+  campaignId      String
+  campaign        EmailCampaign   @relation(fields: [campaignId], references: [id])
+  guestId         String
+  guest           GuestAccount    @relation(fields: [guestId], references: [id])
+  email           String
+  status          RecipientStatus
+  resendMessageId String?
+  openedAt        DateTime?
+  clickedAt       DateTime?
+  bouncedAt       DateTime?
+  complainedAt    DateTime?
+  unsubscribedAt  DateTime?
+  createdAt       DateTime        @default(now())
+
+  @@unique([campaignId, guestId])
+  @@index([resendMessageId])
+  @@index([campaignId, status])
+}
+
+model EmailAutomation {
+  id                String                      @id @default(cuid())
+  tenantId          String
+  tenant            Tenant                      @relation(fields: [tenantId], references: [id])
+  name              String
+  trigger           AutomationTrigger
+  status            AutomationStatus
+  allowReenrollment Boolean                     @default(false)
+  steps             EmailAutomationStep[]
+  enrollments       AutomationEnrollment[]
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+
+  analytics         EmailAutomationAnalytics?
+
+  @@index([tenantId])
+}
+
+model EmailAutomationStep {
+  id           String          @id @default(cuid())
+  automationId String
+  automation   EmailAutomation @relation(fields: [automationId], references: [id])
+  templateId   String
+  template     EmailAppTemplate @relation(fields: [templateId], references: [id])
+  delaySeconds Int             @default(0)
+  order        Int
+  createdAt    DateTime        @default(now())
+
+  enrollments  AutomationEnrollment[]
+
+  @@unique([automationId, order])
+}
+
+model AutomationEnrollment {
+  id            String               @id @default(cuid())
+  tenantId      String
+  automationId  String
+  automation    EmailAutomation      @relation(fields: [automationId], references: [id])
+  guestId       String
+  guest         GuestAccount         @relation(fields: [guestId], references: [id])
+  currentStepId String?
+  currentStep   EmailAutomationStep? @relation(fields: [currentStepId], references: [id])
+  scheduledAt   DateTime
+  status        EnrollmentStatus
+  claimedAt     DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([scheduledAt, status])
+  @@index([tenantId, automationId])
+}
+
+model EmailSuppression {
+  id          String            @id @default(cuid())
+  tenantId    String
+  tenant      Tenant            @relation(fields: [tenantId], references: [id])
+  email       String
+  reason      SuppressionReason
+  bounceCount Int               @default(1)
+  createdAt   DateTime          @default(now())
+
+  @@unique([tenantId, email])
+  @@index([tenantId, email])
+}
+
+enum BounceType {
+  HARD
+  SOFT
+}
+
+model EmailBounceEvent {
+  id              String     @id @default(cuid())
+  tenantId        String
+  email           String
+  bounceType      BounceType
+  resendMessageId String?
+  rawPayload      Json
+  createdAt       DateTime   @default(now())
+
+  @@index([tenantId, email])
+  @@index([createdAt])
+}
+
+model EmailCampaignAnalytics {
+  campaignId   String        @id
+  campaign     EmailCampaign @relation(fields: [campaignId], references: [id])
+  sent         Int           @default(0)
+  delivered    Int           @default(0)
+  opened       Int           @default(0)
+  clicked      Int           @default(0)
+  bounced      Int           @default(0)
+  complained   Int           @default(0)
+  unsubscribed Int           @default(0)
+  updatedAt    DateTime      @updatedAt
+}
+
+model EmailAutomationAnalytics {
+  automationId String          @id
+  automation   EmailAutomation @relation(fields: [automationId], references: [id])
+  sent         Int             @default(0)
+  delivered    Int             @default(0)
+  opened       Int             @default(0)
+  clicked      Int             @default(0)
+  bounced      Int             @default(0)
+  complained   Int             @default(0)
+  unsubscribed Int             @default(0)
+  updatedAt    DateTime        @updatedAt
 }

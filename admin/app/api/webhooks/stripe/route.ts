@@ -760,7 +760,7 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
   const effectiveEmail = order.guestEmail || (pi.receipt_email ?? "");
   if (effectiveEmail) {
     try {
-      await upsertGuestAccountFromOrder(
+      const guestAccount = await upsertGuestAccountFromOrder(
         order.tenantId,
         order.id,
         effectiveEmail,
@@ -768,6 +768,17 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
         order.guestPhone || undefined,
         order.billingAddress as Record<string, string> | null,
       );
+
+      // Gift card orders are auto-fulfilled — enroll in ORDER_COMPLETED automations
+      if (orderType === "GIFT_CARD") {
+        import("@/app/_lib/email/enrollInAutomations").then(({ enrollInAutomations }) =>
+          enrollInAutomations({
+            tenantId: order.tenantId,
+            guestId: guestAccount.id,
+            trigger: "ORDER_COMPLETED",
+          }),
+        ).catch((err) => log("error", "webhook.automation_enroll.failed", { orderId: order.id, error: String(err) }));
+      }
     } catch (err) {
       log("warn", "webhook.guest_account_failed", { orderId: order.id, error: String(err) });
     }
