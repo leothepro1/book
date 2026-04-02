@@ -1,0 +1,69 @@
+/* SpinnerButton — .sb namespace */
+
+.sb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Text — scales down + fades out from fixed center */
+.sb__label {
+  transform: scale(1);
+  opacity: 1;
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.1s ease;
+  will-change: transform, opacity;
+}
+
+.sb__label--hidden {
+  transform: scale(0.75);
+  opacity: 0;
+}
+
+/* Reverse: text enters after spinner exits */
+.sb__label:not(.sb__label--hidden) {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1) 0.1s,
+              opacity 0.15s ease 0.1s;
+}
+
+/* Spinner — grows in from fixed center, delayed until text gone */
+.sb__spinner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: scale(0);
+  opacity: 0;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1) 0.15s,
+              opacity 0.1s ease 0.15s;
+  will-change: transform, opacity;
+}
+
+.sb__spinner--visible {
+  transform: scale(1);
+  opacity: 1;
+}
+
+/* Reverse: spinner exits instantly */
+.sb__spinner:not(.sb__spinner--visible) {
+  transition: transform 0.1s ease,
+              opacity 0.1s ease;
+}
+
+/* Inner circle — rotation only, no transform interference */
+.sb__spinner::after {
+  content: "";
+  width: 19px;
+  height: 19px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: sb-spin 0.6s linear infinite;
+}
+
+@keyframes sb-spin {
+  to { rotate: 360deg; }
+}
