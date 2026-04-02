@@ -429,16 +429,37 @@ export function buildCheckinCardsPatch(
 // ═══════════════════════════════════════════════════════════════
 
 /**
+ * Resolve the effective pageId for settings reads/writes.
+ * Pages with settingsSource delegate to the source page's config path.
+ */
+function resolveSettingsPageId(pageId: PageId): PageId {
+  const def = getPageDefinition(pageId);
+  return def.settingsSource ?? pageId;
+}
+
+/**
+ * Resolve the effective PageDefinition for settings.
+ * Pages with settingsSource use the source page's pageSettings definition.
+ */
+export function resolveSettingsDefinition(pageId: PageId): import("./types").PageDefinition {
+  const def = getPageDefinition(pageId);
+  if (def.settingsSource) return getPageDefinition(def.settingsSource);
+  return def;
+}
+
+/**
  * Read page-level settings for a given page.
  * Merges stored values over platform defaults from PageDefinition.
+ * Pages with settingsSource read from the source page's config path.
  */
 export function getPageSettings(
   config: TenantConfig | null | undefined,
   pageId: PageId,
 ): Record<string, unknown> {
-  const def = getPageDefinition(pageId);
-  const defaults = def.pageSettings?.defaults ?? {};
-  const entry = getPageEntry(config, pageId);
+  const effectiveId = resolveSettingsPageId(pageId);
+  const effectiveDef = getPageDefinition(effectiveId);
+  const defaults = effectiveDef.pageSettings?.defaults ?? {};
+  const entry = getPageEntry(config, effectiveId);
   const stored = entry?.pageSettings ?? {};
   return { ...defaults, ...stored };
 }
@@ -446,18 +467,20 @@ export function getPageSettings(
 /**
  * Build a save patch that writes page-level settings.
  * Merges patch into existing stored settings.
+ * Pages with settingsSource write to the source page's config path.
  */
 export function buildPageSettingsPatch(
   config: TenantConfig,
   pageId: PageId,
   patch: Record<string, unknown>,
 ): Partial<TenantConfig> {
-  const current = getPageConfig(config, pageId);
+  const effectiveId = resolveSettingsPageId(pageId);
+  const current = getPageConfig(config, effectiveId);
   const existing = current.pageSettings ?? {};
   return {
     pages: {
       ...config.pages,
-      [pageId]: { ...current, pageSettings: { ...existing, ...patch } },
+      [effectiveId]: { ...current, pageSettings: { ...existing, ...patch } },
     },
   };
 }
@@ -501,6 +524,10 @@ const PAGE_TO_PREVIEW_ROUTE: Record<PageId, string> = {
   support: "/p/[token]/support",
   product: "/preview/product",
   checkout: "/preview/checkout",
+  "thank-you": "/preview/thank-you",
+  bookings: "/preview/bookings",
+  "order-status": "/preview/order-status",
+  profile: "/preview/profile",
 };
 
 /**

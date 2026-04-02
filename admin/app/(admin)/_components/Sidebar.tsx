@@ -80,16 +80,16 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-screen transition-all duration-300 ease-in-out z-30 flex flex-col ${
-        isCollapsed ? 'w-16' : 'w-[270px]'
+      className={`fixed left-0 top-0 h-screen z-30 flex flex-col ${
+        isCollapsed ? 'w-[58px]' : 'w-[270px]'
       }`}
-      style={{ background: '#f3f3f4', borderRight: '1px solid var(--admin-border)' }}
+      style={{ background: '#f3f3f4', borderRight: '1px solid var(--admin-border)', transition: 'width 0.2s ease-in-out', overflow: 'hidden' }}
     >
       {/* Profile row */}
       <SidebarUserRow isCollapsed={isCollapsed} />
 
       {/* Navigation */}
-      <nav className="p-3 flex-1 overflow-y-auto flex flex-col" style={{ gap: 6 }}>
+      <nav className="flex-1 overflow-y-auto flex flex-col" style={{ gap: 6, padding: 12 }}>
         {/* Startsida */}
         {(() => {
           const item = NAV_ITEMS[0];
@@ -98,7 +98,7 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
             <Link
               href={item.href}
               onClick={(e) => guardedClick(e, item.href)}
-              className={`flex items-center gap-3 ${
+              className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} ${
                 active
                   ? 'bg-[#e3e3e3] text-[#303030]'
                   : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'

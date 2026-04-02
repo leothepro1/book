@@ -1,5 +1,5 @@
 import { getDraftConfig } from "@/app/(admin)/_lib/tenant/getDraftConfig";
-import EditorClient from "./EditorClient";
+import EditorClient from "../EditorClient";
 
 export const dynamic = "force-dynamic";
 

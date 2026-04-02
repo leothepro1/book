@@ -1713,7 +1713,7 @@ function extractPreview(settings: Record<string, unknown>): string | null {
 // ═══════════════════════════════════════════════════════════════
 
 function BackIcon() {
-  return <EditorIcon name="chevron_left" size={16} />;
+  return <EditorIcon name="chevron_left" size={20} />;
 }
 
 function MoreIcon() {

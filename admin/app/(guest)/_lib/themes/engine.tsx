@@ -26,6 +26,7 @@ import { SectionErrorBoundary } from "./SectionErrorBoundary";
 import { sanitizeSectionSettings } from "./sanitizeSettings";
 import { migrateSettings } from "./migrations";
 import { resolvePageItems } from "@/app/_lib/sections/resolve";
+import { resolveDataSources } from "@/app/_lib/sections/data-sources";
 import { ensureSectionsRegistered } from "@/app/_lib/sections/registry";
 import { getPageSections } from "@/app/_lib/pages/config";
 
@@ -36,6 +37,7 @@ import { SectionItem } from "../../_components/sections";
 import { MapsProvider } from "../../_components/sections/elements/MapsContext";
 import { MenusProvider } from "../../_components/sections/elements/MenusContext";
 import { SpecialLinkProvider } from "../../_components/SpecialLinkProvider";
+import type { ResolvedDataMap } from "@/app/_lib/sections/data-sources";
 
 export type ThemeRendererProps = {
   /** Which page template to render (e.g. "home", "shop", "account"). */
@@ -44,6 +46,12 @@ export type ThemeRendererProps = {
   booking: NormalizedBooking;
   bookingStatus: NormalizedBookingStatus;
   token?: string;
+  /**
+   * Page-level resolved data, injected into every section's resolvedData.
+   * Used by the product page to provide accommodation data to all sections.
+   * Section-level dataSources override page-level keys if both exist.
+   */
+  pageResolvedData?: ResolvedDataMap;
 };
 
 /**
@@ -67,6 +75,24 @@ function resolveSlotSettings(
 }
 
 /**
+ * Merge page-level resolvedData into every section's resolvedData.
+ * Section-level dataSources override page-level keys if both exist.
+ */
+function mergePageResolvedData(
+  items: import("@/app/_lib/sections/resolve").PageItem[],
+  pageData?: ResolvedDataMap,
+): void {
+  if (!pageData) return;
+  for (const item of items) {
+    if (item.kind !== "section") continue;
+    item.renderProps.resolvedData = {
+      ...pageData,
+      ...item.renderProps.resolvedData,
+    };
+  }
+}
+
+/**
  * Renders a themed page. Async server component.
  *
  * If the requested template doesn't exist in the active theme,
@@ -79,6 +105,7 @@ export async function ThemeRenderer({
   booking,
   bookingStatus,
   token,
+  pageResolvedData,
 }: ThemeRendererProps) {
   await Promise.all([ensureRegistered(), ensureSectionsRegistered()]);
 
@@ -111,6 +138,8 @@ export async function ThemeRenderer({
       console.log(`[ThemeEngine] First section: ${pageSections[0].definitionId} active=${pageSections[0].isActive}`);
     }
     const pageItems = resolvePageItems([], pageSections, config);
+    await resolveDataSources(pageItems, config.tenantId);
+    mergePageResolvedData(pageItems, pageResolvedData);
     console.log(`[ThemeEngine] Resolved ${pageItems.length} page items for "${templateKey}"`);
     if (pageItems.length === 0) {
       console.log(`[ThemeEngine] WARNING: 0 page items, returning null for "${templateKey}"`);
@@ -223,6 +252,8 @@ export async function ThemeRenderer({
   const pageItems = resolvePageItems(pageCards, pageSections, config).filter(
     (item) => item.kind !== "section" || !themeRenderedTypes.has(item.renderProps.definition.id),
   );
+  await resolveDataSources(pageItems, config.tenantId);
+  mergePageResolvedData(pageItems, pageResolvedData);
 
   return (
     <MapsProvider maps={config.maps ?? []}>

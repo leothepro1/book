@@ -36,7 +36,11 @@ export type PageId =
   | "help-center"
   | "support"
   | "product"
-  | "checkout";
+  | "checkout"
+  | "thank-you"
+  | "bookings"
+  | "order-status"
+  | "profile";
 
 // ═══════════════════════════════════════════════════════════════
 // EDITOR MODE
@@ -131,6 +135,41 @@ export type PageDefinition = {
    * reads this and renders the defined fields generically.
    */
   pageSettings?: PageSettingsDefinition;
+  /**
+   * If set, this page shares its settings panel and config with the
+   * source page. Reads and writes are redirected to the source page's
+   * config path. The source page's pageSettings definition is used
+   * for rendering the editor panel.
+   *
+   * Example: "thank-you" uses settingsSource: "checkout" — both pages
+   * read/write config.pages.checkout.pageSettings, and changes to
+   * either page affect both.
+   */
+  settingsSource?: PageId;
+
+  /**
+   * Declares a resource picker shown under the page name in the editor sidebar.
+   * Shopify pattern: product templates show "Change product", collection templates
+   * show "Change collection". This is the generic, declarative version.
+   *
+   * The picker type determines which field component renders (productPicker,
+   * collectionPicker, etc.). The selected resource ID is passed to the preview
+   * page which builds pageResolvedData from it.
+   */
+  previewResource?: PagePreviewResource;
+};
+
+/**
+ * Declares a resource picker for a page template.
+ * Shown directly under the page name in the editor sidebar.
+ */
+export type PagePreviewResource = {
+  /** SettingField type for the picker (determines which UI component renders). */
+  pickerType: import("@/app/(guest)/_lib/themes/types").SettingFieldType;
+  /** Label shown above the picker (e.g. "Förhandsvisar"). */
+  label: string;
+  /** Key in pageResolvedData where the resolved resource is stored. */
+  dataKey: string;
 };
 
 /**

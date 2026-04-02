@@ -829,6 +829,125 @@ export async function listCollections() {
   });
 }
 
+/**
+ * Lightweight collection summaries for the editor collection picker.
+ * Returns non-archived collections with product count, ordered by title.
+ */
+export type CollectionSummary = {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  status: string;
+  productCount: number;
+};
+
+export async function getCollectionSummaries(): Promise<CollectionSummary[]> {
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return [];
+
+  const collections = await prisma.productCollection.findMany({
+    where: {
+      tenantId: tenantData.tenant.id,
+      status: { not: "ARCHIVED" },
+    },
+    select: {
+      id: true,
+      title: true,
+      imageUrl: true,
+      status: true,
+      _count: { select: { items: true } },
+    },
+    orderBy: { title: "asc" },
+  });
+
+  return collections.map((c) => ({
+    id: c.id,
+    title: c.title,
+    imageUrl: c.imageUrl,
+    status: c.status,
+    productCount: c._count.items,
+  }));
+}
+
+/**
+ * Lightweight product summaries for the editor product picker.
+ * Returns non-archived products with featured image, ordered by title.
+ */
+export type ProductSummary = {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  status: string;
+  price: number;
+  currency: string;
+};
+
+export async function getProductSummaries(): Promise<ProductSummary[]> {
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return [];
+
+  const products = await prisma.product.findMany({
+    where: {
+      tenantId: tenantData.tenant.id,
+      status: { not: "ARCHIVED" },
+    },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      price: true,
+      currency: true,
+      media: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } },
+    },
+    orderBy: { title: "asc" },
+  });
+
+  return products.map((p) => ({
+    id: p.id,
+    title: p.title,
+    imageUrl: p.media[0]?.url ?? null,
+    status: p.status,
+    price: p.price,
+    currency: p.currency,
+  }));
+}
+
+/**
+ * Lightweight accommodation summaries for the editor resource picker.
+ * Returns active accommodations ordered by sortOrder.
+ */
+export type AccommodationSummary = {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+};
+
+export async function getAccommodationSummaries(): Promise<AccommodationSummary[]> {
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return [];
+
+  const accommodations = await prisma.accommodation.findMany({
+    where: {
+      tenantId: tenantData.tenant.id,
+      status: "ACTIVE",
+      archivedAt: null,
+    },
+    select: {
+      id: true,
+      name: true,
+      nameOverride: true,
+      media: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } },
+    },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+
+  return accommodations.map((a) => ({
+    id: a.id,
+    title: a.nameOverride ?? a.name,
+    imageUrl: a.media[0]?.url ?? null,
+  }));
+}
+
 // ═════════════════════════════════════════════════════════════
 // PMS SYNC ACTION
 // ═════════════════════════════════════════════════════════════

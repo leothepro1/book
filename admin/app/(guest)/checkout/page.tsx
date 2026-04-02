@@ -6,6 +6,17 @@ import { CheckoutClient } from "./CheckoutClient";
 import { resolvePaymentMethods } from "@/app/_lib/payments/resolve";
 import type { PaymentMethodConfig } from "@/app/_lib/payments/types";
 import type { SelectedAddon } from "@/app/_lib/checkout/session-types";
+import { getPageSettings } from "@/app/_lib/pages/config";
+import { FONT_CATALOG } from "@/app/_lib/fonts/catalog";
+import { resolveContrastPalette } from "@/app/_lib/color/contrast";
+
+const SANS_FALLBACK = "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+
+function fontStack(key: string): string {
+  const f = FONT_CATALOG.find((c) => c.key === key);
+  if (!f) return SANS_FALLBACK;
+  return `${f.label}, ${f.serif ? "ui-serif, Georgia, serif" : SANS_FALLBACK}`;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -92,10 +103,35 @@ export default async function CheckoutPage({
   const addonTotal = addons.reduce((sum, a) => sum + a.totalAmount, 0);
   const totalAmount = session.accommodationTotal + addonTotal;
 
-  // ── Fetch tenant config for header + payment methods ────────
+  // ── Fetch tenant config for header + payment methods + page settings ──
   const config = await getTenantConfig(tenant.id);
-  const logoUrl = (config.theme?.header?.logoUrl as string) ?? null;
-  const logoWidth = (config.theme?.header?.logoWidth as number) ?? 120;
+  const ps = getPageSettings(config, "checkout");
+  const logoUrl = (ps.logoUrl as string) || (config.theme?.header?.logoUrl as string) || null;
+  const logoWidth = (ps.logoWidth as number) || (config.theme?.header?.logoWidth as number) || 120;
+
+  const bgColor = (ps.backgroundColor as string) || "#FFFFFF";
+  const contrast = resolveContrastPalette(bgColor);
+  const summaryBg = (ps.summaryBackgroundColor as string) || "#FFFFFF";
+  const summaryContrast = resolveContrastPalette(summaryBg);
+  const buttonBg = (ps.buttonColor as string) || "#207EA9";
+  const buttonContrast = resolveContrastPalette(buttonBg);
+
+  const pageStyles: Record<string, string> = {
+    "--background": bgColor,
+    "--accent": (ps.accentColor as string) || "#121212",
+    "--button-bg": buttonBg,
+    "--button-text": buttonContrast.text,
+    "--error": (ps.errorColor as string) || "#c13515",
+    "--text": contrast.text,
+    "--font-heading": fontStack((ps.headingFont as string) || "inter"),
+    "--font-body": fontStack((ps.bodyFont as string) || "inter"),
+    "--logo-align": (ps.logoAlignment as string) === "left" ? "flex-start" : "center",
+    "--field-bg": (ps.fieldStyle as string) === "transparent" ? "transparent" : "#fff",
+    "--field-text": (ps.fieldStyle as string) === "transparent" ? "inherit" : "#202020",
+    "--card-inputs-bg": (ps.fieldStyle as string) === "transparent" ? `color-mix(in srgb, ${contrast.text} 4%, transparent)` : "#f3f3f4",
+    "--summary-bg": summaryBg,
+    "--summary-text": summaryContrast.text,
+  };
 
   const bookingTerms = await prisma.tenantPolicy.findUnique({
     where: { tenantId_policyId: { tenantId: tenant.id, policyId: "booking-terms" } },
@@ -131,6 +167,7 @@ export default async function CheckoutPage({
       availableMethods={resolvedMethods.availableMethods}
       walletsEnabled={resolvedMethods.walletsEnabled}
       klarnaEnabled={resolvedMethods.klarnaEnabled}
+      pageStyles={pageStyles}
     />
   );
 }

@@ -239,7 +239,10 @@ export type SettingFieldType =
   | "video"
   | "imageList"
   | "layoutPicker"
-  | "menuPicker";
+  | "menuPicker"
+  | "collectionPicker"
+  | "productPicker"
+  | "accommodationPicker";
 
 export type SettingField = {
   key: string;

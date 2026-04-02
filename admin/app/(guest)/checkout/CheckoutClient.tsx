@@ -11,6 +11,7 @@ import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { CheckoutModal } from "./CheckoutModal";
 import { LoadingScreen } from "@/app/_components/Loading";
 import { track } from "@/app/_lib/analytics/client";
+import { SpinnerButton } from "@/app/(guest)/_components/SpinnerButton";
 import "./checkout.css";
 
 const stripePromise = loadStripe(
@@ -55,32 +56,32 @@ interface CheckoutProps {
   walletsEnabled?: boolean;
   /** Whether Klarna is available as payment type */
   klarnaEnabled?: boolean;
+  /** CSS variables from page settings (colors, fonts). Applied to root element. */
+  pageStyles?: Record<string, string>;
 }
 
 type PaymentType = "full" | "klarna";
 type PaymentMethod = "card" | "paypal" | "gpay" | "applepay";
 
-const CARD_STYLE = {
-  base: {
-    fontSize: "16px",
-    fontFamily: '"Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
-    color: "#1a1a1a",
-    fontWeight: "400",
-    lineHeight: "51px",
-    "::placeholder": { color: "transparent" },
-  },
-  invalid: { color: "#c13515" },
-};
-
-// Stripe elements with content get data-filled via onChange tracking
-const CARD_STYLE_FILLED = {
-  base: {
-    ...CARD_STYLE.base,
-    lineHeight: "24px",
-    "::placeholder": { color: "transparent" },
-  },
-  invalid: CARD_STYLE.invalid,
-};
+function buildCardStyle(errorColor = "#c13515", bodyFont?: string) {
+  const fontFamily = bodyFont || '"Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif';
+  const base = {
+    base: {
+      fontSize: "16px",
+      fontFamily,
+      color: "#1a1a1a",
+      fontWeight: "400",
+      lineHeight: "51px",
+      "::placeholder": { color: "transparent" },
+    },
+    invalid: { color: errorColor },
+  };
+  const filled = {
+    base: { ...base.base, lineHeight: "24px", "::placeholder": { color: "transparent" } },
+    invalid: base.invalid,
+  };
+  return { base: base, filled };
+}
 
 const ALL_PAYMENT_METHODS: Array<{ id: PaymentMethod; title: string; svg: string; redirectDesc?: string; walletType?: "gpay" | "applepay" }> = [
   {
@@ -146,16 +147,23 @@ function CardInputs({
   onCardChange,
   cardName,
   onCardNameChange,
+  errorColor,
+  bodyFont,
 }: {
   onReady: () => void;
   onCardChange: (info: CardInfo | null) => void;
   cardName: string;
   onCardNameChange: (v: string) => void;
+  errorColor?: string;
+  bodyFont?: string;
 }) {
   const [numberFilled, setNumberFilled] = useState(false);
   const [cardBrand, setCardBrand] = useState<string>("unknown");
   const [expiryFilled, setExpiryFilled] = useState(false);
   const [cvcFilled, setCvcFilled] = useState(false);
+  const cardStyles = buildCardStyle(errorColor, bodyFont);
+  const CARD_STYLE = cardStyles.base;
+  const CARD_STYLE_FILLED = cardStyles.filled;
 
   return (
     <div className="co__card-inputs">
@@ -244,6 +252,9 @@ function PaymentMethodAccordion({
   onCardChange,
   cardName,
   onCardNameChange,
+  errorColor,
+  bodyFont,
+  previewMode,
 }: {
   methods: typeof ALL_PAYMENT_METHODS;
   onReady: () => void;
@@ -252,6 +263,9 @@ function PaymentMethodAccordion({
   onCardChange: (info: CardInfo | null) => void;
   cardName: string;
   onCardNameChange: (v: string) => void;
+  errorColor?: string;
+  bodyFont?: string;
+  previewMode?: boolean;
 }) {
   return (
     <div className="co__methods">
@@ -281,13 +295,37 @@ function PaymentMethodAccordion({
             </button>
             <div className={`co__method-body${isOpen ? " co__method-body--open" : ""}`}>
               <div className="co__method-inner">
-                {method.id === "card" && (
+                {method.id === "card" && !previewMode && (
                   <CardInputs
                     onReady={onReady}
                     onCardChange={onCardChange}
                     cardName={cardName}
                     onCardNameChange={onCardNameChange}
+                    errorColor={errorColor}
+                    bodyFont={bodyFont}
                   />
+                )}
+                {method.id === "card" && previewMode && (
+                  <div className="co__card-inputs">
+                    <div className="co__float">
+                      <input type="text" className="co__float-input" placeholder="Kortnummer" readOnly />
+                      <span className="co__float-label">Kortnummer</span>
+                    </div>
+                    <div className="co__contact-row">
+                      <div className="co__float">
+                        <input type="text" className="co__float-input" placeholder="Utgångsdatum" readOnly />
+                        <span className="co__float-label">Utgångsdatum</span>
+                      </div>
+                      <div className="co__float">
+                        <input type="text" className="co__float-input" placeholder="CVC" readOnly />
+                        <span className="co__float-label">Säkerhetskod</span>
+                      </div>
+                    </div>
+                    <div className="co__float">
+                      <input type="text" className="co__float-input" placeholder="Namn på kort" readOnly />
+                      <span className="co__float-label">Namn på kort</span>
+                    </div>
+                  </div>
                 )}
                 {method.redirectDesc && (
                   <p className="co__method-redirect">
@@ -464,14 +502,13 @@ function ConfirmButton({
     return (
       <>
         {error && <div className="co__payment-error">{error}</div>}
-        <button
-          type="button"
+        <SpinnerButton
           className="co__confirm-btn co__confirm-btn--klarna"
           onClick={handleConfirm}
           disabled={disabled || processing || !stripe}
         >
-          {processing ? "Behandlar..." : "Fortsätt till Klarna"}
-        </button>
+          Fortsätt till Klarna
+        </SpinnerButton>
       </>
     );
   }
@@ -480,14 +517,13 @@ function ConfirmButton({
   return (
     <>
       {error && <div className="co__payment-error">{error}</div>}
-      <button
-        type="button"
+      <SpinnerButton
         className="co__confirm-btn"
         onClick={handleConfirm}
         disabled={disabled || processing || !stripe}
       >
-        {processing ? "Behandlar..." : "Bekräfta och betala"}
-      </button>
+        Bekräfta och betala
+      </SpinnerButton>
     </>
   );
 }
@@ -504,13 +540,67 @@ function FieldError({ error }: { error?: string }) {
 
 // ── Main Checkout ──────────────────────────────────────────
 
-export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guests, nights, addons: addonSnapshots, accommodationTotal, bookingTerms, header, availableMethods, walletsEnabled = true, klarnaEnabled = true }: CheckoutProps) {
+export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guests, nights, addons: addonSnapshots, accommodationTotal, bookingTerms, header, availableMethods, walletsEnabled = true, klarnaEnabled = true, pageStyles }: CheckoutProps) {
   const router = useRouter();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const fontLinkRef = useRef<HTMLLinkElement | null>(null);
+
+  // Page styles applied as inline style on root div (not via useEffect,
+  // because rootRef isn't available until after the loading gate).
+
+  // Listen for live CSS variable updates from the editor
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      if (e.data?.type === "checkin-css-update" && e.data.vars && rootRef.current) {
+        const fontFamilies: string[] = [];
+        for (const [varName, value] of Object.entries(e.data.vars)) {
+          rootRef.current.style.setProperty(varName, value as string);
+          if (varName.startsWith("--font-") && typeof value === "string") {
+            const family = value.split(",")[0].trim();
+            if (family) fontFamilies.push(family);
+          }
+        }
+        if (fontFamilies.length > 0) {
+          const params = fontFamilies
+            .map((f) => `family=${encodeURIComponent(f)}:wght@400;500;600;700`)
+            .join("&");
+          const url = `https://fonts.googleapis.com/css2?${params}&display=swap`;
+          if (fontLinkRef.current) {
+            fontLinkRef.current.href = url;
+          } else {
+            const link = document.createElement("link");
+            link.rel = "stylesheet";
+            link.href = url;
+            document.head.appendChild(link);
+            fontLinkRef.current = link;
+          }
+        }
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => {
+      window.removeEventListener("message", handler);
+      if (fontLinkRef.current) {
+        fontLinkRef.current.remove();
+        fontLinkRef.current = null;
+      }
+    };
+  }, []);
 
   const [paymentType, setPaymentType] = useState<PaymentType>("full");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [cardInfo, setCardInfo] = useState<CardInfo | null>(null);
   const [cardName, setCardName] = useState("");
+  const [discountCode, setDiscountCode] = useState("");
+  const [discountApplied, setDiscountApplied] = useState<{
+    code: string;
+    discountAmount: number;
+    title: string;
+    valueType: string;
+    value: number;
+  } | null>(null);
+  const [discountError, setDiscountError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
 
@@ -674,6 +764,7 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
   // Create Order + PaymentIntent on mount (no step gating)
   useEffect(() => {
     if (clientSecret || orderId || !product || !checkIn || !checkOut) return;
+    if (sessionToken === "preview") return;
     if (piIsLoading.current) return;
 
     piIsLoading.current = true;
@@ -688,6 +779,7 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
       body: JSON.stringify({
         sessionToken,
         paymentType,
+        ...(discountApplied ? { discountCode: discountApplied.code } : {}),
       }),
     })
       .then(async (res) => {
@@ -706,7 +798,7 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
       })
       .catch(() => setPiError("Nätverksfel — försök igen."))
       .finally(() => { piIsLoading.current = false; });
-  }, [clientSecret, orderId, product, sessionToken, checkIn, checkOut, guests, paymentType]);
+  }, [clientSecret, orderId, product, sessionToken, checkIn, checkOut, guests, paymentType, discountApplied]);
 
   const handlePaymentSuccess = () => {
     if (orderId) {
@@ -762,7 +854,7 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
   }
 
   return (
-    <>
+    <div ref={rootRef} style={{ ...pageStyles, background: "var(--background, #fff)", minHeight: "100vh" } as React.CSSProperties}>
     {/* ── Checkout header ──────────────────────────── */}
     <header className="co-header">
       <div className="co-header__inner">
@@ -774,25 +866,18 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
             <div className="co-header__logo-placeholder" style={{ width: header.logoWidth }} />
           )}
         </a>
-        <span
-          className="material-symbols-rounded"
-          style={{ fontSize: 23, color: "#1a1a1a", fontVariationSettings: "'wght' 300" }}
-        >
-          shopping_bag
-        </span>
       </div>
     </header>
 
     <div className="co">
-      {/* Column 1: Back button */}
-      <div className="co__back-col">
-        <button type="button" className="co__back-btn" onClick={() => router.back()} aria-label="Tillbaka">
-          <span className="material-symbols-rounded" style={{ fontSize: 20 }}>arrow_back</span>
-        </button>
-      </div>
-
-      {/* Column 2: Main */}
-      <div className="co__main-col">
+      {/* Left: Back + Main */}
+      <div className="co__left">
+        <div className="co__back-col">
+          <button type="button" className="co__back-btn" onClick={() => router.back()} aria-label="Tillbaka">
+            <span className="material-symbols-rounded" style={{ fontSize: 20 }}>arrow_back</span>
+          </button>
+        </div>
+        <div className="co__main-col">
         <h1 className="co__title">Bekräfta och betala</h1>
 
         <div className="co__sections">
@@ -961,7 +1046,37 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
             </div>
           </section>
 
-          {clientSecret ? (
+          {sessionToken === "preview" ? (
+            <>
+              {/* ── Preview mode: static payment method mockup ── */}
+              <section className="co__section">
+                <h2 className="co__section-title">Lägg till betalningsmetod</h2>
+                <PaymentMethodAccordion
+                  methods={paymentMethods}
+                  onReady={() => {}}
+                  selectedMethod={paymentMethod}
+                  onMethodChange={setPaymentMethod}
+                  onCardChange={() => {}}
+                  cardName=""
+                  onCardNameChange={() => {}}
+                  errorColor={pageStyles?.["--error"]}
+                  bodyFont={pageStyles?.["--font-body"]}
+                  previewMode
+                />
+              </section>
+              <section className="co__section">
+                <p className="co__terms">
+                  Genom att trycka på knappen godkänner jag dessa{" "}
+                  <button type="button" className="co__terms-link" onClick={() => setTermsOpen(true)}>
+                    bokningsvillkor
+                  </button>.
+                </p>
+                <button type="button" className="co__confirm-btn" style={{ pointerEvents: "none" }}>
+                  Bekräfta och betala
+                </button>
+              </section>
+            </>
+          ) : clientSecret ? (
             <Elements stripe={stripePromise} options={{ clientSecret }}>
               {/* ── Payment method (card/paypal/wallet) — hidden for Klarna ── */}
               {paymentType !== "klarna" && (
@@ -975,6 +1090,8 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
                     onCardChange={setCardInfo}
                     cardName={cardName}
                     onCardNameChange={setCardName}
+                    errorColor={pageStyles?.["--error"]}
+                    bodyFont={pageStyles?.["--font-body"]}
                   />
                 </section>
               )}
@@ -1033,8 +1150,10 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
           )}
         </div>
       </div>
+      </div>
 
-      {/* Column 3: Summary */}
+      {/* Right: Summary */}
+      <div className="co__right">
       <div className="co__summary-col">
         <div className="co__summary">
           {/* Product header */}
@@ -1043,6 +1162,67 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
               <img src={product.image} alt={product?.title ?? ""} className="co__summary-image" />
             )}
             <h3 className="co__summary-title">{product?.title ?? "Boende"}</h3>
+          </div>
+
+          {/* Rabattkod */}
+          <div className="co__discount-wrap">
+            <div className="co__discount">
+              <div className="co__float" data-filled={discountCode ? "" : undefined}>
+                <input
+                  type="text"
+                  className="co__float-input"
+                  placeholder="Rabattkod"
+                  value={discountCode}
+                  onChange={(e) => setDiscountCode(e.target.value)}
+                />
+                <span className="co__float-label">Rabattkod</span>
+              </div>
+              <SpinnerButton className={`co__discount-btn${discountCode.trim() ? " co__discount-btn--active" : ""}`} disabled={!discountCode.trim() || !!discountApplied} onClick={async () => {
+                setDiscountError(null);
+                const res = await fetch("/api/checkout/validate-discount", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    code: discountCode.trim(),
+                    orderAmount: product?.price ? product.price * nights : 0,
+                    productIds: product ? [product.title] : [],
+                    itemCount: 1,
+                    checkInDate: checkIn ?? undefined,
+                    checkOutDate: checkOut ?? undefined,
+                  }),
+                });
+                const data = await res.json();
+                if (data.valid) {
+                  setDiscountApplied({
+                    code: discountCode.trim(),
+                    discountAmount: data.discountAmount,
+                    title: data.title,
+                    valueType: data.valueType,
+                    value: data.value,
+                  });
+                } else {
+                  setDiscountError(
+                    data.error === "DISCOUNT_NOT_FOUND" ? "Rabattkoden finns inte" :
+                    data.error === "DISCOUNT_EXPIRED" ? "Rabattkoden har gått ut" :
+                    data.error === "USAGE_LIMIT_REACHED" ? "Rabattkoden har använts maximalt antal gånger" :
+                    data.error === "CONDITION_NOT_MET" ? "Villkoren för rabattkoden uppfylls inte" :
+                    "Rabattkoden kunde inte tillämpas"
+                  );
+                }
+              }}>
+                Tillämpa
+              </SpinnerButton>
+            </div>
+            <FieldError error={discountError ?? undefined} />
+            {discountApplied && (
+              <div className="co__discount-pill">
+                <span className="material-symbols-rounded co__discount-pill__icon">shoppingmode</span>
+                <span className="co__discount-pill__code">{discountApplied.code}</span>
+                <button type="button" className="co__discount-pill__remove" onClick={() => { setDiscountApplied(null); setDiscountCode(""); }}>
+                  <span className="material-symbols-rounded" style={{ fontSize: 21 }}>close</span>
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="co__summary-divider" />
@@ -1086,6 +1266,12 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
                       <span>{formatPriceDisplay(addon.totalAmount, addon.currency)} kr</span>
                     </div>
                   ))}
+                  {discountApplied && (
+                    <div className="co__summary-price-row co__summary-price-row--discount">
+                      <span>Rabatt</span>
+                      <span>−{formatPriceDisplay(discountApplied.discountAmount, product.currency)} kr</span>
+                    </div>
+                  )}
                   <div className="co__summary-price-row">
                     <span>Skatter</span>
                     <span>{formatPriceDisplay(taxAmount, product.currency)} kr</span>
@@ -1096,7 +1282,7 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
 
                 <div className="co__summary-row co__summary-row--total">
                   <span>Totalt</span>
-                  <span>{formatPriceDisplay(total, product.currency)} kr</span>
+                  <span>{formatPriceDisplay(discountApplied ? total - discountApplied.discountAmount : total, product.currency)} kr</span>
                 </div>
               </>
             );
@@ -1120,6 +1306,7 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
             Prisspecifikation
           </button>
         </div>
+      </div>
       </div>
 
       {/* Prisspecifikation modal */}
@@ -1200,6 +1387,6 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
         </div>
       </CheckoutModal>
     </div>
-    </>
+    </div>
   );
 }

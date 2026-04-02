@@ -8,6 +8,9 @@ import CheckInPage from "../../../(guest)/check-in/page";
 import LoginPage from "../../../(guest)/login/page";
 import { ProductPreviewPage } from "./ProductPreviewPage";
 import { CheckoutPreviewPage } from "./CheckoutPreviewPage";
+import { ThankYouPreviewPage } from "./ThankYouPreviewPage";
+import { ProfilePreviewPage } from "./ProfilePreviewPage";
+import { BookingsPreviewPage } from "./BookingsPreviewPage";
 
 export const dynamic = "force-dynamic";
 
@@ -37,10 +40,19 @@ export default async function PreviewPage(props: {
       return <CheckInPage />;
     case "login":
       return <LoginPage searchParams={props.searchParams} />;
-    case "product":
-      return <ProductPreviewPage />;
+    case "product": {
+      const sp = await props.searchParams;
+      const productId = typeof sp?.product === "string" ? sp.product : undefined;
+      return <ProductPreviewPage productId={productId} />;
+    }
     case "checkout":
       return <CheckoutPreviewPage />;
+    case "thank-you":
+      return <ThankYouPreviewPage />;
+    case "profile":
+      return <ProfilePreviewPage />;
+    case "bookings":
+      return <BookingsPreviewPage />;
     default:
       return notFound();
   }

@@ -18,4 +18,5 @@ export {
   getAllResourceBearingPageIds,
   getPreviewRoute,
   getEditorPages,
+  resolveSettingsDefinition,
 } from "./config";

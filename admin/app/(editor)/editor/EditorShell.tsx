@@ -15,7 +15,6 @@
  */
 
 import { EditorHeader } from "./EditorHeader";
-import { EditorRail } from "./EditorRail";
 import { EditorPanel } from "./EditorPanel";
 import { EditorCanvas } from "./EditorCanvas";
 
@@ -24,7 +23,6 @@ export function EditorShell() {
     <div className="editor">
       <EditorHeader />
       <div className="editor-body">
-        <EditorRail />
         <EditorPanel />
         <EditorCanvas />
       </div>

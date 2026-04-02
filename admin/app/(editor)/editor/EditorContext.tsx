@@ -25,7 +25,7 @@ import {
   type ReactNode,
 } from "react";
 import type { PageId } from "@/app/_lib/pages/types";
-import { getPageDefinition } from "@/app/_lib/pages/registry";
+import { getPageDefinition, isPageId } from "@/app/_lib/pages/registry";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -118,7 +118,14 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const [detailTarget, setDetailTarget] = useState<DetailTarget | null>(null);
   const [settingsAccordion, setSettingsAccordion] = useState<string | null>(null);
-  const [currentPageId, setCurrentPageIdRaw] = useState<PageId>("home");
+  const [currentPageId, setCurrentPageIdRaw] = useState<PageId>(() => {
+    if (typeof window === "undefined") return "home";
+    const segments = window.location.pathname.split("/");
+    // URL pattern: /editor/{pageId}
+    const slug = segments[2];
+    if (slug && isPageId(slug)) return slug;
+    return "home";
+  });
   const [inspectorActive, setInspectorActive] = useState(false);
   const [inspectorHoveredSectionId, setInspectorHoveredSectionId] = useState<string | null>(null);
   const [activeStepId, setActiveStepId] = useState<string | null>(null);
@@ -170,6 +177,10 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     setSettingsAccordion(null);
     setInspectorHoveredSectionId(null);
     setActiveStepId(null);
+
+    // Sync URL — replaceState keeps browser history clean (no back-spam)
+    const url = pageId === "home" ? "/editor" : `/editor/${pageId}`;
+    window.history.replaceState(null, "", url);
   }, []);
 
   const navigateToSettings = useCallback((accordion?: string) => {

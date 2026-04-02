@@ -27,6 +27,10 @@ const ROUTE_TO_SLUG: Readonly<Record<string, string>> = {
   "/p/[token]/support": "support",
   "/preview/product": "product",
   "/preview/checkout": "checkout",
+  "/preview/thank-you": "thank-you",
+  "/preview/bookings": "bookings",
+  "/preview/order-status": "order-status",
+  "/preview/profile": "profile",
 } as const;
 
 // Share URL uses the app's base URL for now. Once tenant context is
@@ -110,6 +114,16 @@ function GuestPreviewFrame({
     iframeKeyRef.current += 1;
     setIframeLoaded(false);
     setLoadFailed(false);
+  }, []);
+
+  // ── Resource picker change — show spinner while iframe reloads ──
+  useEffect(() => {
+    const handler = () => {
+      setIframeLoaded(false);
+      setLoadFailed(false);
+    };
+    window.addEventListener("preview-resource-change", handler);
+    return () => window.removeEventListener("preview-resource-change", handler);
   }, []);
 
   // ── PostMessage — fire-and-forget, no ready gate ─────────────

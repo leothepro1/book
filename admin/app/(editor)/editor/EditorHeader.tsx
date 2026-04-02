@@ -11,6 +11,8 @@ import { getPageDefinition } from "@/app/_lib/pages/registry";
 import type { PageId } from "@/app/_lib/pages/types";
 import { EditorPublishBar } from "./EditorPublishBar";
 import { SaveProgressBar } from "@/app/(admin)/_components/SaveProgressBar";
+import { Tooltip } from "@/app/_components/Tooltip";
+import type { RailTab } from "./EditorContext";
 
 /**
  * Lightweight theme name lookup — avoids depending on the async theme registry.
@@ -43,28 +45,25 @@ export function EditorHeader() {
     <header className="editor-header">
       <SaveProgressBar />
       <div className="editor-header__nav">
-        <button
-          type="button"
-          onClick={handleBack}
-          className="editor-header__back"
-          aria-label="Avsluta editor"
-        >
-          <EditorIcon name="logout" size={20} style={{ transform: "rotate(180deg)" }} />
-        </button>
-        <span className="editor-header__label">
-          <span className="editor-header__label-text editor-header__label-text--default">Editor</span>
-          <span className="editor-header__label-text editor-header__label-text--hover">Avsluta</span>
-        </span>
-        <span className={`editor-header__status ${hasUnsavedChanges ? "editor-header__status--unsaved" : "editor-header__status--live"}`}>
-          <span className="editor-header__status-dot" />
-          {hasUnsavedChanges ? "Osparad" : "Live"}
-        </span>
-        <HeaderMoreMenu />
+        <Tooltip label="Lämna" placement="bottom">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="editor-header__back"
+            aria-label="Lämna"
+          >
+            <EditorIcon name="logout" size={18} style={{ transform: "rotate(180deg)" }} />
+          </button>
+        </Tooltip>
+        <HeaderRailButtons />
       </div>
 
       <div className="editor-header__spacer" />
 
-      <PageSwitcher />
+      <div className="editor-header__center">
+        <EditorStatusTrigger />
+        <PageSwitcher />
+      </div>
 
       <div className="editor-header__spacer" />
 
@@ -137,7 +136,7 @@ function PageSwitcher() {
           {/* If current page has steps, show them as a group at the top */}
           {currentDef.steps && currentDef.steps.length > 0 && (
             <>
-              <li className="sf-dropdown__item sf-dropdown__item--group-label">
+              <li className="sf-dropdown__item--group-label">
                 {currentDef.label}
               </li>
               {currentDef.steps.map((step) => (
@@ -154,24 +153,93 @@ function PageSwitcher() {
             </>
           )}
           {currentDef.editorMode === "settings" ? (
-            <li
-              className="sf-dropdown__item"
-              onClick={() => handleSelect("home" as PageId)}
-            >
-              <EditorIcon name="storefront" size={18} className="editor-header__page-icon" />
-              <span style={{ flex: 1 }}>Portalens tema</span>
-            </li>
-          ) : (
-            pages.map((page) => (
+            <>
+              {/* ── Kassa ──────────────────────────── */}
+              <li className="sf-dropdown__item--group-label">Kassa</li>
               <li
-                key={page.id}
-                className={`sf-dropdown__item${page.id === currentPageId ? " sf-dropdown__item--active" : ""}`}
-                onClick={() => handleSelect(page.id)}
+                className={`sf-dropdown__item${currentPageId === "checkout" ? " sf-dropdown__item--active" : ""}`}
+                onClick={() => handleSelect("checkout" as PageId)}
               >
-                <EditorIcon name={page.icon} size={18} className="editor-header__page-icon" />
-                <span style={{ flex: 1 }}>{page.label}</span>
+                <EditorIcon name="shopping_cart" size={18} className="editor-header__page-icon" />
+                <span style={{ flex: 1 }}>Kassa</span>
               </li>
-            ))
+
+              <li className="sf-dropdown__divider" />
+
+              {/* ── Efter köp ──────────────────────── */}
+              <li className="sf-dropdown__item--group-label">Efter köp</li>
+              <li
+                className={`sf-dropdown__item${currentPageId === "thank-you" ? " sf-dropdown__item--active" : ""}`}
+                onClick={() => handleSelect("thank-you" as PageId)}
+              >
+                <EditorIcon name="celebration" size={18} className="editor-header__page-icon" />
+                <span style={{ flex: 1 }}>Tack</span>
+              </li>
+
+              <li className="sf-dropdown__divider" />
+
+              {/* ── Kundkonton ─────────────────────── */}
+              <li className="sf-dropdown__item--group-label">Kundkonton</li>
+              <li
+                className={`sf-dropdown__item${currentPageId === "login" ? " sf-dropdown__item--active" : ""}`}
+                onClick={() => handleSelect("login" as PageId)}
+              >
+                <EditorIcon name="login" size={18} className="editor-header__page-icon" />
+                <span style={{ flex: 1 }}>Inloggning</span>
+              </li>
+              <li
+                className={`sf-dropdown__item${currentPageId === "bookings" ? " sf-dropdown__item--active" : ""}`}
+                onClick={() => handleSelect("bookings" as PageId)}
+              >
+                <EditorIcon name="calendar_month" size={18} className="editor-header__page-icon" />
+                <span style={{ flex: 1 }}>Bokningar</span>
+              </li>
+              <li
+                className={`sf-dropdown__item${currentPageId === "order-status" ? " sf-dropdown__item--active" : ""}`}
+                onClick={() => handleSelect("order-status" as PageId)}
+              >
+                <EditorIcon name="local_shipping" size={18} className="editor-header__page-icon" />
+                <span style={{ flex: 1 }}>Orderstatus</span>
+              </li>
+              <li
+                className={`sf-dropdown__item${currentPageId === "profile" ? " sf-dropdown__item--active" : ""}`}
+                onClick={() => handleSelect("profile" as PageId)}
+              >
+                <EditorIcon name="person" size={18} className="editor-header__page-icon" />
+                <span style={{ flex: 1 }}>Profil</span>
+              </li>
+
+              <li className="sf-dropdown__divider" />
+
+              {/* ── Tillbaka till tema ──────────────── */}
+              <li
+                className="sf-dropdown__item"
+                onClick={() => handleSelect("home" as PageId)}
+              >
+                <EditorIcon name="storefront" size={18} className="editor-header__page-icon" />
+                <span style={{ flex: 1 }}>Webbshoppens tema</span>
+              </li>
+            </>
+          ) : (
+            <>
+              {pages.filter((p) => p.editorMode !== "settings").map((page) => (
+                <li
+                  key={page.id}
+                  className={`sf-dropdown__item${page.id === currentPageId ? " sf-dropdown__item--active" : ""}`}
+                  onClick={() => handleSelect(page.id)}
+                >
+                  <EditorIcon name={page.icon} size={18} className="editor-header__page-icon" />
+                  <span style={{ flex: 1 }}>{page.label}</span>
+                </li>
+              ))}
+              <li
+                className="sf-dropdown__item"
+                onClick={() => handleSelect("checkout" as PageId)}
+              >
+                <EditorIcon name="shopping_cart" size={18} className="editor-header__page-icon" />
+                <span style={{ flex: 1 }}>Kassa och kundkonton</span>
+              </li>
+            </>
           )}
         </ul>
       )}
@@ -179,11 +247,12 @@ function PageSwitcher() {
   );
 }
 
-// ─── More Menu ────────────────────────────────────────────────
+// ─── Editor Status Trigger (Editor label + status badge → opens more menu) ──
 
-function HeaderMoreMenu() {
+function EditorStatusTrigger() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const { hasUnsavedChanges } = usePublishBar();
   const { config } = usePreview();
 
   const themeId = config?.themeId;
@@ -200,14 +269,18 @@ function HeaderMoreMenu() {
   }, [open]);
 
   return (
-    <div className="sf-dropdown editor-header__more" ref={ref}>
+    <div className="sf-dropdown editor-header__status-trigger-wrap" ref={ref}>
       <button
         type="button"
-        className="dp-header__menu"
-        aria-label="Fler alternativ"
+        className="editor-header__status-trigger"
         onClick={() => setOpen(!open)}
       >
-        <MoreIcon />
+        <span className="editor-header__status-trigger-label">{config?.property?.name || "Editor"}</span>
+        <span className={`editor-header__status ${hasUnsavedChanges ? "editor-header__status--unsaved" : "editor-header__status--live"}`}>
+          <span className="editor-header__status-dot" />
+          {hasUnsavedChanges ? "Osparad" : "Live"}
+        </span>
+        <EditorIcon name="keyboard_arrow_down" size={20} className="editor-header__page-chevron" />
       </button>
       {open && (
         <div className="sf-dropdown__menu editor-header__more-menu">
@@ -255,6 +328,40 @@ function HeaderMoreMenu() {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Header Rail Buttons (horizontal, replaces vertical EditorRail) ──
+
+function HeaderRailButtons() {
+  const { activeRail, setActiveRail } = useEditor();
+
+  return (
+    <nav className="editor-header__rail" aria-label="Editorpaneler">
+      <div className="editor-header__rail-divider" />
+      <Tooltip label="Sektioner" placement="bottom">
+        <button
+          type="button"
+          className={`editor-rail__btn${activeRail === "sections" ? " editor-rail__btn--active" : ""}`}
+          onClick={() => setActiveRail("sections")}
+          aria-pressed={activeRail === "sections"}
+          aria-label="Sektioner"
+        >
+          <EditorIcon name="grid_view" size={18} />
+        </button>
+      </Tooltip>
+      <Tooltip label="Design" placement="bottom">
+        <button
+          type="button"
+          className={`editor-rail__btn${activeRail === "settings" ? " editor-rail__btn--active" : ""}`}
+          onClick={() => setActiveRail("settings")}
+          aria-pressed={activeRail === "settings"}
+          aria-label="Design"
+        >
+          <EditorIcon name="settings" size={18} />
+        </button>
+      </Tooltip>
+    </nav>
   );
 }
 

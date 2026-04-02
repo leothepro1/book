@@ -2,12 +2,23 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "../../_lib/tenant/resolveTenantFromHost";
 import { getTenantConfig } from "../../_lib/tenant/getTenantConfig";
+import { getPageSettings } from "@/app/_lib/pages/config";
+import { FONT_CATALOG } from "@/app/_lib/fonts/catalog";
+import { resolveContrastPalette } from "@/app/_lib/color/contrast";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { format, parseISO } from "date-fns";
 import { sv } from "date-fns/locale";
 import { CheckoutCompletedTracker } from "./CheckoutCompletedTracker";
 import type { SelectedAddon } from "@/app/_lib/checkout/session-types";
 import "../checkout.css";
+
+const SANS_FALLBACK = "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
+
+function fontStack(key: string): string {
+  const f = FONT_CATALOG.find((c) => c.key === key);
+  if (!f) return SANS_FALLBACK;
+  return `${f.label}, ${f.serif ? "ui-serif, Georgia, serif" : SANS_FALLBACK}`;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -63,10 +74,35 @@ export default async function CheckoutSuccessPage({
   });
   const contactEmail = tenantData?.emailFrom ?? null;
 
-  // Header config
+  // Header config + page settings (shared with checkout via settingsSource)
   const config = await getTenantConfig(tenant.id);
-  const logoUrl = (config.theme?.header?.logoUrl as string) ?? null;
-  const logoWidth = (config.theme?.header?.logoWidth as number) ?? 120;
+  const ps = getPageSettings(config, "checkout");
+  const logoUrl = (ps.logoUrl as string) || (config.theme?.header?.logoUrl as string) || null;
+  const logoWidth = (ps.logoWidth as number) || (config.theme?.header?.logoWidth as number) || 120;
+
+  const bgColor = (ps.backgroundColor as string) || "#FFFFFF";
+  const contrast = resolveContrastPalette(bgColor);
+  const summaryBg = (ps.summaryBackgroundColor as string) || "#FFFFFF";
+  const summaryContrast = resolveContrastPalette(summaryBg);
+  const buttonBg = (ps.buttonColor as string) || "#207EA9";
+  const buttonContrast = resolveContrastPalette(buttonBg);
+
+  const pageStyles: React.CSSProperties = {
+    "--background": bgColor,
+    "--accent": (ps.accentColor as string) || "#121212",
+    "--button-bg": buttonBg,
+    "--button-text": buttonContrast.text,
+    "--error": (ps.errorColor as string) || "#c13515",
+    "--text": contrast.text,
+    "--font-heading": fontStack((ps.headingFont as string) || "inter"),
+    "--font-body": fontStack((ps.bodyFont as string) || "inter"),
+    "--logo-align": (ps.logoAlignment as string) === "left" ? "flex-start" : "center",
+    "--field-bg": (ps.fieldStyle as string) === "transparent" ? "transparent" : "#fff",
+    "--field-text": (ps.fieldStyle as string) === "transparent" ? "inherit" : "#202020",
+    "--card-inputs-bg": (ps.fieldStyle as string) === "transparent" ? `color-mix(in srgb, ${contrast.text} 4%, transparent)` : "#f3f3f4",
+    "--summary-bg": summaryBg,
+    "--summary-text": summaryContrast.text,
+  } as React.CSSProperties;
 
   const trackerElement = !isPending ? (
     <CheckoutCompletedTracker
@@ -78,7 +114,7 @@ export default async function CheckoutSuccessPage({
   ) : null;
 
   return (
-    <>
+    <div style={{ ...pageStyles, background: "var(--background, #fff)", minHeight: "100vh" }}>
     {trackerElement}
 
     {/* ── Checkout header (identical to checkout) ── */}
@@ -92,20 +128,12 @@ export default async function CheckoutSuccessPage({
             <div className="co-header__logo-placeholder" style={{ width: logoWidth }} />
           )}
         </a>
-        <span
-          className="material-symbols-rounded"
-          style={{ fontSize: 23, color: "#1a1a1a", fontVariationSettings: "'wght' 300" }}
-        >
-          shopping_bag
-        </span>
       </div>
     </header>
 
     <div className="co">
-      {/* Column 1: Back (empty on success) */}
+      <div className="co__left">
       <div className="co__back-col" />
-
-      {/* Column 2: Main — confirmation */}
       <div className="co__main-col">
         <div className="co__sections" style={{ gap: 0 }}>
 
@@ -134,10 +162,10 @@ export default async function CheckoutSuccessPage({
                 </span>
               )}
               <div>
-                <p style={{ fontSize: "0.8125rem", color: "#6c6c6c", margin: "0 0 4px" }}>
+                <p style={{ fontSize: "0.8125rem", color: "color-mix(in srgb, var(--text, #000) 55%, transparent)", margin: "0 0 4px" }}>
                   Bekräftelse #{order.orderNumber}
                 </p>
-                <h1 style={{ letterSpacing: "-.015em", color: "var(--text, #1a1a1a)", margin: 0, fontSize: 21, fontWeight: 600, lineHeight: 1.25 }}>
+                <h1 style={{ fontFamily: "var(--font-heading)", letterSpacing: "-.015em", color: "var(--text, #1a1a1a)", margin: 0, fontSize: 21, fontWeight: 600, lineHeight: 1.25 }}>
                   Tack {(order.guestName || "").split(" ")[0] || ""}!
                 </h1>
               </div>
@@ -152,11 +180,11 @@ export default async function CheckoutSuccessPage({
               padding: "20px 24px",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                <h2 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text, #1a1a1a)", margin: 0 }}>
+                <h2 style={{ fontFamily: "var(--font-heading)", fontSize: "1rem", fontWeight: 600, color: "var(--text, #1a1a1a)", margin: 0 }}>
                   Din bokning är bekräftad
                 </h2>
               </div>
-              <p style={{ fontSize: "0.8125rem", color: "#303030", margin: 0, paddingLeft: 0 }}>
+              <p style={{ fontSize: "0.8125rem", color: "color-mix(in srgb, var(--text, #000) 65%, transparent)", margin: 0, paddingLeft: 0 }}>
                 Du kommer snart att få en e-postbekräftelse
               </p>
             </div>
@@ -170,7 +198,7 @@ export default async function CheckoutSuccessPage({
               overflow: "hidden",
             }}>
               <div style={{ padding: "16px 24px", borderBottom: "1px solid color-mix(in srgb, var(--text, #000) 8%, transparent)" }}>
-                <h2 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text, #1a1a1a)", margin: 0 }}>
+                <h2 style={{ fontFamily: "var(--font-heading)", fontSize: "1rem", fontWeight: 600, color: "var(--text, #1a1a1a)", margin: 0 }}>
                   Orderuppgifter
                 </h2>
               </div>
@@ -214,7 +242,7 @@ export default async function CheckoutSuccessPage({
               <p style={{ fontSize: "0.8125rem", color: "color-mix(in srgb, var(--text, #000) 55%, transparent)", margin: 0 }}>
                 Behöver du hjälp?{" "}
                 {contactEmail ? (
-                  <a href={`mailto:${contactEmail}`} style={{ color: "#207EA9", textDecoration: "underline", textUnderlineOffset: 2 }}>
+                  <a href={`mailto:${contactEmail}`} style={{ color: "var(--accent, #207EA9)", textDecoration: "underline", textUnderlineOffset: 2 }}>
                     Kontakta oss
                   </a>
                 ) : (
@@ -228,8 +256,8 @@ export default async function CheckoutSuccessPage({
                   padding: "14px 20px",
                   fontSize: "0.8125rem",
                   fontWeight: 600,
-                  color: "#fff",
-                  background: "#207EA9",
+                  color: "var(--button-text, #fff)",
+                  background: "var(--button-bg, #207EA9)",
                   border: "none",
                   borderRadius: 8,
                   textDecoration: "none",
@@ -242,8 +270,10 @@ export default async function CheckoutSuccessPage({
 
         </div>
       </div>
+      </div>
 
-      {/* Column 3: Summary (identical to checkout) */}
+      {/* Right: Summary */}
+      <div className="co__right">
       <div className="co__summary-col">
         <div className="co__summary">
           {/* Product header */}
@@ -293,6 +323,12 @@ export default async function CheckoutSuccessPage({
                 <span>{formatPriceDisplay(addon.totalAmount, addon.currency)} kr</span>
               </div>
             ))}
+            {order.discountAmount > 0 && (
+              <div className="co__summary-price-row co__summary-price-row--discount">
+                <span>Rabatt</span>
+                <span>−{formatPriceDisplay(order.discountAmount, order.currency)} kr</span>
+              </div>
+            )}
             <div className="co__summary-price-row">
               <span>Skatter</span>
               <span>{formatPriceDisplay(Math.round(subtotal * 0.25), order.currency)} kr</span>
@@ -308,7 +344,8 @@ export default async function CheckoutSuccessPage({
 
         </div>
       </div>
+      </div>
     </div>
-    </>
+    </div>
   );
 }

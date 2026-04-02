@@ -13,6 +13,7 @@ import { resolveAccommodation } from "@/app/_lib/accommodations/resolve";
 import type { AccommodationWithRelations } from "@/app/_lib/accommodations/types";
 import { ProductProvider } from "@/app/(guest)/_lib/product-context/ProductContext";
 import type { ProductRatePlan } from "@/app/(guest)/_lib/product-context/ProductContext";
+import type { ResolvedProductDisplay } from "@/app/_lib/sections/data-sources";
 
 export const dynamic = "force-dynamic";
 
@@ -102,17 +103,35 @@ export default async function RoomDetailPage({
     (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000,
   );
 
-  // ── Build ProductContext data ───────────────────────────────
-  const productData = {
+  // ── Build shared product display data (dataSources infrastructure) ──
+  const visibleFacilities = resolved.facilities.filter((f) => f.isVisible).map((f) => f.facilityType);
+  const productDisplay: ResolvedProductDisplay = {
     id: accommodation.id,
     title: resolved.displayName,
     description: resolved.displayDescription,
     slug: resolved.slug,
-    images: resolved.media.map((m) => m.url),
     price: ratePlans[0]?.pricePerNight ?? resolved.basePricePerNight,
     currency: resolved.currency,
+    compareAtPrice: null,
+    featuredImage: resolved.media[0] ? { url: resolved.media[0].url, alt: resolved.media[0].altText ?? "" } : null,
+    images: resolved.media.map((m) => ({ url: m.url, alt: m.altText ?? "" })),
     productType: "PMS_ACCOMMODATION",
-    facilities: resolved.facilities.filter((f) => f.isVisible).map((f) => f.facilityType),
+    facilities: visibleFacilities,
+    highlights: resolved.highlights.map((h) => ({ icon: h.icon, text: h.text, description: h.description })),
+    capacity: {
+      maxGuests: resolved.maxGuests,
+      bedrooms: resolved.bedrooms,
+      bathrooms: resolved.bathrooms,
+      roomSizeSqm: resolved.roomSizeSqm,
+      extraBeds: resolved.extraBeds,
+    },
+  };
+
+  // ── Build ProductContext data (extends display with PMS-specific fields) ──
+  const productData = {
+    ...productDisplay,
+    images: resolved.media.map((m) => m.url),
+    facilities: visibleFacilities,
     highlights: resolved.highlights.map((h) => ({ icon: h.icon, text: h.text, description: h.description })),
     ratePlans,
     maxGuests: resolved.maxGuests,
@@ -139,6 +158,7 @@ export default async function RoomDetailPage({
           booking={booking}
           bookingStatus={bookingStatus}
           token="preview"
+          pageResolvedData={{ product: productDisplay }}
         />
       </ProductProvider>
     </GuestPageShell>

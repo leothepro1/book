@@ -431,7 +431,10 @@ export function buildSectionPickerData(context?: { pageId?: string }): {
 
   // Standalone elements — first-class items in the picker.
   // Each element type gets its own entry, categorized by ELEMENT_CATEGORY_MAP.
-  const elementDefs = getAllElementDefinitions();
+  // pageScope elements only appear on their designated page.
+  const elementDefs = getAllElementDefinitions().filter(
+    (d) => !d.pageScope || d.pageScope === context?.pageId,
+  );
   const standaloneItems: PickerItem[] = elementDefs.map((def) => {
     const catInfo = ELEMENT_CATEGORY_MAP[def.type] ?? { primary: "el-other" };
     return {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useUser } from '@clerk/nextjs';
+import { useSidebar } from './SidebarContext';
 
 const IS_DEV = process.env.NODE_ENV === 'development';
 
@@ -20,11 +21,26 @@ function useClerkUser() {
 
 export function SidebarUserRow({ isCollapsed }: { isCollapsed: boolean }) {
   const { user } = useClerkUser();
+  const { setIsCollapsed } = useSidebar();
 
   if (!user) return null;
 
   const firstName = user.firstName || user.username || 'User';
   const imageUrl = user.imageUrl;
+
+  if (isCollapsed) {
+    return (
+      <div className="flex items-center justify-center flex-shrink-0" style={{ padding: "18px 18px 15px 18px", borderBottom: "1px solid #ebebeb" }}>
+        <button
+          className="flex-shrink-0 p-1 text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232] rounded-lg transition-colors duration-150"
+          aria-label="Expandera sidebar"
+          onClick={() => setIsCollapsed(false)}
+        >
+          <span className="material-symbols-rounded" style={{ fontSize: 20, display: "block", color: "#303030" }}>side_navigation</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-between flex-shrink-0" style={{ padding: "18px 18px 15px 18px", borderBottom: "1px solid #ebebeb" }}>
@@ -40,22 +56,18 @@ export function SidebarUserRow({ isCollapsed }: { isCollapsed: boolean }) {
             {firstName[0]}
           </div>
         )}
-        <span
-          className={`text-base tracking-[-0.15px] font-[500] text-[#6D6C6B] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-            isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-          }`}
-        >
+        <span className="text-base tracking-[-0.15px] font-[500] text-[#6D6C6B] whitespace-nowrap overflow-hidden transition-all duration-200 w-auto opacity-100">
           {firstName}
         </span>
       </div>
       <button
-        className={`flex-shrink-0 p-1 text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232] rounded-lg transition-colors duration-150 ${
-          isCollapsed ? 'hidden' : ''
-        }`}
-        aria-label="Notiser"
+        className="flex-shrink-0 p-1 text-[#6D6C6B] hover:bg-[#E6E5E3] hover:text-[#323232] rounded-lg transition-colors duration-150"
+        aria-label="Kollapsa sidebar"
+        onClick={() => setIsCollapsed(true)}
       >
-        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" className="flex-shrink-0">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="flex-shrink-0">
+          <rect x="1" y="2" width="16" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
+          <line x1="6.5" y1="2" x2="6.5" y2="16" stroke="currentColor" strokeWidth="1.5" />
         </svg>
       </button>
     </div>

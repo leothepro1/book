@@ -51,24 +51,16 @@ export function EditorPublishBar() {
           <EditorIcon name="web_traffic" size={20} />
         </button>
       </Tooltip>
-      <div className="editor-publish__viewport">
+      <Tooltip label={viewportMode === "mobile" ? "Datorvy" : "Mobilvy"}>
         <button
           type="button"
-          className={`editor-publish__viewport-btn${viewportMode === "desktop" ? " editor-publish__viewport-btn--active" : ""}`}
-          onClick={() => setViewportMode("desktop")}
-          aria-label="Datorvy"
+          className={`editor-publish__icon-btn editor-publish__inspector${viewportMode === "mobile" ? " editor-publish__inspector--active" : ""}`}
+          onClick={() => setViewportMode(viewportMode === "mobile" ? "desktop" : "mobile")}
+          aria-label={viewportMode === "mobile" ? "Datorvy" : "Mobilvy"}
         >
-          <EditorIcon name="desktop_windows" size={18} />
+          <EditorIcon name="tablet_mac" size={18} />
         </button>
-        <button
-          type="button"
-          className={`editor-publish__viewport-btn${viewportMode === "mobile" ? " editor-publish__viewport-btn--active" : ""}`}
-          onClick={() => setViewportMode("mobile")}
-          aria-label="Mobilvy"
-        >
-          <EditorIcon name="smartphone" size={18} />
-        </button>
-      </div>
+      </Tooltip>
       <div className="editor-publish__group">
         <Tooltip label="Ångra">
           <button

@@ -69,6 +69,7 @@ import {
 } from "@/app/_lib/sections/mutations";
 import { getPageLayout, getPageDefinition, getPageSections, getPageUndoSnapshot, buildSectionsPatch, getPageFooter, buildFooterPatch } from "@/app/_lib/pages";
 import { PAGE_FOOTER_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
+import { PageResourcePicker } from "./PageResourcePicker";
 
 // ─── Drag Scope Types ───────────────────────────────────────
 // Each drag level is scoped to its own DndContext.
@@ -142,18 +143,10 @@ function SectionListPane() {
   const saveDraft = useDraftUpdate();
   const { openDetail, inspectorHoveredSectionId, currentPageId } = useEditor();
 
-  // Preview product name for product page
-  const [previewProductName, setPreviewProductName] = useState<string | null>(null);
-  useEffect(() => {
-    if (currentPageId !== "product") { setPreviewProductName(null); return; }
-    import("@/app/_lib/products/actions").then(({ getPreviewProductName }) =>
-      getPreviewProductName().then(setPreviewProductName),
-    );
-  }, [currentPageId]);
-
   // Resolve page layout contract and editor mode from current page
+  const pageDef = useMemo(() => getPageDefinition(currentPageId), [currentPageId]);
   const layout = useMemo(() => getPageLayout(currentPageId), [currentPageId]);
-  const editorMode = useMemo(() => getPageDefinition(currentPageId).editorMode, [currentPageId]);
+  const editorMode = pageDef.editorMode;
 
   const sections: SectionInstance[] = useMemo(
     () => getPageSections(config, currentPageId),
@@ -754,9 +747,9 @@ function SectionListPane() {
     <>
       {/* ── Page header ── */}
       <div className="sp-page-header">
-        <span className="sp-page-name">{getPageDefinition(currentPageId).label}</span>
-        {currentPageId === "product" && previewProductName && (
-          <span className="sp-page-subtitle">Förhandsvisar: {previewProductName}</span>
+        <span className="sp-page-name">{pageDef.label}</span>
+        {pageDef.previewResource && (
+          <PageResourcePicker resource={pageDef.previewResource} pageId={currentPageId} />
         )}
       </div>
 

@@ -6,13 +6,14 @@ import GuestPageShell from "@/app/(guest)/_components/GuestPageShell";
 import { getRequestLocale } from "@/app/(guest)/_lib/locale/getRequestLocale";
 import { prisma } from "@/app/_lib/db/prisma";
 import { ProductProvider } from "@/app/(guest)/_lib/product-context/ProductContext";
+import type { ResolvedProductDisplay } from "@/app/_lib/sections/data-sources";
 
 /**
  * Product (Boende) page preview for the editor.
  * Fetches the first active accommodation as preview data.
  * Wraps in ProductProvider so product-gallery/product-content elements work.
  */
-export async function ProductPreviewPage() {
+export async function ProductPreviewPage({ productId }: { productId?: string }) {
   const booking = await resolveBookingFromToken("preview");
 
   if (!booking) {
@@ -24,54 +25,85 @@ export async function ProductPreviewPage() {
   const config = await getTenantConfig(tenantId, { preferDraft: true, locale });
   const bookingStatus = getBookingStatus(booking);
 
-  // Fetch first active accommodation for preview
-  const previewAccommodation = await prisma.accommodation.findFirst({
-    where: { tenantId, status: "ACTIVE" },
-    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-    include: {
-      media: { orderBy: { sortOrder: "asc" }, take: 7 },
-      facilities: { where: { overrideHidden: false } },
-      highlights: { orderBy: { sortOrder: "asc" } },
-    },
-  });
+  // Fetch specific accommodation by ID, or fall back to first active
+  const previewAccommodation = productId
+    ? await prisma.accommodation.findFirst({
+        where: { id: productId, tenantId, status: "ACTIVE" },
+        include: {
+          media: { orderBy: { sortOrder: "asc" }, take: 7 },
+          facilities: { where: { overrideHidden: false } },
+          highlights: { orderBy: { sortOrder: "asc" } },
+        },
+      })
+    : await prisma.accommodation.findFirst({
+        where: { tenantId, status: "ACTIVE" },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        include: {
+          media: { orderBy: { sortOrder: "asc" }, take: 7 },
+          facilities: { where: { overrideHidden: false } },
+          highlights: { orderBy: { sortOrder: "asc" } },
+        },
+      });
 
-  const productData = previewAccommodation
+  // Build shared product display (dataSources infrastructure)
+  const acc = previewAccommodation;
+  const productDisplay: ResolvedProductDisplay = acc
     ? {
-        id: previewAccommodation.id,
-        title: previewAccommodation.nameOverride ?? previewAccommodation.name,
-        description: previewAccommodation.descriptionOverride ?? previewAccommodation.description,
-        slug: previewAccommodation.slug,
-        images: previewAccommodation.media.map((m) => m.url),
-        price: previewAccommodation.basePricePerNight,
-        currency: previewAccommodation.currency,
+        id: acc.id,
+        title: acc.nameOverride ?? acc.name,
+        description: acc.descriptionOverride ?? acc.description,
+        slug: acc.slug,
+        price: acc.basePricePerNight,
+        currency: acc.currency,
+        compareAtPrice: null,
+        featuredImage: acc.media[0] ? { url: acc.media[0].url, alt: acc.media[0].altText ?? "" } : null,
+        images: acc.media.map((m) => ({ url: m.url, alt: m.altText ?? "" })),
         productType: "PMS_ACCOMMODATION",
-        facilities: previewAccommodation.facilities.map((f) => f.facilityType),
-        highlights: previewAccommodation.highlights.map((h) => ({ icon: h.icon, text: h.text, description: h.description })),
-        ratePlans: [],
-        maxGuests: previewAccommodation.maxGuests,
-        bedrooms: previewAccommodation.bedrooms,
-        bathrooms: previewAccommodation.bathrooms,
-        roomSizeSqm: previewAccommodation.roomSizeSqm,
-        extraBeds: previewAccommodation.extraBeds,
+        facilities: acc.facilities.map((f) => f.facilityType),
+        highlights: acc.highlights.map((h) => ({ icon: h.icon, text: h.text, description: h.description })),
+        capacity: {
+          maxGuests: acc.maxGuests,
+          bedrooms: acc.bedrooms,
+          bathrooms: acc.bathrooms,
+          roomSizeSqm: acc.roomSizeSqm,
+          extraBeds: acc.extraBeds,
+        },
       }
     : {
         id: "preview",
         title: "Exempelboende",
         description: "Detta är en förhandsvisning av boendesidan.",
         slug: "preview",
-        images: [],
         price: 0,
         currency: "SEK",
+        compareAtPrice: null,
+        featuredImage: null,
+        images: [],
         productType: "PMS_ACCOMMODATION",
         facilities: [],
         highlights: [],
-        ratePlans: [],
-        maxGuests: null,
-        bedrooms: null,
-        bathrooms: null,
-        roomSizeSqm: null,
-        extraBeds: 0,
+        capacity: { maxGuests: null, bedrooms: null, bathrooms: null, roomSizeSqm: null, extraBeds: 0 },
       };
+
+  // ProductContext extends display data with PMS-specific fields
+  const productData = {
+    id: productDisplay.id,
+    title: productDisplay.title,
+    description: productDisplay.description,
+    slug: productDisplay.slug,
+    images: acc ? acc.media.map((m) => m.url) : [],
+    price: productDisplay.price,
+    currency: productDisplay.currency,
+    productType: productDisplay.productType,
+    facilities: productDisplay.facilities ?? [],
+    highlights: productDisplay.highlights ?? [],
+    ratePlans: [] as never[],
+    maxGuests: acc?.maxGuests ?? null,
+    bedrooms: acc?.bedrooms ?? null,
+    bathrooms: acc?.bathrooms ?? null,
+    roomSizeSqm: acc?.roomSizeSqm ?? null,
+    extraBeds: acc?.extraBeds ?? 0,
+  };
 
   return (
     <GuestPageShell config={config}>
@@ -82,6 +114,7 @@ export async function ProductPreviewPage() {
           booking={booking}
           bookingStatus={bookingStatus}
           token="preview"
+          pageResolvedData={{ product: productDisplay }}
         />
       </ProductProvider>
     </GuestPageShell>

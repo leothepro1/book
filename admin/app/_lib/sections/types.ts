@@ -506,6 +506,22 @@ export type SectionCategory =
   | "utility";
 
 /**
+ * Declares an external data requirement on a section definition.
+ *
+ * The rendering pipeline reads the referenced setting value (a collection ID,
+ * product ID, etc.) and batch-fetches the corresponding data server-side.
+ * Renderers receive pre-fetched, typed data via `resolvedData`.
+ */
+export type DataSourceDefinition = {
+  /** Unique key within this section — used as the key in resolvedData. */
+  key: string;
+  /** What kind of data to fetch. */
+  type: "collection" | "product";
+  /** Which section setting holds the resource ID (e.g. "collectionId"). */
+  settingKey: string;
+};
+
+/**
  * Defines a section type. The top-level blueprint.
  */
 export type SectionDefinition = {
@@ -572,6 +588,25 @@ export type SectionDefinition = {
    * conditional rendering needed.
    */
   editableFields?: string[];
+
+  // ─── Data Sources (server-side data fetching) ───
+
+  /**
+   * Declares external data requirements for this section type.
+   *
+   * The rendering pipeline reads each data source's settingKey from the
+   * section's settings to get a resource ID, then batch-fetches all
+   * needed data server-side before rendering. Renderers receive
+   * pre-fetched, typed data via `resolvedData` — no client-side
+   * fetching needed.
+   *
+   * Example: a "featured collection" section declares:
+   *   dataSources: [{ key: "collection", type: "collection", settingKey: "collectionId" }]
+   *
+   * The pipeline reads settings.collectionId, fetches the collection
+   * with its products, and passes it as resolvedData.collection.
+   */
+  dataSources?: DataSourceDefinition[];
 
   // ─── Section-Level Settings (shared across all presets) ───
 
@@ -740,6 +775,13 @@ export type SectionRendererProps = {
    * Contains pre-computed CSS variables ready to apply on the section wrapper.
    */
   colorScheme: import("@/app/_lib/color-schemes/types").ResolvedColorScheme | null;
+
+  /**
+   * Server-resolved external data, keyed by DataSourceDefinition.key.
+   * Present only when the section definition declares dataSources.
+   * Null values indicate the referenced resource was not found or deleted.
+   */
+  resolvedData?: import("@/app/_lib/sections/data-sources").ResolvedDataMap;
 };
 
 /**
