@@ -18,8 +18,8 @@ interface GuestAccount {
   city: string | null;
   postalCode: string | null;
   country: string | null;
-  verifiedEmail: boolean;
-  emailMarketingState: string;
+  verifiedEmail?: boolean;
+  emailMarketingState?: string;
 }
 
 interface AccountClientProps {
