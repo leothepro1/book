@@ -59,18 +59,15 @@ export default async function AppPage({
     );
   }
 
-  // Not installed → render grid page with modal pre-opened
+  // Not installed → app listing page
   const tenantData = await getCurrentTenant();
   const tenantId = tenantData?.tenant.id;
 
-  const [apps, installed, setup, healthStates] = await Promise.all([
-    Promise.resolve(getAllApps()),
-    getInstalledApps(),
-    tenantId ? getSetupStatus(tenantId) : Promise.resolve({ pms: { complete: false }, payments: { complete: false }, isReadyForApps: false }),
-    getHealthForApps(),
-  ]);
+  const setup = tenantId
+    ? await getSetupStatus(tenantId)
+    : { pms: { complete: false }, payments: { complete: false }, isReadyForApps: false };
 
-  const serializedInstalled = JSON.parse(JSON.stringify(installed));
+  const { AppListingPage } = await import("./AppListingPage");
 
-  return <AppsClient apps={apps} installed={serializedInstalled} setup={setup} healthStates={healthStates} initialAppId={appId} />;
+  return <AppListingPage app={appDef} status={null} setupReady={setup.isReadyForApps} />;
 }

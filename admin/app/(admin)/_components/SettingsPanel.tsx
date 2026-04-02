@@ -281,7 +281,7 @@ export function SettingsPanel() {
               ) : activeItem === 'payments' ? (
                 <PaymentsContent key={resetKey} onSubTitleChange={setSubTitle} />
               ) : activeItem === 'apps' ? (
-                <AppsContent key={resetKey} onSubTitleChange={setSubTitle} />
+                <AppsContent key={resetKey} onSubTitleChange={setSubTitle} onHeaderExtraChange={setHeaderExtra} />
               ) : activeItem === 'billing' ? (
                 <BillingContent key={resetKey} onSubTitleChange={setSubTitle} />
               ) : (

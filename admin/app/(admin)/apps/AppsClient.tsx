@@ -1,11 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useTransition } from "react";
-import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Link from "next/link";
 import { EditorIcon } from "@/app/_components/EditorIcon";
-import { installApp } from "@/app/_lib/apps/actions";
 import type { AppDefinition, AppCategory, SetupStatus, AppStatus, HealthStatus } from "@/app/_lib/apps/types";
 import type { AppHealthSummary } from "@/app/_lib/apps/health";
 import "./apps.css";
@@ -29,7 +26,6 @@ type Props = {
   installed: InstalledApp[];
   setup: SetupStatus;
   healthStates: AppHealthSummary[];
-  initialAppId?: string;
 };
 
 // ── Category tabs ────────────────────────────────────────────────
@@ -97,323 +93,17 @@ function getCtaProps(
   return { label: "Installera", className: "admin-btn admin-btn--accent admin-btn--sm", disabled: blocked };
 }
 
-function renderMarkdown(md: string): string {
-  return md
-    .replace(/## (.+)/g, '<h2>$1</h2>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/^(?!<[hul])(.+)$/gm, '<p>$1</p>')
-    .replace(/<p><\/p>/g, '')
-    .replace(/<p>(<[hul])/g, '$1')
-    .replace(/(<\/[hul][l2]?>)<\/p>/g, '$1');
-}
-
-// ── App Modal ────────────────────────────────────────────────────
-
-function AppModal({
-  app,
-  visible,
-  onClose,
-  status,
-  setupReady,
-}: {
-  app: AppDefinition;
-  visible: boolean;
-  onClose: () => void;
-  status: AppStatus | null;
-  setupReady: boolean;
-}) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [selectedTier, setSelectedTier] = useState(app.pricing[0]?.tier ?? "free");
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [galleryIndex, setGalleryIndex] = useState(0);
-  const carouselRef = useRef<HTMLDivElement>(null);
-  const sidebarRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setSelectedTier(app.pricing[0]?.tier ?? "free");
-    setLightboxOpen(false);
-    setLightboxIndex(0);
-    setGalleryIndex(0);
-  }, [app.id, app.pricing]);
-
-  // Sync sidebar max-height with carousel slide height
-  useEffect(() => {
-    const carousel = carouselRef.current;
-    const sidebar = sidebarRef.current;
-    if (!carousel || !sidebar) return;
-
-    const sync = () => {
-      const h = carousel.getBoundingClientRect().height;
-      if (h > 0) sidebar.style.height = `${h}px`;
-    };
-
-    sync();
-    const ro = new ResizeObserver(sync);
-    ro.observe(carousel);
-    return () => ro.disconnect();
-  }, [app.id, visible]);
-
-  // ESC to close
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  const handleInstall = () => {
-    startTransition(async () => {
-      const result = await installApp(app.id);
-      if (result.ok) router.push(`/apps/${app.id}/setup`);
-    });
-  };
-
-  const currentPricing = app.pricing.find((p) => p.tier === selectedTier) ?? app.pricing[0];
-  const hasScreenshots = app.screenshots.length > 0;
-
-  // CTA logic
-  let ctaLabel = isPending ? "Installerar..." : "Installera";
-  let ctaAction = handleInstall;
-  let ctaDisabled = isPending || (app.requiredSetup.length > 0 && !setupReady);
-  let ctaClassName = "admin-btn admin-btn--accent";
-
-  if (status === "ACTIVE") {
-    ctaLabel = "Hantera"; ctaAction = () => router.push(`/apps/${app.id}`); ctaClassName = "admin-btn admin-btn--outline"; ctaDisabled = false;
-  } else if (status === "PENDING_SETUP") {
-    ctaLabel = "Slutför inställning"; ctaAction = () => router.push(`/apps/${app.id}/setup`); ctaClassName = "admin-btn admin-btn--accent"; ctaDisabled = false;
-  } else if (status === "ERROR") {
-    ctaLabel = "Åtgärda"; ctaAction = () => router.push(`/apps/${app.id}`); ctaClassName = "admin-btn admin-btn--danger"; ctaDisabled = false;
-  } else if (status === "PAUSED") {
-    ctaLabel = "Aktivera"; ctaAction = () => router.push(`/apps/${app.id}`); ctaClassName = "admin-btn admin-btn--accent"; ctaDisabled = false;
-  }
-
-  return createPortal(
-    <div className={`app-modal__overlay${visible ? " app-modal__overlay--visible" : ""}`} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="app-modal__inner">
-        <button className="app-modal__close" onClick={onClose} type="button">
-          <EditorIcon name="close" size={24} />
-        </button>
-        <div className="app-modal">
-          <div className="app-modal__body">
-            <div className="app-modal__layout">
-            {/* Left column — content */}
-            <div className="app-modal__content">
-              {/* Screenshot carousel */}
-              {hasScreenshots && (
-                <div className="app-gallery" ref={carouselRef}>
-                  <button
-                    type="button"
-                    className="app-gallery__slide"
-                    onClick={() => { setLightboxIndex(galleryIndex); setLightboxOpen(true); }}
-                  >
-                    <img
-                      src={app.screenshots[galleryIndex].url.includes("cloudinary") ? `${app.screenshots[galleryIndex].url}/c_fill,w_900,h_560,g_auto,q_auto,f_auto` : app.screenshots[galleryIndex].url}
-                      alt={app.screenshots[galleryIndex].alt}
-                      className="app-gallery__img"
-                    />
-                  </button>
-                  {galleryIndex > 0 && (
-                    <button
-                      type="button"
-                      className="app-gallery__nav app-gallery__nav--prev"
-                      onClick={() => setGalleryIndex((i) => i - 1)}
-                    >
-                      <EditorIcon name="chevron_left" size={24} />
-                    </button>
-                  )}
-                  {galleryIndex < app.screenshots.length - 1 && (
-                    <button
-                      type="button"
-                      className="app-gallery__nav app-gallery__nav--next"
-                      onClick={() => setGalleryIndex((i) => i + 1)}
-                    >
-                      <EditorIcon name="chevron_right" size={24} />
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Lightbox */}
-              {lightboxOpen && app.screenshots.length > 0 && createPortal(
-                <div className="app-lightbox" onClick={() => setLightboxOpen(false)}>
-                  <button className="app-lightbox__close" onClick={() => setLightboxOpen(false)} type="button">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
-                  </button>
-                  {app.screenshots.length > 1 && (
-                    <>
-                      <button
-                        className="app-lightbox__nav app-lightbox__nav--prev"
-                        onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i - 1 + app.screenshots.length) % app.screenshots.length); }}
-                        type="button"
-                      >
-                        <EditorIcon name="chevron_left" size={28} />
-                      </button>
-                      <button
-                        className="app-lightbox__nav app-lightbox__nav--next"
-                        onClick={(e) => { e.stopPropagation(); setLightboxIndex((i) => (i + 1) % app.screenshots.length); }}
-                        type="button"
-                      >
-                        <EditorIcon name="chevron_right" size={28} />
-                      </button>
-                    </>
-                  )}
-                  <img
-                    src={app.screenshots[lightboxIndex].url}
-                    alt={app.screenshots[lightboxIndex].alt}
-                    className="app-lightbox__img"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </div>,
-                document.body,
-              )}
-
-
-            </div>
-
-            {/* Right column — sidebar */}
-            <div className="app-modal__sidebar" ref={sidebarRef}>
-              <div className="app-modal__sidebar-scroll">
-                {/* App header */}
-                <div className="app-listing__header">
-                  <div className="app-listing__icon">
-                    {app.iconUrl
-                      ? <img src={app.iconUrl} alt="" className="app-modal__icon-img" />
-                      : <span className="material-symbols-rounded" style={{ fontSize: 32 }}>{app.icon}</span>
-                    }
-                  </div>
-                  <div className="app-listing__header-info">
-                    <h3 className="app-modal__name">{app.name}</h3>
-                    <p className="app-modal__developer">Skapad av {app.developer === "bedfront" ? "Bedfront" : app.developer}</p>
-                  </div>
-                </div>
-
-                {/* Hero heading + description */}
-                {(app.heroHeading || app.heroDescription) && (
-                  <div className="app-listing__hero">
-                    {app.heroHeading && (
-                      <h2 className="app-listing__hero-heading">{app.heroHeading}</h2>
-                    )}
-                    {app.heroDescription && (
-                      <p className="app-listing__hero-desc">{app.heroDescription}</p>
-                    )}
-                  </div>
-                )}
-
-                {/* Permissions */}
-                {(app.permissionLabels ?? []).length > 0 && (
-                  <div className="app-modal__permissions">
-                    <h4 className="app-modal__permissions-title">Behörigheter</h4>
-                    <p className="app-modal__permissions-subtitle">När denna app är installerad kan den:</p>
-                    <ul className="app-modal__permissions-list">
-                      {app.permissionLabels!.map((label, i) => (
-                        <li key={i} className="app-modal__permissions-item">
-                          <span className="material-symbols-rounded app-modal__permissions-check">check</span>
-                          {label}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              {/* CTA — sticky footer */}
-              <div className="app-modal__cta">
-                <button
-                  className={`app-modal__cta-btn${status ? " app-modal__cta-btn--secondary" : ""}`}
-                  onClick={status ? () => router.push(`/apps/${app.id}`) : handleInstall}
-                  disabled={!status && ctaDisabled}
-                  type="button"
-                >
-                  {status ? "Öppna" : (isPending ? "Installerar..." : "Installera")}
-                </button>
-              </div>
-            </div>
-            </div>
-
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
 // ── Main Component ───────────────────────────────────────────────
 
-export function AppsClient({ apps, installed, setup, healthStates, initialAppId }: Props) {
+export function AppsClient({ apps, installed, setup, healthStates }: Props) {
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState<AppCategory | "all">("all");
-  const [selectedApp, setSelectedApp] = useState<AppDefinition | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
-  const closingRef = useRef(false);
-  const fromInitialRef = useRef(!!initialAppId);
 
   // Build lookups
   const installMap = new Map(installed.map((a) => [a.appId, a]));
   const healthMap = new Map(healthStates.map((h) => [h.appId, h.status]));
-  const setupReady = setup.isReadyForApps;
-
-  // Initialize from prop (direct visit to /apps/[appId])
-  useEffect(() => {
-    if (initialAppId) {
-      const app = apps.find((a) => a.id === initialAppId);
-      if (app) setSelectedApp(app);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Animate modal in when selectedApp changes
-  useEffect(() => {
-    if (selectedApp && !modalVisible && !closingRef.current) {
-      requestAnimationFrame(() => setModalVisible(true));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedApp]);
-
-  // Handle browser back/forward
-  useEffect(() => {
-    const onPopState = () => {
-      if (selectedApp && !closingRef.current) {
-        closingRef.current = true;
-        setModalVisible(false);
-        setTimeout(() => {
-          setSelectedApp(null);
-          closingRef.current = false;
-        }, 350);
-      }
-    };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, [selectedApp]);
-
-  const openModal = useCallback((app: AppDefinition) => {
-    fromInitialRef.current = false;
-    setSelectedApp(app);
-    window.history.pushState(null, "", `/apps/${app.id}`);
-  }, []);
-
-  const closeModal = useCallback(() => {
-    closingRef.current = true;
-    setModalVisible(false);
-    setTimeout(() => {
-      setSelectedApp(null);
-      closingRef.current = false;
-    }, 350);
-    if (fromInitialRef.current) {
-      window.history.replaceState(null, "", "/apps");
-      fromInitialRef.current = false;
-    } else {
-      window.history.back();
-    }
-  }, []);
 
   // Filter
   const filtered = apps.filter((app) => {
-    if (category !== "all" && app.category !== category) return false;
     if (search) {
       const q = search.toLowerCase();
       if (!app.name.toLowerCase().includes(q) && !app.tagline.toLowerCase().includes(q)) return false;
@@ -422,16 +112,15 @@ export function AppsClient({ apps, installed, setup, healthStates, initialAppId 
   });
 
   return (
-    <div className="admin-page admin-page--no-preview">
-      <div className="admin-editor">
-        <div className="apps-page">
-          {/* Header */}
-          <div className="apps-header">
-            <h1 className="apps-header__title">App Store</h1>
-            <p className="apps-header__tagline">Utöka din bokningsmotor med appar och integrationer</p>
-          </div>
+    <div className="apps-root">
+      {/* Sticky header */}
+      <div className="apps-topbar">
+        <div className="apps-topbar__inner">
+          <h1 className="apps-topbar__title">App Store</h1>
+        </div>
+      </div>
 
-          {/* Search */}
+      <div className="apps-page">
           <div className="apps-search">
             <EditorIcon name="search" size={18} className="apps-search__icon" />
             <input
@@ -443,19 +132,6 @@ export function AppsClient({ apps, installed, setup, healthStates, initialAppId 
             />
           </div>
 
-          {/* Category tabs */}
-          <div className="apps-tabs">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.key}
-                type="button"
-                className={`apps-tab${category === cat.key ? " apps-tab--active" : ""}`}
-                onClick={() => setCategory(cat.key)}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
 
           {/* Grid */}
           {filtered.length === 0 ? (
@@ -469,83 +145,31 @@ export function AppsClient({ apps, installed, setup, healthStates, initialAppId 
           ) : (
             <div className="apps-grid">
               {filtered.map((app) => {
-                const inst = installMap.get(app.id);
-                const status = (inst?.status ?? null) as AppStatus | null;
-                const healthStatus = healthMap.get(app.id) as HealthStatus | undefined;
-                const badge = getStatusBadgeWithHealth(status, healthStatus);
-                const appRequiresSetup = app.requiredSetup.length > 0;
-                const cta = getCtaProps(status, setupReady, appRequiresSetup);
-
                 return (
-                  <div
+                  <Link
                     key={app.id}
+                    href={`/apps/${app.id}`}
                     className="app-card"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openModal(app)}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openModal(app); } }}
                   >
-                    <div className="app-card__top">
-                      <div className="app-card__icon-wrap">
-                        {app.iconUrl
-                          ? <img src={app.iconUrl} alt="" className="app-card__icon-img" />
-                          : <span className="material-symbols-rounded" style={{ fontSize: 24 }}>{app.icon}</span>
-                        }
-                      </div>
-                      <div className="app-card__info">
+                    <div className="app-card__icon-wrap">
+                      {app.iconUrl
+                        ? <img src={app.iconUrl} alt="" className="app-card__icon-img" />
+                        : <span className="material-symbols-rounded" style={{ fontSize: 24 }}>{app.icon}</span>
+                      }
+                    </div>
+                    <div className="app-card__info">
+                      <div className="app-card__name-row">
                         <h3 className="app-card__name">{app.name}</h3>
-                        <p className="app-card__tagline">{app.tagline}</p>
+                        <span className="app-card__category-pill">{CATEGORY_LABELS[app.category] ?? app.category}</span>
                       </div>
+                      <p className="app-card__tagline">{app.tagline}</p>
                     </div>
-
-                    {app.highlights.length > 0 && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
-                        {app.highlights.slice(0, 2).map((h, i) => (
-                          <div key={i} style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", fontSize: "var(--font-xs)", color: "var(--admin-text-secondary)" }}>
-                            <EditorIcon name={h.icon} size={14} style={{ color: "var(--admin-accent)", flexShrink: 0 }} />
-                            {h.title}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="app-card__meta">
-                      <span className={`app-card__developer app-card__developer--${app.developer}`}>
-                        {app.developer === "bedfront" ? "Bedfront" : "Partner"}
-                      </span>
-                      <span className="app-card__price">{getPriceLabel(app)}</span>
-                    </div>
-
-                    <div className="app-card__footer">
-                      <div>
-                        {badge && (
-                          <span className={`app-card__status ${badge.className}`}>
-                            {badge.label}
-                          </span>
-                        )}
-                      </div>
-                      <span className={`app-card__cta ${cta.className}`} style={{ pointerEvents: "none" }}>
-                        {cta.label}
-                      </span>
-                    </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
           )}
         </div>
-      </div>
-
-      {/* App modal */}
-      {selectedApp && (
-        <AppModal
-          app={selectedApp}
-          visible={modalVisible}
-          onClose={closeModal}
-          status={(installMap.get(selectedApp.id)?.status ?? null) as AppStatus | null}
-          setupReady={setupReady}
-        />
-      )}
     </div>
   );
 }

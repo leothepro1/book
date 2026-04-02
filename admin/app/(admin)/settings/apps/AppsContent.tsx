@@ -8,6 +8,7 @@ import { getInstalledAppsForSettings, getAppDetailForSettings } from "./actions"
 import type { SettingsAppRow, SettingsAppDetail } from "./actions";
 import { uninstallApp, pauseApp, resumeApp } from "@/app/_lib/apps/actions";
 import { useSettings } from "@/app/(admin)/_components/SettingsContext";
+import "@/app/(admin)/orders/orders.css";
 import "./apps-settings.css";
 
 // ── Constants ───────────────────────────────────────────────────
@@ -41,16 +42,62 @@ const CATEGORY_LABELS: Record<string, string> = {
   finance: "Ekonomi",
 };
 
-const PERMISSION_LABELS: Record<string, string> = {
-  "orders:read": "Läsa ordrar",
-  "orders:write": "Skriva ordrar",
-  "bookings:read": "Läsa bokningar",
-  "bookings:write": "Skriva bokningar",
-  "guests:read": "Läsa gästprofiler",
-  "guests:write": "Skriva gästprofiler",
-  "products:read": "Läsa produkter",
-  "analytics:read": "Läsa analys",
+const PERMISSION_AREAS: Record<string, string> = {
+  orders: "Ordrar",
+  bookings: "Bokningar",
+  guests: "Gästprofiler",
+  products: "Produkter",
+  analytics: "Analys",
+  accommodations: "Boenden",
 };
+
+function groupPermissions(permissions: string[]): { area: string; label: string; read: boolean; write: boolean }[] {
+  const map = new Map<string, { read: boolean; write: boolean }>();
+  for (const p of permissions) {
+    const [area, scope] = p.split(":");
+    if (!map.has(area)) map.set(area, { read: false, write: false });
+    const entry = map.get(area)!;
+    if (scope === "read") entry.read = true;
+    if (scope === "write") entry.write = true;
+  }
+  return Array.from(map.entries()).map(([area, flags]) => ({
+    area,
+    label: PERMISSION_AREAS[area] ?? area,
+    ...flags,
+  }));
+}
+
+const EVENT_ICONS: Record<string, string> = {
+  INSTALLED: "download",
+  SETUP_STARTED: "play_arrow",
+  SETUP_COMPLETED: "task_alt",
+  ACTIVATED: "check_circle",
+  PAUSED: "pause_circle",
+  ERROR_OCCURRED: "error",
+  ERROR_RESOLVED: "check_circle",
+  UNINSTALLED: "delete",
+  SETTINGS_UPDATED: "settings",
+  TIER_CHANGED: "upgrade",
+};
+
+function formatConfigValue(val: unknown): string {
+  if (typeof val === "boolean") return val ? "Ja" : "Nej";
+  if (typeof val === "number") return String(val);
+  if (typeof val === "string") return val || "—";
+  return "—";
+}
+
+function findStepFieldLabel(step: { configFields?: { key: string; label: string }[]; apiKeyConfig?: { fields: { key: string; label: string }[] } }, key: string): string {
+  if (step.configFields) {
+    const f = step.configFields.find((cf) => cf.key === key);
+    if (f) return f.label;
+  }
+  if (step.apiKeyConfig?.fields) {
+    const f = step.apiKeyConfig.fields.find((af) => af.key === key);
+    if (f) return f.label;
+  }
+  return key;
+}
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -69,13 +116,14 @@ function relativeTime(iso: string): string {
 type BreadcrumbSegment = { label: string; onClick?: () => void };
 type AppsContentProps = {
   onSubTitleChange?: (title: string | BreadcrumbSegment[] | null) => void;
+  onHeaderExtraChange?: (extra: React.ReactNode) => void;
 };
 
 type View = { type: "list" } | { type: "detail"; appId: string };
 
 // ── Component ───────────────────────────────────────────────────
 
-export function AppsContent({ onSubTitleChange }: AppsContentProps) {
+export function AppsContent({ onSubTitleChange, onHeaderExtraChange }: AppsContentProps) {
   const [apps, setApps] = useState<SettingsAppRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [view, setView] = useState<View>({ type: "list" });
@@ -111,6 +159,29 @@ export function AppsContent({ onSubTitleChange }: AppsContentProps) {
     setView({ type: "list" });
     setDetailData(null);
     onSubTitleChange?.(null);
+    onHeaderExtraChange?.(null);
+  }
+
+  function setDetailHeaderButtons(app: SettingsAppRow) {
+    onHeaderExtraChange?.(
+      <div className="sa-header-actions">
+        <button
+          className="sa-header-actions__store-btn"
+          onClick={() => {
+            close();
+            router.push(`/apps`);
+          }}
+        >
+          Visa i App Store
+        </button>
+        <button
+          className="admin-btn admin-btn--accent admin-btn--sm"
+          onClick={() => handleOpenApp(app)}
+        >
+          Öppna app
+        </button>
+      </div>,
+    );
   }
 
   function goToDetail(app: SettingsAppRow) {
@@ -121,6 +192,7 @@ export function AppsContent({ onSubTitleChange }: AppsContentProps) {
       { label: "Appar", onClick: goToList },
       { label: app.name },
     ]);
+    setDetailHeaderButtons(app);
     getAppDetailForSettings(app.appId).then((data) => {
       setDetailData(data);
       setDetailLoading(false);
@@ -239,152 +311,110 @@ export function AppsContent({ onSubTitleChange }: AppsContentProps) {
     const { app, detail, events } = detailData;
     const statusInfo = STATUS_MAP[detail.status] ?? { label: detail.status, cls: "" };
     const currentPricing = app.pricing.find((p) => p.tier === detail.pricingTier);
+    const settings = detail.settings as Record<string, Record<string, unknown>>;
+    const configSteps = app.setupSteps.filter((s) => s.type !== "review" && s.type !== "webhook");
 
     return (
       <div className="sa-detail">
-        {/* Header */}
-        <div className="sa-detail__header">
-          <div className="sa-detail__icon-wrap">
-            {app.iconUrl
-              ? <img src={app.iconUrl} alt="" className="sa-detail__icon-img" />
-              : <span className="material-symbols-rounded" style={{ fontSize: 24, color: "var(--admin-text-secondary)" }}>{app.icon}</span>
-            }
+        {/* Error banner */}
+        {detail.status === "ERROR" && detail.errorMessage && (
+          <div className="sa-detail__error-banner">
+            <EditorIcon name="error" size={16} />
+            <span>{detail.errorMessage}</span>
           </div>
-          <div className="sa-detail__header-info">
-            <div className="sa-detail__name">{app.name}</div>
-            <div className="sa-detail__meta">
-              <span className={`sa-badge ${statusInfo.cls}`}>{statusInfo.label}</span>
-              {currentPricing && (
-                <span className="sa-detail__tier">
-                  {currentPricing.pricePerMonth === 0 ? "Gratis" : `${Math.round(currentPricing.pricePerMonth / 100)} kr/mån`}
-                </span>
-              )}
-            </div>
-          </div>
+        )}
+
+        {/* Om */}
+        <div className="sa-card">
+          <h4 className="sa-card__label">Om</h4>
+          <p className="sa-detail__desc">{app.description}</p>
         </div>
 
-        {/* Description */}
-        <p className="sa-detail__desc">{app.description}</p>
-
-        {/* Info grid */}
-        <div className="sa-detail__info">
-          <div className="sa-detail__info-row">
-            <span className="sa-detail__info-label">Utvecklare</span>
-            <span className="sa-detail__info-value">{app.developer === "bedfront" ? "Bedfront" : "Partner"}</span>
-          </div>
-          <div className="sa-detail__info-row">
-            <span className="sa-detail__info-label">Kategori</span>
-            <span className="sa-detail__info-value">{CATEGORY_LABELS[app.category] ?? app.category}</span>
-          </div>
-          {detail.installedAt && (
-            <div className="sa-detail__info-row">
-              <span className="sa-detail__info-label">Installerad</span>
-              <span className="sa-detail__info-value">{new Date(detail.installedAt).toLocaleDateString("sv-SE")}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Permissions */}
+        {/* Aktivitet och behörigheter */}
         {app.permissions.length > 0 && (
-          <div className="sa-detail__section">
-            <h4 className="sa-detail__section-title">Behörigheter</h4>
-            <div className="sa-detail__permissions">
-              {app.permissions.map((p) => (
-                <div key={p} className="sa-detail__permission">
-                  <EditorIcon name="check" size={14} style={{ color: "var(--admin-accent)" }} />
-                  <span>{PERMISSION_LABELS[p] ?? p}</span>
+          <div className="sa-card">
+            <h4 className="sa-card__label">Aktivitet och behörigheter</h4>
+            <div className="sa-perm-table">
+              <div className="sa-perm-table__header">
+                <span className="sa-perm-table__col sa-perm-table__col--area">Område</span>
+                <span className="sa-perm-table__col sa-perm-table__col--check">Visa</span>
+                <span className="sa-perm-table__col sa-perm-table__col--check">Redigera</span>
+              </div>
+              {groupPermissions(app.permissions).map((row) => (
+                <div key={row.area} className="sa-perm-table__row">
+                  <span className="sa-perm-table__col sa-perm-table__col--area">{row.label}</span>
+                  <span className="sa-perm-table__col sa-perm-table__col--check">
+                    {row.read && <EditorIcon name="check" size={16} style={{ color: "#047B5D" }} />}
+                  </span>
+                  <span className="sa-perm-table__col sa-perm-table__col--check">
+                    {row.write && <EditorIcon name="check" size={16} style={{ color: "#047B5D" }} />}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Activity */}
+        {/* Aktivitet */}
         {events.length > 0 && (
-          <div className="sa-detail__section">
-            <h4 className="sa-detail__section-title">Aktivitet</h4>
-            <div className="sa-detail__events">
-              {events.map((event) => (
-                <div key={event.id} className="sa-detail__event">
-                  <span className="sa-detail__event-label">{EVENT_LABELS[event.type] ?? event.type}</span>
-                  {event.message && <span className="sa-detail__event-msg">{event.message}</span>}
-                  <span className="sa-detail__event-time">{relativeTime(event.createdAt)}</span>
-                </div>
-              ))}
+          <div className="sa-card">
+            <h4 className="sa-card__label">Aktivitet</h4>
+            <div className="ord-tl sa-detail__tl">
+              <div className="ord-tl-track">
+                {(() => {
+                  const groups: { date: string; label: string; events: typeof events }[] = [];
+                  for (const event of events) {
+                    const d = new Date(event.createdAt);
+                    const dateKey = d.toISOString().slice(0, 10);
+                    const label = d.toLocaleDateString("sv-SE", { day: "numeric", month: "long", year: "numeric" });
+                    const last = groups[groups.length - 1];
+                    if (last && last.date === dateKey) {
+                      last.events.push(event);
+                    } else {
+                      groups.push({ date: dateKey, label, events: [event] });
+                    }
+                  }
+
+                  return groups.map((group) => (
+                    <div key={group.date} className="ord-tl-group">
+                      <div className="ord-tl-group__date">{group.label}</div>
+                      {group.events.map((event) => {
+                        const isDiagnostic = event.type === "ERROR_RESOLVED";
+                        const time = new Date(event.createdAt).toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" });
+
+                        return (
+                          <div key={event.id} className={`ord-tl-event${isDiagnostic ? " ord-tl-event--diagnostic" : ""}`}>
+                            <div className={`ord-tl-event__dot${isDiagnostic ? " ord-tl-event__dot--diagnostic" : ""}`} />
+                            <div className="ord-tl-event__body">
+                              <span>{EVENT_LABELS[event.type] ?? event.type}</span>
+                              {event.message && (
+                                <span style={{ color: "var(--admin-text-secondary)" }}> — {event.message}</span>
+                              )}
+                            </div>
+                            <span className="ord-tl-event__time">{time}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ));
+                })()}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Actions */}
-        <div className="sa-detail__section sa-detail__danger">
-          <h4 className="sa-detail__section-title">Farlig zon</h4>
-
-          {detail.status === "ACTIVE" && (
-            <div className="sa-detail__danger-card">
-              <div>
-                <div className="sa-detail__danger-title">Pausa app</div>
-                <div className="sa-detail__danger-desc">Appen inaktiveras men dina inställningar sparas.</div>
-              </div>
-              <button
-                className="admin-btn admin-btn--danger-secondary admin-btn--sm"
-                disabled={isPending}
-                onClick={() => {
-                  startTransition(async () => {
-                    const result = await pauseApp(app.id);
-                    if (result.ok) {
-                      const refreshed = await getAppDetailForSettings(app.id);
-                      setDetailData(refreshed);
-                      setApps((prev) => prev.map((a) => a.appId === app.id ? { ...a, status: "PAUSED" } : a));
-                    }
-                  });
-                }}
-              >
-                Pausa
-              </button>
-            </div>
-          )}
-
-          {detail.status === "PAUSED" && (
-            <div className="sa-detail__danger-card">
-              <div>
-                <div className="sa-detail__danger-title">Återaktivera app</div>
-                <div className="sa-detail__danger-desc">Appen aktiveras igen med befintliga inställningar.</div>
-              </div>
-              <button
-                className="admin-btn admin-btn--accent admin-btn--sm"
-                disabled={isPending}
-                onClick={() => {
-                  startTransition(async () => {
-                    const result = await resumeApp(app.id);
-                    if (result.ok) {
-                      const refreshed = await getAppDetailForSettings(app.id);
-                      setDetailData(refreshed);
-                      setApps((prev) => prev.map((a) => a.appId === app.id ? { ...a, status: "ACTIVE" } : a));
-                    }
-                  });
-                }}
-              >
-                Återaktivera
-              </button>
-            </div>
-          )}
-
-          <div className="sa-detail__danger-card">
-            <div>
-              <div className="sa-detail__danger-title">Avinstallera app</div>
-              <div className="sa-detail__danger-desc">Tar bort appen och alla dess inställningar permanent.</div>
-            </div>
-            <button
-              className="admin-btn admin-btn--danger admin-btn--sm"
-              disabled={isPending}
-              onClick={() => {
-                const row = apps.find((a) => a.appId === app.id);
-                if (row) handleUninstall(row);
-              }}
-            >
-              Avinstallera
-            </button>
-          </div>
+        {/* Avinstallera */}
+        <div className="sa-detail__uninstall-row">
+          <button
+            className="admin-btn admin-btn--danger admin-btn--sm"
+            disabled={isPending}
+            onClick={() => {
+              const row = apps.find((a) => a.appId === app.id);
+              if (row) handleUninstall(row);
+            }}
+          >
+            Avinstallera app
+          </button>
         </div>
       </div>
     );
@@ -393,7 +423,7 @@ export function AppsContent({ onSubTitleChange }: AppsContentProps) {
   // ── Render ────────────────────────────────────────────────────
 
   return (
-    <>
+    <div className={view.type === "detail" ? "sa-detail-wrap" : "sa-list-wrap"}>
       {view.type === "list" ? renderList() : renderDetail()}
 
       {confirmApp && createPortal(
@@ -432,6 +462,6 @@ export function AppsContent({ onSubTitleChange }: AppsContentProps) {
         </div>,
         document.body,
       )}
-    </>
+    </div>
   );
 }

@@ -3,25 +3,155 @@
 .apps-page {
   max-width: 1100px;
   margin: 0 auto;
+  padding: 24px 24px;
 }
 
-/* ── Header ── */
+/* ── Sticky topbar ── */
 
-.apps-header {
-  margin-bottom: var(--space-8);
+/* Remove container constraints on apps page */
+.container:has(> .apps-root) {
+  max-width: none;
+  padding: 0;
 }
 
-.apps-header__title {
-  font-size: 22px;
+.apps-root {}
+
+.apps-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--admin-bg);
+  border-bottom: 1px solid var(--admin-border);
+  padding: 0 24px;
+}
+
+.apps-topbar__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+}
+
+.apps-topbar__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.apps-topbar__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--admin-text-secondary);
+  text-decoration: none;
+  transition: color var(--duration-fast);
+}
+
+.apps-topbar__back:hover {
+  color: var(--admin-text);
+}
+
+.apps-topbar__app-id {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.apps-topbar__app-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--admin-border);
+}
+
+.apps-topbar__app-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.apps-topbar__title {
+  font-size: 18px;
   font-weight: 600;
   color: var(--admin-text);
-  margin: 0 0 var(--space-1);
+  margin: 0;
 }
 
-.apps-header__tagline {
-  font-size: var(--font-sm);
-  color: var(--admin-text-secondary);
-  margin: 0;
+/* ── Listing page ── */
+
+.app-listing-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 24px;
+}
+
+.app-listing__name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.app-listing__icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--admin-border);
+}
+
+.app-listing__cta-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 8px 24px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--admin-accent);
+  color: #fff;
+  transition: background var(--duration-fast);
+}
+
+.app-listing__cta-btn:hover {
+  background: var(--admin-accent-hover);
+}
+
+.app-listing__cta-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.app-listing__cta-btn--secondary {
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  border: 1px solid var(--admin-border);
+}
+
+.app-listing__cta-btn--secondary:hover {
+  background: var(--admin-surface-raised);
+}
+
+.app-listing-page__section-title {
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--admin-text);
+  margin: 0 0 16px;
+}
+
+.app-listing__main {
+  min-width: 0;
+}
+
+
+
+.app-card {
+  text-decoration: none;
 }
 
 /* ── Setup banner ── */
@@ -81,7 +211,7 @@
 
 .apps-search {
   position: relative;
-  margin-bottom: var(--space-5);
+  margin-bottom: 16px;
 }
 
 .apps-search__icon {
@@ -95,12 +225,13 @@
 
 .apps-search__input {
   width: 100%;
-  height: 40px;
-  padding: 0 var(--space-4) 0 40px;
+  height: 42px;
+  padding: 0 0 0 34px;
   border: 1px solid var(--admin-border);
   border-radius: var(--radius-md);
   font-size: var(--font-sm);
-  color: var(--admin-text);
+  color: #303030;
+  font-weight: 400;
   background: var(--admin-surface);
   outline: none;
   transition: border-color var(--duration-normal) var(--ease-default);
@@ -157,34 +288,26 @@
 
 .apps-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: var(--space-6);
+  grid-template-columns: 2fr 2fr;
+  gap: 16px;
 }
 
 /* ── App card ── */
 
 .app-card {
-  background: var(--admin-surface);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--admin-shadow-sm);
-  padding: var(--space-5);
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--space-3);
-  transition: transform var(--duration-normal) var(--ease-default),
-              box-shadow var(--duration-normal) var(--ease-default);
+  padding: 16px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
+  background: #fff;
+  border: 1px solid var(--admin-border);
+  transition: background var(--duration-fast) var(--ease-default);
 }
 
 .app-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--admin-shadow-md);
-}
-
-.app-card__top {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
+  background: #fafafa;
 }
 
 .app-card__icon-wrap {
@@ -204,8 +327,24 @@
   min-width: 0;
 }
 
+.app-card__name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.app-card__category-pill {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: #f3f3f3;
+  color: #303030;
+  white-space: nowrap;
+}
+
 .app-card__name {
-  font-size: var(--font-lg);
+  font-size: 13px;
   font-weight: 600;
   color: var(--admin-text);
   margin: 0;
@@ -815,6 +954,7 @@ body:has(.app-modal__overlay--visible) {
   height: 100%;
   object-fit: cover;
   border-radius: var(--radius-md);
+  border: 1px solid var(--admin-border);
 }
 
 .app-modal__icon-img {

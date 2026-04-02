@@ -34,6 +34,7 @@ export type SidebarApp = {
   appId: string;
   name: string;
   icon: string;
+  iconUrl?: string;
   isSalesChannel: boolean;
   channelHandle?: string;
 };
@@ -60,6 +61,7 @@ export async function getActiveAppsForSidebar(): Promise<SidebarApp[]> {
       appId: def.id,
       name: def.name,
       icon: def.icon,
+      iconUrl: def.iconUrl,
       isSalesChannel: !!def.salesChannel,
       channelHandle: def.salesChannel?.handle,
     });

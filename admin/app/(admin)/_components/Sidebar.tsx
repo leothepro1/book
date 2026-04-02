@@ -689,45 +689,50 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
         {/* Appar — installed ACTIVE apps (non-channel) + "Lägg till" */}
         {!isCollapsed && (
           <div style={{ marginTop: 'var(--space-2)' }}>
-            <div className="admin-group-label" style={{ padding: '0 8px', marginBottom: 2 }}>
+            <Link href="/apps" className="admin-group-label" style={{ padding: '0 8px', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 2, textDecoration: 'none', color: 'inherit' }}>
               Appar
-            </div>
+              <span className="material-symbols-rounded" style={{ fontSize: 14, color: '#303030' }}>chevron_right</span>
+            </Link>
             {sidebarApps.filter((a) => !a.isSalesChannel).map((app) => (
               <Link
                 key={app.appId}
                 href={`/apps/${app.appId}`}
                 onClick={(e) => guardedClick(e, `/apps/${app.appId}`)}
                 className="flex items-center gap-3 text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]"
-                style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontSize: 'var(--font-sm)' }}
+                style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8, fontSize: 'var(--font-sm)' }}
+              >
+                {app.iconUrl ? (
+                  <img src={app.iconUrl} alt="" style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'cover', flexShrink: 0, border: '1px solid var(--admin-border)' }} />
+                ) : (
+                  <span
+                    className="material-symbols-rounded flex-shrink-0"
+                    style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
+                  >
+                    {app.icon}
+                  </span>
+                )}
+                <span className="text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden" style={{ color: '#303030' }}>
+                  {app.name}
+                </span>
+              </Link>
+            ))}
+            {sidebarApps.filter((a) => !a.isSalesChannel).length === 0 && (
+              <Link
+                href="/apps"
+                className="flex items-center gap-3 text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]"
+                style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8, fontSize: 'var(--font-sm)' }}
               >
                 <span
                   className="material-symbols-rounded flex-shrink-0"
                   style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
                 >
-                  {app.icon}
+                  add_circle
                 </span>
                 <span className="text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden">
-                  {app.name}
+                  Lägg till
                 </span>
               </Link>
-            ))}
-            <a
-              href="/apps"
-              target="_blank"
-              rel="noopener"
-              className="flex items-center gap-3 text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]"
-              style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontSize: 'var(--font-sm)' }}
-            >
-              <span
-                className="material-symbols-rounded flex-shrink-0"
-                style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
-              >
-                add_circle
-              </span>
-              <span className="text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden">
-                Lägg till
-              </span>
-            </a>
+            )}
           </div>
         )}
 
