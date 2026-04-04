@@ -46,18 +46,22 @@ function GuestPreviewFrame({
   inspectorPageId = "home",
   onInspectorHover,
   onInspectorClick,
+  onNavigate,
 }: Omit<GuestPreviewProps, "device"> & {
   scrollTarget?: PreviewScrollTarget | null;
   inspectorActive?: boolean;
   inspectorPageId?: import("@/app/_lib/pages/types").PageId;
   onInspectorHover?: (sectionId: string | null) => void;
   onInspectorClick?: (sectionId: string) => void;
+  onNavigate?: (pathname: string) => void;
 }) {
   const { config, draftVersion } = usePreview();
   const { hasUnsavedChanges } = usePublishBar();
   const [copied, setCopied] = useState(false);
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  const iframeLoadedRef = useRef(false);
+  iframeLoadedRef.current = iframeLoaded;
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -90,8 +94,10 @@ function GuestPreviewFrame({
     setLoadFailed(false);
   }
 
-  // ── Load timeout — if iframe doesn't load within 10s, show retry ──
-  const LOAD_TIMEOUT_MS = 10_000;
+  // ── Load timeout — if iframe doesn't load within 15s, show retry ──
+  // Bumped from 10s to 15s: Turbopack first-compile + DB queries can
+  // legitimately take 8-12s on cold start in Codespaces.
+  const LOAD_TIMEOUT_MS = 15_000;
 
   useEffect(() => {
     if (iframeLoaded || loadFailed) {
@@ -172,6 +178,8 @@ function GuestPreviewFrame({
   onInspectorHoverRef.current = onInspectorHover;
   const onInspectorClickRef = useRef(onInspectorClick);
   onInspectorClickRef.current = onInspectorClick;
+  const onNavigateRef = useRef(onNavigate);
+  onNavigateRef.current = onNavigate;
   const inspectorActiveRef = useRef(inspectorActive);
   inspectorActiveRef.current = inspectorActive;
 
@@ -182,6 +190,13 @@ function GuestPreviewFrame({
 
       if (data.type === "preview-ready") {
         if (__DEV__) console.log("[GuestPreview] Received preview-ready");
+        // preview-ready is the most reliable signal that iframe content rendered.
+        // onLoad may not fire on hot-reload or client-side navigation.
+        if (!iframeLoadedRef.current) {
+          iframeLoadedRef.current = true;
+          setIframeLoaded(true);
+        }
+        setLoadFailed(false);
         const w = iframeRef.current?.contentWindow;
         if (!w) return;
         if (config?.theme) {
@@ -207,6 +222,10 @@ function GuestPreviewFrame({
       }
       if (data.type === "inspector-click") {
         onInspectorClickRef.current?.(data.sectionId);
+      }
+
+      if (data.type === "preview-navigate") {
+        onNavigateRef.current?.(data.pathname);
       }
     }
     window.addEventListener("message", onMessage);
@@ -317,7 +336,7 @@ function GuestPreviewFrame({
             className="preview-phone__iframe"
             title="Guest Portal Preview"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            onLoad={() => setIframeLoaded(true)}
+            onLoad={() => { iframeLoadedRef.current = true; setIframeLoaded(true); }}
           />
         </div>
       </div>

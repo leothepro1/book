@@ -6,6 +6,10 @@ import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
 import { isValidLocale, PRIMARY_LOCALE } from "@/app/_lib/translations/locales";
 import { scanTranslatableStrings } from "@/app/_lib/translations/scanner";
 import { computeDigest } from "@/app/_lib/translations/digest";
+import { getResourceTypes } from "@/app/_lib/translations/resource-types";
+import type { DbResourceItems } from "@/app/_lib/translations/traversal";
+// Register DB-backed resource types (products, collections, accommodations, etc.)
+import "@/app/_lib/translations/resource-types-db";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import type { StoredTranslation, TranslatableField, TranslationGroup, SectionTranslationGroup } from "@/app/_lib/translations/types";
 
@@ -63,7 +67,19 @@ export async function GET(_request: Request, context: RouteContext) {
       ]),
     );
 
-    const fields = scanTranslatableStrings(config, existingMap, localeCode);
+    // Pre-fetch DB-backed resource type items (products, accommodations, etc.)
+    const dbResourceItems: DbResourceItems = new Map();
+    const allTypes = getResourceTypes();
+    console.log(`[translations] Resource types: ${allTypes.map(rt => `${rt.id}(async=${!!rt.extractAsync})`).join(", ")}`);
+    for (const rt of allTypes) {
+      if (rt.extractAsync) {
+        const items = await rt.extractAsync(tenant.id);
+        console.log(`[translations] ${rt.id}: ${items.length} items`);
+        dbResourceItems.set(rt.id, items);
+      }
+    }
+
+    const fields = scanTranslatableStrings(config, existingMap, localeCode, dbResourceItems);
 
     // Group by page → section
     const groups = groupFields(fields);

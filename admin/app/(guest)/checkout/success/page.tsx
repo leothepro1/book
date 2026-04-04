@@ -6,6 +6,7 @@ import { getPageSettings } from "@/app/_lib/pages/config";
 import { FONT_CATALOG } from "@/app/_lib/fonts/catalog";
 import { resolveContrastPalette } from "@/app/_lib/color/contrast";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
+import { formatOrderNumberForTenant } from "@/app/_lib/orders/format-server";
 import { format, parseISO } from "date-fns";
 import { sv } from "date-fns/locale";
 import { CheckoutCompletedTracker } from "./CheckoutCompletedTracker";
@@ -163,7 +164,7 @@ export default async function CheckoutSuccessPage({
               )}
               <div>
                 <p style={{ fontSize: "0.8125rem", color: "color-mix(in srgb, var(--text, #000) 55%, transparent)", margin: "0 0 4px" }}>
-                  Bekräftelse #{order.orderNumber}
+                  Bekräftelse {await formatOrderNumberForTenant(tenant.id, order.orderNumber)}
                 </p>
                 <h1 style={{ fontFamily: "var(--font-heading)", letterSpacing: "-.015em", color: "var(--text, #1a1a1a)", margin: 0, fontSize: 21, fontWeight: 600, lineHeight: 1.25 }}>
                   Tack {(order.guestName || "").split(" ")[0] || ""}!

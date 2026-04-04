@@ -1,5 +1,5 @@
 export * from "./types";
 export * from "./registry";
 export * from "./selection";
-export { ThemeRenderer } from "./engine";
+export { ThemeRenderer, renderSidebarSlots } from "./engine";
 export type { ThemeRendererProps } from "./engine";

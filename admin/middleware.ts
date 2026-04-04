@@ -26,9 +26,11 @@ const isPublicRoute = createRouteMatcher([
   '/api/guest-auth/(.*)',
   '/api/portal/(.*)',
   '/login(.*)',
+  '/register(.*)',
   '/no-booking(.*)',
-  // Session-gated guest portal pages — public for Clerk (guests don't have Clerk accounts),
+  // Session-gated guest pages — public for Clerk (guests don't have Clerk accounts),
   // but gated by guest_session cookie check below.
+  '/account(.*)',
   '/portal/(.*)',
 ]);
 
@@ -130,9 +132,9 @@ function resolveLocaleFromPath(request: NextRequest): LocaleResolution {
     return { locale: tokenMatch[1], token, rewriteUrl: new URL(restPath, request.url) };
   }
 
-  // Match /{locale}/checkout, /{locale}/stays, /{locale}/shop/...
+  // Match /{locale}/checkout, /{locale}/stays, /{locale}/shop, /{locale}/search, ...
   // Subdomain-based routes — no token needed
-  const guestMatch = pathname.match(/^\/([a-z]{2})(\/(checkout|stays|shop)(\/.*)?$)/);
+  const guestMatch = pathname.match(/^\/([a-z]{2})(\/(checkout|stays|shop|search|account|portal|login|register|order-status)(\/.*)?$)/);
   if (guestMatch && LOCALE_CODES.has(guestMatch[1])) {
     const restPath = guestMatch[2];
     return { locale: guestMatch[1], token: null, rewriteUrl: new URL(restPath, request.url) };
@@ -190,6 +192,7 @@ async function handleLocale(request: NextRequest): Promise<NextResponse | null> 
 // or check-in card previews.
 
 const SESSION_GATED_ROUTES = createRouteMatcher([
+  '/account(.*)',
   '/portal/(.*)',
 ]);
 

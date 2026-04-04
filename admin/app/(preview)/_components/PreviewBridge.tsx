@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { themeToStyleAttr, backgroundStyle, googleFontsUrl } from "@/app/(guest)/_lib/theme";
 import type { ThemeConfig } from "@/app/(guest)/_lib/theme/types";
 import type { PreviewScrollTarget, InspectorSectionMeta } from "../_lib/previewMessages";
@@ -390,6 +390,40 @@ export function PreviewBridge() {
     if (__DEV__) console.log("[PreviewBridge] Sending preview-ready");
     window.parent.postMessage({ type: "preview-ready" }, window.location.origin);
 
+    // ── Persistent navigation reporter ────────────────────────
+    // Monkey-patch history.pushState/replaceState so navigation is
+    // reported to the parent EVEN when PreviewBridge unmounts during
+    // a route-group transition (e.g. /preview/* → /search).
+    // This is intentionally NOT cleaned up — the patch must survive
+    // across layouts for the editor to stay in sync.
+    const PATCHED = "__preview_nav_patched__";
+    if (!(window.history as any)[PATCHED]) {
+      const parentOrigin = window.location.origin;
+      const notify = () => {
+        window.parent.postMessage(
+          { type: "preview-navigate", pathname: window.location.pathname },
+          parentOrigin,
+        );
+      };
+
+      const origPush = window.history.pushState.bind(window.history);
+      const origReplace = window.history.replaceState.bind(window.history);
+
+      window.history.pushState = function (...args: Parameters<typeof origPush>) {
+        origPush(...args);
+        notify();
+      };
+      window.history.replaceState = function (...args: Parameters<typeof origReplace>) {
+        origReplace(...args);
+        notify();
+      };
+
+      window.addEventListener("popstate", notify);
+      (window.history as any)[PATCHED] = true;
+
+      if (__DEV__) console.log("[PreviewBridge] History patched for persistent nav reporting");
+    }
+
     return () => {
       window.removeEventListener("message", onMessage);
       if (retryCleanupRef.current) {
@@ -407,6 +441,20 @@ export function PreviewBridge() {
       }
     };
   }, [applyTheme, handleContentRefresh, handleScrollToTarget, activateInspector, deactivateInspector]);
+
+  // ── Report navigation changes to parent ────────────────────
+  const pathname = usePathname();
+  const prevPathname = useRef(pathname);
+  useEffect(() => {
+    if (window === window.parent) return;
+    if (pathname === prevPathname.current) return;
+    prevPathname.current = pathname;
+    if (__DEV__) console.log("[PreviewBridge] Navigate:", pathname);
+    window.parent.postMessage(
+      { type: "preview-navigate", pathname },
+      window.location.origin,
+    );
+  }, [pathname]);
 
   return null;
 }

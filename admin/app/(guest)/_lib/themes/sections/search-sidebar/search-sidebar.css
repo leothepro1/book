@@ -1,0 +1,467 @@
+/* ═══════════════════════════════════════════════════════════════
+   Search Sidebar (ss)
+   Vertical search widget for the sidebar-search theme.
+   All colors via CSS variables — zero hardcoded values.
+   ═══════════════════════════════════════════════════════════════ */
+
+.ss {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5, 20px);
+  padding: var(--space-6, 24px);
+  background: var(--background, #fff);
+  border-radius: var(--radius-lg, 12px);
+  color: var(--text, #202020);
+}
+
+/* ── Title ── */
+
+.ss__title {
+  font-family: var(--font-heading, inherit);
+  font-size: clamp(1.125rem, 1rem + 0.5vw, 1.375rem);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text);
+  margin: 0;
+}
+
+/* ── Fieldset reset ── */
+
+.ss__fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+
+/* ── Accommodation type filter ── */
+
+.ss__type-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 14px 18px;
+  margin: 0 -24px;
+  background: color-mix(in srgb, var(--text) 6%, var(--background));
+}
+
+.ss__type-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 150ms ease;
+  color: var(--text);
+}
+
+.ss__checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid color-mix(in srgb, var(--text) 25%, transparent);
+  background: var(--background);
+  flex-shrink: 0;
+  box-sizing: border-box;
+  transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+.ss__checkbox--checked {
+  background: var(--accent, var(--text));
+  border-color: var(--accent, var(--text));
+  color: var(--background);
+}
+
+.ss__check-icon {
+  width: 10px;
+  height: 10px;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.ss__checkbox--checked .ss__check-icon {
+  opacity: 1;
+}
+
+.ss__type-label {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1em;
+}
+.ss__type-btn--active .ss__type-label {
+    font-weight: 500;
+    line-height: 1em;
+}
+
+/* ── Section label ── */
+
+.ss__section-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+  margin-bottom: var(--space-1, 7px);
+}
+
+/* ── Calendar ── */
+
+.ss__calendar {
+  margin-top: 0;
+  padding: 0;
+  background: var(--background);
+  border: none;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ss__cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 280px;
+  margin-bottom: var(--space-2, 8px);
+}
+
+.ss__cal-label-track {
+  flex: 1;
+  position: relative;
+  overflow: visible;
+  text-align: center;
+  height: auto;
+}
+
+.ss__cal-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.ss__cal-label:only-child {
+  position: relative;
+}
+
+/* Slide container for day grids */
+.ss__cal-slide-container {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Slide animations — Apple-grade crossfade with spring easing.
+   Exit travels 40%, enter starts from 40% — keeps both visible
+   during the overlap window. Opacity leads on exit, lags on enter
+   for a layered depth effect. */
+
+.ss__cal-slide--exit-left {
+  animation: ss-exit-left 0.42s cubic-bezier(0.32, 0.72, 0, 1) both;
+  position: absolute;
+  inset: 0;
+}
+.ss__cal-slide--exit-right {
+  animation: ss-exit-right 0.42s cubic-bezier(0.32, 0.72, 0, 1) both;
+  position: absolute;
+  inset: 0;
+}
+.ss__cal-slide--enter-right {
+  animation: ss-enter-right 0.42s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.ss__cal-slide--enter-left {
+  animation: ss-enter-left 0.42s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes ss-exit-left {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+
+@keyframes ss-exit-right {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
+}
+
+@keyframes ss-enter-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes ss-enter-left {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+.ss__cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full, 999px);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.ss__cal-nav:hover:not(:disabled) {
+  color: color-mix(in srgb, var(--text) 70%, transparent);
+}
+
+.ss__cal-nav--disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ss__cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 40px);
+  margin-bottom: 0;
+}
+
+.ss__cal-weekday {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--text) 75%, transparent);
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ss__cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 40px);
+}
+
+.ss__cal-cell {
+  width: 40px;
+  height: 40px;
+}
+
+.ss__cal-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: var(--radius-full, 999px);
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.ss__cal-day:hover:not(:disabled):not(.ss__cal-day--selected) {
+  background: color-mix(in srgb, var(--text) 6%, var(--background));
+}
+
+.ss__cal-day--disabled {
+  opacity: 0.28;
+  pointer-events: none;
+}
+
+.ss__cal-day--selected {
+  background: var(--accent, var(--text));
+  color: var(--background);
+  font-weight: 600;
+}
+
+.ss__cal-day--range {
+  /* Range background handled by cell bg */
+}
+
+/* ── Guest trigger ── */
+
+.ss__guest-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: var(--radius-md, 8px);
+  background: var(--background);
+  cursor: pointer;
+  transition: border-color 200ms ease;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ss__guest-trigger:hover {
+  border-color: color-mix(in srgb, var(--text) 30%, transparent);
+}
+
+.ss__guest-trigger-placeholder {
+  color: color-mix(in srgb, var(--text) 45%, transparent);
+  font-weight: 400;
+}
+
+.ss__guest-trigger-value {
+  color: var(--text);
+}
+
+.ss__guest-trigger-icon {
+  color: color-mix(in srgb, var(--text) 50%, transparent);
+  flex-shrink: 0;
+}
+
+/* ── Guest fieldset (relative anchor) ── */
+
+.ss__fieldset--guest {
+  position: relative;
+}
+
+/* ── Guest dropdown (floating popover) ── */
+
+.ss__guest-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  background: var(--background, #fff);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.06);
+  animation: ss-dropdown-in 0.2s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes ss-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ss__guest-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  padding: 10px 0;
+}
+
+.ss__guest-divider {
+  height: 1px;
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.ss__guest-type {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  margin: 0;
+}
+
+.ss__guest-desc {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--text) 50%, transparent);
+  margin: 2px 0 0;
+}
+
+/* ── Counter ── */
+
+.ss__counter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+}
+
+.ss__counter-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-full, 999px);
+  border: none;
+  background: color-mix(in srgb, var(--text) 6%, var(--background));
+  cursor: pointer;
+  color: var(--text);
+  transition: background-color 150ms ease;
+}
+
+.ss__counter-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 12%, var(--background));
+}
+
+.ss__counter-btn--disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ss__counter-value {
+  min-width: 20px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ── Search button ── */
+
+.ss__search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2, 8px);
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--button-radius, 8px);
+  background: var(--button-bg, #207EA9);
+  color: var(--button-fg, #fff);
+  font-size: 16px;
+  font-weight: 600;
+  height: 44px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  font-family: var(--font-button, var(--font-heading, inherit));
+}
+
+.ss__search-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.ss__search-btn:disabled {
+  pointer-events: none;
+}
+
+.ss__search-btn--incomplete {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Error message ── */
+
+.ss__error {
+  margin: var(--space-1, 4px) 0 0;
+  font-size: 12px;
+  color: #c13515;
+}
+
+/* ── CSS custom property for range highlight ── */
+
+.ss {
+  --ss-range-bg: color-mix(in srgb, var(--accent, var(--text)) 8%, var(--background));
+}

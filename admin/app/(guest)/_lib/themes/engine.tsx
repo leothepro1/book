@@ -21,9 +21,10 @@ import type { NormalizedBooking, NormalizedBookingStatus } from "@/app/_lib/inte
 import type { TenantConfig } from "../tenant/types";
 import type { ThemeManifest, ThemeSectionSlot, TenantSectionSettings } from "./types";
 import { ensureRegistered, getTheme, getAllThemes, getSectionComponent, hasTheme } from "./registry";
-import { getActiveThemeIdOrDefault } from "./selection";
+import { getActiveThemeIdOrDefault, getActiveThemeId } from "./selection";
 import { SectionErrorBoundary } from "./SectionErrorBoundary";
 import { sanitizeSectionSettings } from "./sanitizeSettings";
+import { SIDEBAR_RENDERER_MAP } from "./sidebarRenderers";
 import { migrateSettings } from "./migrations";
 import { resolvePageItems } from "@/app/_lib/sections/resolve";
 import { resolveDataSources } from "@/app/_lib/sections/data-sources";
@@ -138,7 +139,7 @@ export async function ThemeRenderer({
       console.log(`[ThemeEngine] First section: ${pageSections[0].definitionId} active=${pageSections[0].isActive}`);
     }
     const pageItems = resolvePageItems([], pageSections, config);
-    await resolveDataSources(pageItems, config.tenantId);
+    await resolveDataSources(pageItems, config.tenantId, config._currentLocale);
     mergePageResolvedData(pageItems, pageResolvedData);
     console.log(`[ThemeEngine] Resolved ${pageItems.length} page items for "${templateKey}"`);
     if (pageItems.length === 0) {
@@ -244,15 +245,16 @@ export async function ThemeRenderer({
   //   2. Tenant page sections (pageSections) — placed by the tenant in the editor
   // If a section type was already rendered via a theme slot, skip it in the
   // content feed to prevent double-rendering the same section type.
+  const sidebarSlots = manifest.sectionGroups.sidebar ?? [];
   const themeRenderedTypes = new Set(
-    [...headerSlots, ...templateSlots, ...footerSlots].map((s) => s.type),
+    [...headerSlots, ...templateSlots, ...footerSlots, ...sidebarSlots].map((s) => s.type),
   );
   const pageCards: typeof config.home.cards = [];
   const pageSections = getPageSections(config, templateKey);
   const pageItems = resolvePageItems(pageCards, pageSections, config).filter(
     (item) => item.kind !== "section" || !themeRenderedTypes.has(item.renderProps.definition.id),
   );
-  await resolveDataSources(pageItems, config.tenantId);
+  await resolveDataSources(pageItems, config.tenantId, config._currentLocale);
   mergePageResolvedData(pageItems, pageResolvedData);
 
   return (
@@ -317,3 +319,132 @@ export async function ThemeRenderer({
   );
 }
 
+// ─── Sidebar Slot Renderer ──────────────────────────────────
+
+/**
+ * Resolves the active theme's layout mode.
+ * Returns "default" for themes without a layout field (classic, immersive).
+ */
+export async function resolveThemeLayout(
+  config: Pick<TenantConfig, "themeId">,
+): Promise<"default" | "sidebar-left"> {
+  await ensureRegistered();
+  const themeId = getActiveThemeId(config);
+  if (!themeId) return "default";
+  const manifest = getTheme(themeId);
+  return manifest?.layout ?? "default";
+}
+
+/**
+ * Renders the sidebar section group from the active theme.
+ *
+ * IMPORTANT: This is a synchronous function, NOT an async server component.
+ * It must be called AFTER ensureRegistered() has already completed (which
+ * resolveThemeLayout() guarantees). Using an async server component here
+ * causes a deadlock: React renders SidebarSlotRenderer and ThemeRenderer
+ * in parallel, both awaiting the same bootstrap promise which can't resolve
+ * because the request is blocked.
+ *
+ * Returns null when:
+ *   - No theme selected
+ *   - Theme has no sidebar slots
+ *   - Theme layout is not sidebar-left
+ */
+export function renderSidebarSlots(config: TenantConfig): React.ReactElement | null {
+  const themeId = getActiveThemeId(config);
+  if (!themeId) return null;
+
+  const manifest = getTheme(themeId);
+  if (!manifest) return null;
+  if (manifest.layout !== "sidebar-left") return null;
+
+  const sidebarSlots = manifest.sectionGroups.sidebar;
+  if (!sidebarSlots || sidebarSlots.length === 0) return null;
+
+  const sortedSlots = [...sidebarSlots].sort((a, b) => a.order - b.order);
+  const sectionOverrides = config.sectionSettings ?? {};
+
+  // Collect section settings from page config (editor DetailPanel saves here)
+  const pageSectionSettings: Record<string, Record<string, unknown>> = {};
+  if (config.pages) {
+    for (const page of Object.values(config.pages)) {
+      if (!page?.sections) continue;
+      for (const sec of page.sections) {
+        if (sec.settings && Object.keys(sec.settings).length > 0) {
+          pageSectionSettings[sec.definitionId] = {
+            ...pageSectionSettings[sec.definitionId],
+            ...sec.settings,
+          };
+        }
+      }
+    }
+  }
+
+  // Merge theme-level settings
+  const themeSettings: Record<string, unknown> = {
+    ...manifest.settingDefaults,
+    ...(config.themeSettings ?? {}),
+  };
+
+  // Dummy booking context — sidebar sections don't use booking data
+  const now = new Date();
+  const dummyBooking: import("@/app/_lib/integrations/types").NormalizedBooking = {
+    externalId: "",
+    tenantId: config.tenantId,
+    firstName: "",
+    lastName: "",
+    guestName: "",
+    guestEmail: "",
+    guestPhone: null,
+    arrival: now,
+    departure: now,
+    unit: "",
+    unitType: null,
+    status: "upcoming",
+    adults: 0,
+    children: 0,
+    extras: [],
+    rawSource: "manual",
+    checkedInAt: null,
+    checkedOutAt: null,
+    signatureCapturedAt: null,
+  };
+
+  return (
+    <>
+      {sortedSlots.map((slot) => {
+        const key = `${slot.type}/${slot.variant}`;
+        const Component = SIDEBAR_RENDERER_MAP[key];
+        if (!Component) {
+          console.error(
+            `[ThemeEngine] Missing sidebar section "${key}" ` +
+            `(slot "${slot.id}" in theme "${manifest.id}"). ` +
+            `Add it to SIDEBAR_RENDERER_MAP in sidebarRenderers.ts.`,
+          );
+          return null;
+        }
+
+        const slotSettings = resolveSlotSettings(slot, manifest.id, sectionOverrides);
+        const editorSettings = pageSectionSettings[slot.type] ?? {};
+        const settings = { ...slotSettings, ...editorSettings };
+
+        return (
+          <SectionErrorBoundary
+            key={slot.id}
+            sectionId={slot.id}
+            sectionType={slot.type}
+          >
+            <Component
+              slot={slot}
+              settings={settings}
+              config={config}
+              booking={dummyBooking}
+              bookingStatus="upcoming"
+              themeSettings={themeSettings}
+            />
+          </SectionErrorBoundary>
+        );
+      })}
+    </>
+  );
+}

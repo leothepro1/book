@@ -12,7 +12,7 @@ import type {
   StoredTranslation,
 } from "./types";
 import { computeDigest } from "./digest";
-import { traverseConfig } from "./traversal";
+import { traverseConfig, type DbResourceItems } from "./traversal";
 
 // ── Status resolution ────────────────────────────────────────
 
@@ -31,6 +31,7 @@ export function scanTranslatableStrings(
   config: TenantConfig,
   existingTranslations: Map<string, StoredTranslation>,
   targetLocale: string,
+  dbResourceItems?: DbResourceItems,
 ): TranslatableField[] {
   const fields: TranslatableField[] = [];
 
@@ -58,7 +59,7 @@ export function scanTranslatableStrings(
         fieldLabel: raw.fieldLabel,
       },
     });
-  });
+  }, dbResourceItems);
 
   return fields;
 }

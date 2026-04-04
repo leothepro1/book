@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useOrderFormat } from "@/app/(admin)/_hooks/useOrderFormat";
 import { getOrder, fulfillOrder, cancelOrder, addOrderComment, updateCustomerNote, updateOrderTags, archiveOrder, unarchiveOrder, deleteOrder, type OrderDetail } from "../actions";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { getOrganisationUsers, type OrgUser } from "@/app/(admin)/settings/users/actions";
@@ -65,6 +66,7 @@ const CHANNEL_LABELS: Record<string, string> = {
 
 export function OrderDetailClient({ orderId }: { orderId: string }) {
   const router = useRouter();
+  const fmtOrder = useOrderFormat();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
@@ -208,7 +210,7 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
                 <span className="material-symbols-rounded" style={{ fontSize: 22 }}>inbox</span>
               </button>
               <EditorIcon name="chevron_right" size={16} style={{ color: "var(--admin-text-tertiary)", flexShrink: 0 }} />
-              <span style={{ marginLeft: 3 }}>#{order.orderNumber}</span>
+              <span style={{ marginLeft: 3 }}>{fmtOrder(order.orderNumber)}</span>
               <span className="pf-header__actions" style={{ marginLeft: 8 }}>
                 <OrderBadge type="financial" financial={fin} fulfillment={ful} />
                 <OrderBadge type="fulfillment" fulfillment={ful} />

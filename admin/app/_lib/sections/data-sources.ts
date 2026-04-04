@@ -21,6 +21,7 @@
 import { prisma } from "@/app/_lib/db/prisma";
 import { log } from "@/app/_lib/logger";
 import { effectivePrice } from "@/app/_lib/products/pricing";
+import { applyTranslationsBatch } from "@/app/_lib/translations/apply-db-translations";
 import type { PageItem } from "./resolve";
 
 // ═══════════════════════════════════════════════════════════════
@@ -111,19 +112,21 @@ export type ResolvedDataMap = Record<
 export async function resolveDataSources(
   items: PageItem[],
   tenantId: string,
+  locale?: string,
 ): Promise<void> {
   // ── 1. Collect all needed resource IDs ──
 
   type Requirement = {
     item: PageItem & { kind: "section" };
     dataSourceKey: string;
-    type: "collection" | "product";
+    type: "collection" | "product" | "accommodation";
     resourceId: string;
   };
 
   const requirements: Requirement[] = [];
   const collectionIds = new Set<string>();
   const productIds = new Set<string>();
+  const accommodationIds = new Set<string>();
 
   for (const item of items) {
     if (item.kind !== "section") continue;
@@ -144,6 +147,7 @@ export async function resolveDataSources(
 
       if (ds.type === "collection") collectionIds.add(resourceId);
       if (ds.type === "product") productIds.add(resourceId);
+      if (ds.type === "accommodation") accommodationIds.add(resourceId);
     }
   }
 
@@ -158,10 +162,10 @@ export async function resolveDataSources(
   try {
     const [cMap, pMap] = await Promise.all([
       collectionIds.size > 0
-        ? fetchCollections([...collectionIds], tenantId)
+        ? fetchCollections([...collectionIds], tenantId, locale)
         : new Map<string, ResolvedCollectionDisplay>(),
       productIds.size > 0
-        ? fetchProducts([...productIds], tenantId)
+        ? fetchProducts([...productIds], tenantId, locale)
         : new Map<string, ResolvedProductDisplay>(),
     ]);
     collectionMap = cMap;
@@ -190,6 +194,9 @@ export async function resolveDataSources(
     } else if (req.type === "product") {
       renderProps.resolvedData[req.dataSourceKey] =
         productMap.get(req.resourceId) ?? null;
+    } else if (req.type === "accommodation") {
+      // Accommodation fetcher will be added when accommodation sections are created
+      renderProps.resolvedData[req.dataSourceKey] = null;
     }
   }
 }
@@ -201,6 +208,7 @@ export async function resolveDataSources(
 async function fetchCollections(
   ids: string[],
   tenantId: string,
+  locale?: string,
 ): Promise<Map<string, ResolvedCollectionDisplay>> {
   const collections = await prisma.productCollection.findMany({
     where: {
@@ -246,12 +254,23 @@ async function fetchCollections(
     });
   }
 
+  // Apply translations to collections and their products
+  if (locale) {
+    const allCollections = [...map.values()];
+    await applyTranslationsBatch(tenantId, locale, "collection", allCollections, ["title", "description"]);
+    const allProducts = allCollections.flatMap((c) => c.products);
+    if (allProducts.length > 0) {
+      await applyTranslationsBatch(tenantId, locale, "product", allProducts, ["title", "description"]);
+    }
+  }
+
   return map;
 }
 
 async function fetchProducts(
   ids: string[],
   tenantId: string,
+  locale?: string,
 ): Promise<Map<string, ResolvedProductDisplay>> {
   const products = await prisma.product.findMany({
     where: {
@@ -269,6 +288,12 @@ async function fetchProducts(
 
   for (const product of products) {
     map.set(product.id, toProductDisplay(product));
+  }
+
+  // Apply translations to standalone products
+  if (locale) {
+    const allProducts = [...map.values()];
+    await applyTranslationsBatch(tenantId, locale, "product", allProducts, ["title", "description"]);
   }
 
   return map;

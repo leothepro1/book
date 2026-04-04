@@ -54,8 +54,14 @@ export interface TranslatableResourceType {
   resourceIdSegment: string;
   /** Fields translatable on each top-level item */
   fields: TranslatableFieldDef[];
-  /** Extract items from TenantConfig */
+  /** Extract items from TenantConfig (config-based resource types) */
   extract: (config: TenantConfig) => TranslatableItem[];
+  /**
+   * Extract items from DB (DB-backed resource types like products, accommodations).
+   * When present, the scanner calls this instead of extract() and passes tenantId.
+   * Must be async — queries Prisma. Only runs server-side (scanner API route).
+   */
+  extractAsync?: (tenantId: string) => Promise<TranslatableItem[]>;
 }
 
 // ── Registry ─────────────────────────────────────────────────
@@ -132,4 +138,73 @@ registerResourceType({
       })),
     }));
   },
+});
+
+// ── DB-backed resource types (browser-safe stubs) ───────────
+// Register metadata (label, icon, fields) for the translation panel
+// dropdown. extractAsync() is attached server-side by resource-types-db.ts.
+
+registerResourceType({
+  id: "products",
+  label: "Produkter",
+  icon: "inventory_2",
+  namespace: "TENANT",
+  resourceIdSegment: "product",
+  fields: [
+    { key: "title", type: "text" as const, label: "Titel" },
+    { key: "description", type: "textarea" as const, label: "Beskrivning" },
+  ],
+  extract: () => [],
+});
+
+registerResourceType({
+  id: "collections",
+  label: "Produktserier",
+  icon: "collections_bookmark",
+  namespace: "TENANT",
+  resourceIdSegment: "collection",
+  fields: [
+    { key: "title", type: "text" as const, label: "Titel" },
+    { key: "description", type: "textarea" as const, label: "Beskrivning" },
+  ],
+  extract: () => [],
+});
+
+registerResourceType({
+  id: "gift-cards",
+  label: "Presentkort",
+  icon: "redeem",
+  namespace: "TENANT",
+  resourceIdSegment: "gift-card",
+  fields: [
+    { key: "title", type: "text" as const, label: "Titel" },
+    { key: "description", type: "textarea" as const, label: "Beskrivning" },
+  ],
+  extract: () => [],
+});
+
+registerResourceType({
+  id: "accommodations",
+  label: "Boenden",
+  icon: "hotel",
+  namespace: "TENANT",
+  resourceIdSegment: "accommodation",
+  fields: [
+    { key: "name", type: "text" as const, label: "Namn" },
+    { key: "description", type: "textarea" as const, label: "Beskrivning" },
+  ],
+  extract: () => [],
+});
+
+registerResourceType({
+  id: "accommodation-categories",
+  label: "Boendetyper",
+  icon: "category",
+  namespace: "TENANT",
+  resourceIdSegment: "accommodation-category",
+  fields: [
+    { key: "title", type: "text" as const, label: "Titel" },
+    { key: "description", type: "textarea" as const, label: "Beskrivning" },
+  ],
+  extract: () => [],
 });

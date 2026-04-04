@@ -22,6 +22,7 @@ export async function updateDraft(
   changes: DraftPatch
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    console.log("[updateDraft] called with keys:", Object.keys(changes));
     const { userId } = await getAuth();
     const tenantData = await getCurrentTenant();
 

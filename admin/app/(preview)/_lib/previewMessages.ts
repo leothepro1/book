@@ -40,7 +40,8 @@ export type ParentToPreviewMessage =
 export type PreviewToParentMessage =
   | { type: "preview-ready" }
   | { type: "inspector-hover"; sectionId: string | null }
-  | { type: "inspector-click"; sectionId: string };
+  | { type: "inspector-click"; sectionId: string }
+  | { type: "preview-navigate"; pathname: string };
 
 export type PreviewMessage = ParentToPreviewMessage | PreviewToParentMessage;
 
@@ -48,7 +49,7 @@ const VALID_TYPES = [
   "theme-update", "content-refresh", "preview-ready",
   "scroll-to-target", "inspector-mode",
   "inspector-hover", "inspector-click",
-  "checkin-step",
+  "checkin-step", "preview-navigate",
 ];
 
 /** Origin check — same origin for preview iframe */

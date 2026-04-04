@@ -7,6 +7,7 @@ import { ThemeRenderer } from "../../_lib/themes";
 import GuestPageShell from "../../_components/GuestPageShell";
 import { getRequestLocale } from "../../_lib/locale/getRequestLocale";
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
+import { applyTranslations } from "@/app/_lib/translations/apply-db-translations";
 import { prisma } from "@/app/_lib/db/prisma";
 import { ACCOMMODATION_SELECT } from "@/app/_lib/accommodations/types";
 import { resolveAccommodation } from "@/app/_lib/accommodations/resolve";
@@ -143,6 +144,16 @@ export default async function RoomDetailPage({
 
   // ── Load tenant config + theme ──────────────────────────────
   const locale = await getRequestLocale();
+
+  // Apply locale translations to accommodation name + description
+  const translatedAcc = await applyTranslations(
+    tenant.id, locale, "accommodation", accommodation.id,
+    { name: resolved.displayName, description: resolved.displayDescription },
+    ["name", "description"],
+  );
+  resolved.displayName = translatedAcc.name as string;
+  resolved.displayDescription = translatedAcc.description as string;
+
   const config = await getTenantConfig(tenant.id, { locale });
   const booking = await resolveBookingFromToken("preview");
   if (!booking) return notFound();

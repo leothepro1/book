@@ -516,7 +516,7 @@ export type DataSourceDefinition = {
   /** Unique key within this section — used as the key in resolvedData. */
   key: string;
   /** What kind of data to fetch. */
-  type: "collection" | "product";
+  type: "collection" | "product" | "accommodation";
   /** Which section setting holds the resource ID (e.g. "collectionId"). */
   settingKey: string;
 };
@@ -714,6 +714,12 @@ export type ResolvedElement = {
   action: ElementAction;
   /** The element definition. */
   definition: ElementDefinition;
+  /**
+   * Section-level resolved data, passed down from the parent section.
+   * Available when the section declares dataSources. Elements can read
+   * product/collection data from here instead of requiring page-level context.
+   */
+  resolvedData?: import("@/app/_lib/sections/data-sources").ResolvedDataMap;
 };
 
 /**

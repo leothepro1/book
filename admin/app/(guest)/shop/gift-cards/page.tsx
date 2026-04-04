@@ -1,7 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
+import { getRequestLocale } from "@/app/(guest)/_lib/locale/getRequestLocale";
 import { prisma } from "@/app/_lib/db/prisma";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
+import { applyTranslationsBatch } from "@/app/_lib/translations/apply-db-translations";
 import Link from "next/link";
 import "./gift-card.css";
 
@@ -38,6 +40,10 @@ export default async function GiftCardListingPage() {
   });
 
   if (products.length === 0) return notFound();
+
+  // Apply locale translations
+  const locale = await getRequestLocale();
+  await applyTranslationsBatch(tenant.id, locale, "gift-card", products, ["title", "description"]);
 
   // Single product — redirect directly (no listing needed)
   if (products.length === 1) {

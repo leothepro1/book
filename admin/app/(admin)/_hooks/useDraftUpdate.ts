@@ -31,6 +31,7 @@ const overwriteArrays: merge.Options["arrayMerge"] = (_target, source) => source
 let _timer: ReturnType<typeof setTimeout> | null = null;
 let _pending: DraftPatch | null = null;
 let _flushImpl: (() => Promise<void>) | null = null;
+let _idleTimer: ReturnType<typeof setTimeout> | null = null;
 
 // ── Save progress tracking (module-level pub/sub) ────────
 // Drives the global progress bar. Any component can subscribe
@@ -65,7 +66,12 @@ export function cancelPendingDraft() {
     clearTimeout(_timer);
     _timer = null;
   }
+  if (_idleTimer) {
+    clearTimeout(_idleTimer);
+    _idleTimer = null;
+  }
   _pending = null;
+  setSaveState({ phase: "idle", progress: 0 });
 }
 
 /**
@@ -138,8 +144,15 @@ export function useDraftUpdate() {
       }
     }
 
-    // Reset to idle after bar completes
-    setTimeout(() => setSaveState({ phase: "idle", progress: 0 }), 400);
+    // Reset to idle after bar completes.
+    // Guard: only reset if no new cycle started during the 400ms wait.
+    if (_idleTimer) clearTimeout(_idleTimer);
+    _idleTimer = setTimeout(() => {
+      _idleTimer = null;
+      if (!_pending && !_timer) {
+        setSaveState({ phase: "idle", progress: 0 });
+      }
+    }, 400);
   }, []);
 
   // Register flush for external callers (flushPendingDraft)

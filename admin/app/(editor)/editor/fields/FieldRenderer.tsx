@@ -48,6 +48,8 @@ import { FieldLayoutPicker } from "./FieldLayoutPicker";
 import { FieldMenuPicker } from "./FieldMenuPicker";
 import { FieldCollectionPicker } from "./FieldCollectionPicker";
 import { FieldProductPicker } from "./FieldProductPicker";
+import { FieldAccommodationPicker } from "./FieldAccommodationPicker";
+import { FieldFontPicker } from "./FieldFontPicker";
 
 // ─── Field Dispatcher ───────────────────────────────────────
 
@@ -85,6 +87,8 @@ const FIELD_MAP: Record<string, React.ComponentType<FieldRendererProps>> = {
   menuPicker: FieldMenuPicker,
   collectionPicker: FieldCollectionPicker,
   productPicker: FieldProductPicker,
+  accommodationPicker: FieldAccommodationPicker,
+  fontPicker: FieldFontPicker,
 };
 
 export function FieldRenderer({ field, value, onChange, allValues }: FieldRendererProps) {

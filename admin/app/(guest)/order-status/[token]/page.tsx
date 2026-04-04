@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/app/_lib/db/prisma";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
+import { formatOrderNumberForTenant } from "@/app/_lib/orders/format-server";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export default async function OrderStatusPage({
   const order = await prisma.order.findUnique({
     where: { statusToken: token },
     select: {
+      tenantId: true,
       orderNumber: true,
       status: true,
       createdAt: true,
@@ -59,7 +61,7 @@ export default async function OrderStatusPage({
     <div style={{ maxWidth: 520, margin: "0 auto", padding: "clamp(2rem, 5vw, 4rem) 1.5rem", fontFamily: '"Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif' }}>
       <div style={{ textAlign: "center", marginBottom: "2rem" }}>
         <h1 style={{ fontSize: "clamp(1.25rem, 1rem + 1vw, 1.75rem)", fontWeight: 600, margin: "0 0 0.5rem" }}>
-          Order #{order.orderNumber}
+          Order {await formatOrderNumberForTenant(order.tenantId, order.orderNumber)}
         </h1>
         <span style={{
           display: "inline-block",

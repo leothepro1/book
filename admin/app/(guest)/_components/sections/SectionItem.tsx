@@ -25,6 +25,7 @@
 
 import type { SectionRendererProps } from "@/app/_lib/sections/types";
 import { GenericSectionRenderer } from "./GenericSectionRenderer";
+import { SectionDataProvider } from "./SectionDataContext";
 import { TabsUnderlineRenderer, TabsPillRenderer } from "./renderers/TabsRenderer";
 import { AccordionDefaultRenderer, AccordionCardRenderer } from "./renderers/AccordionRenderer";
 import { SliderButtonRowRenderer, SliderCardRenderer } from "./renderers/SliderRenderer";
@@ -84,17 +85,23 @@ export function SectionItem({ renderProps }: { renderProps: SectionRendererProps
   const sanitized = sanitizeForClient(renderProps);
 
   const schemeStyle = renderProps.colorScheme?.cssVariables;
+  const resolvedData = renderProps.resolvedData;
 
-  // When a color scheme is active, wrap in a scoping div that sets
-  // CSS custom properties. All descendants inherit via cascading.
-  // When no scheme is active, render the renderer directly (no wrapper overhead).
+  // SectionDataProvider makes resolvedData available to descendant elements
+  // via useSectionData() hook — zero overhead when no data is present.
   if (schemeStyle) {
     return (
       <div data-color-scheme={renderProps.colorScheme!.scheme.id} style={schemeStyle}>
-        <Renderer {...sanitized} />
+        <SectionDataProvider data={resolvedData}>
+          <Renderer {...sanitized} />
+        </SectionDataProvider>
       </div>
     );
   }
 
-  return <Renderer {...sanitized} />;
+  return (
+    <SectionDataProvider data={resolvedData}>
+      <Renderer {...sanitized} />
+    </SectionDataProvider>
+  );
 }

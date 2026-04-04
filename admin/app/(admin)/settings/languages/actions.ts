@@ -8,6 +8,10 @@ import { isValidLocale, PRIMARY_LOCALE, SUPPORTED_LOCALES } from "@/app/_lib/tra
 import { getTenantPrimaryLocale, invalidatePrimaryLocaleCache } from "@/app/_lib/translations/tenant-primary-locale";
 import { invalidateLocaleCache } from "@/app/_lib/translations/locale-cache";
 import { scanTranslatableStrings } from "@/app/_lib/translations/scanner";
+import { getResourceTypes } from "@/app/_lib/translations/resource-types";
+import type { DbResourceItems } from "@/app/_lib/translations/traversal";
+// Attach extractAsync to DB-backed resource types
+import "@/app/_lib/translations/resource-types-db";
 import { ensureSectionsRegistered } from "@/app/_lib/sections/registry";
 import { computeDigest } from "@/app/_lib/translations/digest";
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
@@ -203,7 +207,15 @@ export async function getTranslationPanel(
       }),
   );
 
-  const fields = scanTranslatableStrings(config, existingMap, localeCode);
+  // Pre-fetch DB-backed resource type items (products, accommodations, etc.)
+  const dbResourceItems: DbResourceItems = new Map();
+  for (const rt of getResourceTypes()) {
+    if (rt.extractAsync) {
+      dbResourceItems.set(rt.id, await rt.extractAsync(tenantData.tenant.id));
+    }
+  }
+
+  const fields = scanTranslatableStrings(config, existingMap, localeCode, dbResourceItems);
 
   return {
     fields: fields.map((f) => ({

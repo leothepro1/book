@@ -121,7 +121,8 @@ export function PickerModal({
 }: PickerModalProps) {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState(defaultTab ?? tabs?.[0]?.key ?? "");
-  const [activeItemId, setActiveItemId] = useState<string | null>(null);
+  // Default to first item so preview panel shows content immediately
+  const [activeItemId, setActiveItemId] = useState<string | null>(() => items[0]?.id ?? null);
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -241,15 +242,19 @@ export function PickerModal({
     [onSelect, onClose]
   );
 
-  const showPreview = !!previewThumbnail;
+  // Active item name for preview header
+  const activeItemName = useMemo(() => {
+    if (!activeItemId) return null;
+    return items.find((i) => i.id === activeItemId)?.name ?? null;
+  }, [activeItemId, items]);
 
   return createPortal(
     <div
-      className={`pk-popup${showPreview ? " pk-popup--with-presets" : ""}`}
+      className="pk-popup pk-popup--with-presets"
       ref={popupRef}
     >
       {/* Main panel */}
-      <div className={`pk-popup__main${showPreview ? " pk-popup__main--shifted" : ""}`}>
+      <div className="pk-popup__main pk-popup__main--shifted">
         {/* Search */}
         <div className="pk-popup__search">
           <SearchIcon />
@@ -305,26 +310,28 @@ export function PickerModal({
         </div>
       </div>
 
-      {/* Preview panel — shows how the hovered item looks in the guest portal */}
-      {showPreview && (
-        <div
-          className="pk-popup__presets"
-          onMouseEnter={handlePresetPanelEnter}
-          onMouseLeave={handlePresetPanelLeave}
-        >
-          <div className="pk-popup__presets-header">
-            <span className="pk-popup__presets-title">Förhandsvisning</span>
-          </div>
-          <div className="pk-popup__preview-wrap">
+      {/* Preview panel — always visible */}
+      <div
+        className="pk-popup__presets"
+        onMouseEnter={handlePresetPanelEnter}
+        onMouseLeave={handlePresetPanelLeave}
+      >
+        <div className="pk-popup__preview-wrap">
+          {previewThumbnail ? (
             <img
               src={previewThumbnail}
-              alt="Förhandsvisning"
+              alt={activeItemName ?? "Förhandsvisning"}
               className="pk-popup__preview-img"
               draggable={false}
             />
-          </div>
+          ) : (
+            <div className="pk-popup__preview-empty">
+              <EditorIcon name="dashboard" size={32} className="pk-popup__preview-empty-icon" />
+              <span className="pk-popup__preview-empty-text">Ingen förhandsgranskning tillgänglig</span>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>,
     document.body
   );

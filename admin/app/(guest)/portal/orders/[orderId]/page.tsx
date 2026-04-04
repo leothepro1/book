@@ -3,6 +3,7 @@ import { prisma } from "@/app/_lib/db/prisma";
 import { resolveGuestContext } from "../../../_lib/portal/resolveGuestContext";
 import GuestPageShell from "../../../_components/GuestPageShell";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
+import { formatOrderNumberForTenant } from "@/app/_lib/orders/format-server";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,7 @@ export default async function PortalOrderDetailPage({
 
         <div style={{ marginBottom: "1.5rem" }}>
           <h1 style={{ fontSize: "clamp(1.25rem, 1rem + 1vw, 1.75rem)", fontWeight: 600, margin: "0 0 0.5rem", color: "var(--text)" }}>
-            Order #{order.orderNumber}
+            Order {await formatOrderNumberForTenant(ctx.config.tenantId, order.orderNumber)}
           </h1>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <span style={{

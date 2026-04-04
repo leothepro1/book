@@ -5,6 +5,7 @@ import type { ThemeConfig } from "./types";
  * Applied to the .min-h-dvh wrapper in the guest layout.
  */
 export function backgroundStyle(bg: ThemeConfig["background"], colors?: ThemeConfig["colors"]): React.CSSProperties {
+  if (!bg) return { background: "var(--background)" };
   switch (bg.mode) {
     case "fill":
       return { background: "var(--background)" };

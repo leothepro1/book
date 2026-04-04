@@ -470,6 +470,10 @@ model Tenant {
   emailAccentColor      String?   // hex e.g. "#1A56DB"
 
   // Feature toggles — account-level, immediate effect (not draft/publish)
+  // Order number formatting — Shopify-style prefix/suffix
+  orderNumberPrefix     String  @default("")
+  orderNumberSuffix     String  @default("")
+
   checkinEnabled        Boolean @default(false)
   checkoutEnabled       Boolean @default(false)
   earlyCheckinEnabled   Boolean @default(false)
@@ -1628,9 +1632,6 @@ model Accommodation {
   accommodationType AccommodationType
   status            AccommodationStatus @default(ACTIVE)
 
-  // Search visibility — false for spot-booking accommodations (not shown in guest search)
-  visibleInSearch Boolean @default(true)
-
   // Content — override pattern: resolveAccommodation() always reads nameOverride ?? pmsName ?? name
   nameOverride        String?
   descriptionOverride String? @db.Text
@@ -1696,7 +1697,6 @@ model Accommodation {
   @@index([tenantId, sortOrder])
   @@index([tenantId, archivedAt])
   @@index([tenantId, pmsProvider, externalId])
-  @@index([tenantId, visibleInSearch])
 }
 
 /// Highlight / selling point on an accommodation.
@@ -1863,6 +1863,9 @@ model AccommodationCategory {
   slug        String
   imageUrl    String?
   status      AccommodationStatus @default(ACTIVE)
+  /// Whether this category appears in the guest search form filter.
+  /// When false, accommodations in this category are hidden from search results.
+  visibleInSearch Boolean @default(true)
   sortOrder   Int      @default(0)
   /// PMS type string that seeded this category (e.g. "HOTEL").
   /// Null for manually created categories. Never overwritten by sync.
@@ -1879,6 +1882,7 @@ model AccommodationCategory {
   @@unique([tenantId, slug])
   @@index([tenantId])
   @@index([tenantId, status])
+  @@index([tenantId, visibleInSearch])
   @@index([tenantId, sortOrder])
 }
 

@@ -158,9 +158,21 @@ export function ThemeConfigureView({ manifest }: { manifest: ThemeManifest }) {
   const templateEntries = Object.entries(manifest.templates);
   const hasHeaderGroup = manifest.sectionGroups.header.length > 0;
   const hasFooterGroup = manifest.sectionGroups.footer.length > 0;
+  const hasSidebarGroup = (manifest.sectionGroups.sidebar ?? []).length > 0;
 
   return (
     <div className="tc">
+      {hasSidebarGroup && (
+        <>
+          <div className="tc__label">Sidebar</div>
+          <SectionList
+            slots={manifest.sectionGroups.sidebar!}
+            resolveSettings={resolveSettings}
+            onChange={handleChange}
+          />
+        </>
+      )}
+
       {hasHeaderGroup && (
         <>
           <div className="tc__label">Header</div>

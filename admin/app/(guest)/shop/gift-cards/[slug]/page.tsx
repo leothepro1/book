@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
+import { getRequestLocale } from "@/app/(guest)/_lib/locale/getRequestLocale";
 import { prisma } from "@/app/_lib/db/prisma";
+import { applyTranslations } from "@/app/_lib/translations/apply-db-translations";
 import { GiftCardPurchaseClient } from "./GiftCardPurchaseClient";
 
 export const revalidate = 60;
@@ -72,11 +74,19 @@ export default async function GiftCardProductPage({
   if (!product.enabled || product.status !== "ACTIVE") return notFound();
   if (product.designs.length === 0) return notFound();
 
+  // Apply locale translations
+  const locale = await getRequestLocale();
+  const translated = await applyTranslations(
+    tenant.id, locale, "gift-card", product.id,
+    { title: product.title, description: product.description },
+    ["title", "description"],
+  );
+
   // Sanitize — never pass raw Prisma objects to client
   const data: GiftCardProductData = {
     id: product.id,
-    title: product.title,
-    description: product.description,
+    title: translated.title as string,
+    description: translated.description as string,
     tenantName: tenant.name,
     minAmount: product.minAmount,
     maxAmount: product.maxAmount,

@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
+import { getRequestLocale } from "@/app/(guest)/_lib/locale/getRequestLocale";
+import { applyTranslations } from "@/app/_lib/translations/apply-db-translations";
 import { ProductDetail } from "./ProductDetail";
 
 export const revalidate = 60;
@@ -39,13 +41,21 @@ export default async function ProductPage({
 
   if (!product || product.status !== "ACTIVE") return notFound();
 
+  // Apply locale translations to product fields
+  const locale = await getRequestLocale();
+  const translated = await applyTranslations(
+    tenant.id, locale, "product", product.id,
+    { title: product.title, description: product.description },
+    ["title", "description"],
+  );
+
   // STANDARD / GIFT_CARD → cart flow page
   return (
     <ProductDetail
       product={{
         id: product.id,
-        title: product.title,
-        description: product.description,
+        title: translated.title as string,
+        description: translated.description as string,
         slug: product.slug,
         price: product.price,
         currency: product.currency,

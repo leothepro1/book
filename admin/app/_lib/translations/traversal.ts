@@ -53,9 +53,17 @@ export type TraversalVisitor = (field: TraversalField) => void;
 
 // ── Main traversal ───────────────────────────────────────────
 
+/**
+ * Pre-fetched items from DB-backed resource types.
+ * Keyed by resource type ID (e.g. "products", "accommodations").
+ * Populated by the scanner API route before calling traverseConfig.
+ */
+export type DbResourceItems = Map<string, import("./resource-types").TranslatableItem[]>;
+
 export function traverseConfig(
   config: TenantConfig,
   visitor: TraversalVisitor,
+  dbResourceItems?: DbResourceItems,
 ): void {
   // 1. Global header
   if (config.globalHeader) {
@@ -78,9 +86,12 @@ export function traverseConfig(
     }
   }
 
-  // 4. Registered resource types (maps, menus, etc.)
+  // 4. Registered resource types (maps, menus, products, accommodations, etc.)
   for (const resourceType of getResourceTypes()) {
-    const items = resourceType.extract(config);
+    // DB-backed types use pre-fetched items; config-based types extract from config
+    const items = resourceType.extractAsync
+      ? (dbResourceItems?.get(resourceType.id) ?? [])
+      : resourceType.extract(config);
     const prefix = NAMESPACE_PREFIX[resourceType.namespace];
 
     for (const item of items) {

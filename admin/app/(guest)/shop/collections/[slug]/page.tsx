@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
+import { getRequestLocale } from "@/app/(guest)/_lib/locale/getRequestLocale";
+import { applyTranslations, applyTranslationsBatch } from "@/app/_lib/translations/apply-db-translations";
 import { formatPriceDisplay, getVariantPriceRange } from "@/app/_lib/products/pricing";
 import "./collection-page.css";
 
@@ -36,10 +38,23 @@ export default async function CollectionPage({
 
   if (!collection || collection.status !== "ACTIVE") return notFound();
 
+  // Apply locale translations
+  const locale = await getRequestLocale();
+  const translatedCollection = await applyTranslations(
+    tenant.id, locale, "collection", collection.id,
+    { title: collection.title, description: collection.description ?? "" },
+    ["title", "description"],
+  );
+  collection.title = translatedCollection.title as string;
+  collection.description = translatedCollection.description as string;
+
   // Filter to only ACTIVE products
   const products = collection.items
     .map((item) => item.product)
     .filter((p) => p.status === "ACTIVE");
+
+  // Translate product titles/descriptions in one batch query
+  await applyTranslationsBatch(tenant.id, locale, "product", products, ["title", "description"]);
 
   return (
     <div className="cp">

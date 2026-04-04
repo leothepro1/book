@@ -1,0 +1,99 @@
+/* ═══════════════════════════════════════════════════════════════
+   Sidebar Layout (sl)
+   Two-column layout for sidebar-left themes.
+   Desktop: fixed sidebar + scrollable main.
+   Mobile: toggle bar + collapsible panel above main.
+   ═══════════════════════════════════════════════════════════════ */
+
+.sl {
+  display: grid;
+  grid-template-columns: var(--sidebar-width, max-content) 1fr;
+  gap: var(--space-5, 20px);
+  min-height: 0;
+  max-width: var(--layout-max-width, 1200px);
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ── Sidebar (desktop only) ── */
+
+.sl__sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100dvh;
+  overflow: visible;
+  padding: var(--space-4, 32px) 0;
+
+  /* Subtle scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text, #202020) 15%, transparent) transparent;
+}
+
+/* ── Main content ── */
+
+.sl__main {
+  min-width: 0; /* Prevent grid blowout */
+}
+
+/* ── Mobile toggle bar (hidden on desktop) ── */
+
+.sl__mobile-bar {
+  display: none;
+}
+
+.sl__mobile-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px solid color-mix(in srgb, var(--text, #202020) 12%, transparent);
+  border-radius: var(--radius-md, 8px);
+  background: var(--background, #fff);
+  color: var(--text, #202020);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: var(--font-body, inherit);
+  transition: border-color 200ms ease;
+}
+
+.sl__mobile-toggle:hover {
+  border-color: color-mix(in srgb, var(--text, #202020) 30%, transparent);
+}
+
+.sl__mobile-label {
+  flex: 1;
+  text-align: left;
+}
+
+/* ── Mobile panel (hidden on desktop) ── */
+
+.sl__mobile-panel {
+  display: none;
+}
+
+/* ── Mobile breakpoint ── */
+
+@media (max-width: 767px) {
+  .sl {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .sl__sidebar {
+    display: none;
+  }
+
+  .sl__mobile-bar {
+    display: block;
+    padding: var(--space-3, 12px) 0;
+  }
+
+  .sl__mobile-panel {
+    display: block;
+    padding: 0 0 var(--space-4, 16px);
+  }
+}

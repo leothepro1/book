@@ -35,6 +35,7 @@ export function registerTheme(manifest: ThemeManifest): void {
   const allSlots = [
     ...manifest.sectionGroups.header,
     ...manifest.sectionGroups.footer,
+    ...(manifest.sectionGroups.sidebar ?? []),
     ...Object.values(manifest.templates).flatMap((t) => t.sections),
   ];
 
@@ -164,6 +165,7 @@ async function doBootstrap(): Promise<void> {
   const manifestImports = [
     import("./manifests/classic"),
     import("./manifests/immersive"),
+    import("./manifests/sidebar"),
   ];
 
   const manifestResults = await Promise.allSettled(manifestImports);
@@ -183,6 +185,7 @@ async function doBootstrap(): Promise<void> {
     import("./sections/hero-slider/pebble"),
     import("./sections/category-tabs/pebble"),
     import("./sections/checkin-slot/pebble"),
+    import("./sections/search-sidebar/default"),
   ];
 
   const sectionResults = await Promise.allSettled(sectionImports);

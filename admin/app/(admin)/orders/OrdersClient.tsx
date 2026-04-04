@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useOrderFormat } from "@/app/(admin)/_hooks/useOrderFormat";
 import { EditorIcon } from "@/app/_components/EditorIcon";
 import { getOrders, type OrderListItem, type OrderSortField, type OrderSortDirection, type OrderTab } from "./actions";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
@@ -68,6 +69,7 @@ export function OrdersClient() {
   const searchParams = useSearchParams();
   const activeTab = (searchParams.get("tab") as OrderTab) || "all";
   const activeChannel = searchParams.get("channel") || "";
+  const fmtOrder = useOrderFormat();
   const urlPage = parseInt(searchParams.get("page") ?? "1", 10) || 1;
 
   const [orders, setOrders] = useState<OrderListItem[]>([]);
@@ -402,7 +404,7 @@ export function OrdersClient() {
                   <EditorIcon name="check" size={14} className="ord-check__icon" />
                 </button>
                 <div className="ord-col ord-col--order">
-                  <span className="ord-row__order-number">#{order.orderNumber}</span>
+                  <span className="ord-row__order-number">{fmtOrder(order.orderNumber)}</span>
                 </div>
                 <div className="ord-col ord-col--date">
                   <span className="ord-row__date">{formatDate(order.createdAt)}</span>

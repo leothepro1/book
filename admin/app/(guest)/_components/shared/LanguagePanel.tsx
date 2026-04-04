@@ -11,7 +11,8 @@ export interface LanguagePanelProps {
   primaryLocale: string;
   publishedLocales: string[];
   showFlags: boolean;
-  pathname: string;
+  /** @deprecated No longer used — URL is read from window.location to preserve query params */
+  pathname?: string;
 }
 
 export function LanguagePanel({
@@ -109,17 +110,22 @@ export function LanguagePanel({
   const handleSelect = useCallback((localeCode: string) => {
     onClose();
 
-    const strippedPath = pathname.replace(/^\/[a-z]{2}(\/(?:p|preview)\/)/, "$1");
+    // Use window.location to preserve query params (usePathname strips them)
+    const url = new URL(window.location.href);
 
-    let newPath: string;
-    if (localeCode === primaryLocale) {
-      newPath = strippedPath;
-    } else {
-      newPath = `/${localeCode}${strippedPath}`;
-    }
+    // Strip existing locale prefix from pathname: /de/search → /search
+    const localePrefix = /^\/[a-z]{2}(?=\/|$)/;
+    const cleanPath = url.pathname.replace(localePrefix, "") || "/";
 
-    window.location.href = newPath;
-  }, [onClose, pathname, primaryLocale]);
+    // Build new path with or without locale prefix
+    const newPath = localeCode === primaryLocale
+      ? cleanPath
+      : `/${localeCode}${cleanPath}`;
+
+    // Preserve query params + hash
+    url.pathname = newPath;
+    window.location.href = url.toString();
+  }, [onClose, primaryLocale]);
 
   return (
     <>

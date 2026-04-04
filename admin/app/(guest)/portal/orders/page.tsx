@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { resolveGuestContext } from "../../_lib/portal/resolveGuestContext";
 import GuestPageShell from "../../_components/GuestPageShell";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
+import { formatOrderNumberForTenant } from "@/app/_lib/orders/format-server";
 import type { GuestOrder } from "../../_lib/portal/resolveGuestContext";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,15 @@ export default async function PortalOrdersPage() {
 
   const { active, past } = splitOrders(ctx.orders);
 
+  // Pre-format all order numbers with tenant prefix/suffix
+  const orderDisplayNumbers = new Map<string, string>();
+  for (const order of ctx.orders) {
+    orderDisplayNumbers.set(
+      order.id,
+      await formatOrderNumberForTenant(ctx.config.tenantId, order.orderNumber),
+    );
+  }
+
   return (
     <GuestPageShell config={ctx.config}>
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "clamp(2rem, 5vw, 3rem) 1rem" }}>
@@ -41,18 +51,18 @@ export default async function PortalOrdersPage() {
         )}
 
         {active.length > 0 && (
-          <OrderSection title="Aktuella" orders={active} />
+          <OrderSection title="Aktuella" orders={active} displayNumbers={orderDisplayNumbers} />
         )}
 
         {past.length > 0 && (
-          <OrderSection title="Tidigare" orders={past} />
+          <OrderSection title="Tidigare" orders={past} displayNumbers={orderDisplayNumbers} />
         )}
       </div>
     </GuestPageShell>
   );
 }
 
-function OrderSection({ title, orders }: { title: string; orders: GuestOrder[] }) {
+function OrderSection({ title, orders, displayNumbers }: { title: string; orders: GuestOrder[]; displayNumbers: Map<string, string> }) {
   return (
     <section style={{ marginBottom: "2rem" }}>
       <h2 style={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text)", opacity: 0.5, margin: "0 0 0.75rem" }}>
@@ -75,7 +85,7 @@ function OrderSection({ title, orders }: { title: string; orders: GuestOrder[] }
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.25rem" }}>
               <span style={{ fontSize: "0.9375rem", fontWeight: 600, color: "var(--text)" }}>
-                Order #{order.orderNumber}
+                Order {displayNumbers.get(order.id) ?? `#${order.orderNumber}`}
               </span>
               <span style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text)", opacity: 0.7 }}>
                 {STATUS_LABELS[order.status] ?? order.status}

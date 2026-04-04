@@ -8,3 +8,4 @@ export { SectionItem } from "./SectionItem";
 export { GenericSectionRenderer } from "./GenericSectionRenderer";
 export { ElementRenderer } from "./elements";
 export { BookingsProvider } from "./BookingsContext";
+export { SectionDataProvider, useSectionData, useSectionDataKey } from "./SectionDataContext";

@@ -57,6 +57,17 @@ export type ThemeManifest = {
   tags: string[];
 
   /**
+   * Layout mode for this theme.
+   *
+   * "default"       — standard single-column layout (header → content → footer)
+   * "sidebar-left"  — persistent left sidebar + main content column
+   *
+   * The layout is declared by the theme and applied by GuestPageShell.
+   * Sidebar content is defined in sectionGroups.sidebar.
+   */
+  layout?: "default" | "sidebar-left";
+
+  /**
    * Per-page templates.
    *
    * Each key is a page/route identifier (e.g. "home", "shop", "account").
@@ -77,6 +88,8 @@ export type ThemeManifest = {
   sectionGroups: {
     header: ThemeSectionSlot[];
     footer: ThemeSectionSlot[];
+    /** Persistent sidebar sections. Only rendered when layout is "sidebar-left". */
+    sidebar?: ThemeSectionSlot[];
   };
 
   /**
@@ -242,7 +255,8 @@ export type SettingFieldType =
   | "menuPicker"
   | "collectionPicker"
   | "productPicker"
-  | "accommodationPicker";
+  | "accommodationPicker"
+  | "fontPicker";
 
 export type SettingField = {
   key: string;

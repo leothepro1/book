@@ -6,6 +6,8 @@ import { ACCOMMODATION_SELECT } from "@/app/_lib/accommodations/types";
 import { resolveAccommodation } from "@/app/_lib/accommodations/resolve";
 import type { AccommodationWithRelations } from "@/app/_lib/accommodations/types";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
+import { getRequestLocale } from "@/app/(guest)/_lib/locale/getRequestLocale";
+import { applyTranslations, applyTranslationsBatch } from "@/app/_lib/translations/apply-db-translations";
 
 export const revalidate = 60;
 export const dynamicParams = true;
@@ -35,9 +37,31 @@ export default async function AccommodationCategoryPage({
 
   if (!category || category.status !== "ACTIVE") return notFound();
 
+  // Apply locale translations to category title/description
+  const locale = await getRequestLocale();
+  const translatedCat = await applyTranslations(
+    tenant.id, locale, "accommodation-category", category.id,
+    { title: category.title, description: category.description ?? "" },
+    ["title", "description"],
+  );
+  category.title = translatedCat.title as string;
+  if (translatedCat.description) category.description = translatedCat.description as string;
+
   const accommodations = category.items
     .map((item) => resolveAccommodation(item.accommodation as unknown as AccommodationWithRelations))
     .filter((a) => a.status === "ACTIVE");
+
+  // Translate accommodation names + descriptions in batch
+  const accForTranslation = accommodations.map((a) => ({
+    id: a.id,
+    name: a.displayName,
+    description: a.displayDescription ?? "",
+  }));
+  await applyTranslationsBatch(tenant.id, locale, "accommodation", accForTranslation, ["name", "description"]);
+  for (let i = 0; i < accommodations.length; i++) {
+    accommodations[i].displayName = accForTranslation[i].name;
+    accommodations[i].displayDescription = accForTranslation[i].description;
+  }
 
   return (
     <div className="cp">

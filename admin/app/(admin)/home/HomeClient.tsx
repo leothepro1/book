@@ -197,9 +197,19 @@ function HomeClientInner() {
   const [detailManifest, setDetailManifest] = useState<import("@/app/(guest)/_lib/themes/types").ThemeManifest | null>(null);
 
   // Sync: if theme gets removed (undo, external change) while on configure → grid
+  // Grace period: skip the first render cycle after navigating to configure,
+  // because SSE-driven refresh can temporarily overwrite the optimistic config
+  // with stale data from DB before the draft persist completes.
+  const configureEnteredAt = useRef(0);
+  useEffect(() => {
+    if (themeView === "configure") configureEnteredAt.current = Date.now();
+  }, [themeView]);
   useEffect(() => {
     if (themeView === "configure" && !configHasTheme) {
-      setThemeView("grid");
+      const elapsed = Date.now() - configureEnteredAt.current;
+      if (elapsed > 2000) {
+        setThemeView("grid");
+      }
     }
   }, [configHasTheme, themeView]);
 
