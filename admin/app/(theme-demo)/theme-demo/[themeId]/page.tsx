@@ -1,17 +1,17 @@
 import { notFound } from "next/navigation";
 import { ensureRegistered, getTheme } from "@/app/(guest)/_lib/themes/registry";
-import { getTenantConfig } from "@/app/(guest)/_lib/tenant";
 import { themeToStyleAttr, backgroundStyle, googleFontsUrl } from "@/app/(guest)/_lib/theme";
 import { ThemeRenderer } from "@/app/(guest)/_lib/themes/engine";
+import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import type { NormalizedBooking } from "@/app/_lib/integrations/types";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 3600; // 1h — no DB calls, purely static content
 
 /**
- * Theme demo page — single DB call, no header/footer.
+ * Theme demo page — zero DB calls, fully self-contained.
  *
  * Renders the theme layout inside a minimal shell with CSS vars + fonts.
- * Optimised for fast initial paint in the admin phone-frame preview.
+ * Uses a fake config so the demo works without a real tenant in the DB.
  */
 export default async function ThemeDemoPage(props: {
   params: Promise<{ themeId: string }>;
@@ -24,23 +24,22 @@ export default async function ThemeDemoPage(props: {
   const manifest = getTheme(themeId);
   if (!manifest) return notFound();
 
-  const config = await getTenantConfig("apelviken", { preferDraft: true });
-
-  // Use the theme's design preset for the demo — this shows the theme
-  // exactly as its author intended, independent of the tenant's current design.
   const presetTheme = manifest.designPreset;
 
   const demoConfig = {
-    ...config,
+    tenantId: "demo",
     themeId,
+    themeVersion: manifest.version,
     theme: presetTheme,
     sectionSettings: {},
     themeSettings: {},
-    home: {
-      ...config.home,
-      cards: [],
-    },
-  };
+    property: { name: "Demo Hotel", logo: "" },
+    home: { cards: [], sections: [] },
+    footer: { links: [] },
+    features: {},
+    rules: [],
+    supportLinks: {},
+  } as unknown as TenantConfig;
 
   const cssVars = themeToStyleAttr(presetTheme);
   const bgStyle = backgroundStyle(presetTheme.background, presetTheme.colors);

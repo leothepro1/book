@@ -27,6 +27,7 @@ import "./themes.css";
 // Trigger registration so getAllThemes() returns results on the client
 import "@/app/(guest)/_lib/themes/manifests/classic";
 import "@/app/(guest)/_lib/themes/manifests/immersive";
+import "@/app/(guest)/_lib/themes/manifests/sidebar";
 
 export type ThemeView = "grid" | "detail" | "configure";
 
@@ -141,6 +142,18 @@ export function ThemePickerContent({
             manifest={theme}
             isActive={hasTheme && theme.id === currentThemeId}
             onClick={() => handleCardClick(theme)}
+          />
+        ))}
+      </div>
+      {/* Preload theme demo iframes so detail view opens instantly */}
+      <div style={{ position: "absolute", width: 0, height: 0, overflow: "hidden", pointerEvents: "none" }}>
+        {allThemes.map((theme) => (
+          <iframe
+            key={theme.id}
+            src={`/theme-demo/${theme.id}`}
+            title={`Preload ${theme.name}`}
+            tabIndex={-1}
+            aria-hidden
           />
         ))}
       </div>

@@ -764,31 +764,6 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
         </div>
       )}
 
-      {/* Footer */}
-      <div className="p-3 flex-shrink-0 border-t border-[#E6E5E3]">
-        <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
-          {!isCollapsed && (
-            <button className="p-2 text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030] rounded-lg">
-              <span className="material-symbols-rounded" style={{ fontSize: 18 }}>help</span>
-            </button>
-          )}
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-2 text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030] rounded-lg"
-            aria-label={isCollapsed ? 'Expandera sidebar' : 'Kollapsa sidebar'}
-          >
-            {isCollapsed ? (
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-                <path fillRule="evenodd" clipRule="evenodd" d="M7 3a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h10a4 4 0 0 0 4-4V7a4 4 0 0 0-4-4zm1.5 16.5H7A2.5 2.5 0 0 1 4.5 17V7A2.5 2.5 0 0 1 7 4.5h1.5zm1.5 0v-15h7A2.5 2.5 0 0 1 19.5 7v10a2.5 2.5 0 0 1-2.5 2.5z" fill="currentColor" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-                <path fillRule="evenodd" clipRule="evenodd" d="M7 21a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7Zm3-16.5v15h7a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 17 4.5h-7Z" fill="currentColor" />
-              </svg>
-            )}
-          </button>
-        </div>
-      </div>
     </aside>
   );
 }

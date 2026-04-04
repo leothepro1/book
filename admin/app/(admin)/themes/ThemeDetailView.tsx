@@ -51,14 +51,11 @@ function AnimatedSpinner({ visible }: { visible: boolean }) {
 /**
  * ThemeDetailView — Full detail page shown when clicking a theme card.
  *
- * The iframe loads immediately but is non-interactive (pointer-events: none)
- * until activated. Activation happens via:
- *   - Clicking the phone overlay (with cursor-following tooltip)
- *   - Clicking "Visa demo" in the footer
+ * Toolbar row: back button (absolute left), viewport toggle (centered),
+ * "Välj tema" button (right). Desktop viewport is default.
  *
- * When demo is active:
- *   - Footer slides down out of view
- *   - Two floating controls appear beside the phone (close + "Välj tema")
+ * The iframe loads immediately but is non-interactive (pointer-events: none)
+ * until activated via clicking the phone overlay or "Visa demo" in the footer.
  */
 export function ThemeDetailView({
   manifest,
@@ -73,20 +70,12 @@ export function ThemeDetailView({
   const [interactive, setInteractive] = useState(false);
   const [selectLoading, setSelectLoading] = useState(false);
   const [footerHidden, setFooterHidden] = useState(false);
-  const [showSideControls, setShowSideControls] = useState(false);
+  const [viewport, setViewport] = useState<"desktop" | "mobile">("desktop");
+  const [fullscreen, setFullscreen] = useState(false);
   const cursorRef = useRef<HTMLDivElement>(null);
 
-  // When interactive becomes true, hide footer then show side controls after transition
   useEffect(() => {
-    if (interactive) {
-      setFooterHidden(true);
-      // Show side controls after footer slide-down completes (650ms)
-      const t = setTimeout(() => setShowSideControls(true), 650);
-      return () => clearTimeout(t);
-    } else {
-      setShowSideControls(false);
-      setFooterHidden(false);
-    }
+    setFooterHidden(interactive);
   }, [interactive]);
 
   const handleOverlayMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -105,10 +94,6 @@ export function ThemeDetailView({
     setInteractive(!interactive);
   }, [interactive]);
 
-  const handleCloseDemo = useCallback(() => {
-    setInteractive(false);
-  }, []);
-
   const handleSelect = useCallback(() => {
     setSelectLoading(true);
     setTimeout(() => {
@@ -117,36 +102,71 @@ export function ThemeDetailView({
     }, SPINNER_MIN_MS);
   }, [onSelect, manifest.id]);
 
-  const handleSideSelect = useCallback(() => {
-    setSelectLoading(true);
-    setTimeout(() => {
-      setSelectLoading(false);
-      onSelect(manifest.id);
-    }, SPINNER_MIN_MS);
-  }, [onSelect, manifest.id]);
-
   return (
-    <div className="td">
+    <div className={`td ${fullscreen ? "td--fullscreen" : ""}`}>
       {/* ── Dark preview container ── */}
       <div className="td__preview">
-        {/* Back button */}
-        <button type="button" className="td__back" onClick={onBack}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
+        {/* Back button (outside toolbar in normal mode) */}
+        {!fullscreen && (
+          <button type="button" className="td__back" onClick={onBack}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        )}
 
-        {/* Phone frame with side controls */}
-        <div className="td__phone-wrap">
-          {/* Left: close button */}
-          <div className={`td__side-control td__side-control--left ${showSideControls ? "td__side-control--visible" : ""}`}>
-            <button type="button" className="td__close-btn" onClick={handleCloseDemo}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" viewBox="0 0 256 256">
-                <path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z" />
+        {/* Toolbar: viewport toggle (centered) + select button (right) */}
+        <div className="td__toolbar">
+          {fullscreen && (
+            <button type="button" className="td__back" onClick={() => setFullscreen(false)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
+          )}
+          <div className="td__viewport-toggle">
+            <button
+              type="button"
+              className={`td__viewport-btn ${viewport === "desktop" ? "td__viewport-btn--active" : ""}`}
+              onClick={() => { setViewport("desktop"); setFullscreen(false); }}
+              aria-label="Datorvy"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="24" height="24" fill="currentColor"><path fillRule="evenodd" d="M3.5 6.25a2.75 2.75 0 0 1 2.75-2.75h7.5a2.75 2.75 0 0 1 2.75 2.75v4.5a2.75 2.75 0 0 1-2.75 2.75h-1.25v1.5h.75a.75.75 0 0 1 0 1.5h-6.5a.75.75 0 0 1 0-1.5h.75v-1.5h-1.25a2.75 2.75 0 0 1-2.75-2.75v-4.5Zm5.5 7.25h2v1.5h-2v-1.5Zm-2.75-8.5c-.69 0-1.25.56-1.25 1.25v3.25h10v-3.25c0-.69-.56-1.25-1.25-1.25h-7.5Zm8.725 6c-.116.57-.62 1-1.225 1h-7.5a1.25 1.25 0 0 1-1.225-1h9.95Z" /></svg>
+            </button>
+            <button
+              type="button"
+              className={`td__viewport-btn ${viewport === "mobile" ? "td__viewport-btn--active" : ""}`}
+              onClick={() => { setViewport("mobile"); setFullscreen(false); }}
+              aria-label="Mobilvy"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="24" height="24" fill="currentColor"><path d="M7.75 13.75a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1-.75-.75Z" /><path fillRule="evenodd" d="M4.75 5.75a2.75 2.75 0 0 1 2.75-2.75h5a2.75 2.75 0 0 1 2.75 2.75v8.5a2.75 2.75 0 0 1-2.75 2.75h-5a2.75 2.75 0 0 1-2.75-2.75v-8.5Zm2.75-1.25c-.69 0-1.25.56-1.25 1.25v8.5c0 .69.56 1.25 1.25 1.25h5c.69 0 1.25-.56 1.25-1.25v-8.5c0-.69-.56-1.25-1.25-1.25h-.531a1 1 0 0 1-.969.75h-2a1 1 0 0 1-.969-.75h-.531Z" /></svg>
+            </button>
+            {interactive && (
+              <button
+                type="button"
+                className={`td__viewport-btn ${fullscreen ? "td__viewport-btn--active" : ""}`}
+                onClick={() => setFullscreen(!fullscreen)}
+                aria-label="Helskärm"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="24" height="24" fill="currentColor"><path d="M12.75 3.5a.75.75 0 0 0 0 1.5h1.19l-3.22 3.22a.75.75 0 0 0 1.06 1.06l3.22-3.22v1.19a.75.75 0 0 0 1.5 0v-3a.75.75 0 0 0-.75-.75h-3Z" /><path d="M7.25 16.5a.75.75 0 0 0 0-1.5h-1.19l3.22-3.22a.75.75 0 1 0-1.06-1.06l-3.22 3.22v-1.19a.75.75 0 0 0-1.5 0v3c0 .414.336.75.75.75h3Z" /></svg>
+              </button>
+            )}
           </div>
+          {interactive && (
+            <button
+              type="button"
+              className="td__btn td__btn--ghost"
+              onClick={handleSelect}
+              disabled={selectLoading}
+            >
+              <AnimatedSpinner visible={selectLoading} />
+              <span>Välj tema</span>
+            </button>
+          )}
+        </div>
 
+        {/* Phone frame */}
+        <div className={`td__phone-wrap ${viewport === "desktop" ? "td__phone-wrap--desktop" : ""} ${fullscreen ? "td__phone-wrap--fullscreen" : ""}`}>
           <div className={`td__phone ${!iframeLoaded ? "td__phone--loading" : ""} ${interactive ? "td__phone--interactive" : ""}`}>
             {!iframeLoaded && (
               <div className="td__phone-spinner">
@@ -171,19 +191,6 @@ export function ThemeDetailView({
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Right: select theme button */}
-          <div className={`td__side-control td__side-control--right ${showSideControls ? "td__side-control--visible" : ""}`}>
-            <button
-              type="button"
-              className="td__btn td__btn--ghost"
-              onClick={handleSideSelect}
-              disabled={selectLoading}
-            >
-              <AnimatedSpinner visible={selectLoading} />
-              <span>Välj tema</span>
-            </button>
           </div>
         </div>
 
