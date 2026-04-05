@@ -27,6 +27,11 @@ import { validateStayDates } from "@/app/_lib/validation/dates";
 import { log } from "@/app/_lib/logger";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 const NO_STORE = { "Cache-Control": "no-store" };
+
+/** Strip HTML tags for plain-text display. */
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, "").trim();
+}
 const PMS_TIMEOUT_MS = 8_000;
 
 const paramsSchema = z.object({
@@ -221,14 +226,22 @@ export async function GET(req: Request) {
           externalId: { in: categoryExternalIds },
           status: "ACTIVE",
         },
-        select: { id: true, externalId: true },
+        select: {
+          id: true,
+          externalId: true,
+          name: true,
+          nameOverride: true,
+          description: true,
+          descriptionOverride: true,
+          maxGuests: true,
+        },
       })
     : [];
 
-  const accommodationIdMap = new Map<string, string>();
+  const accommodationMap = new Map<string, typeof accommodationRows[number]>();
   for (const row of accommodationRows) {
     if (row.externalId) {
-      accommodationIdMap.set(row.externalId, row.id);
+      accommodationMap.set(row.externalId, row);
     }
   }
 
@@ -268,8 +281,21 @@ export async function GET(req: Request) {
       available = false;
     }
 
+    // Enrich category with tenant-configured data (overrides PMS defaults)
+    const acc = accommodationMap.get(entry.category.externalId);
+    const rawDesc = acc ? (acc.descriptionOverride ?? acc.description) : "";
+    const enrichedCategory = {
+      ...entry.category,
+      ...(acc ? {
+        name: acc.nameOverride ?? acc.name,
+        shortDescription: stripHtml(rawDesc),
+        longDescription: stripHtml(rawDesc),
+        maxGuests: acc.maxGuests,
+      } : {}),
+    };
+
     return {
-      category: entry.category,
+      category: enrichedCategory,
       ratePlans: entry.ratePlans.map((rp) => ({
         ...rp,
         nightlyAmount: rp.pricePerNight,
@@ -278,7 +304,7 @@ export async function GET(req: Request) {
       availableUnits: entry.availableUnits,
       available,
       restrictionViolations: violations,
-      accommodationId: accommodationIdMap.get(entry.category.externalId) ?? null,
+      accommodationId: acc?.id ?? null,
     };
   });
 
