@@ -817,6 +817,17 @@ export function SpotBookingEditor({ initialData }: Props) {
                     </div>
                   );
                 })}
+                <button
+                  type="button"
+                  className="sbe__add-marker-btn"
+                  onClick={() => {
+                    setPlacingMode(true);
+                    setSelectedId(null);
+                  }}
+                >
+                  <EditorIcon name="add_circle" size={20} />
+                  Lägg till markör
+                </button>
               </div>
             )}
           </div>

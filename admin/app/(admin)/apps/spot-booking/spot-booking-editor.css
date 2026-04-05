@@ -239,6 +239,26 @@
   gap: 1px;
 }
 
+.sbe__add-marker-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--admin-accent);
+  border-radius: var(--radius-sm, 6px);
+  transition: background 0.15s;
+}
+
+.sbe__add-marker-btn:hover {
+  background: color-mix(in srgb, var(--admin-accent) 8%, transparent);
+}
+
 .sbe__marker-row {
   display: flex;
   align-items: center;
