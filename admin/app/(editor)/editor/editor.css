@@ -4794,10 +4794,11 @@ border-radius: 8px;
 
 .cs-section-label {
   display: block;
-  font-size: 12px;
+  width: 100%;
+  font-size: 13px;
   font-weight: 400;
   color: var(--admin-text);
-  margin-bottom: 2px;
+  margin-bottom: 0px;
 }
 
 .cs-description {
@@ -4811,8 +4812,8 @@ border-radius: 8px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 25px;
-  flex-direction: row;
+  gap: 7px;
+  flex-direction: column;
 }
 
 
@@ -5246,18 +5247,19 @@ border-radius: 8px;
 /* ── Color token field ── */
 
 .cs-field {
-    flex-direction: row;
+    flex-direction: column;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 0px;
+    gap: 7px;
 }
 
 
 
 .cs-field__label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
+  width: 100%;
   color: #303030;
 }
 
