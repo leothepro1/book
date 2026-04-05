@@ -3,7 +3,7 @@
  *
  * POST /api/apps/spot-booking/markers
  *
- * Creates a SpotMarker and sets the accommodation's visibleInSearch
+ * Creates a SpotMarker linked to an accommodation
  * to false atomically. Admin-only, tenant-scoped.
  */
 
@@ -85,11 +85,6 @@ export async function POST(req: Request) {
           x,
           y,
         },
-      });
-
-      await tx.accommodation.update({
-        where: { id: accommodationId },
-        data: { visibleInSearch: false },
       });
 
       return created;

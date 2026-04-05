@@ -116,7 +116,7 @@ export const productContentSection: SectionDefinition = {
     definitionVersion: "1.0.0",
     presetKey: "default",
     presetVersion: "1.0.0",
-    isActive: true,
+    isActive: false,
     locked: true,
     settings: {},
     presetSettings: {},

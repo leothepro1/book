@@ -114,7 +114,7 @@ export function ColorPickerPopup({ value, onChange, onClose, anchorRef }: ColorP
     const popupH = popupRef.current.offsetHeight;
 
     let top = anchor.top - popupH - 8;
-    let left = anchor.left;
+    let left = anchor.left - 37;
 
     // If not enough room above, flip below
     if (top < 8) top = anchor.bottom + 8;

@@ -20,18 +20,22 @@ import { sv } from "date-fns/locale";
 import { Loader2 } from "lucide-react";
 import type { SectionRendererProps } from "@/app/_lib/sections/types";
 import { formatSwedishDate, formatDateRange } from "@/app/_lib/search/dates";
+import { useSearchEngine } from "@/app/_lib/search/useSearchEngine";
+import { useAccommodationTypes } from "@/app/_lib/search/useAccommodationTypes";
+import type { SearchAccommodationType } from "@/app/_lib/search/getAccommodationTypes";
+import { FONT_CATALOG } from "@/app/_lib/fonts/catalog";
+import { resolveContrastPalette } from "@/app/_lib/color/contrast";
 import "./search-renderer.css";
 
-// ─── Constants ──────────────────────────────────────────────
-type AccommodationType = "CAMPING" | "APARTMENT" | "HOTEL" | "CABIN";
-type PanelId = "type" | "date" | "guests";
+function fontStack(key: string): string {
+  if (!key) return "";
+  const entry = FONT_CATALOG.find((f) => f.key === key);
+  if (!entry) return key;
+  return `${entry.label}, ${entry.serif ? "serif" : "sans-serif"}`;
+}
 
-const ACCOMMODATION_TYPES: Array<{ value: AccommodationType; label: string }> = [
-  { value: "CAMPING", label: "Campingtomter" },
-  { value: "APARTMENT", label: "Lägenheter" },
-  { value: "HOTEL", label: "Hotell" },
-  { value: "CABIN", label: "Stugor" },
-];
+// ─── Constants ──────────────────────────────────────────────
+type PanelId = "type" | "date" | "guests";
 
 const LABELS = {
   ACCOMMODATION_TYPE: "Boendetyp",
@@ -70,40 +74,48 @@ function MIcon({ name, size = 24, weight = 400, className }: { name: string; siz
 }
 
 // ─── Section Renderer ───────────────────────────────────────
-export function SearchDefaultRenderer(_props: SectionRendererProps) {
+export function SearchDefaultRenderer(props: SectionRendererProps) {
+  const tenantId = props.config?.tenantId ?? "";
+  const s = props.settings;
+
+  const sectionStyle: React.CSSProperties = {
+    ...(s.bgColor ? { "--background": s.bgColor as string } : {}),
+    ...(s.textColor ? { "--text": s.textColor as string } : {}),
+    ...(s.buttonColor ? { "--button-bg": s.buttonColor as string } : {}),
+    ...(s.accentColor ? { "--accent": s.accentColor as string } : {}),
+    ...(s.headingFont ? { "--font-heading": fontStack(s.headingFont as string) } : {}),
+    ...(s.bodyFont ? { "--font-body": fontStack(s.bodyFont as string) } : {}),
+    ...(s.buttonFont ? { "--font-button": fontStack(s.buttonFont as string) } : {}),
+    ...(s.showShadow ? { boxShadow: "0 6px 16px rgba(0, 0, 0, 0.12)" } : {}),
+  } as React.CSSProperties;
+
   return (
-    <section className="s-search">
+    <section className="s-search" style={sectionStyle}>
       <div className="s-search__container">
-        <SearchForm />
+        <SearchForm tenantId={tenantId} />
       </div>
     </section>
   );
 }
 
 // ─── Search Form ────────────────────────────────────────────
-function SearchForm() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [checkIn, setCheckIn] = useState<Date | null>(null);
-  const [checkOut, setCheckOut] = useState<Date | null>(null);
-  const [selectedTypes, setSelectedTypes] = useState<AccommodationType[]>(["CAMPING", "APARTMENT", "HOTEL", "CABIN"]);
-  const [adults, setAdults] = useState(0);
-  const [children_, setChildren] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+function SearchForm({ tenantId }: { tenantId: string }) {
+  const fetchedTypes = useAccommodationTypes(tenantId);
+  const engine = useSearchEngine({ tenantId });
+  const { params, status } = engine;
 
-  // Hydrate from URL
-  const hydrated = useRef(false);
-  useEffect(() => {
-    if (hydrated.current) return;
-    const ci = searchParams.get("checkIn");
-    const co = searchParams.get("checkOut");
-    if (ci) { const d = parseISO(ci); if (!isNaN(d.getTime())) setCheckIn(d); }
-    if (co) { const d = parseISO(co); if (!isNaN(d.getTime())) setCheckOut(d); }
-    const g = searchParams.get("guests");
-    if (g) { const n = parseInt(g, 10); if (!isNaN(n) && n > 0) setAdults(n); }
-    hydrated.current = true;
-  }, [searchParams]);
+  // Derive Date objects from engine ISO strings for calendar UI
+  const checkIn = params.checkIn ? parseISO(params.checkIn) : null;
+  const checkOut = params.checkOut ? parseISO(params.checkOut) : null;
+  const selectedCategoryIds = params.categoryIds;
+  const adults = params.adults;
+  const children_ = params.children;
+  const isLoading = status === "loading";
+  const [submitted, setSubmitted] = useState(false);
+  const pendingCommit = useRef(false);
+
+  // Build accommodation type options from fetched types
+  const ACCOMMODATION_TYPES = fetchedTypes;
 
   // Panel state
   const [activePanel, setActivePanel] = useState<PanelId | null>(null);
@@ -187,32 +199,47 @@ function SearchForm() {
   const today = startOfDay(new Date());
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(today));
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
-  const handleRangeChange = useCallback((ci: Date | null, co: Date | null) => { setCheckIn(ci); setCheckOut(co); }, []);
-  const handleClearDates = useCallback((e: React.MouseEvent) => { e.stopPropagation(); setCheckIn(null); setCheckOut(null); setHoverDate(null); }, []);
-  const toggleType = useCallback((type: AccommodationType) => { setSelectedTypes((prev) => prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]); }, []);
+  const handleRangeChange = useCallback((ci: Date | null, co: Date | null) => {
+    engine.setParams({
+      checkIn: ci ? format(ci, "yyyy-MM-dd") : null,
+      checkOut: co ? format(co, "yyyy-MM-dd") : null,
+    });
+  }, [engine]);
+  const handleClearDates = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    engine.setParams({ checkIn: null, checkOut: null });
+    setHoverDate(null);
+  }, [engine]);
+  const toggleCategory = useCallback((categoryId: string) => {
+    const prev = params.categoryIds;
+    engine.setParams({
+      categoryIds: prev.includes(categoryId) ? prev.filter((id) => id !== categoryId) : [...prev, categoryId],
+    });
+  }, [engine, params.categoryIds]);
 
   const handleSearch = useCallback(() => {
     setSubmitted(true);
-    if (!checkIn || !checkOut || adults + children_ === 0) return;
+    pendingCommit.current = true;
+    engine.search();
+  }, [engine]);
+
+  // Commit to URL after engine.search() resolves without validation error
+  useEffect(() => {
+    if (!pendingCommit.current) return;
+    if (status === "loading") return; // still in-flight
+    pendingCommit.current = false;
+    if (status === "error") return; // validation or fetch error — don't navigate
     setActivePanel(null);
-    setIsLoading(true);
-    const params = new URLSearchParams();
-    params.set("checkIn", format(checkIn, "yyyy-MM-dd"));
-    params.set("checkOut", format(checkOut, "yyyy-MM-dd"));
-    params.set("guests", String(adults + children_));
-    if (selectedTypes.length > 0) params.set("types", selectedTypes.join(","));
-    // Hard navigation to ensure server re-renders with new search params
-    window.location.href = `/search?${params.toString()}`;
-  }, [checkIn, checkOut, adults, children_, selectedTypes, router]);
+    engine.commitToUrl();
+  }, [status, engine]);
 
   const guestIsPlaceholder = adults === 0 && children_ === 0;
   const guestText = guestIsPlaceholder ? LABELS.GUEST_PLACEHOLDER : children_ === 0 ? `${adults} vuxna` : `${adults} vuxna, ${children_} barn`;
   const dateIsPlaceholder = !checkIn;
   const dateText = checkIn && checkOut ? formatDateRange(checkIn, checkOut) : checkIn ? `${formatSwedishDate(checkIn)} →` : LABELS.DATE_PLACEHOLDER;
-  const typeText = selectedTypes.length === 0 || selectedTypes.length === ACCOMMODATION_TYPES.length ? "Alla boenden" : selectedTypes.length === 1 ? ACCOMMODATION_TYPES.find((t) => t.value === selectedTypes[0])?.label ?? "" : `${selectedTypes.length} ${LABELS.TYPES_SELECTED}`;
+  const typeText = selectedCategoryIds.length === 0 || selectedCategoryIds.length === ACCOMMODATION_TYPES.length ? "Alla boenden" : selectedCategoryIds.length === 1 ? ACCOMMODATION_TYPES.find((t) => t.id === selectedCategoryIds[0])?.title ?? "" : `${selectedCategoryIds.length} ${LABELS.TYPES_SELECTED}`;
 
-  const dateError = submitted ? !checkIn ? "Välj incheckningsdatum" : !checkOut ? "Välj utcheckningsdatum" : undefined : undefined;
-  const guestError = submitted && adults + children_ === 0 ? "Lägg till minst 1 gäst" : undefined;
+  const engineError = submitted && engine.error ? engine.error.message : undefined;
 
   return (
     <div
@@ -296,13 +323,12 @@ function SearchForm() {
       </div>
 
       {/* Errors */}
-      {dateError && <p className="mt-1 px-5 text-xs text-red-600">{dateError}</p>}
-      {guestError && <p className="mt-1 px-5 text-xs text-red-600">{guestError}</p>}
+      {engineError && <p className="mt-1 px-5 text-xs text-red-600">{engineError}</p>}
 
       {/* Invisible measure container */}
       {activePanel && (
         <div ref={measureRef} className="pointer-events-none invisible absolute left-0 top-0 z-[-1] w-max" aria-hidden="true">
-          <PanelContent panel={activePanel} selectedTypes={selectedTypes} onToggleType={toggleType} checkIn={checkIn} checkOut={checkOut} onRangeChange={handleRangeChange} minDate={today} viewMonth={viewMonth} onViewMonthChange={setViewMonth} hoverDate={hoverDate} onHoverDateChange={setHoverDate} adults={adults} children_={children_} onAdultsChange={setAdults} onChildrenChange={setChildren} containerWidth={containerRef.current?.offsetWidth ?? 850} />
+          <PanelContent panel={activePanel} selectedCategoryIds={selectedCategoryIds} onToggleCategory={toggleCategory} accommodationTypes={ACCOMMODATION_TYPES} checkIn={checkIn} checkOut={checkOut} onRangeChange={handleRangeChange} minDate={today} viewMonth={viewMonth} onViewMonthChange={setViewMonth} hoverDate={hoverDate} onHoverDateChange={setHoverDate} adults={adults} children_={children_} onAdultsChange={(n: number) => engine.setParams({ adults: n })} onChildrenChange={(n: number) => engine.setParams({ children: n })} containerWidth={containerRef.current?.offsetWidth ?? 850} />
         </div>
       )}
 
@@ -322,7 +348,7 @@ function SearchForm() {
         }}
       >
         <div style={{ opacity: contentVisible ? 1 : 0, transition: contentVisible ? `opacity ${MOTION.fadeIn}ms ease-out` : `opacity ${MOTION.fadeOut}ms ease-in` }}>
-          {activePanel && <PanelContent panel={activePanel} selectedTypes={selectedTypes} onToggleType={toggleType} checkIn={checkIn} checkOut={checkOut} onRangeChange={handleRangeChange} minDate={today} viewMonth={viewMonth} onViewMonthChange={setViewMonth} hoverDate={hoverDate} onHoverDateChange={setHoverDate} adults={adults} children_={children_} onAdultsChange={setAdults} onChildrenChange={setChildren} containerWidth={containerRef.current?.offsetWidth ?? 850} />}
+          {activePanel && <PanelContent panel={activePanel} selectedCategoryIds={selectedCategoryIds} onToggleCategory={toggleCategory} accommodationTypes={ACCOMMODATION_TYPES} checkIn={checkIn} checkOut={checkOut} onRangeChange={handleRangeChange} minDate={today} viewMonth={viewMonth} onViewMonthChange={setViewMonth} hoverDate={hoverDate} onHoverDateChange={setHoverDate} adults={adults} children_={children_} onAdultsChange={(n: number) => engine.setParams({ adults: n })} onChildrenChange={(n: number) => engine.setParams({ children: n })} containerWidth={containerRef.current?.offsetWidth ?? 850} />}
         </div>
       </div>
     </div>
@@ -353,7 +379,8 @@ function AnimatedCheckbox({ checked }: { checked: boolean }) {
 
 // ─── Panel content ──────────────────────────────────────────
 interface PanelContentProps {
-  panel: PanelId; selectedTypes: AccommodationType[]; onToggleType: (t: AccommodationType) => void;
+  panel: PanelId; selectedCategoryIds: string[]; onToggleCategory: (id: string) => void;
+  accommodationTypes: SearchAccommodationType[];
   checkIn: Date | null; checkOut: Date | null; onRangeChange: (ci: Date | null, co: Date | null) => void;
   minDate: Date; viewMonth: Date; onViewMonthChange: (d: Date) => void;
   hoverDate: Date | null; onHoverDateChange: (d: Date | null) => void;
@@ -361,16 +388,16 @@ interface PanelContentProps {
   containerWidth: number;
 }
 
-function PanelContent({ panel, selectedTypes, onToggleType, checkIn, checkOut, onRangeChange, minDate, viewMonth, onViewMonthChange, hoverDate, onHoverDateChange, adults, children_, onAdultsChange, onChildrenChange, containerWidth }: PanelContentProps) {
+function PanelContent({ panel, selectedCategoryIds, onToggleCategory, accommodationTypes, checkIn, checkOut, onRangeChange, minDate, viewMonth, onViewMonthChange, hoverDate, onHoverDateChange, adults, children_, onAdultsChange, onChildrenChange, containerWidth }: PanelContentProps) {
   if (panel === "type") {
     return (
       <div className="w-max px-5 py-[22px]">
-        {ACCOMMODATION_TYPES.map((type) => {
-          const isSelected = selectedTypes.includes(type.value);
+        {accommodationTypes.map((type) => {
+          const isSelected = selectedCategoryIds.includes(type.id);
           return (
-            <button key={type.value} type="button" onClick={() => onToggleType(type.value)} className="flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-left transition-all duration-200 hover:bg-slate-50">
+            <button key={type.id} type="button" onClick={() => onToggleCategory(type.id)} className="flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-left transition-all duration-200 hover:bg-slate-50">
               <AnimatedCheckbox checked={isSelected} />
-              <span className={`text-sm ${isSelected ? "font-medium text-[#202020]" : "text-[#6b6b6b]"}`}>{type.label}</span>
+              <span className={`text-sm ${isSelected ? "font-medium text-[#202020]" : "text-[#6b6b6b]"}`}>{type.title}</span>
             </button>
           );
         })}

@@ -5,8 +5,8 @@
   width: 100%;
   max-width: var(--layout-max-width, 1250px);
   margin: 0 auto;
-  padding-left: 32px;
-  padding-right: 32px;
+  padding-left: var(--page-padding, 32px);
+  padding-right: var(--page-padding, 32px);
   box-sizing: border-box;
 }
 

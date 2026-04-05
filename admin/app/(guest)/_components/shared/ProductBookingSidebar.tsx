@@ -7,6 +7,7 @@ import { sv } from "date-fns/locale";
 import { DateRangePicker, getNightCount } from "./DateRangePicker";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { useProduct } from "@/app/(guest)/_lib/product-context/ProductContext";
+import { useCommerceEngine } from "@/app/_lib/commerce/useCommerceEngine";
 import "./product-booking-sidebar.css";
 
 function CounterControl({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (n: number) => void }) {
@@ -64,7 +65,27 @@ export function ProductBookingSidebar() {
     () => ratePlans[0]?.externalId ?? null,
   );
   const selectedPlan = ratePlans.find((rp) => rp.externalId === selectedPlanId) ?? ratePlans[0] ?? null;
-  const price = selectedPlan ? selectedPlan.totalPrice : (product?.price ?? 0);
+
+  // ── Commerce Engine — live PMS pricing on rate plan change ──
+  const tenantId = product?.tenantId ?? "";
+  const {
+    selectAccommodation,
+    pricing: enginePricing,
+    pricingStatus,
+    pricingError,
+    initiateCheckout,
+    checkoutStatus,
+    checkoutError,
+    reset: resetEngine,
+  } = useCommerceEngine({ tenantId });
+
+  // Derive displayed price: engine (fresh PMS) → server props (initial load)
+  const displayPricePerNight = enginePricing?.pricePerNight ?? selectedPlan?.pricePerNight ?? 0;
+  const displayTotal = enginePricing?.baseTotal ?? selectedPlan?.totalPrice ?? 0;
+  const displayRatePlanName = enginePricing?.ratePlanName ?? selectedPlan?.name ?? "";
+  const displayNights = enginePricing?.nights ?? nights ?? 0;
+  const displayCurrency = enginePricing?.currency ?? selectedPlan?.currency ?? "SEK";
+  const price = displayTotal > 0 ? displayTotal : (product?.price ?? 0);
 
   const prevGuestsRef = useRef(totalGuests);
 
@@ -140,44 +161,35 @@ export function ProductBookingSidebar() {
     params.set("guests", String(totalGuests));
     const newUrl = `${pathname}?${params.toString()}`;
     window.history.replaceState(null, "", newUrl);
+    resetEngine();
     router.refresh();
   };
 
   const fmtDate = (d: Date | null, ph: string) => d ? format(d, "d MMM yyyy", { locale: sv }) : ph;
 
-  const [isBooking, setIsBooking] = useState(false);
+  const isBooking = checkoutStatus === "loading";
 
   const handleBook = async () => {
     if (!checkIn || !checkOut) { openModal(); return; }
     if (!selectedPlan || !product?.id) return;
 
-    setIsBooking(true);
-    try {
-      const res = await fetch("/api/portal/checkout/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accommodationId: product.id,
-          ratePlanId: selectedPlan.externalId,
-          checkIn: format(checkIn, "yyyy-MM-dd"),
-          checkOut: format(checkOut, "yyyy-MM-dd"),
-          adults: totalGuests,
-        }),
-      });
+    // Ensure engine selection is current before checkout
+    selectAccommodation({
+      accommodationId: product.id,
+      ratePlanId: selectedPlan.externalId,
+      checkIn: format(checkIn, "yyyy-MM-dd"),
+      checkOut: format(checkOut, "yyyy-MM-dd"),
+      adults,
+      children: children_,
+    });
 
-      const data = await res.json();
-      if (!res.ok) {
-        setIsBooking(false);
-        return;
-      }
+    const result = await initiateCheckout();
+    if (!result) return;
 
-      const url = data.redirect.includes("?")
-        ? `${data.redirect}&session=${data.token}`
-        : `${data.redirect}?session=${data.token}`;
-      router.push(url);
-    } catch {
-      setIsBooking(false);
-    }
+    const url = result.redirect.includes("?")
+      ? `${result.redirect}&session=${result.token}`
+      : `${result.redirect}?session=${result.token}`;
+    router.push(url);
   };
 
   const guestText = children_ === 0 ? `${adults} gäster` : `${adults} vuxna, ${children_} barn`;
@@ -186,15 +198,20 @@ export function ProductBookingSidebar() {
     <div className="pbs">
       {/* Price */}
       <div className="pbs__price">
-        {selectedPlan ? (
+        {pricingStatus === "loading" ? (
+          <span className="pbs__price-loading">Hämtar pris…</span>
+        ) : displayPricePerNight > 0 ? (
           <>
-            {formatPriceDisplay(selectedPlan.pricePerNight)} kr
+            {formatPriceDisplay(displayPricePerNight)} kr
             <span className="pbs__price-suffix"> / natt</span>
           </>
         ) : (
           price > 0 ? `${formatPriceDisplay(price)} kr` : "—"
         )}
       </div>
+      {pricingError && (
+        <div className="pbs__price-error">{pricingError.message}</div>
+      )}
 
       {/* Triggers + guest dropdown wrapper */}
       <div className="pbs__triggers-wrap" ref={guestRef}>
@@ -260,7 +277,19 @@ export function ProductBookingSidebar() {
                 key={rp.externalId}
                 type="button"
                 className={`pbs__plan${isSelected ? " pbs__plan--selected" : ""}`}
-                onClick={() => setSelectedPlanId(rp.externalId)}
+                onClick={() => {
+                  setSelectedPlanId(rp.externalId);
+                  if (product?.id && checkIn && checkOut) {
+                    selectAccommodation({
+                      accommodationId: product.id,
+                      ratePlanId: rp.externalId,
+                      checkIn: format(checkIn, "yyyy-MM-dd"),
+                      checkOut: format(checkOut, "yyyy-MM-dd"),
+                      adults,
+                      children: children_,
+                    });
+                  }
+                }}
               >
                 <div className="pbs__plan-radio">
                   <span className="pbs__plan-radio-dot" />
@@ -275,8 +304,16 @@ export function ProductBookingSidebar() {
                   )}
                 </div>
                 <div className="pbs__plan-price">
-                  <span className="pbs__plan-price-total">{formatPriceDisplay(rp.totalPrice)} kr</span>
-                  <span className="pbs__plan-price-nightly">{formatPriceDisplay(rp.pricePerNight)} kr/natt</span>
+                  <span className="pbs__plan-price-total">
+                    {isSelected && enginePricing
+                      ? `${formatPriceDisplay(enginePricing.baseTotal)} kr`
+                      : `${formatPriceDisplay(rp.totalPrice)} kr`}
+                  </span>
+                  <span className="pbs__plan-price-nightly">
+                    {isSelected && enginePricing
+                      ? `${formatPriceDisplay(enginePricing.pricePerNight)} kr/natt`
+                      : `${formatPriceDisplay(rp.pricePerNight)} kr/natt`}
+                  </span>
                 </div>
               </button>
             );
@@ -318,6 +355,11 @@ export function ProductBookingSidebar() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Checkout error */}
+      {checkoutError && (
+        <div className="pbs__price-error">{checkoutError.message}</div>
       )}
 
       {/* Buy button */}

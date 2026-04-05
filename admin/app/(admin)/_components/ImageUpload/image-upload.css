@@ -54,41 +54,79 @@
 .img-upload-cta-btn:hover:not(:disabled) { background: var(--admin-accent-hover); }
 .img-upload-cta-btn:disabled { cursor: not-allowed; opacity: 0.5; }
 
+/* ── Result state (image preview card) ── */
 .img-upload-result {
-    background: var(--admin-surface);
-    border: 1.5px solid var(--admin-border);
-    border-radius: 12px;
-    align-items: center;
-    gap: 24px;
-    min-height: 64px;
-    padding: 10px 12px;
-    display: flex;
-}
-
-.img-upload-result-thumb {
-    aspect-ratio: 1 / 1;
-    box-sizing: border-box;
-    background: var(--admin-surface-muted);
-    border-radius: 8px;
-    flex-shrink: 0;
-    width: 110px;
-    padding: 0px;
-    position: relative;
-    overflow: hidden;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border: 1.5px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface-muted);
+  overflow: hidden;
+  cursor: pointer;
 }
 .img-upload-result-img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  border-radius: 4px;
+  object-fit: cover;
   display: block;
+}
+
+/* Filename badge — bottom left */
+.img-upload-result-filename {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  max-width: calc(100% - 16px);
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--admin-font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Hover overlay — "Ändra" centered */
+.img-upload-result-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.img-upload-result:hover .img-upload-result-overlay {
+  opacity: 1;
+}
+.img-upload-result-overlay-label {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--admin-font);
+  letter-spacing: 0.2px;
+}
+
+/* Upload progress overlay */
+.img-upload-result-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 8px;
 }
 
 /* Skeleton shimmer */
 .img-upload-skeleton {
   position: absolute;
   inset: 0;
-  border-radius: 8px;
   background: linear-gradient(
     90deg,
     var(--admin-surface-muted) 25%,
@@ -106,71 +144,17 @@
   100% { background-position: 0% 50%; }
 }
 
-/* Meta column */
-.img-upload-result-meta {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.img-upload-result-filename {
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    color: var(--admin-text);
-    font-family: var(--admin-font);
-    font-size: 14px;
-    font-weight: 500;
-    overflow: hidden;
-}
-.img-upload-replace-btn {
-    color: var(--admin-accent);
-    cursor: pointer;
-    text-align: left;
-    background: none;
-    border: none;
-    width: fit-content;
-    padding: 0;
-    font-family: var(--admin-font);
-    font-size: 14px;
-    font-weight: 500;
-    transition: color .15s;
-}
-.img-upload-replace-btn:hover { color: var(--admin-accent-hover); }
-
 .img-upload-progressbar {
-    background: linear-gradient(45deg, #5b9ef7 25%, var(--admin-accent) 25% 50%, #5b9ef7 50% 75%, var(--admin-accent) 75%, var(--admin-accent)) 0 0 / 30px 30px;
-    border-radius: 4px;
-    width: 100%;
-    height: 8px;
-    animation: .5s linear infinite img-progress-stripes;
-    overflow: hidden;
-    max-width: 300px;
+  background: linear-gradient(45deg, #5b9ef7 25%, var(--admin-accent) 25% 50%, #5b9ef7 50% 75%, var(--admin-accent) 75%, var(--admin-accent)) 0 0 / 30px 30px;
+  border-radius: 4px;
+  width: 100%;
+  height: 6px;
+  animation: .5s linear infinite img-progress-stripes;
+  overflow: hidden;
 }
-.img-upload-progressbar-fill { display: none; }
 @keyframes img-progress-stripes {
   from { background-position: 0 0; }
   to   { background-position: 30px 0; }
-}
-
-/* Trash button */
-.img-upload-trash-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: none;
-  border-radius: 8px;
-  cursor: pointer;
-  color: var(--admin-text-tertiary);
-  flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.img-upload-trash-btn:hover {
-  background: var(--admin-danger-tint);
-  color: var(--admin-danger);
 }
 
 /* Error */

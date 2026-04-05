@@ -65,7 +65,7 @@ export default async function Page(props: {
     const bookingStatus = getBookingStatus(mockBooking);
 
     return (
-      <GuestPageShell config={config}>
+      <GuestPageShell config={config} pageId="stays">
         <BookingsProvider currentBookings={currentBookings} previousBookings={previousBookings}>
           <ThemeRenderer
             templateKey="stays"

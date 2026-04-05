@@ -35,7 +35,7 @@ export default async function SessionStaysPage() {
       redirect("/portal/orders");
     }
     return (
-      <GuestPageShell config={ctx.config}>
+      <GuestPageShell config={ctx.config} pageId="stays">
         <div style={{ maxWidth: 640, margin: "0 auto", padding: "clamp(2rem, 5vw, 3rem) 1rem", textAlign: "center" }}>
           <h1 style={{ fontSize: "clamp(1.25rem, 1rem + 1vw, 1.75rem)", fontWeight: 600, color: "var(--text)", marginBottom: "0.75rem" }}>
             Mina vistelser

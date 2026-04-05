@@ -4,7 +4,7 @@ import { prisma } from "@/app/_lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -29,7 +29,7 @@ async function resolveUniqueSlug(tenantId: string, baseSlug: string, excludeId?:
 }
 
 export async function createAccommodationCategory(
-  input: { title: string; description?: string; status?: "ACTIVE" | "INACTIVE"; imageUrl?: string | null; accommodationIds?: string[] },
+  input: { title: string; description?: string; status?: "ACTIVE" | "INACTIVE"; imageUrl?: string | null; accommodationIds?: string[]; visibleInSearch?: boolean },
 ): Promise<ActionResult<{ id: string; slug: string }>> {
   const auth = await requireAdmin();
   if (!auth.ok) return { ok: false, error: auth.error };
@@ -49,6 +49,7 @@ export async function createAccommodationCategory(
           slug,
           imageUrl: input.imageUrl ?? null,
           status: (input.status as "ACTIVE" | "INACTIVE") ?? "ACTIVE",
+          visibleInSearch: input.visibleInSearch ?? true,
         },
       });
       if (input.accommodationIds && input.accommodationIds.length > 0) {
@@ -67,6 +68,7 @@ export async function createAccommodationCategory(
       return created;
     });
     revalidatePath("/accommodation-categories");
+    revalidateTag(`accommodation-types:${tenantId}`, { expire: 0 });
     return { ok: true, data: { id: cat.id, slug: cat.slug } };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -78,7 +80,7 @@ export async function createAccommodationCategory(
 
 export async function updateAccommodationCategory(
   categoryId: string,
-  input: { title?: string; description?: string; status?: "ACTIVE" | "INACTIVE"; imageUrl?: string | null; accommodationIds?: string[]; expectedVersion?: number },
+  input: { title?: string; description?: string; status?: "ACTIVE" | "INACTIVE"; imageUrl?: string | null; accommodationIds?: string[]; expectedVersion?: number; visibleInSearch?: boolean },
 ): Promise<ActionResult<{ id: string; slug: string; version: number }>> {
   const auth = await requireAdmin();
   if (!auth.ok) return { ok: false, error: auth.error };
@@ -110,6 +112,7 @@ export async function updateAccommodationCategory(
           ...(input.description !== undefined && { description: input.description }),
           ...(input.imageUrl !== undefined && { imageUrl: input.imageUrl }),
           ...(input.status !== undefined && { status: input.status }),
+          ...(input.visibleInSearch !== undefined && { visibleInSearch: input.visibleInSearch }),
           version: { increment: 1 },
         },
       });
@@ -133,6 +136,7 @@ export async function updateAccommodationCategory(
     });
     revalidatePath("/accommodation-categories");
     revalidatePath(`/accommodation-categories/${categoryId}`);
+    revalidateTag(`accommodation-types:${tenantId}`, { expire: 0 });
     return { ok: true, data: { id: cat.id, slug: cat.slug, version: cat.version } };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -156,6 +160,7 @@ export async function deleteAccommodationCategory(categoryId: string): Promise<A
 
   await prisma.accommodationCategory.delete({ where: { id: categoryId } });
   revalidatePath("/accommodation-categories");
+  revalidateTag(`accommodation-types:${tenantData.tenant.id}`, { expire: 0 });
   return { ok: true, data: undefined };
 }
 

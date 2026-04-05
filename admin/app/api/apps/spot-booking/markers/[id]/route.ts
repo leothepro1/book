@@ -2,7 +2,7 @@
  * Spot Booking — Update / Delete Marker
  *
  * PATCH /api/apps/spot-booking/markers/[id] — update label/position
- * DELETE /api/apps/spot-booking/markers/[id] — delete + restore visibleInSearch
+ * DELETE /api/apps/spot-booking/markers/[id] — delete marker
  *
  * Admin-only, tenant-scoped.
  */
@@ -119,26 +119,7 @@ export async function DELETE(_req: Request, ctx: RouteCtx) {
     return NextResponse.json({ error: "Markering hittades inte" }, { status: 404 });
   }
 
-  await prisma.$transaction(async (tx) => {
-    // Delete the marker
-    await tx.spotMarker.delete({ where: { id: marker.id } });
-
-    // Restore visibleInSearch only if this accommodation is not
-    // used in any OTHER SpotMarker (across all maps for this tenant)
-    const otherUsage = await tx.spotMarker.count({
-      where: {
-        accommodationId: marker.accommodationId,
-        id: { not: marker.id },
-      },
-    });
-
-    if (otherUsage === 0) {
-      await tx.accommodation.update({
-        where: { id: marker.accommodationId },
-        data: { visibleInSearch: true },
-      });
-    }
-  });
+  await prisma.spotMarker.delete({ where: { id: marker.id } });
 
   log("info", "spot_booking.marker_deleted", {
     tenantId,

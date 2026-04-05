@@ -30,6 +30,7 @@ export interface ProductRatePlan {
 }
 
 export interface ProductContextData {
+  tenantId: string;
   id: string;
   title: string;
   description: string;

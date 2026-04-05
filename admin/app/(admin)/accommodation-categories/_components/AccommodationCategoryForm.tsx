@@ -26,6 +26,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import "../../products/_components/product-form.css";
 import "../../products/products.css";
+import "../../files/files.css";
 
 const CARD: React.CSSProperties = {
   background: "#fff",
@@ -55,6 +56,7 @@ type ExistingCategory = {
   slug: string;
   imageUrl: string | null;
   status: "ACTIVE" | "INACTIVE";
+  visibleInSearch?: boolean;
   version?: number;
   items: Array<{ accommodation: AccommodationItem }>;
 };
@@ -88,6 +90,7 @@ export default function AccommodationCategoryForm({
   const [mediaLibOpen, setMediaLibOpen] = useState(false);
   const [status, setStatus] = useState<"ACTIVE" | "INACTIVE">(category?.status === "ACTIVE" ? "ACTIVE" : "INACTIVE");
   const [statusOpen, setStatusOpen] = useState(false);
+  const [visibleInSearch, setVisibleInSearch] = useState(category?.visibleInSearch ?? true);
   const statusRef = useRef<HTMLDivElement>(null);
 
   // -- Accommodation picker --
@@ -275,6 +278,7 @@ export default function AccommodationCategoryForm({
             description,
             imageUrl: imageUrl || null,
             status,
+            visibleInSearch,
             accommodationIds,
             expectedVersion: category?.version,
           })
@@ -283,6 +287,7 @@ export default function AccommodationCategoryForm({
             description,
             imageUrl: imageUrl || null,
             status,
+            visibleInSearch,
             accommodationIds,
           });
 
@@ -305,7 +310,7 @@ export default function AccommodationCategoryForm({
         setTimeout(() => setSaveError(null), 5000);
       }
     });
-  }, [title, description, imageUrl, status, addedAccommodations, addonCollections, isEdit, category, router]);
+  }, [title, description, imageUrl, status, visibleInSearch, addedAccommodations, addonCollections, isEdit, category, router]);
 
   const handleDiscard = useCallback(() => {
     setIsDiscarding(true);
@@ -313,6 +318,7 @@ export default function AccommodationCategoryForm({
     setDescription(category?.description ?? "");
     setImageUrl(category?.imageUrl ?? "");
     setStatus(category?.status === "ACTIVE" ? "ACTIVE" : "INACTIVE");
+    setVisibleInSearch(category?.visibleInSearch ?? true);
     setAddedAccommodations(
       (category?.items ?? []).map((i) => i.accommodation),
     );
@@ -556,6 +562,24 @@ export default function AccommodationCategoryForm({
                   </button>
                 </div>
               )}
+            </div>
+
+            <div style={CARD}>
+              <div className="pf-card-header" style={{ marginBottom: 8 }}>
+                <span className="pf-card-title">Visning</span>
+              </div>
+              <label
+                style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: "var(--admin-text)", margin: 0 }}
+                onClick={() => { setVisibleInSearch(!visibleInSearch); setDirty(true); }}
+              >
+                <div
+                  className={`files-header-check${visibleInSearch ? " files-header-check--active" : ""}`}
+                  style={{ width: 16, height: 16, borderRadius: 3, flexShrink: 0 }}
+                >
+                  <EditorIcon name="check" size={12} className="files-header-check__icon" />
+                </div>
+                Visa i sökformuläret
+              </label>
             </div>
           </div>
         </div>

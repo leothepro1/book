@@ -6,43 +6,8 @@ import Link from "next/link";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { formatDateRange } from "@/app/_lib/search/dates";
 import { track } from "@/app/_lib/analytics/client";
+import type { SearchResult, AvailabilityResponse } from "@/app/_lib/search/types";
 import "./stays.css";
-
-// ── Types ──────────────────────────────────────────────────────
-
-interface RoomCategory {
-  externalId: string;
-  name: string;
-  shortDescription: string;
-  type: string;
-  imageUrls: string[];
-  maxGuests: number;
-  facilities: string[];
-  basePricePerNight: number;
-}
-
-interface RatePlan {
-  externalId: string;
-  name: string;
-  nightlyAmount: number;
-  totalAmount: number;
-  currency: string;
-  cancellationPolicy: string;
-}
-
-interface AvailabilityEntry {
-  category: RoomCategory;
-  ratePlans: RatePlan[];
-  availableUnits: number;
-  available: boolean;
-  restrictionViolations: string[];
-}
-
-interface AvailabilityResponse {
-  results: AvailabilityEntry[];
-  searchParams: { checkIn: string; checkOut: string; guests: number; nights: number };
-  tenantId: string;
-}
 
 interface StaysClientProps {
   tenantId: string;
@@ -137,7 +102,7 @@ function RoomCategoryCard({
   entry,
   searchParams,
 }: {
-  entry: AvailabilityEntry;
+  entry: SearchResult;
   searchParams: string;
 }) {
   const { category, ratePlans, available, restrictionViolations } = entry;
@@ -215,6 +180,7 @@ export function StaysClient({
   const guests = searchParams.get("guests")
     ? parseInt(searchParams.get("guests")!, 10)
     : initialParams.guests;
+  const categories = searchParams.get("categories") ?? initialParams.types ?? "";
   const hasSearch = !!(checkIn && checkOut && guests && guests > 0);
 
   // Re-fetch when URL params change (after compact form submit)
@@ -228,6 +194,7 @@ export function StaysClient({
     params.set("checkIn", checkIn!);
     params.set("checkOut", checkOut!);
     params.set("guests", String(guests));
+    if (categories) params.set("categories", categories);
 
     fetch(`/api/availability?${params.toString()}`, { cache: "no-store" })
       .then(async (res) => {
@@ -250,7 +217,7 @@ export function StaysClient({
       .catch(() => { if (!cancelled) setError("Kunde inte hämta tillgänglighet. Försök igen."); })
       .finally(() => { if (!cancelled) setLoaded(true); });
     return () => { cancelled = true; };
-  }, [checkIn, checkOut, guests, tenantId, hasSearch, initialData]);
+  }, [checkIn, checkOut, guests, categories, tenantId, hasSearch, initialData]);
 
   // Build search params string for category links
   const searchParamsStr = hasSearch

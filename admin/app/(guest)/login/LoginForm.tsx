@@ -111,20 +111,21 @@ export default function LoginForm({ tenantName, logoUrl, logoWidth, privacyHtml 
           });
         }}
       >
-        <label htmlFor="otp-email" className="otp-login__label">
-          {t.emailLabel}
-        </label>
-        <input
-          id="otp-email"
-          type="email"
-          required
-          autoComplete="email"
-          autoFocus
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="otp-login__input"
-          disabled={isPending}
-        />
+        <div className="co__float" data-filled={email ? "" : undefined}>
+          <input
+            id="otp-email"
+            type="email"
+            required
+            autoComplete="email"
+            autoFocus
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="co__float-input"
+            placeholder={t.emailLabel}
+            disabled={isPending}
+          />
+          <span className="co__float-label">{t.emailLabel}</span>
+        </div>
         <ErrorSlide message={error} />
         <button
           type="submit"
@@ -134,6 +135,10 @@ export default function LoginForm({ tenantName, logoUrl, logoWidth, privacyHtml 
           {isPending ? t.emailSubmitting : t.emailSubmit}
         </button>
       </form>
+      <p className="otp-login__switch">
+        {t.noAccount}{" "}
+        <a href="/register" className="otp-login__switch-link">{t.noAccountLink}</a>
+      </p>
     </>
   );
 
@@ -465,88 +470,43 @@ function OtpStep({
   onBack: () => void;
 }) {
   const t = LOGIN_STRINGS[locale];
-  const [digits, setDigits] = useState<string[]>(Array(OTP_LENGTH).fill(""));
+  const [code, setCode] = useState("");
+  const [showPlaceholder, setShowPlaceholder] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    inputRefs.current[0]?.focus();
+    inputRef.current?.focus();
   }, []);
 
-  const updateDigit = useCallback((index: number, value: string) => {
-    setDigits((prev) => {
-      const next = [...prev];
-      next[index] = value;
-      return next;
-    });
+  const handleCodeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, "").slice(0, OTP_LENGTH);
+    setCode(raw);
+    setShowPlaceholder(false);
   }, []);
 
-  const clearAll = useCallback(() => {
-    setDigits(Array(OTP_LENGTH).fill(""));
-    inputRefs.current[0]?.focus();
+  const handleFocus = useCallback(() => {
+    if (showPlaceholder) {
+      setShowPlaceholder(false);
+    }
+  }, [showPlaceholder]);
+
+  const handleBlur = useCallback(() => {
+    if (!code) {
+      setShowPlaceholder(true);
+    }
+  }, [code]);
+
+  const clearCode = useCallback(() => {
+    setCode("");
+    setShowPlaceholder(false);
+    inputRef.current?.focus();
   }, []);
-
-  const handleInput = useCallback(
-    (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value;
-      if (val.length > 1) {
-        const pasted = val.replace(/\D/g, "").slice(0, OTP_LENGTH);
-        if (pasted.length > 0) {
-          setDigits((prev) => {
-            const next = [...prev];
-            for (let i = 0; i < OTP_LENGTH; i++) {
-              next[i] = pasted[i] ?? "";
-            }
-            return next;
-          });
-          const focusIdx = Math.min(pasted.length, OTP_LENGTH - 1);
-          inputRefs.current[focusIdx]?.focus();
-        }
-        return;
-      }
-      const digit = val.replace(/\D/g, "");
-      updateDigit(index, digit);
-      if (digit && index < OTP_LENGTH - 1) {
-        inputRefs.current[index + 1]?.focus();
-      }
-    },
-    [updateDigit],
-  );
-
-  const handleKeyDown = useCallback(
-    (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Backspace" && !digits[index] && index > 0) {
-        updateDigit(index - 1, "");
-        inputRefs.current[index - 1]?.focus();
-        e.preventDefault();
-      }
-    },
-    [digits, updateDigit],
-  );
-
-  const handlePaste = useCallback(
-    (e: React.ClipboardEvent<HTMLInputElement>) => {
-      e.preventDefault();
-      const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, OTP_LENGTH);
-      if (!pasted) return;
-      setDigits((prev) => {
-        const next = [...prev];
-        for (let i = 0; i < OTP_LENGTH; i++) {
-          next[i] = pasted[i] ?? "";
-        }
-        return next;
-      });
-      const focusIdx = Math.min(pasted.length, OTP_LENGTH - 1);
-      inputRefs.current[focusIdx]?.focus();
-    },
-    [],
-  );
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      const code = digits.join("");
       if (code.length !== OTP_LENGTH) return;
       setError(null);
       startTransition(async () => {
@@ -563,49 +523,46 @@ function OtpStep({
           }
           if (res.status === 401) {
             setError(t.errorWrongCode);
-            clearAll();
+            clearCode();
             return;
           }
           setError(t.errorInvalidCode);
-          clearAll();
+          clearCode();
         } catch {
           setError(t.errorGeneric);
         }
       });
     },
-    [digits, email, clearAll, t],
+    [code, email, clearCode, t],
   );
-
-  const allFilled = digits.every((d) => d !== "");
 
   return (
     <>
       <h1 className="otp-login__title">{t.otpTitle}</h1>
       <p className="otp-login__subtitle">{t.otpSubtitle(email)}</p>
       <form className="otp-login__form" onSubmit={handleSubmit}>
-        <div className="otp-login__code-group">
-          {Array.from({ length: OTP_LENGTH }).map((_, i) => (
-            <input
-              key={i}
-              ref={(el) => { inputRefs.current[i] = el; }}
-              type="text"
-              inputMode="numeric"
-              autoComplete={i === 0 ? "one-time-code" : "off"}
-              maxLength={OTP_LENGTH}
-              value={digits[i]}
-              onChange={(e) => handleInput(i, e)}
-              onKeyDown={(e) => handleKeyDown(i, e)}
-              onPaste={handlePaste}
-              disabled={isPending}
-              className="otp-login__code-input"
-              aria-label={`${i + 1} / ${OTP_LENGTH}`}
-            />
-          ))}
+        <div className="co__float" data-filled="">
+          <input
+            ref={inputRef}
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={OTP_LENGTH}
+            value={showPlaceholder ? "000000" : code}
+            onChange={handleCodeChange}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            disabled={isPending}
+            className="co__float-input"
+            style={showPlaceholder ? { color: "#717171" } : undefined}
+            placeholder="000000"
+          />
+          <span className="co__float-label">{t.otpLabel}</span>
         </div>
         <ErrorSlide message={error} />
         <button
           type="submit"
-          disabled={isPending || !allFilled}
+          disabled={isPending || code.length !== OTP_LENGTH}
           className="otp-login__button"
         >
           {isPending ? t.otpSubmitting : t.otpSubmit}

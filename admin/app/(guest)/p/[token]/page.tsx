@@ -25,12 +25,12 @@ export default async function Page(props: { params: Promise<{ token?: string }> 
   }
 
   const locale = await getRequestLocale();
-  const config = await getTenantConfig(booking.tenantId ?? "default", { preferDraft: true, locale });
+  const config = await getTenantConfig(booking.tenantId ?? "default", { preferDraft: token === "preview", locale });
 
   const bookingStatus = getBookingStatus(booking);
 
   return (
-    <GuestPageShell config={config}>
+    <GuestPageShell config={config} pageId="home">
       <ThemeRenderer
         templateKey="home"
         config={config}

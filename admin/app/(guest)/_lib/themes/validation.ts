@@ -139,7 +139,8 @@ export function validateSettingValue(field: SettingField, value: unknown): Valid
     case "menuPicker":
     case "collectionPicker":
     case "productPicker":
-    case "accommodationPicker": {
+    case "accommodationPicker":
+    case "fontPicker": {
       return { valid: true };
     }
 

@@ -31,9 +31,14 @@ interface LoginStrings {
   // OTP step
   otpTitle: string;
   otpSubtitle: (email: string) => string;
+  otpLabel: string;
   otpSubmit: string;
   otpSubmitting: string;
   otpBack: string;
+
+  // Navigation
+  noAccount: string;
+  noAccountLink: string;
 
   // Errors
   errorRateLimit: string;
@@ -55,9 +60,13 @@ export const LOGIN_STRINGS: Record<LoginLocale, LoginStrings> = {
 
     otpTitle: "Ange kod",
     otpSubtitle: (email) => `Vi har skickat en kod till ${email}`,
+    otpLabel: "Verifieringskod",
     otpSubmit: "Logga in",
     otpSubmitting: "Verifierar...",
     otpBack: "Byt e-postadress",
+
+    noAccount: "Inget konto?",
+    noAccountLink: "Skapa ett",
 
     errorRateLimit: "För många försök. Vänta en stund och försök igen.",
     errorGeneric: "Något gick fel. Försök igen.",
@@ -76,9 +85,13 @@ export const LOGIN_STRINGS: Record<LoginLocale, LoginStrings> = {
 
     otpTitle: "Enter code",
     otpSubtitle: (email) => `We sent a code to ${email}`,
+    otpLabel: "Verification code",
     otpSubmit: "Log in",
     otpSubmitting: "Verifying...",
     otpBack: "Change email address",
+
+    noAccount: "Don't have an account?",
+    noAccountLink: "Create one",
 
     errorRateLimit: "Too many attempts. Please wait a moment and try again.",
     errorGeneric: "Something went wrong. Please try again.",
@@ -97,9 +110,13 @@ export const LOGIN_STRINGS: Record<LoginLocale, LoginStrings> = {
 
     otpTitle: "Code eingeben",
     otpSubtitle: (email) => `Wir haben einen Code an ${email} gesendet`,
+    otpLabel: "Bestätigungscode",
     otpSubmit: "Anmelden",
     otpSubmitting: "Wird überprüft...",
     otpBack: "E-Mail-Adresse ändern",
+
+    noAccount: "Kein Konto?",
+    noAccountLink: "Erstellen Sie eines",
 
     errorRateLimit: "Zu viele Versuche. Bitte warten Sie einen Moment und versuchen Sie es erneut.",
     errorGeneric: "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
@@ -118,9 +135,13 @@ export const LOGIN_STRINGS: Record<LoginLocale, LoginStrings> = {
 
     otpTitle: "Entrez le code",
     otpSubtitle: (email) => `Nous avons envoyé un code à ${email}`,
+    otpLabel: "Code de vérification",
     otpSubmit: "Se connecter",
     otpSubmitting: "Vérification...",
     otpBack: "Changer d'adresse e-mail",
+
+    noAccount: "Pas de compte ?",
+    noAccountLink: "Créer un",
 
     errorRateLimit: "Trop de tentatives. Veuillez patienter un moment et réessayer.",
     errorGeneric: "Une erreur s'est produite. Veuillez réessayer.",
@@ -139,9 +160,13 @@ export const LOGIN_STRINGS: Record<LoginLocale, LoginStrings> = {
 
     otpTitle: "Ingresa el código",
     otpSubtitle: (email) => `Hemos enviado un código a ${email}`,
+    otpLabel: "Código de verificación",
     otpSubmit: "Iniciar sesión",
     otpSubmitting: "Verificando...",
     otpBack: "Cambiar correo electrónico",
+
+    noAccount: "¿No tienes cuenta?",
+    noAccountLink: "Crea una",
 
     errorRateLimit: "Demasiados intentos. Espera un momento e inténtalo de nuevo.",
     errorGeneric: "Algo salió mal. Inténtalo de nuevo.",

@@ -16,6 +16,8 @@
 }
 
 .com__modal {
+  --text: #1a1a1a;
+  color: #1a1a1a;
   background: #fff;
   border-radius: 16px;
   flex-direction: column;

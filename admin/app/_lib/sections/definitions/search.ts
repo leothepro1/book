@@ -7,7 +7,7 @@
  *
  * This is a LOCKED section — no blocks or elements.
  * Tenants can toggle visibility but cannot delete, add, or reorder.
- * editableFields will be added later for accent color, labels, etc.
+ * editableFields controls which settings appear in the editor DetailPanel.
  */
 
 import type { SectionDefinition, SectionPreset } from "../types";
@@ -68,10 +68,114 @@ export const searchSection: SectionDefinition = {
   thumbnail: "",
   scope: "locked",
   lockedTo: ["home", "stays"],
-  editableFields: [],
 
-  settingsSchema: [],
-  settingDefaults: {},
+  editableFields: [
+    "title",
+    "titleAlign",
+    "bgColor",
+    "showShadow",
+    "textColor",
+    "buttonColor",
+    "accentColor",
+    "headingFont",
+    "bodyFont",
+    "buttonFont",
+  ],
+
+  settingsSchema: [
+    // ── Titel ──
+    {
+      key: "title",
+      type: "text",
+      label: "Titel",
+      default: "Sök & boka",
+    },
+    {
+      key: "titleAlign",
+      type: "segmented",
+      label: "Rubrikens placering",
+      default: "left",
+      options: [
+        { value: "left", label: "Vänster" },
+        { value: "center", label: "Centrerad" },
+      ],
+    },
+
+    // ── Bakgrund ──
+    {
+      key: "bgColor",
+      type: "color",
+      label: "Bakgrundsfärg",
+      default: "#FFFFFF",
+      group: "Bakgrund",
+    },
+    {
+      key: "showShadow",
+      type: "toggle",
+      label: "Visa skugga",
+      default: false,
+      group: "Bakgrund",
+    },
+
+    // ── Färger ──
+    {
+      key: "textColor",
+      type: "color",
+      label: "Textfärg",
+      default: "#202020",
+      group: "Färger",
+    },
+    {
+      key: "buttonColor",
+      type: "color",
+      label: "Knappar",
+      default: "#207EA9",
+      group: "Färger",
+    },
+    {
+      key: "accentColor",
+      type: "color",
+      label: "Accentfärg",
+      default: "#207EA9",
+      group: "Färger",
+    },
+
+    // ── Typografi ──
+    {
+      key: "headingFont",
+      type: "fontPicker",
+      label: "Rubriker",
+      default: "inter",
+      group: "Typografi",
+    },
+    {
+      key: "bodyFont",
+      type: "fontPicker",
+      label: "Brödtext",
+      default: "inter",
+      group: "Typografi",
+    },
+    {
+      key: "buttonFont",
+      type: "fontPicker",
+      label: "Knappar",
+      default: "inter",
+      group: "Typografi",
+    },
+  ],
+
+  settingDefaults: {
+    title: "Sök & boka",
+    titleAlign: "left",
+    bgColor: "#FFFFFF",
+    showShadow: false,
+    textColor: "#202020",
+    buttonColor: "#207EA9",
+    accentColor: "#207EA9",
+    headingFont: "",
+    bodyFont: "",
+    buttonFont: "",
+  },
 
   presets: [defaultPreset],
 

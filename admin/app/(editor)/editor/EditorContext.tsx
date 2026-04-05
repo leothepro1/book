@@ -114,11 +114,7 @@ const EditorContext = createContext<EditorContextValue | null>(null);
 // ─── Provider ───────────────────────────────────────────────
 
 export function EditorProvider({ children }: { children: ReactNode }) {
-  const [activeRail, setActiveRail] = useState<RailTab>("sections");
-  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
-  const [detailTarget, setDetailTarget] = useState<DetailTarget | null>(null);
-  const [settingsAccordion, setSettingsAccordion] = useState<string | null>(null);
-  const [currentPageId, setCurrentPageIdRaw] = useState<PageId>(() => {
+  const [initialPageId] = useState<PageId>(() => {
     if (typeof window === "undefined") return "home";
     const segments = window.location.pathname.split("/");
     // URL pattern: /editor/{pageId}
@@ -126,6 +122,14 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     if (slug && isPageId(slug)) return slug;
     return "home";
   });
+  const [activeRail, setActiveRail] = useState<RailTab>(() => {
+    const def = getPageDefinition(initialPageId);
+    return def.editorMode === "settings" ? "settings" : "sections";
+  });
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+  const [detailTarget, setDetailTarget] = useState<DetailTarget | null>(null);
+  const [settingsAccordion, setSettingsAccordion] = useState<string | null>(null);
+  const [currentPageId, setCurrentPageIdRaw] = useState<PageId>(initialPageId);
   const [inspectorActive, setInspectorActive] = useState(false);
   const [inspectorHoveredSectionId, setInspectorHoveredSectionId] = useState<string | null>(null);
   const [activeStepId, setActiveStepId] = useState<string | null>(null);

@@ -68,7 +68,7 @@ export default async function OtpLoginPage({
       guestAccountId: guestAccount.id,
     });
 
-    redirect("/portal/home");
+    redirect("/account");
   }
 
   // ── OTP flow (no ml param) ────────────────────────────────

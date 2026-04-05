@@ -336,6 +336,40 @@ export async function resolveThemeLayout(
 }
 
 /**
+ * Resolves theme-level layout CSS variables.
+ * Must be called AFTER resolveThemeLayout (which bootstraps the registry).
+ *
+ * Returns variables consumed by the shell, sidebar layout, and content:
+ *   --page-padding     — outer page padding (header, content, sidebar)
+ *   --sidebar-width    — sidebar column width (sidebar-left themes only)
+ */
+export function resolveThemeLayoutVars(
+  config: Pick<TenantConfig, "themeId" | "themeSettings">,
+): Record<string, string> {
+  const themeId = getActiveThemeId(config);
+  if (!themeId) return {};
+
+  const manifest = getTheme(themeId);
+  if (!manifest) return {};
+
+  const merged: Record<string, unknown> = {
+    ...manifest.settingDefaults,
+    ...(config.themeSettings ?? {}),
+  };
+
+  const vars: Record<string, string> = {};
+  const pagePadding = (merged.pagePadding as number) ?? DEFAULT_PAGE_PADDING;
+  vars["--page-padding"] = `${pagePadding}px`;
+
+  if (manifest.layout === "sidebar-left") {
+    const sidebarWidth = (merged.sidebarWidth as number) ?? 320;
+    vars["--sidebar-width"] = `${sidebarWidth}px`;
+  }
+
+  return vars;
+}
+
+/**
  * Renders the sidebar section group from the active theme.
  *
  * IMPORTANT: This is a synchronous function, NOT an async server component.

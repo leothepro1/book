@@ -34,6 +34,9 @@ import { checkRateLimit } from "@/app/_lib/rate-limit/checkout";
 import { claimIdempotencyKey, completeIdempotencyKey, failIdempotencyKey } from "@/app/_lib/checkout/idempotency";
 import { resolvePaymentMethods } from "@/app/_lib/payments/resolve";
 import type { PaymentMethodConfig } from "@/app/_lib/payments/types";
+import { evaluateDiscountCode } from "@/app/_lib/discounts/engine";
+import { applyDiscountInTx } from "@/app/_lib/discounts/apply";
+import type { DiscountEvaluationResult } from "@/app/_lib/discounts/types";
 
 const SUPPORTED_CURRENCIES = ["SEK", "EUR", "NOK", "DKK"] as const;
 const MIN_AMOUNT = 1000;   // 10 SEK — below this, price data is wrong
@@ -43,6 +46,7 @@ const MAX_AMOUNT = 10_000_000; // 100,000 SEK — requires manual review
 const sessionInputSchema = z.object({
   sessionToken: z.string().min(1),
   paymentType: z.enum(["full", "klarna"]),
+  discountCode: z.string().min(1).max(64).optional(),
 });
 
 /** Legacy input: used by shop/cart flow — retained for backward compatibility */
@@ -440,7 +444,7 @@ export async function POST(req: Request) {
 async function handleSessionPaymentIntent(
   req: Request,
   tenantId: string,
-  input: { sessionToken: string; paymentType: string },
+  input: { sessionToken: string; paymentType: string; discountCode?: string },
   idempotencyKey: string,
 ) {
   const session = await prisma.checkoutSession.findUnique({
@@ -508,6 +512,43 @@ async function handleSessionPaymentIntent(
       { error: "INVALID_PRICE", message: "Ogiltigt belopp." },
       { status: 400 },
     );
+  }
+
+  // ── Evaluate discount code (if provided) ────────────────────
+  let discountResult: Extract<DiscountEvaluationResult, { valid: true }> | null = null;
+  let discountCodeId: string | undefined;
+
+  if (input.discountCode) {
+    const evalResult = await evaluateDiscountCode({
+      tenantId,
+      code: input.discountCode,
+      orderAmount: totalPrice,
+      productIds: [session.accommodation.id],
+      itemCount: 1,
+      checkInDate: session.checkIn,
+      checkOutDate: session.checkOut,
+    });
+
+    if (!evalResult.valid) {
+      await failIdempotencyKey(tenantId, idempotencyKey, "payment-intent");
+      return NextResponse.json(
+        { error: "DISCOUNT_INVALID", discountError: evalResult.error },
+        { status: 409 },
+      );
+    }
+
+    discountResult = evalResult;
+    // Resolve the DiscountCode ID for usage tracking
+    const { findDiscountCode } = await import("@/app/_lib/discounts/codes");
+    const codeRecord = await findDiscountCode(tenantId, input.discountCode);
+    discountCodeId = codeRecord?.id;
+
+    log("info", "checkout.discount_evaluated", {
+      tenantId,
+      code: input.discountCode,
+      discountAmount: evalResult.discountAmount,
+      orderAmount: totalPrice,
+    });
   }
 
   // ── Create Order from session snapshot ──────────────────────
@@ -607,6 +648,23 @@ async function handleSessionPaymentIntent(
       },
     });
 
+    // Apply discount inside transaction (authoritative evaluation with FOR UPDATE lock)
+    if (discountResult) {
+      const createdOrder = await tx.order.findUniqueOrThrow({
+        where: { id: newOrder.id },
+        include: { lineItems: { select: { id: true, productId: true, totalAmount: true } } },
+      });
+      await applyDiscountInTx(tx, {
+        orderId: newOrder.id,
+        tenantId,
+        guestEmail: "",
+        guestAccountId: undefined,
+        result: discountResult,
+        discountCodeId,
+        lineItems: createdOrder.lineItems,
+      });
+    }
+
     // Transition session to COMPLETED — release dedupKey so same booking can be made again
     await tx.checkoutSession.update({
       where: { id: session.id },
@@ -622,6 +680,8 @@ async function handleSessionPaymentIntent(
     orderId: order.id,
     orderNumber,
     amount: totalPrice + taxAmount,
+    discountAmount: discountResult?.discountAmount ?? 0,
+    discountCode: input.discountCode ?? null,
     currency,
     addonCount: addons.length,
   });
@@ -641,13 +701,16 @@ async function handleSessionPaymentIntent(
     data: { platformFeeBps: feeBps },
   });
 
-  // ── Initiate payment ──────────────────────────────────────────
+  // ── Initiate payment (post-discount amount to Stripe) ────────
+  const discountAmount = discountResult?.discountAmount ?? 0;
+  const chargeAmount = Math.max(0, totalPrice + taxAmount - discountAmount);
+
   try {
     const init = await initiateOrderPayment({
       order: {
         id: order.id,
         tenantId,
-        totalAmount: totalPrice + taxAmount,
+        totalAmount: chargeAmount,
         currency,
       },
       guest: { email: "", name: "" },

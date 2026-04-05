@@ -7,6 +7,7 @@ import { NavigationGuardProvider, UnsavedChangesModal } from './NavigationGuard'
 import { SettingsProvider, useSettings } from './SettingsContext';
 import { RoleProvider } from './RoleContext';
 import { Sidebar } from './Sidebar';
+import { RippleInit } from './RippleInit';
 import type { SidebarApp } from '@/app/_lib/apps/actions';
 
 const SettingsPanel = dynamic(() => import('./SettingsPanel').then(m => ({ default: m.SettingsPanel })), { ssr: false });
@@ -30,6 +31,7 @@ function ShellInner({ sidebarApps, children }: { sidebarApps: SidebarApp[]; chil
 
   return (
     <>
+      <RippleInit />
       <div className={`admin-shell flex min-h-screen ${isOpen ? 'admin-shell--pushed' : ''}`}
         style={{ background: 'var(--admin-bg)' }}
       >

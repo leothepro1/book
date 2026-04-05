@@ -59,7 +59,7 @@ describe("POST /api/guest-auth/verify-otp", () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json).toEqual({ success: true, redirectTo: "/portal/home" });
+    expect(json).toEqual({ success: true, redirectTo: "/account" });
     expect(mockSetSession).toHaveBeenCalledWith({
       tenantId: "t1",
       email: "guest@example.com",

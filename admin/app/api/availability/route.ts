@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
  * ════════════════
  *
  * Real-time availability search via PMS adapter.
- * GET /api/availability?tenantId=xxx&checkIn=2025-06-01&checkOut=2025-06-05&guests=2
+ * GET /api/availability?checkIn=2025-06-01&checkOut=2025-06-05&guests=2
  *
  * Never cached — availability is always fresh from PMS.
  *
@@ -25,21 +25,30 @@ import type { AvailabilityEntry, Restriction } from "@/app/_lib/integrations/typ
 import { prisma } from "@/app/_lib/db/prisma";
 import { validateStayDates } from "@/app/_lib/validation/dates";
 import { log } from "@/app/_lib/logger";
-import { AccommodationType } from "@prisma/client";
-
-const VALID_ACCOMMODATION_TYPES = new Set<string>(Object.values(AccommodationType));
+import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 const NO_STORE = { "Cache-Control": "no-store" };
+const PMS_TIMEOUT_MS = 8_000;
 
 const paramsSchema = z.object({
-  tenantId: z.string().min(1, "tenantId krävs"),
   checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ogiltigt datumformat (YYYY-MM-DD)"),
   checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ogiltigt datumformat (YYYY-MM-DD)"),
   guests: z.coerce.number().int().min(1, "Minst 1 gäst").max(99),
-  types: z.string().optional(), // comma-separated: "CAMPING,HOTEL"
-  typeId: z.string().optional(), // AccommodationType value OR legacy collection ID
+  categories: z.string().optional(), // comma-separated AccommodationCategory IDs
+  types: z.string().optional(), // legacy: comma-separated AccommodationType enums
+  typeId: z.string().optional(), // legacy: AccommodationType value
 });
 
 export async function GET(req: Request) {
+  // ── Resolve tenant from Host header — never from query params ──
+  const resolvedTenant = await resolveTenantFromHost();
+  if (!resolvedTenant) {
+    return NextResponse.json(
+      { error: "TENANT_NOT_FOUND", message: "Okänd tenant." },
+      { status: 401, headers: NO_STORE },
+    );
+  }
+  const tenantId = resolvedTenant.id;
+
   const url = new URL(req.url);
   const raw = Object.fromEntries(url.searchParams);
 
@@ -57,7 +66,7 @@ export async function GET(req: Request) {
     );
   }
 
-  const { tenantId, guests, types } = parsed.data;
+  const { guests } = parsed.data;
 
   // Validate dates via shared utility
   const dateCheck = validateStayDates(parsed.data.checkIn, parsed.data.checkOut);
@@ -69,53 +78,46 @@ export async function GET(req: Request) {
   }
   const { checkIn, checkOut, nights } = dateCheck;
 
-  // ── Build type filter for adapter call ──────────────────────────
-  const typeFilter = types ? types.split(",").filter(Boolean) : undefined;
+  // ── Build accommodation filter from visible categories ─────────
+  // Only accommodations belonging to visible categories are shown.
+  // If specific category IDs are passed, further narrow to those.
+  const categoryIds = parsed.data.categories
+    ? parsed.data.categories.split(",").filter(Boolean)
+    : undefined;
 
-  // ── Build externalId filter from typeId or types param ──────────
-  let externalIdFilter: string[] | undefined;
+  // Query visible categories (optionally filtered to specific IDs)
+  const visibleCategories = await prisma.accommodationCategory.findMany({
+    where: {
+      tenantId,
+      status: "ACTIVE",
+      visibleInSearch: true,
+      ...(categoryIds && categoryIds.length > 0 ? { id: { in: categoryIds } } : {}),
+    },
+    select: {
+      items: {
+        select: { accommodation: { select: { externalId: true, status: true } } },
+      },
+    },
+  });
 
-  if (parsed.data.typeId) {
-    const typeId = parsed.data.typeId;
-
-    if (VALID_ACCOMMODATION_TYPES.has(typeId)) {
-      // A) typeId is a valid AccommodationType — query Accommodation table
-      const accommodations = await prisma.accommodation.findMany({
-        where: {
-          tenantId,
-          status: "ACTIVE",
-          visibleInSearch: true,
-          accommodationType: typeId as AccommodationType,
-        },
-        select: { externalId: true },
-      });
-      externalIdFilter = accommodations
-        .map((a) => a.externalId)
-        .filter((id): id is string => id != null);
-    } else {
-      // Unknown typeId — not an AccommodationType, no longer falls back to ProductCollection
-      log("warn", "availability.unknown_type_id", { tenantId, typeId });
-      externalIdFilter = []; // empty = no results
-    }
-  } else if (typeFilter && typeFilter.length > 0) {
-    // C) types param — validate and filter via Accommodation table
-    const validTypes = typeFilter.filter((t) => VALID_ACCOMMODATION_TYPES.has(t));
-    if (validTypes.length > 0) {
-      const accommodations = await prisma.accommodation.findMany({
-        where: {
-          tenantId,
-          status: "ACTIVE",
-          visibleInSearch: true,
-          accommodationType: { in: validTypes as AccommodationType[] },
-        },
-        select: { externalId: true },
-      });
-      externalIdFilter = accommodations
-        .map((a) => a.externalId)
-        .filter((id): id is string => id != null);
+  // Collect externalIds of active accommodations in visible categories
+  const visibleExternalIds = new Set<string>();
+  for (const cat of visibleCategories) {
+    for (const item of cat.items) {
+      if (item.accommodation.status === "ACTIVE" && item.accommodation.externalId) {
+        visibleExternalIds.add(item.accommodation.externalId);
+      }
     }
   }
-  // D) Neither typeId nor types — no filtering (all categories returned)
+
+  // When no visible accommodations exist, use empty array to block all results.
+  // undefined would bypass filtering and show everything — never allow that.
+  const externalIdFilter = Array.from(visibleExternalIds);
+
+  // Legacy type filter for PMS adapter call
+  const typeFilter = parsed.data.types
+    ? parsed.data.types.split(",").filter(Boolean)
+    : undefined;
 
   // ── Resolve PMS adapter ─────────────────────────────────────────
   let adapter;
@@ -132,11 +134,11 @@ export async function GET(req: Request) {
     );
   }
 
-  // ── Fetch availability and restrictions in parallel ─────────────
+  // ── Fetch availability and restrictions in parallel (with timeout) ──
   let availabilityResult;
   let restrictions: Restriction[];
   try {
-    [availabilityResult, restrictions] = await Promise.all([
+    const pmsPromise = Promise.all([
       adapter.getAvailability(tenantId, {
         checkIn,
         checkOut,
@@ -145,10 +147,44 @@ export async function GET(req: Request) {
       }),
       adapter.getRestrictions(tenantId, checkIn, checkOut),
     ]);
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      globalThis.setTimeout(() => reject(new Error("PMS_TIMEOUT")), PMS_TIMEOUT_MS);
+    });
+
+    [availabilityResult, restrictions] = await Promise.race([pmsPromise, timeoutPromise]);
   } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg === "PMS_TIMEOUT") {
+      log("error", "availability.pms_timeout", {
+        tenantId,
+        duration: PMS_TIMEOUT_MS,
+      });
+      // Return empty availability — conservative, never show false positives
+      return NextResponse.json(
+        {
+          results: [],
+          searchParams: {
+            checkIn: parsed.data.checkIn,
+            checkOut: parsed.data.checkOut,
+            guests,
+            nights,
+          },
+          tenantId,
+        },
+        {
+          headers: {
+            ...NO_STORE,
+            "X-Bedfront-Partial": "true",
+            "X-Bedfront-Partial-Reason": "PMS_TIMEOUT",
+          },
+        },
+      );
+    }
+
     log("error", "availability.pms_query_failed", {
       tenantId,
-      error: err instanceof Error ? err.message : String(err),
+      error: errMsg,
     });
     return NextResponse.json(
       { error: "PMS_UNAVAILABLE", message: "Kunde inte hämta tillgänglighet. Försök igen." },
@@ -157,11 +193,12 @@ export async function GET(req: Request) {
   }
 
   // ── Apply externalId filtering ──────────────────────────────────
-  const filteredCategories = externalIdFilter
-    ? availabilityResult.categories.filter((entry: AvailabilityEntry) =>
-        externalIdFilter.includes(entry.category.externalId),
-      )
-    : availabilityResult.categories;
+  // Filter PMS results to only include accommodations in visible categories.
+  // If externalIdFilter is empty, no accommodations pass — this is intentional
+  // (all categories hidden = no results, never show hidden accommodations).
+  const filteredCategories = availabilityResult.categories.filter(
+    (entry: AvailabilityEntry) => externalIdFilter.includes(entry.category.externalId),
+  );
 
   // ── Build restriction map ───────────────────────────────────────
   const restrictionMap = new Map<string, Restriction[]>();
@@ -183,7 +220,6 @@ export async function GET(req: Request) {
           tenantId,
           externalId: { in: categoryExternalIds },
           status: "ACTIVE",
-          visibleInSearch: true,
         },
         select: { id: true, externalId: true },
       })
@@ -196,37 +232,8 @@ export async function GET(req: Request) {
     }
   }
 
-  // ── Exclude hidden accommodations (visibleInSearch = false) ────
-  // The batch lookup only returned visible accommodations. When no
-  // externalIdFilter was applied, we also need to exclude entries
-  // that map to hidden accommodations. We query for hidden ones and
-  // remove them from the results.
-  let hiddenExternalIds: Set<string> | null = null;
-  if (!externalIdFilter && categoryExternalIds.length > 0) {
-    const hiddenRows = await prisma.accommodation.findMany({
-      where: {
-        tenantId,
-        externalId: { in: categoryExternalIds },
-        status: "ACTIVE",
-        visibleInSearch: false,
-      },
-      select: { externalId: true },
-    });
-    if (hiddenRows.length > 0) {
-      hiddenExternalIds = new Set(
-        hiddenRows.map((r) => r.externalId).filter((id): id is string => id != null),
-      );
-    }
-  }
-
-  const visibleCategories = hiddenExternalIds
-    ? filteredCategories.filter(
-        (entry: AvailabilityEntry) => !hiddenExternalIds!.has(entry.category.externalId),
-      )
-    : filteredCategories;
-
   // ── Build results ───────────────────────────────────────────────
-  const results = visibleCategories.map((entry: AvailabilityEntry) => {
+  const results = filteredCategories.map((entry: AvailabilityEntry) => {
     const catRestrictions = [
       ...(restrictionMap.get(entry.category.externalId) ?? []),
       ...(restrictionMap.get("__all") ?? []),

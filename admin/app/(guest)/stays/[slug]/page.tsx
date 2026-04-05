@@ -131,6 +131,7 @@ export default async function RoomDetailPage({
   // ── Build ProductContext data (extends display with PMS-specific fields) ──
   const productData = {
     ...productDisplay,
+    tenantId: tenant.id,
     images: resolved.media.map((m) => m.url),
     facilities: visibleFacilities,
     highlights: resolved.highlights.map((h) => ({ icon: h.icon, text: h.text, description: h.description })),

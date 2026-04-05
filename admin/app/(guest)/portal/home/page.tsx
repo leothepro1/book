@@ -29,7 +29,7 @@ export default async function SessionHomePage() {
   const bookingStatus = getBookingStatus(ctx.primaryBooking);
 
   return (
-    <GuestPageShell config={ctx.config}>
+    <GuestPageShell config={ctx.config} pageId="home">
       <ThemeRenderer
         templateKey="home"
         config={ctx.config}

@@ -49,7 +49,6 @@ export async function GET() {
               id: true,
               name: true,
               slug: true,
-              visibleInSearch: true,
             },
           },
         },
@@ -78,7 +77,6 @@ export async function GET() {
       name: true,
       slug: true,
       externalCode: true,
-      visibleInSearch: true,
     },
     orderBy: { name: "asc" },
   });

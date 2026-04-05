@@ -33,7 +33,8 @@ import { FieldRenderer } from "../fields/FieldRenderer";
 import { ColorTokenField } from "./ColorTokenField";
 import { useEditor } from "../EditorContext";
 import { getPageDefinition } from "@/app/_lib/pages/registry";
-import { getPageSettings, buildPageSettingsPatch, getPageUndoSnapshot } from "@/app/_lib/pages/config";
+import { getPageSettings, buildPageSettingsPatch, getPageUndoSnapshot, resolveSettingsDefinition } from "@/app/_lib/pages/config";
+import { resolveContrastPalette } from "@/app/_lib/color/contrast";
 import type { SettingField } from "@/app/(guest)/_lib/themes/types";
 import { LAYOUT_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
 
@@ -99,14 +100,16 @@ export function SettingsPanel() {
 
   // Page-aware: check if current page uses settings mode
   const pageDef = getPageDefinition(currentPageId);
-  const isSettingsMode = pageDef.editorMode === "settings" && !!pageDef.pageSettings?.fields.length;
+  // Resolve through settingsSource — shared panels use the source page's definition
+  const effectiveDef = resolveSettingsDefinition(currentPageId);
+  const isSettingsMode = pageDef.editorMode === "settings" && !!effectiveDef.pageSettings?.fields.length;
 
   if (isSettingsMode) {
     return (
       <PageSettingsView
         config={config}
         pageId={currentPageId}
-        pageDef={pageDef}
+        pageDef={effectiveDef}
         pushUndo={pushUndo}
         saveDraft={saveDraft}
       />
@@ -232,7 +235,7 @@ export function SettingsPanel() {
       <div className="editor-panel__header">
         <span className="editor-panel__title">Inställningar</span>
       </div>
-      <div className="editor-panel__body">
+      <div className="editor-panel__body" style={{ paddingTop: 0 }}>
         <LayoutAccordion />
         <LogoAccordion />
         <TypographyAccordion />
@@ -279,10 +282,10 @@ function PageSettingsView({
   // Map pageSettings keys → CSS variable names
   const SETTINGS_TO_CSS: Record<string, string> = {
     backgroundColor: "--background",
-    textColor: "--text",
     buttonColor: "--button-bg",
     accentColor: "--accent",
-    borderColor: "--border-color",
+    errorColor: "--error",
+    summaryBackgroundColor: "--summary-bg",
   };
 
   // Font keys need resolution via FONT_OPTIONS
@@ -308,18 +311,29 @@ function PageSettingsView({
         const fontOpt = FONT_OPTIONS.find((f) => f.key === val);
         cssUpdates[fontVar] = fontOpt?.family ?? "ui-sans-serif";
       }
-      // fieldStyle → --field-bg + --field-text
-      if (key === "fieldStyle" && typeof val === "string") {
-        cssUpdates["--field-bg"] = val === "transparent" ? "transparent" : "#fff";
-        const textColor = (values.textColor as string) || "#121212";
-        cssUpdates["--field-text"] = val === "transparent" ? textColor : "#121212";
-      }
-      // textColor change should also update --field-text when fieldStyle is transparent
-      if (key === "textColor" && typeof val === "string") {
+      // backgroundColor → auto-resolve text + border via WCAG contrast
+      if (key === "backgroundColor" && typeof val === "string") {
+        const contrast = resolveContrastPalette(val);
+        cssUpdates["--text"] = contrast.text;
+        // Also update field-text if fieldStyle is transparent
         const style = (values.fieldStyle as string) || "white";
         if (style === "transparent") {
-          cssUpdates["--field-text"] = val;
+          cssUpdates["--field-text"] = "inherit";
+          cssUpdates["--card-inputs-bg"] = `color-mix(in srgb, ${contrast.text} 4%, transparent)`;
         }
+      }
+      // summaryBackgroundColor → auto-resolve summary text via WCAG contrast
+      if (key === "summaryBackgroundColor" && typeof val === "string") {
+        const sc = resolveContrastPalette(val);
+        cssUpdates["--summary-text"] = sc.text;
+      }
+      // fieldStyle → --field-bg + --field-text + --card-inputs-bg
+      if (key === "fieldStyle" && typeof val === "string") {
+        const bgColor = (values.backgroundColor as string) || "#FFFFFF";
+        const contrast = resolveContrastPalette(bgColor);
+        cssUpdates["--field-bg"] = val === "transparent" ? "transparent" : "#fff";
+        cssUpdates["--field-text"] = val === "transparent" ? "inherit" : "#202020";
+        cssUpdates["--card-inputs-bg"] = val === "transparent" ? `color-mix(in srgb, ${contrast.text} 4%, transparent)` : "#f3f3f4";
       }
     }
 

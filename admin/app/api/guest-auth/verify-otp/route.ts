@@ -64,6 +64,12 @@ export async function POST(req: Request) {
     );
   }
 
+  // Mark email as verified — covers both login and registration flows
+  await prisma.guestAccount.update({
+    where: { id: guestAccount.id },
+    data: { verifiedEmail: true },
+  });
+
   // Set guest session — same pattern as magic-link auth
   await setGuestSession({
     tenantId,
@@ -82,7 +88,5 @@ export async function POST(req: Request) {
     metadata: { method: "otp" },
   });
 
-  // Redirect to session-driven portal home page.
-  // /portal/home handles "no booking" via resolveGuestContext() → redirect to /no-booking.
-  return NextResponse.json({ success: true, redirectTo: "/portal/home" });
+  return NextResponse.json({ success: true, redirectTo: "/account" });
 }

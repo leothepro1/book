@@ -286,8 +286,8 @@
 }
 
 .co__confirm-btn:disabled {
-  opacity: 0.5;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 .co__confirm-btn--paypal {

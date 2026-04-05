@@ -14,42 +14,8 @@ import Link from "next/link";
 import type { SectionRendererProps } from "@/app/_lib/sections/types";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { formatDateRange } from "@/app/_lib/search/dates";
+import type { SearchResult, AvailabilityResponse } from "@/app/_lib/search/types";
 import "./search-results-renderer.css";
-
-// ── Types ──────────────────────────────────────────────────────
-
-interface RoomCategory {
-  externalId: string;
-  name: string;
-  shortDescription: string;
-  type: string;
-  imageUrls: string[];
-  maxGuests: number;
-  facilities: string[];
-  basePricePerNight: number;
-}
-
-interface RatePlan {
-  externalId: string;
-  name: string;
-  nightlyAmount: number;
-  totalAmount: number;
-  currency: string;
-}
-
-interface AvailabilityEntry {
-  category: RoomCategory;
-  ratePlans: RatePlan[];
-  availableUnits: number;
-  available: boolean;
-  restrictionViolations: string[];
-}
-
-interface AvailabilityResponse {
-  results: AvailabilityEntry[];
-  searchParams: { checkIn: string; checkOut: string; guests: number; nights: number };
-  tenantId: string;
-}
 
 // ── Compact Search Form ────────────────────────────────────────
 
@@ -102,7 +68,7 @@ function CompactSearchForm({
 
 // ── Room Card ──────────────────────────────────────────────────
 
-function RoomCard({ entry, searchParams }: { entry: AvailabilityEntry; searchParams: string }) {
+function RoomCard({ entry, searchParams }: { entry: SearchResult; searchParams: string }) {
   const { category, ratePlans, available, restrictionViolations } = entry;
   const lowestNightly = ratePlans.length > 0 ? Math.min(...ratePlans.map((rp) => rp.nightlyAmount)) : 0;
   const image = category.imageUrls[0];
@@ -113,7 +79,6 @@ function RoomCard({ entry, searchParams }: { entry: AvailabilityEntry; searchPar
         {image ? <img src={image} alt={category.name} /> : <div className="sr__card-placeholder" />}
       </div>
       <div className="sr__card-info">
-        <div className="sr__card-type">{category.type}</div>
         <h3 className="sr__card-title">{category.name}</h3>
         <p className="sr__card-desc">{category.shortDescription}</p>
         <div className="sr__card-meta">
@@ -149,6 +114,7 @@ export function SearchResultsDefaultRenderer(props: SectionRendererProps) {
   const checkIn = searchParams.get("checkIn") ?? "";
   const checkOut = searchParams.get("checkOut") ?? "";
   const guests = parseInt(searchParams.get("guests") ?? "2", 10);
+  const categories = searchParams.get("categories") ?? "";
   const tenantId = props.config?.tenantId ?? "";
   const hasSearch = !!(checkIn && checkOut && guests > 0 && tenantId);
 
@@ -159,6 +125,7 @@ export function SearchResultsDefaultRenderer(props: SectionRendererProps) {
     params.set("checkIn", checkIn);
     params.set("checkOut", checkOut);
     params.set("guests", String(guests));
+    if (categories) params.set("categories", categories);
 
     fetch(`/api/availability?${params.toString()}`, { cache: "no-store" })
       .then(async (res) => {
@@ -167,7 +134,7 @@ export function SearchResultsDefaultRenderer(props: SectionRendererProps) {
         setLoaded(true);
       })
       .catch(() => { setError("Kunde inte hämta tillgänglighet."); setLoaded(true); });
-  }, [checkIn, checkOut, guests, tenantId, hasSearch]);
+  }, [checkIn, checkOut, guests, categories, tenantId, hasSearch]);
 
   const searchParamsStr = hasSearch ? `checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}` : "";
 

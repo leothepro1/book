@@ -199,12 +199,12 @@ function SearchSidebarSection({
   }, [guestOpen]);
 
   // ── Handlers ──
-  const toggleType = useCallback((type: AccommodationType) => {
-    const prev = params.types;
+  const toggleCategory = useCallback((categoryId: string) => {
+    const prev = params.categoryIds;
     engine.setParams({
-      types: prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
+      categoryIds: prev.includes(categoryId) ? prev.filter((id) => id !== categoryId) : [...prev, categoryId],
     });
-  }, [engine, params.types]);
+  }, [engine, params.categoryIds]);
 
   const handleDayClick = useCallback(
     (date: Date) => {
@@ -265,16 +265,16 @@ function SearchSidebarSection({
       <h2 className="ss__title" style={{ textAlign: titleAlign }}>{title}</h2>
 
       {/* ── 2. Accommodation type filter ── */}
-      {showTypeFilter && ACCOMMODATION_TYPES.length > 0 && (
+      {showTypeFilter && fetchedTypes.length > 0 && (
         <fieldset className="ss__fieldset">
             <div className="ss__type-list">
-            {ACCOMMODATION_TYPES.map((type) => {
-              const isSelected = selectedTypes.includes(type.value);
+            {fetchedTypes.map((cat) => {
+              const isSelected = selectedCategoryIds.includes(cat.id);
               return (
                 <button
-                  key={type.value}
+                  key={cat.id}
                   type="button"
-                  onClick={() => toggleType(type.value)}
+                  onClick={() => toggleCategory(cat.id)}
                   className={`ss__type-btn ${isSelected ? "ss__type-btn--active" : ""}`}
                 >
                   <span className={`ss__checkbox ${isSelected ? "ss__checkbox--checked" : ""}`}>
@@ -291,7 +291,7 @@ function SearchSidebarSection({
                       />
                     </svg>
                   </span>
-                  <span className="ss__type-label">{type.label}</span>
+                  <span className="ss__type-label">{cat.title}</span>
                 </button>
               );
             })}

@@ -58,14 +58,24 @@ async function resolveFromHost(host: string): Promise<string | null> {
     portalSlug = process.env.DEV_GUEST_PORTAL_SLUG ?? null;
   }
 
-  if (!portalSlug) return null;
+  if (portalSlug) {
+    const tenant = await prisma.tenant.findUnique({
+      where: { portalSlug },
+      select: { id: true },
+    });
+    return tenant?.id ?? null;
+  }
 
-  const tenant = await prisma.tenant.findUnique({
-    where: { portalSlug },
-    select: { id: true },
-  });
+  // Dev fallback: resolve via DEV_ORG_ID (same as login page server component)
+  if (IS_DEV && process.env.DEV_ORG_ID) {
+    const tenant = await prisma.tenant.findUnique({
+      where: { clerkOrgId: process.env.DEV_ORG_ID },
+      select: { id: true },
+    });
+    return tenant?.id ?? null;
+  }
 
-  return tenant?.id ?? null;
+  return null;
 }
 
 /**

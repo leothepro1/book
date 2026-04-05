@@ -38,6 +38,8 @@ export type GuestContext = {
     city: string | null;
     postalCode: string | null;
     country: string | null;
+    verifiedEmail: boolean;
+    emailMarketingState: string;
   };
   bookings: NormalizedBooking[];
   primaryBooking: NormalizedBooking | null;
@@ -81,6 +83,8 @@ export async function resolveGuestContext(): Promise<GuestContext | null> {
       city: true,
       postalCode: true,
       country: true,
+      verifiedEmail: true,
+      emailMarketingState: true,
     },
   });
   if (!guestAccount) return null;

@@ -27,7 +27,7 @@ export default async function StaysPage() {
   const bookingStatus = getBookingStatus(booking);
 
   return (
-    <GuestPageShell config={config}>
+    <GuestPageShell config={config} pageId="stays">
       <ThemeRenderer
         templateKey="stays"
         config={config}

@@ -1,7 +1,7 @@
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import { LAYOUT_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
 import { themeToStyleAttr, backgroundStyle } from "../_lib/theme";
-import { resolveThemeLayout, renderSidebarSlots } from "../_lib/themes/engine";
+import { resolveThemeLayout, resolveThemeLayoutVars, renderSidebarSlots } from "../_lib/themes/engine";
 import GuestHeader from "./GuestHeader";
 import GuestFooter from "./GuestFooter";
 import { SidebarLayout } from "./SidebarLayout";
@@ -42,6 +42,10 @@ export default async function GuestPageShell({
   // Resolve theme layout — awaits registry bootstrap
   const layout = await resolveThemeLayout(config);
   const isSidebar = layout === "sidebar-left";
+
+  // Inject theme layout vars (--page-padding, --sidebar-width)
+  const layoutVars = resolveThemeLayoutVars(config);
+  Object.assign(shellVars, layoutVars);
 
   // When theme layout is sidebar-left, render sidebar slots from the
   // theme manifest. renderSidebarSlots returns null if no slots exist.

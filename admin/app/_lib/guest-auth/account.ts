@@ -2,7 +2,7 @@
  * GuestAccount — single owner of all GuestAccount read/write logic.
  *
  * No other file may call prisma.guestAccount directly.
- * Accounts are created lazily on order payment or booking sync.
+ * Accounts are created on registration, order payment, or booking sync.
  * One account per email per tenant.
  */
 

@@ -87,6 +87,7 @@ export async function ProductPreviewPage({ productId }: { productId?: string }) 
 
   // ProductContext extends display data with PMS-specific fields
   const productData = {
+    tenantId,
     id: productDisplay.id,
     title: productDisplay.title,
     description: productDisplay.description,
@@ -106,7 +107,7 @@ export async function ProductPreviewPage({ productId }: { productId?: string }) 
   };
 
   return (
-    <GuestPageShell config={config}>
+    <GuestPageShell config={config} pageId="product">
       <ProductProvider product={productData}>
         <ThemeRenderer
           templateKey="product"
