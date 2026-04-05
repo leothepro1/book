@@ -621,7 +621,7 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
         {/* Försäljningskanaler */}
         {!isCollapsed && (
           <div style={{ marginTop: 'var(--space-2)' }}>
-            <div className="admin-group-label" style={{ padding: '0 8px', marginBottom: 2 }}>
+            <div className="admin-group-label" style={{ padding: '0 8px', marginBottom: 6 }}>
               Försäljningskanaler
             </div>
             {/* Webbshop — always present, always first */}
@@ -689,33 +689,42 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
         {/* Appar — installed ACTIVE apps (non-channel) + "Lägg till" */}
         {!isCollapsed && (
           <div style={{ marginTop: 'var(--space-2)' }}>
-            <Link href="/apps" className="admin-group-label" style={{ padding: '0 8px', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 2, textDecoration: 'none', color: 'inherit' }}>
+            <Link href="/apps" className="admin-group-label" style={{ padding: '0 8px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 2, textDecoration: 'none', color: 'inherit' }}>
               Appar
               <span className="material-symbols-rounded" style={{ fontSize: 14, color: '#303030' }}>chevron_right</span>
             </Link>
-            {sidebarApps.filter((a) => !a.isSalesChannel).map((app) => (
-              <Link
-                key={app.appId}
-                href={`/apps/${app.appId}`}
-                onClick={(e) => guardedClick(e, `/apps/${app.appId}`)}
-                className="flex items-center gap-3 text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]"
-                style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8, fontSize: 'var(--font-sm)' }}
-              >
-                {app.iconUrl ? (
-                  <img src={app.iconUrl} alt="" style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'cover', flexShrink: 0, border: '1px solid var(--admin-border)' }} />
-                ) : (
-                  <span
-                    className="material-symbols-rounded flex-shrink-0"
-                    style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
-                  >
-                    {app.icon}
+            {sidebarApps.filter((a) => !a.isSalesChannel).map((app) => {
+              const active = isActive(`/apps/${app.appId}`);
+              return (
+                <Link
+                  key={app.appId}
+                  href={`/apps/${app.appId}`}
+                  onClick={(e) => guardedClick(e, `/apps/${app.appId}`)}
+                  className={`flex items-center gap-3 ${
+                    active
+                      ? 'bg-[#e3e3e3] text-[#303030]'
+                      : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
+                  }`}
+                  style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8, fontSize: 'var(--font-sm)' }}
+                >
+                  {app.iconUrl ? (
+                    <img src={app.iconUrl} alt="" style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'cover', flexShrink: 0, border: '1px solid var(--admin-border)' }} />
+                  ) : (
+                    <span
+                      className="material-symbols-rounded flex-shrink-0"
+                      style={{ fontSize: 16, fontVariationSettings: active
+                        ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
+                        : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
+                    >
+                      {app.icon}
+                    </span>
+                  )}
+                  <span className="text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden" style={{ fontWeight: active ? 600 : 500 }}>
+                    {app.name}
                   </span>
-                )}
-                <span className="text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden" style={{ color: '#303030' }}>
-                  {app.name}
-                </span>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
             {sidebarApps.filter((a) => !a.isSalesChannel).length === 0 && (
               <Link
                 href="/apps"
