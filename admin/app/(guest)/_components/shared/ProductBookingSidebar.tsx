@@ -7,7 +7,7 @@ import { sv } from "date-fns/locale";
 import { DateRangePicker, getNightCount } from "./DateRangePicker";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { useProduct } from "@/app/(guest)/_lib/product-context/ProductContext";
-import { useCommerceEngine } from "@/app/_lib/commerce/useCommerceEngine";
+import { useCommerceEngineContext } from "@/app/_lib/commerce/CommerceEngineContext";
 import "./product-booking-sidebar.css";
 
 function CounterControl({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (n: number) => void }) {
@@ -66,8 +66,7 @@ export function ProductBookingSidebar() {
   );
   const selectedPlan = ratePlans.find((rp) => rp.externalId === selectedPlanId) ?? ratePlans[0] ?? null;
 
-  // ── Commerce Engine — live PMS pricing on rate plan change ──
-  const tenantId = product?.tenantId ?? "";
+  // ── Commerce Engine — shared via context, live PMS pricing ──
   const {
     selectAccommodation,
     pricing: enginePricing,
@@ -77,7 +76,7 @@ export function ProductBookingSidebar() {
     checkoutStatus,
     checkoutError,
     reset: resetEngine,
-  } = useCommerceEngine({ tenantId });
+  } = useCommerceEngineContext();
 
   // Derive displayed price: engine (fresh PMS) → server props (initial load)
   const displayPricePerNight = enginePricing?.pricePerNight ?? selectedPlan?.pricePerNight ?? 0;
@@ -356,6 +355,59 @@ export function ProductBookingSidebar() {
           </div>
         </div>
       )}
+
+      {/* Price breakdown */}
+      {pricingStatus === "loading" && (
+        <div className="pbs__breakdown">
+          <div className="pbs__breakdown-line">
+            <span className="pbs__breakdown-skeleton pbs__breakdown-skeleton--label" />
+            <span className="pbs__breakdown-skeleton pbs__breakdown-skeleton--amount" />
+          </div>
+          <div className="pbs__breakdown-line">
+            <span className="pbs__breakdown-skeleton pbs__breakdown-skeleton--label" />
+            <span className="pbs__breakdown-skeleton pbs__breakdown-skeleton--amount" />
+          </div>
+        </div>
+      )}
+      {pricingStatus === "success" && enginePricing?.lineItems && enginePricing.lineItems.length > 0 && (() => {
+        const accomLine = enginePricing.lineItems.find((li) => li.type === "accommodation");
+        const includedItems = enginePricing.lineItems.filter((li) => li.isIncluded);
+        return (
+          <div className="pbs__breakdown">
+            {accomLine && (
+              <>
+                <div className="pbs__breakdown-header">{accomLine.label}</div>
+                <div className="pbs__breakdown-line">
+                  <span className="pbs__breakdown-detail">
+                    {accomLine.nights} nätter &times; {formatPriceDisplay(accomLine.perNight ?? 0, displayCurrency)} kr
+                  </span>
+                  <span className="pbs__breakdown-amount">
+                    {formatPriceDisplay(accomLine.amount, displayCurrency)} kr
+                  </span>
+                </div>
+              </>
+            )}
+            {includedItems.length > 0 && (
+              <>
+                <div className="pbs__breakdown-divider" />
+                <div className="pbs__breakdown-included-label">Inkluderat:</div>
+                {includedItems.map((item) => (
+                  <div key={item.label} className="pbs__breakdown-included-item">
+                    <span className="pbs__breakdown-check">&#10003;</span> {item.label}
+                  </div>
+                ))}
+              </>
+            )}
+            <div className="pbs__breakdown-divider" />
+            <div className="pbs__breakdown-line pbs__breakdown-line--total">
+              <span>Totalt</span>
+              <span className="pbs__breakdown-amount pbs__breakdown-amount--total">
+                {formatPriceDisplay(enginePricing.total, displayCurrency)} kr
+              </span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Checkout error */}
       {checkoutError && (

@@ -93,7 +93,7 @@ function validateSelection(
 function buildPricingSummary(
   result: Awaited<ReturnType<typeof resolveAccommodationPrice>>,
   addons: SelectedAddon[],
-): PricingSummary {
+): PricingSummary | null {
   const baseTotal = result.totalPrice;
 
   // Sum addon totals — values are ören integers from server-side resolution.
@@ -103,20 +103,57 @@ function buildPricingSummary(
     addonsTotal += addon.totalPrice;
   }
 
-  const lineItems: PricingLineItem[] = [
-    {
-      label: result.ratePlan.name,
-      amount: baseTotal,
-      nights: result.nights,
-      perNight: result.pricePerNight,
-    },
-  ];
+  // ── Build typed line items ──
 
+  const lineItems: PricingLineItem[] = [];
+
+  // 1. Accommodation line item — always present
+  const accommodationLine: PricingLineItem = {
+    type: "accommodation",
+    label: result.ratePlan.name,
+    amount: result.pricePerNight * result.nights,
+    nights: result.nights,
+    perNight: result.pricePerNight,
+  };
+  lineItems.push(accommodationLine);
+
+  // 2. Package items — included addons from the rate plan (display only)
+  for (const included of result.ratePlan.includedAddons) {
+    lineItems.push({
+      type: "package_item",
+      label: included.name,
+      amount: 0,
+      isIncluded: true,
+    });
+  }
+
+  // 3. Addon line items (future phase — skip for now)
   for (const addon of addons) {
     lineItems.push({
+      type: "addon",
       label: `${addon.productId}`,
       amount: addon.totalPrice,
+      quantity: addon.quantity,
     });
+  }
+
+  // ── Verify: accommodation line item must equal baseTotal ──
+  // Only check accommodation (not addons — those are a separate total)
+  const accommodationSum = lineItems
+    .filter((li) => li.type === "accommodation")
+    .reduce((sum, li) => sum + li.amount, 0);
+
+  if (accommodationSum !== baseTotal) {
+    log("error", "commerce.pricing_line_item_mismatch", {
+      accommodationSum,
+      baseTotal,
+      nights: result.nights,
+      pricePerNight: result.pricePerNight,
+      ratePlan: result.ratePlan.name,
+    });
+    // This is a bug — nights × perNight should always equal baseTotal.
+    // Return error instead of serving inconsistent data.
+    return null;
   }
 
   return {
@@ -175,6 +212,16 @@ export async function fetchPricingAction(
     const duration = Date.now() - start;
 
     const pricing = buildPricingSummary(result, addons);
+
+    if (!pricing) {
+      return {
+        pricing: null,
+        error: {
+          code: "PRICING_FAILED",
+          message: "Prisberäkningen misslyckades. Försök igen.",
+        },
+      };
+    }
 
     log("info", "commerce.pricing_resolved", {
       tenantId,

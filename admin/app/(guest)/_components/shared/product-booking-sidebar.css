@@ -368,6 +368,97 @@
   cursor: not-allowed;
 }
 
+/* ── Price breakdown ───────────────────────────── */
+
+.pbs__breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--text, #000) 10%, transparent);
+  border-radius: 10px;
+}
+
+.pbs__breakdown-header {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text, #1a1a1a);
+}
+
+.pbs__breakdown-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pbs__breakdown-detail {
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--text, #000) 60%, transparent);
+}
+
+.pbs__breakdown-amount {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text, #1a1a1a);
+}
+
+.pbs__breakdown-divider {
+  height: 1px;
+  background: color-mix(in srgb, var(--text, #000) 10%, transparent);
+  margin: 4px 0;
+}
+
+.pbs__breakdown-included-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--text, #000) 50%, transparent);
+}
+
+.pbs__breakdown-included-item {
+  font-size: 0.8125rem;
+  color: #16a34a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pbs__breakdown-check {
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.pbs__breakdown-line--total {
+  font-weight: 600;
+}
+
+.pbs__breakdown-amount--total {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+/* ── Breakdown skeletons ──────────────────────── */
+
+.pbs__breakdown-skeleton {
+  display: block;
+  height: 14px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text, #000) 8%, transparent);
+  animation: pbs-skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.pbs__breakdown-skeleton--label {
+  width: 140px;
+}
+
+.pbs__breakdown-skeleton--amount {
+  width: 72px;
+}
+
+@keyframes pbs-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 /* ── Buy button ────────────────────────────────── */
 
 .pbs__buy-btn {

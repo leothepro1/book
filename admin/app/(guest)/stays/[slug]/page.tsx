@@ -14,6 +14,7 @@ import { resolveAccommodation } from "@/app/_lib/accommodations/resolve";
 import type { AccommodationWithRelations } from "@/app/_lib/accommodations/types";
 import { ProductProvider } from "@/app/(guest)/_lib/product-context/ProductContext";
 import type { ProductRatePlan } from "@/app/(guest)/_lib/product-context/ProductContext";
+import { CommerceEngineProvider } from "@/app/_lib/commerce/CommerceEngineContext";
 import type { ResolvedProductDisplay } from "@/app/_lib/sections/data-sources";
 
 export const dynamic = "force-dynamic";
@@ -161,17 +162,30 @@ export default async function RoomDetailPage({
 
   const bookingStatus = getBookingStatus(booking);
 
+  const initialSelection = ratePlans[0]
+    ? {
+        accommodationId: accommodation.id,
+        ratePlanId: ratePlans[0].externalId,
+        checkIn,
+        checkOut,
+        adults: guests,
+        children: 0,
+      }
+    : undefined;
+
   return (
     <GuestPageShell config={config}>
       <ProductProvider product={productData}>
-        <ThemeRenderer
-          templateKey="product"
-          config={config}
-          booking={booking}
-          bookingStatus={bookingStatus}
-          token="preview"
-          pageResolvedData={{ product: productDisplay }}
-        />
+        <CommerceEngineProvider tenantId={tenant.id} initialSelection={initialSelection}>
+          <ThemeRenderer
+            templateKey="product"
+            config={config}
+            booking={booking}
+            bookingStatus={bookingStatus}
+            token="preview"
+            pageResolvedData={{ product: productDisplay }}
+          />
+        </CommerceEngineProvider>
       </ProductProvider>
     </GuestPageShell>
   );

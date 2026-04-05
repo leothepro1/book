@@ -9,6 +9,7 @@ const spotBooking: AppDefinition = {
     "Lagg till en interaktiv karta dar gasterna kan valja sin specifika plats. " +
     "Perfekt for campingplatser, stugbyar och resorts dar laget ar en del av upplevelsen.",
   icon: "map",
+  iconUrl: "https://res.cloudinary.com/dmgmoisae/image/upload/q_auto/f_auto/v1775408407/CIqiqqXsiIADEAE_uh5a5l.png",
   category: "operations",
   developer: "bedfront",
   pricing: [

@@ -6,6 +6,7 @@ import GuestPageShell from "@/app/(guest)/_components/GuestPageShell";
 import { getRequestLocale } from "@/app/(guest)/_lib/locale/getRequestLocale";
 import { prisma } from "@/app/_lib/db/prisma";
 import { ProductProvider } from "@/app/(guest)/_lib/product-context/ProductContext";
+import { CommerceEngineProvider } from "@/app/_lib/commerce/CommerceEngineContext";
 import type { ResolvedProductDisplay } from "@/app/_lib/sections/data-sources";
 
 /**
@@ -109,14 +110,16 @@ export async function ProductPreviewPage({ productId }: { productId?: string }) 
   return (
     <GuestPageShell config={config} pageId="product">
       <ProductProvider product={productData}>
-        <ThemeRenderer
-          templateKey="product"
-          config={config}
-          booking={booking}
-          bookingStatus={bookingStatus}
-          token="preview"
-          pageResolvedData={{ product: productDisplay }}
-        />
+        <CommerceEngineProvider tenantId={tenantId}>
+          <ThemeRenderer
+            templateKey="product"
+            config={config}
+            booking={booking}
+            bookingStatus={bookingStatus}
+            token="preview"
+            pageResolvedData={{ product: productDisplay }}
+          />
+        </CommerceEngineProvider>
       </ProductProvider>
     </GuestPageShell>
   );

@@ -11,6 +11,7 @@
  * separately for display — that is a different concern.
  */
 
+import { differenceInCalendarDays } from "date-fns";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { log } from "@/app/_lib/logger";
@@ -65,9 +66,7 @@ export async function resolveAccommodationPrice(
   const { tenantId, accommodationId, ratePlanId, checkIn, checkOut, guests } = params;
 
   // 1. Validate dates
-  const nights = Math.round(
-    (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24),
-  );
+  const nights = differenceInCalendarDays(checkOut, checkIn);
   if (nights < 1) {
     throw new AccommodationPriceError(
       "checkOut must be after checkIn",

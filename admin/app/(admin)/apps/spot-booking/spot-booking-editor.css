@@ -1,61 +1,151 @@
-/* Spot Booking Map Editor */
+/* ══════════════════════════════════════════════════════════
+   spot-booking-editor.css — Mirrors /editor shell layout
+   BEM prefix: .sbe__
+   ══════════════════════════════════════════════════════════ */
 
-.sbe__layout {
+/* ── Override AdminShell — fullscreen editor ── */
+
+/* Kill all shell transitions — instant fullscreen switch */
+.admin-shell:has(.sbe__editor) {
+  transition: none !important;
+}
+
+/* Hide sidebar (<aside>) */
+.admin-shell:has(.sbe__editor) aside {
+  display: none !important;
+}
+
+/* Main: remove sidebar margin, fill viewport, kill slide transition */
+.admin-shell:has(.sbe__editor) main {
+  margin-left: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  height: 100vh !important;
+  transition: none !important;
+}
+
+/* Container: strip all constraints */
+.admin-shell:has(.sbe__editor) .container {
+  max-width: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+}
+
+/* ── Root (mirrors .editor) ── */
+
+.sbe__editor {
   display: grid;
-  grid-template-columns: 1fr 380px;
   grid-template-rows: auto 1fr;
   height: 100vh;
-  background: var(--admin-bg);
+  width: 100vw;
   overflow: hidden;
+  background: var(--admin-surface-sunken);
 }
 
-/* ── Top bar ── */
+/* ── Header — uses shared editor-header classes from editor.css ── */
+/* Only spot-booking-specific overrides here */
 
-.sbe__topbar {
-  grid-column: 1 / -1;
+.sbe__header {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-5);
+  height: 56px;
+  padding: 0 16px;
   background: var(--admin-surface);
-  border-bottom: 1px solid var(--admin-border);
-  min-height: 52px;
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 10;
+  box-shadow: 0 .125rem .0625rem #0000000d, 0 0 .0625rem #42474c73;
 }
 
-.sbe__topbar-back {
+.sbe__header-center {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
-  font-size: var(--font-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--admin-text-secondary);
-  text-decoration: none;
-  transition: color var(--duration-normal) var(--ease-default);
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-.sbe__topbar-back:hover { color: var(--admin-text); }
-
-.sbe__topbar-title {
-  font-size: var(--font-lg);
-  font-weight: var(--font-weight-semibold);
+.sbe__header-info {
+  font-size: 13px;
+  font-weight: 500;
   color: var(--admin-text);
-  margin: 0;
 }
 
-.sbe__topbar-meta {
-  font-size: var(--font-xs);
+/* ── Body (mirrors .editor-body) ── */
+
+.sbe__body {
+  display: grid;
+  grid-template-columns: 24rem 1fr;
+  height: 100%;
+  overflow: hidden;
+  background: #f1f1f1;
+}
+
+/* ── Panel (mirrors .editor-panel) ── */
+
+.sbe__panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--admin-surface);
+  height: calc(100% - 14px);
+  overflow: hidden;
+  margin: 7px 0 7px 7px;
+  border-radius: .75rem;
+  box-shadow: 0 0 0 1px #0000000f, 0 2px 8px #0000000f;
+}
+
+.sbe__panel-header {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.sbe__panel-title {
+  font-size: 14px;
+  font-weight: 550;
+  color: var(--admin-text);
+}
+
+.sbe__panel-count {
+  font-size: 12px;
   color: var(--admin-text-tertiary);
-  margin-left: auto;
+  background: var(--admin-surface-muted);
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
 }
 
-/* ── Map canvas ── */
+.sbe__panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.sbe__panel-footer {
+  padding: 12px;
+  border-top: 1px solid var(--admin-border);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
+/* ── Canvas (mirrors .editor-canvas / preview-widget-inner) ── */
 
 .sbe__canvas {
   position: relative;
   overflow: hidden;
-  background: color-mix(in srgb, var(--admin-text) 4%, var(--admin-bg));
+  background: #f1f1f1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   cursor: grab;
   user-select: none;
+  padding: 7px;
 }
 
 .sbe__canvas--placing {
@@ -79,59 +169,6 @@
   pointer-events: none;
 }
 
-/* ── Canvas toolbar ── */
-
-.sbe__canvas-toolbar {
-  position: absolute;
-  top: var(--space-3);
-  left: var(--space-3);
-  display: flex;
-  gap: var(--space-2);
-  z-index: 10;
-}
-
-.sbe__toolbar-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  background: var(--admin-surface);
-  border: 1px solid var(--admin-border);
-  border-radius: var(--radius-md);
-  font-size: var(--font-xs);
-  font-weight: var(--font-weight-medium);
-  color: var(--admin-text-secondary);
-  cursor: pointer;
-  box-shadow: var(--admin-shadow-sm);
-  transition: all var(--duration-normal) var(--ease-default);
-}
-
-.sbe__toolbar-btn:hover {
-  border-color: var(--admin-border-focus);
-  color: var(--admin-text);
-}
-
-.sbe__toolbar-btn--active {
-  border-color: var(--admin-accent);
-  background: color-mix(in srgb, var(--admin-accent) 8%, var(--admin-surface));
-  color: var(--admin-accent);
-}
-
-/* Zoom indicator */
-.sbe__zoom-indicator {
-  position: absolute;
-  bottom: var(--space-3);
-  left: var(--space-3);
-  padding: var(--space-1) var(--space-3);
-  background: var(--admin-surface);
-  border: 1px solid var(--admin-border);
-  border-radius: var(--radius-md);
-  font-size: var(--font-xs);
-  color: var(--admin-text-tertiary);
-  box-shadow: var(--admin-shadow-sm);
-  z-index: 10;
-}
-
 /* ── Markers on map ── */
 
 .sbe__marker {
@@ -139,7 +176,7 @@
   transform: translate(-50%, -50%);
   z-index: 5;
   cursor: pointer;
-  transition: transform var(--duration-fast) var(--ease-default);
+  transition: transform var(--duration-fast) ease;
 }
 
 .sbe__marker:hover {
@@ -162,9 +199,8 @@
   align-items: center;
   justify-content: center;
   font-size: 11px;
-  font-weight: var(--font-weight-bold);
+  font-weight: 700;
   color: var(--admin-accent-text);
-  transition: box-shadow var(--duration-normal) var(--ease-default);
 }
 
 .sbe__marker--selected .sbe__marker-dot {
@@ -188,53 +224,11 @@
   background: var(--admin-surface);
   border-radius: var(--radius-xs);
   font-size: 10px;
-  font-weight: var(--font-weight-medium);
+  font-weight: 500;
   color: var(--admin-text);
   white-space: nowrap;
   box-shadow: var(--admin-shadow-sm);
   pointer-events: none;
-}
-
-/* ── Right panel ── */
-
-.sbe__panel {
-  background: var(--admin-surface);
-  border-left: 1px solid var(--admin-border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.sbe__panel-header {
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--admin-border);
-}
-
-.sbe__panel-title {
-  font-size: var(--font-md);
-  font-weight: var(--font-weight-semibold);
-  color: var(--admin-text);
-  margin: 0;
-}
-
-.sbe__panel-subtitle {
-  font-size: var(--font-xs);
-  color: var(--admin-text-tertiary);
-  margin: var(--space-1) 0 0;
-}
-
-.sbe__panel-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-4) var(--space-5);
-}
-
-.sbe__panel-footer {
-  padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--admin-border);
-  display: flex;
-  gap: var(--space-3);
-  justify-content: flex-end;
 }
 
 /* ── Marker list ── */
@@ -249,10 +243,10 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-3);
+  padding: var(--space-3);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background var(--duration-normal) var(--ease-default);
+  transition: background 0.15s ease;
 }
 
 .sbe__marker-row:hover {
@@ -273,7 +267,7 @@
   justify-content: center;
   flex-shrink: 0;
   font-size: 10px;
-  font-weight: var(--font-weight-bold);
+  font-weight: 700;
   color: var(--admin-accent-text);
 }
 
@@ -283,8 +277,8 @@
 }
 
 .sbe__marker-row-label {
-  font-size: var(--font-sm);
-  font-weight: var(--font-weight-medium);
+  font-size: 13px;
+  font-weight: 500;
   color: var(--admin-text);
   white-space: nowrap;
   overflow: hidden;
@@ -292,7 +286,7 @@
 }
 
 .sbe__marker-row-acc {
-  font-size: var(--font-xs);
+  font-size: 12px;
   color: var(--admin-text-tertiary);
   white-space: nowrap;
   overflow: hidden;
@@ -304,7 +298,7 @@
   gap: var(--space-1);
   flex-shrink: 0;
   opacity: 0;
-  transition: opacity var(--duration-normal) var(--ease-default);
+  transition: opacity 0.15s ease;
 }
 
 .sbe__marker-row:hover .sbe__marker-row-actions {
@@ -322,7 +316,7 @@
   align-items: center;
   justify-content: center;
   color: var(--admin-text-tertiary);
-  transition: all var(--duration-normal) var(--ease-default);
+  transition: all 0.15s ease;
 }
 
 .sbe__action-btn:hover {
@@ -335,7 +329,7 @@
   color: var(--admin-danger);
 }
 
-/* ── Configure / Edit form ── */
+/* ── Form ── */
 
 .sbe__form {
   display: flex;
@@ -350,14 +344,20 @@
 }
 
 .sbe__field-label {
-  font-size: var(--font-sm);
-  font-weight: var(--font-weight-medium);
+  font-size: 13px;
+  font-weight: 500;
   color: var(--admin-text);
 }
 
 .sbe__field-hint {
-  font-size: var(--font-xs);
+  font-size: 12px;
   color: var(--admin-text-tertiary);
+}
+
+.sbe__settings-price-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Searchable select */
@@ -380,10 +380,10 @@
 
 .sbe__search-item {
   padding: var(--space-2) var(--space-3);
-  font-size: var(--font-sm);
+  font-size: 13px;
   color: var(--admin-text);
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-default);
+  transition: background 0.1s ease;
 }
 
 .sbe__search-item:hover {
@@ -392,38 +392,17 @@
 
 .sbe__search-item--selected {
   background: color-mix(in srgb, var(--admin-accent) 12%, var(--admin-surface));
-  font-weight: var(--font-weight-medium);
+  font-weight: 500;
 }
 
 .sbe__search-empty {
   padding: var(--space-3);
-  font-size: var(--font-xs);
+  font-size: 12px;
   color: var(--admin-text-tertiary);
   text-align: center;
 }
 
-/* ── Empty state ── */
-
-.sbe__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-8) var(--space-4);
-  text-align: center;
-}
-
-.sbe__empty-icon {
-  color: var(--admin-text-tertiary);
-}
-
-.sbe__empty-text {
-  font-size: var(--font-sm);
-  color: var(--admin-text-tertiary);
-  line-height: var(--line-height-relaxed);
-}
-
-/* ── Inline error ── */
+/* ── Error ── */
 
 .sbe__error {
   display: flex;
@@ -432,7 +411,7 @@
   padding: var(--space-2) var(--space-3);
   background: var(--admin-danger-tint);
   border-radius: var(--radius-md);
-  font-size: var(--font-xs);
+  font-size: 12px;
   color: var(--admin-danger);
 }
 
@@ -441,7 +420,7 @@
 .sbe__confirm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--admin-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -454,20 +433,20 @@
   padding: var(--space-6);
   max-width: 380px;
   width: 90%;
-  box-shadow: var(--shadow-modal);
+  box-shadow: var(--admin-shadow-lg);
 }
 
 .sbe__confirm-title {
-  font-size: var(--font-md);
-  font-weight: var(--font-weight-semibold);
+  font-size: 14px;
+  font-weight: 600;
   color: var(--admin-text);
   margin: 0 0 var(--space-2);
 }
 
 .sbe__confirm-text {
-  font-size: var(--font-sm);
+  font-size: 13px;
   color: var(--admin-text-secondary);
-  line-height: var(--line-height-relaxed);
+  line-height: 1.5;
   margin: 0 0 var(--space-5);
 }
 
@@ -488,16 +467,16 @@
   background: var(--admin-text);
   color: var(--admin-bg);
   border-radius: var(--radius-md);
-  font-size: var(--font-sm);
-  font-weight: var(--font-weight-medium);
+  font-size: 13px;
+  font-weight: 500;
   box-shadow: var(--admin-shadow-md);
   z-index: 200;
-  animation: sbe-toast-in var(--duration-normal) var(--ease-default);
+  animation: sbe-toast-in 0.2s ease;
 }
 
 @keyframes sbe-toast-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(var(--space-3)); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 /* ── Inline label edit ── */
@@ -510,16 +489,4 @@
 
 .sbe__inline-edit-input {
   width: 100px;
-}
-
-@media (max-width: 768px) {
-  .sbe__layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 50vh 1fr;
-  }
-
-  .sbe__panel {
-    border-left: none;
-    border-top: 1px solid var(--admin-border);
-  }
 }

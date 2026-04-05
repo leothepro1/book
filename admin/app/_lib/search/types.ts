@@ -25,6 +25,7 @@ export interface SearchResultCategory {
   externalId: string;
   name: string;
   shortDescription: string;
+  longDescription: string;
   type: string;
   imageUrls: string[];
   maxGuests: number;

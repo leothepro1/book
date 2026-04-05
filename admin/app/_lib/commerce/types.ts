@@ -40,11 +40,21 @@ export type AccommodationSelection = {
 
 // ─── Pricing ───────────────────────────────────────────────
 
+export type PricingLineItemType =
+  | "accommodation" // base nights × rate
+  | "addon" // per addon
+  | "discount" // negative amount
+  | "package_item" // included in package, display only
+  | "fee"; // cleaning fee etc
+
 export type PricingLineItem = {
+  type: PricingLineItemType;
   label: string;
-  amount: number;
-  nights?: number;
-  perNight?: number;
+  amount: number; // ören — negative for discounts
+  nights?: number; // for accommodation type
+  perNight?: number; // ören — for accommodation type
+  quantity?: number; // for addon type
+  isIncluded?: boolean; // true = display only, not charged
 };
 
 export type PricingSummary = {

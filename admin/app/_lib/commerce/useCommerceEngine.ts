@@ -15,7 +15,7 @@
  *   - Never throws — all errors in state fields
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { fetchPricingAction } from "./actions/fetchPricing";
 import type {
   AccommodationSelection,
@@ -259,6 +259,14 @@ export function useCommerceEngine(options: {
     setCheckoutStatus("idle");
     setCheckoutError(null);
   }, [checkoutStatus]);
+
+  // ── Auto-fetch on mount when initialSelection is complete ──
+  useEffect(() => {
+    if (isSelectionComplete(selectionRef.current)) {
+      void fetchPricing();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // empty deps — mount only, intentional
 
   return {
     selection,
