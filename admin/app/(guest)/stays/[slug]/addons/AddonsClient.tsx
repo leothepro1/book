@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
+import { CheckoutModal } from "@/app/(guest)/checkout/CheckoutModal";
 import type { AddonProduct, AddonVariant } from "@/app/_lib/accommodations/addons";
 import "./addons.css";
 import "./spot-booking-modal.css";
@@ -529,79 +530,71 @@ export function AddonsClient({ token, addons, spotAddon, snapshot, backUrl }: Pr
 
       {/* ── Fixed bottom bar ──────────────────────────── */}
       <div className="ao__bar">
-        <button
-          type="button"
-          className="ao__bar-summary-btn"
-          onClick={() => setSummaryOpen(true)}
-        >
-          Bokningssammanfattning
-        </button>
-        <button
-          type="button"
-          className="ao__bar-continue"
-          onClick={handleContinue}
-          disabled={submitting}
-        >
-          {submitting
-            ? "Sparar..."
-            : hasSelections
-              ? "Fortsätt till utcheckning"
-              : "Fortsätt utan tillägg"}
-        </button>
+        <div className="ao__bar-inner">
+          <button
+            type="button"
+            className="ao__bar-summary-btn"
+            onClick={() => setSummaryOpen(true)}
+          >
+            Bokningssammanfattning
+          </button>
+          <button
+            type="button"
+            className="ao__bar-continue"
+            onClick={handleContinue}
+            disabled={submitting}
+          >
+            {submitting
+              ? "Sparar..."
+              : hasSelections
+                ? "Fortsätt till utcheckning"
+                : "Fortsätt utan tillägg"}
+          </button>
+        </div>
       </div>
 
-      {/* ── Summary modal ──────────────────────────── */}
-      {summaryOpen && (
-        <div className="ao__modal-overlay" onClick={() => setSummaryOpen(false)}>
-          <div className="ao__modal" onClick={(e) => e.stopPropagation()}>
-            <div className="ao__modal-header">
-              <div className="ao__modal-header-left">
-                <h3 className="ao__modal-title">Bokningssammanfattning</h3>
-              </div>
-              <button className="ao__modal-close" onClick={() => setSummaryOpen(false)} aria-label="Stäng">
-                <span className="material-symbols-rounded" style={{ fontSize: 20 }}>close</span>
-              </button>
+      {/* ── Summary modal (CheckoutModal) ──────────── */}
+      <CheckoutModal
+        open={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        title="Bokningssammanfattning"
+      >
+        <div className="ao__summary-modal">
+          <h4 className="ao__summary-modal-name">{snapshot.accommodationName}</h4>
+          <div className="ao__summary-modal-meta">
+            {snapshot.checkIn} – {snapshot.checkOut} · {snapshot.totalNights} natter · {snapshot.adults} {snapshot.adults === 1 ? "gast" : "gaster"}
+          </div>
+          <div className="ao__summary-modal-rate">{snapshot.ratePlanName}</div>
+
+          <div className="ao__summary-modal-divider" />
+
+          <div className="ao__summary-modal-row">
+            <span>Boende</span>
+            <span>{formatPriceDisplay(snapshot.accommodationTotal, snapshot.currency)} {snapshot.currency}</span>
+          </div>
+
+          {addonTotal > 0 && (
+            <div className="ao__summary-modal-row">
+              <span>Tillagg</span>
+              <span>{formatPriceDisplay(addonTotal, snapshot.currency)} {snapshot.currency}</span>
             </div>
-            <div className="ao__modal-body">
-              <div className="ao__summary-modal">
-                <h4 className="ao__summary-modal-name">{snapshot.accommodationName}</h4>
-                <div className="ao__summary-modal-meta">
-                  {snapshot.checkIn} – {snapshot.checkOut} · {snapshot.totalNights} nätter · {snapshot.adults} {snapshot.adults === 1 ? "gäst" : "gäster"}
-                </div>
-                <div className="ao__summary-modal-rate">{snapshot.ratePlanName}</div>
+          )}
 
-                <div className="ao__summary-modal-divider" />
-
-                <div className="ao__summary-modal-row">
-                  <span>Boende</span>
-                  <span>{formatPriceDisplay(snapshot.accommodationTotal, snapshot.currency)} {snapshot.currency}</span>
-                </div>
-
-                {addonTotal > 0 && (
-                  <div className="ao__summary-modal-row">
-                    <span>Tillagg</span>
-                    <span>{formatPriceDisplay(addonTotal, snapshot.currency)} {snapshot.currency}</span>
-                  </div>
-                )}
-
-                {selectedSpot && spotAddon && (
-                  <div className="ao__summary-modal-row">
-                    <span>Plats {selectedSpot.label}</span>
-                    <span>+{formatPriceDisplay(spotAddon.addonPrice, spotAddon.currency)} {spotAddon.currency}</span>
-                  </div>
-                )}
-
-                <div className="ao__summary-modal-divider" />
-
-                <div className="ao__summary-modal-row ao__summary-modal-row--total">
-                  <span>Totalt</span>
-                  <span>{formatPriceDisplay(grandTotal, snapshot.currency)} {snapshot.currency}</span>
-                </div>
-              </div>
+          {selectedSpot && spotAddon && (
+            <div className="ao__summary-modal-row">
+              <span>Plats {selectedSpot.label}</span>
+              <span>+{formatPriceDisplay(spotAddon.addonPrice, spotAddon.currency)} {spotAddon.currency}</span>
             </div>
+          )}
+
+          <div className="ao__summary-modal-divider" />
+
+          <div className="ao__summary-modal-row ao__summary-modal-row--total">
+            <span>Totalt</span>
+            <span>{formatPriceDisplay(grandTotal, snapshot.currency)} {snapshot.currency}</span>
           </div>
         </div>
-      )}
+      </CheckoutModal>
 
       {/* ── Variant modal ──────────────────────────── */}
       {modalAddon && (

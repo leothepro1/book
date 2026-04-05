@@ -330,13 +330,18 @@
   left: 0;
   right: 0;
   z-index: 100;
+  background: var(--background, #fff);
+  border-top: 1px solid color-mix(in srgb, var(--text, #000) 10%, transparent);
+  box-shadow: 0 -2px 12px color-mix(in srgb, var(--text, #000) 6%, transparent);
+}
+
+.ao__bar-inner {
+  max-width: var(--layout-max-width, 1250px);
+  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 14px clamp(1rem, 4vw, 2rem);
-  background: var(--background, #fff);
-  border-top: 1px solid color-mix(in srgb, var(--text, #000) 10%, transparent);
-  box-shadow: 0 -2px 12px color-mix(in srgb, var(--text, #000) 6%, transparent);
 }
 
 .ao__bar-summary-btn {

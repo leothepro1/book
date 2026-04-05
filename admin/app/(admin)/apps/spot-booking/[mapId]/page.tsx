@@ -1,40 +1,25 @@
-/**
- * Spot Booking — Map Data
- *
- * GET /api/apps/spot-booking/map?mapId=xxx
- *
- * Returns a specific SpotMap with all markers and available accommodations
- * for the map editor. Admin-only, tenant-scoped.
- */
-
-import { NextRequest, NextResponse } from "next/server";
+import { redirect } from "next/navigation";
 import { requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { prisma } from "@/app/_lib/db/prisma";
-import { log } from "@/app/_lib/logger";
+import { SpotBookingEditor } from "../SpotBookingEditor";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: NextRequest) {
+type Props = {
+  params: Promise<{ mapId: string }>;
+};
+
+export default async function SpotBookingEditorPage({ params }: Props) {
+  const { mapId } = await params;
+
   const auth = await requireAdmin();
-  if (!auth.ok) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!auth.ok) redirect("/apps");
 
   const tenantData = await getCurrentTenant();
-  if (!tenantData) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  if (!tenantData) redirect("/apps");
 
   const tenantId = tenantData.tenant.id;
-  const mapId = request.nextUrl.searchParams.get("mapId");
-
-  if (!mapId) {
-    return NextResponse.json(
-      { error: "mapId query parameter is required" },
-      { status: 400 },
-    );
-  }
 
   // Load SpotMap by ID with tenant isolation
   const spotMap = await prisma.spotMap.findFirst({
@@ -43,11 +28,7 @@ export async function GET(request: NextRequest) {
       markers: {
         include: {
           accommodation: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-            },
+            select: { id: true, name: true, slug: true },
           },
         },
         orderBy: { createdAt: "asc" },
@@ -59,17 +40,19 @@ export async function GET(request: NextRequest) {
   });
 
   if (!spotMap) {
-    log("warn", "spot_booking.map_not_found", { tenantId });
-    return NextResponse.json({ error: "No map configured" }, { status: 404 });
+    redirect("/apps/spot-booking");
   }
 
-  // Load all tenant accommodations available for linking
-  // (not archived, sorted by name)
+  // Load all active accommodation categories for settings picker
+  const categories = await prisma.accommodationCategory.findMany({
+    where: { tenantId, status: "ACTIVE" },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, title: true, imageUrl: true },
+  });
+
+  // Load all tenant accommodations for linking
   const accommodations = await prisma.accommodation.findMany({
-    where: {
-      tenantId,
-      archivedAt: null,
-    },
+    where: { tenantId, archivedAt: null },
     select: {
       id: true,
       name: true,
@@ -79,18 +62,18 @@ export async function GET(request: NextRequest) {
     orderBy: { name: "asc" },
   });
 
-  // Build set of already-linked accommodation IDs
   const linkedIds = new Set(spotMap.markers.map((m) => m.accommodationId));
 
-  return NextResponse.json({
+  const initialData = {
     spotMap: {
       id: spotMap.id,
       imageUrl: spotMap.imageUrl,
       imagePublicId: spotMap.imagePublicId,
       addonPrice: spotMap.addonPrice,
       currency: spotMap.currency,
-      isActive: spotMap.isActive,
       category: spotMap.accommodationCategory,
+      version: spotMap.version,
+      draftConfig: spotMap.draftConfig as Record<string, unknown> | null,
     },
     markers: spotMap.markers.map((m) => ({
       id: m.id,
@@ -108,5 +91,8 @@ export async function GET(request: NextRequest) {
       externalCode: a.externalCode,
       linked: linkedIds.has(a.id),
     })),
-  });
+    categories,
+  };
+
+  return <SpotBookingEditor initialData={initialData} />;
 }

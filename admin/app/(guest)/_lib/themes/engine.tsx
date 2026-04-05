@@ -262,7 +262,7 @@ export async function ThemeRenderer({
     <MenusProvider menus={config.menus ?? []}>
     <SpecialLinkProvider maps={config.maps ?? []}>
     <div
-      style={{ padding: `${pagePadding}px ${pagePadding}px 124px ${pagePadding}px` }}
+      style={{ padding: `${pagePadding}px 0px 124px 20px` }}
       data-theme-id={renderContext.themeId}
       data-theme-version={renderContext.manifestVersion}
       data-tenant-version={renderContext.tenantVersion ?? "unversioned"}

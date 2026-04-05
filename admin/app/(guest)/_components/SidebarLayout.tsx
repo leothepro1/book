@@ -21,6 +21,9 @@ import "./sidebar-layout.css";
 /** Routes where the sidebar is hidden. */
 const SIDEBAR_EXCLUDED_PREFIXES = ["/checkout"];
 
+/** Routes where the sidebar is hidden (suffix match). */
+const SIDEBAR_EXCLUDED_SUFFIXES = ["/addons"];
+
 export function SidebarLayout({
   sidebar,
   children,
@@ -32,9 +35,9 @@ export function SidebarLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Route-based exclusion — sidebar never renders on checkout
-  const isExcluded = SIDEBAR_EXCLUDED_PREFIXES.some((prefix) =>
-    pathname.startsWith(prefix),
-  );
+  const isExcluded =
+    SIDEBAR_EXCLUDED_PREFIXES.some((prefix) => pathname.startsWith(prefix)) ||
+    SIDEBAR_EXCLUDED_SUFFIXES.some((suffix) => pathname.endsWith(suffix));
 
   if (isExcluded) {
     return <>{children}</>;

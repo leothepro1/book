@@ -1,8 +1,13 @@
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
+import { getApp } from "@/app/_lib/apps/registry";
+import { getSetupStatus } from "@/app/_lib/apps/setup";
 import { prisma } from "@/app/_lib/db/prisma";
-import { SpotBookingEditor } from "./SpotBookingEditor";
+import { SpotMapList } from "./SpotMapList";
+
+// Force registration of all app definitions
+import "@/app/_lib/apps/definitions";
 
 export const dynamic = "force-dynamic";
 
@@ -21,75 +26,65 @@ export default async function SpotBookingPage() {
     select: { id: true, status: true },
   });
 
+  // Not installed → show the app listing / install page
   if (!tenantApp || tenantApp.status === "UNINSTALLED") {
-    redirect("/apps");
+    const appDef = getApp("spot-booking");
+    if (!appDef) redirect("/apps");
+
+    const setup = await getSetupStatus(tenantId);
+    const { AppListingPage } = await import(
+      "@/app/(admin)/apps/[appId]/AppListingPage"
+    );
+
+    return <AppListingPage app={appDef} status={null} setupReady={setup.isReadyForApps} />;
   }
 
   if (tenantApp.status === "PENDING_SETUP") {
     redirect("/apps/spot-booking/setup");
   }
 
-  // Load SpotMap with markers
-  const spotMap = await prisma.spotMap.findUnique({
+  // Load all SpotMaps for this installation
+  const spotMaps = await prisma.spotMap.findMany({
     where: { tenantAppId: tenantApp.id },
     include: {
-      markers: {
-        include: {
-          accommodation: {
-            select: { id: true, name: true, slug: true },
-          },
-        },
-        orderBy: { createdAt: "asc" },
-      },
       accommodationCategory: {
         select: { id: true, title: true },
       },
+      _count: { select: { markers: true } },
     },
+    orderBy: { createdAt: "asc" },
   });
 
-  if (!spotMap) {
-    redirect("/apps/spot-booking/setup");
-  }
-
-  // Load all tenant accommodations for linking
-  const accommodations = await prisma.accommodation.findMany({
-    where: { tenantId, archivedAt: null },
+  // If no maps exist (edge case: all deleted), show empty list
+  // Load available categories for the "create new map" modal
+  const categories = await prisma.accommodationCategory.findMany({
+    where: { tenantId, status: "ACTIVE" },
+    orderBy: { sortOrder: "asc" },
     select: {
       id: true,
-      name: true,
-      slug: true,
-      externalCode: true,
+      title: true,
+      _count: { select: { items: true } },
     },
-    orderBy: { name: "asc" },
   });
 
-  const linkedIds = new Set(spotMap.markers.map((m) => m.accommodationId));
+  const usedCategoryIds = new Set(spotMaps.map((m) => m.accommodationCategoryId));
 
-  const initialData = {
-    spotMap: {
-      id: spotMap.id,
-      imageUrl: spotMap.imageUrl,
-      addonPrice: spotMap.addonPrice,
-      currency: spotMap.currency,
-      category: spotMap.accommodationCategory,
-    },
-    markers: spotMap.markers.map((m) => ({
-      id: m.id,
-      label: m.label,
-      x: m.x,
-      y: m.y,
-      accommodationId: m.accommodationId,
-      accommodationName: m.accommodation.name,
-      accommodationSlug: m.accommodation.slug,
-    })),
-    accommodations: accommodations.map((a) => ({
-      id: a.id,
-      name: a.name,
-      slug: a.slug,
-      externalCode: a.externalCode,
-      linked: linkedIds.has(a.id),
-    })),
-  };
+  const maps = spotMaps.map((m) => ({
+    id: m.id,
+    imageUrl: m.imageUrl,
+    addonPrice: m.addonPrice,
+    currency: m.currency,
+    isActive: m.isActive,
+    markerCount: m._count.markers,
+    category: m.accommodationCategory,
+  }));
 
-  return <SpotBookingEditor initialData={initialData} />;
+  const availableCategories = categories.map((c) => ({
+    id: c.id,
+    title: c.title,
+    accommodationCount: c._count.items,
+    used: usedCategoryIds.has(c.id),
+  }));
+
+  return <SpotMapList maps={maps} categories={availableCategories} />;
 }

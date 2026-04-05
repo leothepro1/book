@@ -8,6 +8,7 @@ import {
   useMemo,
   type MouseEvent as ReactMouseEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { EditorIcon } from "@/app/_components/EditorIcon";
 import { Tooltip } from "@/app/_components/Tooltip";
@@ -56,6 +57,7 @@ type SpotMapData = {
 type CategoryOption = {
   id: string;
   title: string;
+  imageUrl: string | null;
 };
 
 export type EditorInitialData = {
@@ -545,10 +547,10 @@ export function SpotBookingEditor({ initialData }: Props) {
                 onClick={() => setActivePanel("spots")}
                 aria-pressed={activePanel === "spots"}
               >
-                <EditorIcon name="location_on" size={18} />
+                <EditorIcon name="distance" size={20} />
               </button>
             </Tooltip>
-            <Tooltip label="Installningar" placement="bottom">
+            <Tooltip label="Inställningar" placement="bottom">
               <button
                 type="button"
                 className={`editor-rail__btn${activePanel === "settings" ? " editor-rail__btn--active" : ""}`}
@@ -621,7 +623,7 @@ export function SpotBookingEditor({ initialData }: Props) {
           <div className="sbe__panel-header">
             <span className="sbe__panel-title">
               {activePanel === "settings"
-                ? "Installningar"
+                ? "Inställningar"
                 : showForm
                   ? "Konfigurera plats"
                   : "Platser"}
@@ -644,12 +646,26 @@ export function SpotBookingEditor({ initialData }: Props) {
             {activePanel === "settings" ? (
               /* ── Settings panel ── */
               <div className="sbe__form">
+                {/* Category picker */}
                 <div className="sbe__field">
-                  <label className="sbe__field-label">Tilllaggsavgift</label>
-                  <div className="sbe__settings-price-row">
+                  <label className="sbe__field-label">Boendetyp</label>
+                  <span className="sbe__field-hint">Kartan visas vid bokning av denna boendetyp</span>
+                  <CategoryPicker
+                    categories={initialData.categories}
+                    selectedId={currentConfig.accommodationCategoryId}
+                    onSelect={(id) => updateSetting("accommodationCategoryId", id)}
+                  />
+                </div>
+
+                <div className="sbe__field">
+                  <label className="sbe__field-label">Tilläggsavgift</label>
+                  <span className="sbe__field-hint">
+                    Gästen betalar detta tillägg för att välja en specifik plats
+                  </span>
+                  <div className="sbe__price-input-wrap">
                     <input
                       type="number"
-                      className="admin-input--sm"
+                      className="admin-input--sm sbe__price-input"
                       value={Math.round(currentConfig.addonPrice / 100)}
                       onChange={(e) => {
                         const v = parseInt(e.target.value, 10);
@@ -657,23 +673,9 @@ export function SpotBookingEditor({ initialData }: Props) {
                       }}
                       min={0}
                       step={1}
-                      style={{ width: 100 }}
                     />
-                    <select
-                      className="admin-input--sm"
-                      value={currentConfig.currency}
-                      onChange={(e) => updateSetting("currency", e.target.value)}
-                      style={{ width: 80 }}
-                    >
-                      <option value="SEK">SEK</option>
-                      <option value="EUR">EUR</option>
-                      <option value="NOK">NOK</option>
-                      <option value="DKK">DKK</option>
-                    </select>
+                    <span className="sbe__price-suffix">kr</span>
                   </div>
-                  <span className="sbe__field-hint">
-                    Gasten betalar detta tillagg for att valja en specifik plats
-                  </span>
                 </div>
               </div>
             ) : showForm ? (
@@ -934,6 +936,140 @@ export function SpotBookingEditor({ initialData }: Props) {
       {/* Toast */}
       {toast && <div className="sbe__toast">{toast}</div>}
 
+    </div>
+  );
+}
+
+// ── Category picker (sp-resource-picker pattern) ────────────────
+
+function CategoryPicker({
+  categories,
+  selectedId,
+  onSelect,
+}: {
+  categories: CategoryOption[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [popupTop, setPopupTop] = useState(0);
+
+  const selected = categories.find((c) => c.id === selectedId);
+
+  const query = search.trim().toLowerCase();
+  const filtered = query
+    ? categories.filter((c) => c.title.toLowerCase().includes(query))
+    : categories;
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        popupRef.current && !popupRef.current.contains(e.target as Node) &&
+        triggerRef.current && !triggerRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setOpen(false); setSearch(""); }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open]);
+
+  const openPopup = () => {
+    if (triggerRef.current) {
+      setPopupTop(triggerRef.current.getBoundingClientRect().top);
+    }
+    setOpen(true);
+    setSearch("");
+  };
+
+  const popupContent = open && typeof document !== "undefined" && createPortal(
+    <div className="sp-resource-popup" ref={popupRef} style={{ top: popupTop }}>
+      <div className="pk-popup__search">
+        <svg className="pk-popup__search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M11.5 11.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+        <input
+          type="text"
+          className="pk-popup__search-input"
+          placeholder="Sök..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          autoComplete="off"
+        />
+        {search && (
+          <button type="button" className="pk-popup__search-clear" onClick={() => setSearch("")}>
+            <EditorIcon name="close" size={14} />
+          </button>
+        )}
+      </div>
+      <div className="sp-resource-popup__list">
+        {filtered.length === 0 ? (
+          <div className="sp-resource-popup__empty">Inga resultat</div>
+        ) : (
+          filtered.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={`sp-resource-popup__item${c.id === selectedId ? " sp-resource-popup__item--active" : ""}`}
+              onClick={() => { onSelect(c.id); setOpen(false); setSearch(""); }}
+            >
+              {c.imageUrl ? (
+                <img src={c.imageUrl} alt="" className="sp-resource-popup__item-img" />
+              ) : (
+                <div className="sp-resource-popup__item-img sp-resource-popup__item-img--empty">
+                  <EditorIcon name="image" size={12} />
+                </div>
+              )}
+              <span className="sp-resource-popup__item-title">{c.title}</span>
+              {c.id === selectedId && (
+                <EditorIcon name="check" size={16} style={{ color: "var(--admin-accent)", flexShrink: 0 }} />
+              )}
+            </button>
+          ))
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+
+  return (
+    <div className="sp-resource-picker">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="sp-resource-picker__trigger"
+        onClick={() => open ? setOpen(false) : openPopup()}
+      >
+        {selected?.imageUrl ? (
+          <img src={selected.imageUrl} alt="" className="sp-resource-picker__thumb" />
+        ) : (
+          <div className="sp-resource-picker__thumb sp-resource-popup__item-img--empty">
+            <EditorIcon name="image" size={14} />
+          </div>
+        )}
+        <span className="sp-resource-picker__trigger-text">
+          <span className="sp-resource-picker__value">
+            {selected?.title ?? "Välj..."}
+          </span>
+        </span>
+        <EditorIcon name="unfold_more" size={16} className="sp-resource-picker__icon" />
+      </button>
+      {popupContent}
     </div>
   );
 }

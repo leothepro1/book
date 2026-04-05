@@ -2731,7 +2731,7 @@ model TenantApp {
   webhookDeliveries AppWebhookDelivery[]
   emailSyncs    EmailMarketingSync[]
   attributions  EmailAttribution[]
-  spotMap       SpotMap?
+  spotMaps      SpotMap[]
 
   @@unique([tenantId, appId])
   @@index([tenantId, status])
@@ -3264,7 +3264,8 @@ model AnalyticsDailyMetric {
 
 // ── Spot Booking (Platsbokning) ────────────────────────────────
 
-/// Interactive map for spot-based booking. One map per TenantApp installation.
+/// Interactive map for spot-based booking. Multiple maps per installation,
+/// one per accommodation category.
 model SpotMap {
   id                      String   @id @default(cuid())
   tenantId                String
@@ -3275,6 +3276,9 @@ model SpotMap {
   addonPrice              Int      // fixed surcharge in öre
   currency                String   @default("SEK")
   isActive                Boolean  @default(false) // activated on wizard completion
+  draftConfig             Json?    // draft snapshot of desired state (markers + settings)
+  draftUpdatedAt          DateTime?
+  version                 Int      @default(0) // optimistic lock — incremented on each publish
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -3283,7 +3287,7 @@ model SpotMap {
   accommodationCategory AccommodationCategory @relation(fields: [accommodationCategoryId], references: [id])
   markers               SpotMarker[]
 
-  @@unique([tenantAppId]) // one map per installation
+  @@unique([tenantAppId, accommodationCategoryId]) // one map per category per installation
   @@index([tenantId])
   @@index([accommodationCategoryId])
 }
