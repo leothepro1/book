@@ -105,6 +105,7 @@ export function ThemeConfigureView({ manifest }: { manifest: ThemeManifest }) {
       const allSlots = [
         ...manifest.sectionGroups.header,
         ...manifest.sectionGroups.footer,
+        ...(manifest.sectionGroups.sidebar ?? []),
         ...Object.values(manifest.templates).flatMap((t) => t.sections),
       ];
       const slot = allSlots.find((s) => s.id === slotId);
@@ -379,6 +380,26 @@ export function FieldRenderer({
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
+        </div>
+      );
+
+    case "segmented":
+      return (
+        <div className="tc-f">
+          <div className="tc-f__label">{field.label}</div>
+          {field.description && <div className="tc-f__desc">{field.description}</div>}
+          <div className="tc-f__segmented">
+            {field.options?.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                className={`tc-f__seg-btn${String(value) === opt.value ? " tc-f__seg-btn--active" : ""}`}
+                onClick={() => onChange(opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       );
 

@@ -93,13 +93,13 @@ export default async function AddonsPage({
 
   // ── Load addon products from DB ─────────────────────────────
   const addonProducts = await resolveAddonsForAccommodation(
-    session.accommodationId,
+    session.accommodationId!,
     session.tenantId,
   );
 
   // ── Check for active SpotMap for this accommodation's category ──
   const accWithCategories = await prisma.accommodation.findFirst({
-    where: { id: session.accommodationId, tenantId: session.tenantId },
+    where: { id: session.accommodationId!, tenantId: session.tenantId },
     select: { categoryItems: { select: { categoryId: true } } },
   });
 
@@ -141,7 +141,7 @@ export default async function AddonsPage({
   const serializedAddons: AddonProduct[] = JSON.parse(JSON.stringify(addonProducts));
 
   // Build back URL from session snapshot
-  const backUrl = `/stays/${session.accommodationSlug}?checkIn=${format(session.checkIn, "yyyy-MM-dd")}&checkOut=${format(session.checkOut, "yyyy-MM-dd")}&guests=${session.adults}&ratePlanId=${session.ratePlanId}`;
+  const backUrl = `/stays/${session.accommodationSlug}?checkIn=${format(session.checkIn!, "yyyy-MM-dd")}&checkOut=${format(session.checkOut!, "yyyy-MM-dd")}&guests=${session.adults}&ratePlanId=${session.ratePlanId}`;
 
   // Load tenant config for header/footer
   const config = await getTenantConfig(tenant.id);
@@ -153,17 +153,17 @@ export default async function AddonsPage({
       addons={serializedAddons}
       spotAddon={spotAddon}
       snapshot={{
-        accommodationName: session.accommodationName,
-        accommodationSlug: session.accommodationSlug,
-        ratePlanName: session.ratePlanName,
-        ratePlanCancellationPolicy: session.ratePlanCancellationPolicy,
-        pricePerNight: session.pricePerNight,
-        totalNights: session.totalNights,
-        accommodationTotal: session.accommodationTotal,
+        accommodationName: session.accommodationName!,
+        accommodationSlug: session.accommodationSlug!,
+        ratePlanName: session.ratePlanName!,
+        ratePlanCancellationPolicy: session.ratePlanCancellationPolicy!,
+        pricePerNight: session.pricePerNight!,
+        totalNights: session.totalNights!,
+        accommodationTotal: session.accommodationTotal!,
         currency: session.currency,
-        checkIn: format(session.checkIn, "yyyy-MM-dd"),
-        checkOut: format(session.checkOut, "yyyy-MM-dd"),
-        adults: session.adults,
+        checkIn: format(session.checkIn!, "yyyy-MM-dd"),
+        checkOut: format(session.checkOut!, "yyyy-MM-dd"),
+        adults: session.adults!,
       }}
       backUrl={backUrl}
     />

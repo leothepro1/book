@@ -124,7 +124,7 @@ export async function PATCH(
   const selectedAddons: SelectedAddon[] = [];
 
   if (selections.length > 0) {
-    const available = await resolveAddonsForAccommodation(session.accommodationId, tenantId);
+    const available = await resolveAddonsForAccommodation(session.accommodationId!, tenantId);
     const availableById = new Map(available.map((a) => [a.productId, a]));
 
     for (const sel of selections) {
@@ -178,13 +178,13 @@ export async function PATCH(
       let totalAmount: number;
       switch (pricingMode) {
         case "PER_NIGHT":
-          totalAmount = unitAmount * sel.quantity * session.totalNights;
+          totalAmount = unitAmount * sel.quantity * session.totalNights!;
           break;
         case "PER_PERSON":
-          totalAmount = unitAmount * sel.quantity * session.adults;
+          totalAmount = unitAmount * sel.quantity * session.adults!;
           break;
         case "PER_PERSON_PER_NIGHT":
-          totalAmount = unitAmount * sel.quantity * session.totalNights * session.adults;
+          totalAmount = unitAmount * sel.quantity * session.totalNights! * session.adults!;
           break;
         default: // PER_STAY
           totalAmount = unitAmount * sel.quantity;
@@ -238,7 +238,7 @@ export async function PATCH(
     const accCategory = await prisma.accommodationCategoryItem.findFirst({
       where: {
         categoryId: marker.spotMap.accommodationCategoryId,
-        accommodation: { id: session.accommodationId },
+        accommodation: { id: session.accommodationId! },
       },
       select: { id: true },
     });
@@ -255,9 +255,9 @@ export async function PATCH(
       try {
         const adapter = await resolveAdapter(tenantId);
         const result = await adapter.getAvailability(tenantId, {
-          checkIn: session.checkIn,
-          checkOut: session.checkOut,
-          guests: session.adults,
+          checkIn: session.checkIn!,
+          checkOut: session.checkOut!,
+          guests: session.adults!,
         });
 
         const availableIds = new Set(

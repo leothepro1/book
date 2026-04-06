@@ -8,7 +8,7 @@
 .sl {
   display: grid;
   grid-template-columns: var(--sidebar-width, 320px) 1fr;
-  gap: var(--space-5, 20px);
+  gap: var(--space-5, 30px);
   max-width: var(--layout-max-width, 1250px);
   margin: 0 auto;
   width: 100%;

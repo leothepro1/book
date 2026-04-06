@@ -73,6 +73,7 @@ export const searchSection: SectionDefinition = {
     "title",
     "titleAlign",
     "bgColor",
+    "fieldStyle",
     "showShadow",
     "textColor",
     "buttonColor",
@@ -107,6 +108,17 @@ export const searchSection: SectionDefinition = {
       type: "color",
       label: "Bakgrundsfärg",
       default: "#FFFFFF",
+      group: "Bakgrund",
+    },
+    {
+      key: "fieldStyle",
+      type: "segmented",
+      label: "Fält och kort",
+      default: "white",
+      options: [
+        { value: "transparent", label: "Genomskinlig" },
+        { value: "white", label: "Vit" },
+      ],
       group: "Bakgrund",
     },
     {

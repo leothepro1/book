@@ -303,11 +303,11 @@ export async function getAbandonedSessions(opts?: {
       const addonTotal = addons.reduce((sum, a) => sum + (a.totalAmount ?? 0), 0);
       return {
         id: s.id,
-        accommodationName: s.accommodationName,
-        checkIn: s.checkIn.toISOString().split("T")[0],
-        checkOut: s.checkOut.toISOString().split("T")[0],
-        adults: s.adults,
-        accommodationTotal: s.accommodationTotal,
+        accommodationName: s.accommodationName!,
+        checkIn: s.checkIn!.toISOString().split("T")[0],
+        checkOut: s.checkOut!.toISOString().split("T")[0],
+        adults: s.adults!,
+        accommodationTotal: s.accommodationTotal!,
         addonTotal,
         currency: s.currency,
         status: s.status,

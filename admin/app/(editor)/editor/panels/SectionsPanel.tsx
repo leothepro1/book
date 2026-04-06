@@ -53,6 +53,7 @@ import {
   STANDALONE_PICKER_PREFIX,
   SECTION_PICKER_TABS,
 } from "./PickerModal";
+import { getPickerPreview, getElementPreview as getElementPickerPreview } from "./picker-previews";
 import type { SlotDefinition, ElementType } from "@/app/_lib/sections/types";
 import {
   insertBlockIntoSection,
@@ -1039,6 +1040,7 @@ function SectionListPane() {
           categories={pickerData.categories}
           tabs={SECTION_PICKER_TABS}
           defaultTab="sections"
+          getPreview={getPickerPreview}
           onSelect={handlePickSection}
           onClose={() => setPickerInsertIndex(null)}
         />
@@ -1051,6 +1053,7 @@ function SectionListPane() {
           searchPlaceholder="Sök efter element..."
           items={elementPickerData.items}
           categories={elementPickerData.categories}
+          getPreview={getElementPickerPreview}
           onSelect={handlePickElement}
           onClose={() => setElementPickerOpen(false)}
         />
@@ -1063,6 +1066,7 @@ function SectionListPane() {
           searchPlaceholder="Sök efter element..."
           items={blockElementPickerData.items}
           categories={blockElementPickerData.categories}
+          getPreview={getElementPickerPreview}
           onSelect={handlePickElementForBlock}
           onClose={() => setElementPickerTarget(null)}
         />
@@ -1866,6 +1870,7 @@ function FooterElementTree({
           title="Lägg till element"
           items={pickerItems}
           categories={pickerCategories}
+          getPreview={getElementPickerPreview}
           onSelect={(id) => addElement(id)}
           onClose={() => setPickerOpen(false)}
         />
@@ -2088,6 +2093,7 @@ function FooterClassicTree({
           title="Lägg till element"
           items={pickerItems}
           categories={pickerCategories}
+          getPreview={getElementPickerPreview}
           onSelect={(id) => addElement(pickerGroup, id)}
           onClose={() => setPickerGroup(null)}
         />
@@ -2103,7 +2109,6 @@ function getElementName(type: string): string {
   return def?.name || type;
 }
 
-/** Content fields to extract preview from, ordered by priority. */
 const TEXT_CONTENT_KEYS: Record<string, string[]> = {
   heading: ["content"],
   text: ["content"],

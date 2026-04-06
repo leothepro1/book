@@ -1,3 +1,6 @@
+// DEPRECATED: Cart checkout now uses /api/portal/checkout/session/cart
+// This route can be deleted after verifying no external integrations depend on it.
+
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
@@ -14,8 +17,9 @@ import { log } from "@/app/_lib/logger";
 import { checkRateLimit } from "@/app/_lib/rate-limit/checkout";
 import { claimIdempotencyKey, completeIdempotencyKey, failIdempotencyKey } from "@/app/_lib/checkout/idempotency";
 import { getPlatformFeeBps } from "@/app/_lib/payments/platform-fee";
-import { initiateOrderPayment } from "@/app/_lib/payments/providers/initiate";
+import { initiateOrderPayment } from "@/app/_lib/payments/providers";
 import { evaluateDiscountCode, evaluateAutomaticDiscount } from "@/app/_lib/discounts/engine";
+import { verifyChargesEnabled } from "@/app/_lib/stripe/verify-account";
 import { findDiscountCode } from "@/app/_lib/discounts/codes";
 import { applyDiscountInTx } from "@/app/_lib/discounts/apply";
 import type { DiscountEvaluationResult } from "@/app/_lib/discounts/types";
@@ -101,7 +105,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Organisationen hittades inte" }, { status: 404 });
   }
 
-  if (!tenant.stripeOnboardingComplete || !tenant.stripeAccountId) {
+  if (!tenant.stripeAccountId) {
+    return NextResponse.json(
+      { error: "STRIPE_NOT_CONFIGURED", message: "Betalning är inte konfigurerad." },
+      { status: 503 },
+    );
+  }
+
+  const chargesOk = await verifyChargesEnabled(tenant.stripeAccountId);
+  if (!chargesOk) {
     return NextResponse.json(
       { error: "STRIPE_NOT_CONFIGURED", message: "Betalning är inte konfigurerad." },
       { status: 503 },

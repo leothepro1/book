@@ -50,7 +50,7 @@ export default async function GuestPageShell({
   // When theme layout is sidebar-left, render sidebar slots from the
   // theme manifest. renderSidebarSlots returns null if no slots exist.
   // SidebarLayout handles route-based exclusion (e.g. checkout).
-  const sidebarContent = isSidebar ? renderSidebarSlots(config) : null;
+  const sidebarContent = isSidebar ? renderSidebarSlots(config, pageId) : null;
 
   return (
     <div style={shellVars} className="g-body">

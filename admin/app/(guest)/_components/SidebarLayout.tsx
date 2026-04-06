@@ -19,7 +19,7 @@ import type { ReactNode } from "react";
 import "./sidebar-layout.css";
 
 /** Routes where the sidebar is hidden. */
-const SIDEBAR_EXCLUDED_PREFIXES = ["/checkout"];
+const SIDEBAR_EXCLUDED_PREFIXES = ["/checkout", "/shop/products"];
 
 /** Routes where the sidebar is hidden (suffix match). */
 const SIDEBAR_EXCLUDED_SUFFIXES = ["/addons"];
@@ -39,7 +39,7 @@ export function SidebarLayout({
     SIDEBAR_EXCLUDED_PREFIXES.some((prefix) => pathname.startsWith(prefix)) ||
     SIDEBAR_EXCLUDED_SUFFIXES.some((suffix) => pathname.endsWith(suffix));
 
-  if (isExcluded) {
+  if (isExcluded || !sidebar) {
     return <>{children}</>;
   }
 

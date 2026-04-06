@@ -94,7 +94,7 @@
 
 .g-body {
   font-family: var(--font-body);
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .g-btn-font {

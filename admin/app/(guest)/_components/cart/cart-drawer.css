@@ -113,12 +113,17 @@
 }
 
 .cd__item-img {
-  width: 64px;
-  height: 64px;
-  border-radius: 8px;
-  object-fit: cover;
-  flex-shrink: 0;
-  background: color-mix(in srgb, var(--text, #000) 4%, var(--background, #fff));
+    object-fit: cover;
+    background: 
+color-mix(in srgb, var(--text, #000) 4%, var(--background, #fff));
+    border-radius: 8px;
+    flex-shrink: 0;
+    width: 100px;
+    height: 77px;
+    border: 2px solid #fff;
+    border-radius: 10px;
+    flex-shrink: 0;
+    box-shadow: 0 1px 1.75px #0000001f, 0 -.5px 1.5px #00000017, 0 3px 4px #00000008;
 }
 
 .cd__item-info {
@@ -127,7 +132,7 @@
 }
 
 .cd__item-title {
-  font-size: 0.8125rem;
+  font-size: 16px;
   font-weight: 500;
   color: var(--text, #1a1a1a);
   white-space: nowrap;
@@ -136,13 +141,13 @@
 }
 
 .cd__item-variant {
-  font-size: 0.75rem;
-  color: color-mix(in srgb, var(--text, #000) 50%, transparent);
+  font-size: 15px;
+  color: color-mix(in srgb, var(--text, #000) 80%, transparent);
   margin-top: 2px;
 }
 
 .cd__item-price {
-  font-size: 0.8125rem;
+  font-size: 15px;
   font-weight: 500;
   color: var(--text, #1a1a1a);
   margin-top: 4px;

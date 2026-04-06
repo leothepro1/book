@@ -16,7 +16,7 @@ import { log } from "@/app/_lib/logger";
 import { ACCOMMODATION_SELECT } from "@/app/_lib/accommodations/types";
 import { resolveAccommodation } from "@/app/_lib/accommodations/resolve";
 import type { AccommodationWithRelations } from "@/app/_lib/accommodations/types";
-import { AccommodationType, AccommodationStatus } from "@prisma/client";
+import { AccommodationType, AccommodationStatus, Prisma } from "@prisma/client";
 
 const VALID_TYPES = new Set<string>(Object.values(AccommodationType));
 const VALID_STATUSES = new Set<string>(Object.values(AccommodationStatus));
@@ -74,8 +74,11 @@ export async function GET(req: Request) {
   // Parse includeArchived
   const includeArchived = url.searchParams.get("includeArchived") === "true";
 
+  // Parse visibleInSearch filter — only return accommodations in visible categories
+  const visibleInSearch = url.searchParams.get("visibleInSearch") === "true";
+
   // Build where clause
-  const where: Record<string, unknown> = {
+  const where: Prisma.AccommodationWhereInput = {
     tenantId,
     status: statusFilter,
   };
@@ -84,6 +87,38 @@ export async function GET(req: Request) {
   }
   if (typeFilter && typeFilter.length > 0) {
     where.accommodationType = { in: typeFilter };
+  }
+  if (visibleInSearch) {
+    try {
+      const visibleCategoryItems = await prisma.accommodationCategoryItem.findMany({
+        where: {
+          category: {
+            tenantId,
+            status: "ACTIVE",
+            visibleInSearch: true,
+          },
+          accommodation: {
+            tenantId,
+          },
+        },
+        select: { accommodationId: true },
+      });
+      const visibleAccIds = [...new Set(visibleCategoryItems.map((ci) => ci.accommodationId))];
+      if (visibleAccIds.length === 0) {
+        return NextResponse.json(
+          { accommodations: [], total: 0 },
+          { headers: NO_STORE },
+        );
+      }
+      where.id = { in: visibleAccIds };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log("error", "api.accommodations.visible_filter_failed", { tenantId, error: msg });
+      return NextResponse.json(
+        { error: "INTERNAL_ERROR", message: "Kunde inte hämta boenden." },
+        { status: 500, headers: NO_STORE },
+      );
+    }
   }
 
   try {

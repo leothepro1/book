@@ -84,6 +84,7 @@ function collectSlots(manifest: ThemeManifest): ThemeSectionSlot[] {
   return [
     ...manifest.sectionGroups.header,
     ...manifest.sectionGroups.footer,
+    ...(manifest.sectionGroups.sidebar ?? []),
     ...Object.values(manifest.templates).flatMap((t) => t.sections),
   ];
 }

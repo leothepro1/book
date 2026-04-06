@@ -453,7 +453,9 @@ async function handleSessionPaymentIntent(
       id: true,
       tenantId: true,
       status: true,
+      sessionType: true,
       expiresAt: true,
+      // Accommodation fields
       accommodationId: true,
       accommodationName: true,
       accommodationSlug: true,
@@ -475,6 +477,9 @@ async function handleSessionPaymentIntent(
           media: { select: { url: true }, orderBy: { sortOrder: "asc" }, take: 1 },
         },
       },
+      // Cart fields
+      cartItems: true,
+      cartTotal: true,
     },
   });
 
@@ -496,13 +501,18 @@ async function handleSessionPaymentIntent(
     );
   }
 
+  // ── CART session branch ────────────────────────────────────
+  if (session.sessionType === "CART") {
+    return handleCartSessionPaymentIntent(req, tenantId, session, input, idempotencyKey);
+  }
+
   // ── Compute totals from frozen snapshot ──────────────────────
   const addons = (session.selectedAddons ?? []) as Array<{
     productId: string; variantId: string | null; title: string; variantTitle: string | null;
     quantity: number; unitAmount: number; totalAmount: number; pricingMode: string; currency: string;
   }>;
   const addonTotal = addons.reduce((sum, a) => sum + a.totalAmount, 0);
-  const totalPrice = session.accommodationTotal + addonTotal;
+  const totalPrice = session.accommodationTotal! + addonTotal;
   const currency = session.currency;
 
   if (totalPrice < MIN_AMOUNT || totalPrice > MAX_AMOUNT) {
@@ -523,10 +533,10 @@ async function handleSessionPaymentIntent(
       tenantId,
       code: input.discountCode,
       orderAmount: totalPrice,
-      productIds: [session.accommodation.id],
+      productIds: [session.accommodation!.id],
       itemCount: 1,
-      checkInDate: session.checkIn,
-      checkOutDate: session.checkOut,
+      checkInDate: session.checkIn!,
+      checkOutDate: session.checkOut!,
     });
 
     if (!evalResult.valid) {
@@ -573,8 +583,8 @@ async function handleSessionPaymentIntent(
         sourceChannel: "direct",
         metadata: {
           sessionToken: input.sessionToken,
-          checkIn: session.checkIn.toISOString().split("T")[0],
-          checkOut: session.checkOut.toISOString().split("T")[0],
+          checkIn: session.checkIn!.toISOString().split("T")[0],
+          checkOut: session.checkOut!.toISOString().split("T")[0],
           guests: session.adults,
           nights: session.totalNights,
           ratePlanId: session.ratePlanId,
@@ -585,15 +595,15 @@ async function handleSessionPaymentIntent(
           create: [
             // Accommodation line item
             {
-              productId: session.accommodation.id,
+              productId: session.accommodation!.id,
               variantId: null,
-              title: session.accommodationName,
+              title: session.accommodationName!,
               variantTitle: session.ratePlanName,
               sku: null,
-              imageUrl: session.accommodation.media[0]?.url ?? null,
+              imageUrl: session.accommodation!.media[0]?.url ?? null,
               quantity: 1,
-              unitAmount: session.accommodationTotal,
-              totalAmount: session.accommodationTotal,
+              unitAmount: session.accommodationTotal!,
+              totalAmount: session.accommodationTotal!,
               currency,
             },
             // Addon line items from frozen snapshots
@@ -622,8 +632,8 @@ async function handleSessionPaymentIntent(
         message: `Order #${orderNumber} — ${session.accommodationName}, ${session.totalNights} nätter`,
         metadata: {
           sessionToken: input.sessionToken,
-          checkIn: session.checkIn.toISOString().split("T")[0],
-          checkOut: session.checkOut.toISOString().split("T")[0],
+          checkIn: session.checkIn!.toISOString().split("T")[0],
+          checkOut: session.checkOut!.toISOString().split("T")[0],
         },
       },
     });
@@ -633,17 +643,17 @@ async function handleSessionPaymentIntent(
       data: {
         tenantId,
         orderId: newOrder.id,
-        accommodationId: session.accommodationId,
+        accommodationId: session.accommodationId!,
         firstName: "",
         lastName: "",
         guestEmail: "",
-        arrival: session.checkIn,
-        departure: session.checkOut,
-        checkIn: session.checkIn,
-        checkOut: session.checkOut,
-        guestCount: session.adults,
+        arrival: session.checkIn!,
+        departure: session.checkOut!,
+        checkIn: session.checkIn!,
+        checkOut: session.checkOut!,
+        guestCount: session.adults!,
         ratePlanId: session.ratePlanId,
-        unit: session.accommodation.externalId ?? session.accommodationSlug,
+        unit: session.accommodation!.externalId ?? session.accommodationSlug!,
         status: "PRE_CHECKIN",
       },
     });
@@ -737,6 +747,214 @@ async function handleSessionPaymentIntent(
       orderId: order.id,
       error: String(err),
     });
+
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: "CANCELLED", financialStatus: "VOIDED", fulfillmentStatus: "CANCELLED", cancelledAt: new Date() },
+    });
+
+    await failIdempotencyKey(tenantId, idempotencyKey, "payment-intent");
+    return NextResponse.json(
+      { error: "PAYMENT_FAILED", message: err instanceof Error ? err.message : "Betalning misslyckades" },
+      { status: 503 },
+    );
+  }
+}
+
+// ── Cart session → Order + PaymentIntent ─────────────────────
+
+type CartSnapshotItem = {
+  id: string;
+  productId: string;
+  variantId: string | null;
+  title: string;
+  variantTitle: string | null;
+  imageUrl: string | null;
+  unitAmount: number;
+  quantity: number;
+  currency: string;
+};
+
+async function handleCartSessionPaymentIntent(
+  req: Request,
+  tenantId: string,
+  session: { id: string; tenantId: string; cartItems: unknown; cartTotal: number | null; currency: string; selectedAddons: unknown },
+  input: { sessionToken: string; paymentType: string; discountCode?: string },
+  idempotencyKey: string,
+) {
+  const cartItems = (session.cartItems ?? []) as CartSnapshotItem[];
+  const totalPrice = session.cartTotal ?? 0;
+  const currency = session.currency;
+
+  if (totalPrice < MIN_AMOUNT || totalPrice > MAX_AMOUNT) {
+    log("error", "checkout.cart_amount_out_of_bounds", { amount: totalPrice, tenantId });
+    await failIdempotencyKey(tenantId, idempotencyKey, "payment-intent");
+    return NextResponse.json(
+      { error: "INVALID_PRICE", message: "Ogiltigt belopp." },
+      { status: 400 },
+    );
+  }
+
+  // ── Evaluate discount code ──────────────────────────────────
+  let discountResult: Extract<DiscountEvaluationResult, { valid: true }> | null = null;
+  let discountCodeId: string | undefined;
+
+  const productIds = cartItems.map((i) => i.productId);
+  const itemCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
+
+  if (input.discountCode) {
+    const evalResult = await evaluateDiscountCode({
+      tenantId,
+      code: input.discountCode,
+      orderAmount: totalPrice,
+      productIds,
+      itemCount,
+    });
+
+    if (!evalResult.valid) {
+      await failIdempotencyKey(tenantId, idempotencyKey, "payment-intent");
+      return NextResponse.json(
+        { error: "DISCOUNT_INVALID", discountError: evalResult.error },
+        { status: 409 },
+      );
+    }
+
+    discountResult = evalResult;
+    const { findDiscountCode } = await import("@/app/_lib/discounts/codes");
+    const codeRecord = await findDiscountCode(tenantId, input.discountCode);
+    discountCodeId = codeRecord?.id;
+  }
+
+  // ── Create Order from cart snapshot ──────────────────────────
+  const orderNumber = await nextOrderNumber(tenantId);
+  const taxRate = getTaxRate("STANDARD", "SE");
+  const taxAmount = taxRate > 0 ? Math.round(totalPrice * taxRate / 10000) : 0;
+
+  const order = await prisma.$transaction(async (tx) => {
+    const newOrder = await tx.order.create({
+      data: {
+        tenantId,
+        orderNumber,
+        status: "PENDING",
+        paymentMethod: "STRIPE_ELEMENTS",
+        guestEmail: "",
+        guestName: "",
+        subtotalAmount: totalPrice,
+        taxRate,
+        taxAmount,
+        totalAmount: totalPrice + taxAmount,
+        currency,
+        sourceChannel: "direct",
+        metadata: {
+          sessionToken: input.sessionToken,
+          orderType: "PURCHASE",
+          itemCount,
+        },
+        lineItems: {
+          create: cartItems.map((item) => ({
+            productId: item.productId,
+            variantId: item.variantId,
+            title: item.title,
+            variantTitle: item.variantTitle,
+            sku: null,
+            imageUrl: item.imageUrl,
+            quantity: item.quantity,
+            unitAmount: item.unitAmount,
+            totalAmount: item.unitAmount * item.quantity,
+            currency: item.currency,
+          })),
+        },
+      },
+    });
+
+    await tx.orderEvent.create({
+      data: {
+        orderId: newOrder.id,
+        tenantId,
+        type: "ORDER_CREATED",
+        message: `Order #${orderNumber} — ${itemCount} produkter`,
+        metadata: { sessionToken: input.sessionToken, itemCount },
+      },
+    });
+
+    // Apply discount inside transaction
+    if (discountResult) {
+      const createdOrder = await tx.order.findUniqueOrThrow({
+        where: { id: newOrder.id },
+        include: { lineItems: { select: { id: true, productId: true, totalAmount: true } } },
+      });
+      await applyDiscountInTx(tx, {
+        orderId: newOrder.id,
+        tenantId,
+        guestEmail: "",
+        guestAccountId: undefined,
+        result: discountResult,
+        discountCodeId,
+        lineItems: createdOrder.lineItems,
+      });
+    }
+
+    // Transition session to COMPLETED
+    await tx.checkoutSession.update({
+      where: { id: session.id },
+      data: { status: "COMPLETED", dedupKey: null },
+    });
+
+    return newOrder;
+  });
+
+  log("info", "checkout.cart_order_created", {
+    tenantId,
+    sessionId: session.id,
+    orderId: order.id,
+    orderNumber,
+    amount: totalPrice + taxAmount,
+    currency,
+    itemCount,
+  });
+
+  // ── Platform fee ──────────────────────────────────────────────
+  const tenantStripe = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { stripeAccountId: true, subscriptionPlan: true, platformFeeBps: true },
+  });
+
+  const feeBps = tenantStripe
+    ? getPlatformFeeBps(tenantStripe.subscriptionPlan, tenantStripe.platformFeeBps)
+    : 500;
+
+  await prisma.order.update({
+    where: { id: order.id },
+    data: { platformFeeBps: feeBps },
+  });
+
+  // ── Initiate payment ──────────────────────────────────────────
+  const discountAmount = discountResult?.discountAmount ?? 0;
+  const chargeAmount = Math.max(0, totalPrice + taxAmount - discountAmount);
+
+  try {
+    const init = await initiateOrderPayment({
+      order: { id: order.id, tenantId, totalAmount: chargeAmount, currency },
+      guest: { email: "", name: "" },
+      locale: "sv-SE",
+      returnUrl: `${new URL(req.url).origin}/checkout/success`,
+      platformFeeBps: feeBps,
+      metadata: {
+        orderNumber: String(orderNumber),
+        sessionToken: input.sessionToken,
+        orderType: "PURCHASE",
+      },
+    });
+
+    if (init.mode !== "embedded") {
+      throw new Error("Expected embedded payment mode");
+    }
+
+    const successPayload = { clientSecret: init.clientSecret, orderId: order.id };
+    await completeIdempotencyKey(tenantId, idempotencyKey, "payment-intent", successPayload);
+    return NextResponse.json(successPayload);
+  } catch (err) {
+    log("error", "checkout.cart_payment_failed", { tenantId, orderId: order.id, error: String(err) });
 
     await prisma.order.update({
       where: { id: order.id },

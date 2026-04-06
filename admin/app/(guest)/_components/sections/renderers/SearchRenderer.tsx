@@ -78,11 +78,16 @@ export function SearchDefaultRenderer(props: SectionRendererProps) {
   const tenantId = props.config?.tenantId ?? "";
   const s = props.settings;
 
+  const isTransparentFields = (s.fieldStyle as string) === "transparent";
+  const bgColor = (s.bgColor as string) || "#FFFFFF";
+  const textColor = (s.textColor as string) || "#202020";
   const sectionStyle: React.CSSProperties = {
-    ...(s.bgColor ? { "--background": s.bgColor as string } : {}),
-    ...(s.textColor ? { "--text": s.textColor as string } : {}),
+    "--background": bgColor,
+    ...(s.textColor ? { "--text": textColor } : {}),
     ...(s.buttonColor ? { "--button-bg": s.buttonColor as string } : {}),
     ...(s.accentColor ? { "--accent": s.accentColor as string } : {}),
+    "--field-bg": isTransparentFields ? bgColor : "#fff",
+    "--field-text": isTransparentFields ? textColor : "#171717",
     ...(s.headingFont ? { "--font-heading": fontStack(s.headingFont as string) } : {}),
     ...(s.bodyFont ? { "--font-body": fontStack(s.bodyFont as string) } : {}),
     ...(s.buttonFont ? { "--font-button": fontStack(s.buttonFont as string) } : {}),

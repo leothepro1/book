@@ -1977,32 +1977,42 @@ enum CheckoutSessionStatus {
   ABANDONED         // Guest navigated away
 }
 
+enum CheckoutSessionType {
+  ACCOMMODATION
+  CART
+}
+
 model CheckoutSession {
   id       String @id @default(cuid())
   token    String @unique                     // 32 random bytes, base64url — used in all URLs
   tenantId String
 
-  status    CheckoutSessionStatus @default(PENDING)
+  status      CheckoutSessionStatus @default(PENDING)
+  sessionType CheckoutSessionType  @default(ACCOMMODATION)
 
-  // Accommodation reference
-  accommodationId   String
-  accommodation     Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
-  ratePlanId        String         // PMS external ID — not a FK, rate plans are not persisted
+  // ── Accommodation fields (null for CART sessions) ──────────
+  accommodationId   String?
+  accommodation     Accommodation? @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+  ratePlanId        String?        // PMS external ID — not a FK, rate plans are not persisted
 
-  // Stay details
-  checkIn   DateTime
-  checkOut  DateTime
-  adults    Int
+  // Stay details (null for CART sessions)
+  checkIn   DateTime?
+  checkOut  DateTime?
+  adults    Int?
 
   // Frozen snapshot — prices from PMS at session creation time, all in öre (Int)
-  accommodationName               String
-  accommodationSlug               String
-  ratePlanName                     String
-  ratePlanCancellationPolicy       String   // "FLEXIBLE" | "MODERATE" | "NON_REFUNDABLE"
-  pricePerNight                    Int      // öre
-  totalNights                      Int
-  accommodationTotal               Int      // pricePerNight × totalNights, öre
+  accommodationName               String?
+  accommodationSlug               String?
+  ratePlanName                     String?
+  ratePlanCancellationPolicy       String?  // "FLEXIBLE" | "MODERATE" | "NON_REFUNDABLE"
+  pricePerNight                    Int?     // öre
+  totalNights                      Int?
+  accommodationTotal               Int?     // pricePerNight × totalNights, öre
   currency                         String   @default("SEK")
+
+  // ── Cart fields (null for ACCOMMODATION sessions) ──────────
+  cartItems  Json?    // CartItem[] snapshot — frozen at session creation, öre prices
+  cartTotal  Int?     // sum of (unitAmount × quantity), öre
 
   // Addons — frozen at selection time
   selectedAddons Json @default("[]")

@@ -417,6 +417,9 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
                           <div className="ord-product-header__plan">{ratePlanName}</div>
                         )}
                       </div>
+                      <span className="ord-product-header__price">
+                        {formatPriceDisplay(item.unitAmount, item.currency)} kr &times; <span className="ord-product-header__qty">{item.quantity}</span>
+                      </span>
                     </div>
 
                     <div className="ord-product-details">

@@ -3,11 +3,12 @@
 import type { TenantConfig, MenuConfig } from "../_lib/tenant/types";
 import { HEADER_DEFAULTS } from "../_lib/tenant/types";
 import type { ColorScheme } from "@/app/_lib/color-schemes/types";
-import { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import { Fragment, useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { resolvePageIdFromPathname, getPageLayout, getPageHeader } from "@/app/_lib/pages";
 import { SUPPORTED_LOCALES } from "@/app/_lib/translations/locales";
 import { LanguagePanel, useLanguagePanel } from "./shared/LanguagePanel";
+import { CartHeaderButton } from "./CartHeaderButton";
 import "./guest-header.css";
 
 // ─── Logo ────────────────────────────────────────────────────
@@ -335,25 +336,28 @@ export default function GuestHeader({ config }: { config: TenantConfig }) {
   if (isCenter) {
     // Center layout: menu picks a side, lang takes the opposite
     if (menuButton) {
-      (menuPos === "left" ? leftButtons : rightButtons).push(menuButton);
+      (menuPos === "left" ? leftButtons : rightButtons).push(<Fragment key="menu">{menuButton}</Fragment>);
       if (langButton) {
-        (menuPos === "left" ? rightButtons : leftButtons).push(langButton);
+        (menuPos === "left" ? rightButtons : leftButtons).push(<Fragment key="lang">{langButton}</Fragment>);
       }
     } else if (langButton) {
-      (langPos === "left" ? leftButtons : rightButtons).push(langButton);
+      (langPos === "left" ? leftButtons : rightButtons).push(<Fragment key="lang">{langButton}</Fragment>);
     }
   } else {
     // Left layout: logo always left, menu can be left (before logo) or right
-    if (menuButton && menuPos === "left") leftButtons.push(menuButton);
-    if (menuButton && menuPos === "right") rightButtons.push(menuButton);
-    if (langButton) rightButtons.push(langButton);
+    if (menuButton && menuPos === "left") leftButtons.push(<Fragment key="menu">{menuButton}</Fragment>);
+    if (menuButton && menuPos === "right") rightButtons.push(<Fragment key="menu">{menuButton}</Fragment>);
+    if (langButton) rightButtons.push(<Fragment key="lang">{langButton}</Fragment>);
   }
+
+  // Cart button — always last on the right, only visible when items in cart
+  rightButtons.push(<Fragment key="cart"><CartHeaderButton tenantId={config.tenantId} /></Fragment>);
 
   return (
     <>
       <header
         ref={headerRef}
-        className="sticky top-0 z-30 bg-[var(--background)]"
+        className="relative z-30 bg-[var(--background)]"
         style={headerStyle}
       >
         <div className="g-header-inner mx-auto flex items-center justify-between" style={headerInnerStyle}>

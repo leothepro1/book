@@ -8,6 +8,9 @@ import type { PaymentMethodConfig } from "@/app/_lib/payments/types";
 import type { SelectedAddon } from "@/app/_lib/checkout/session-types";
 import { getPageSettings } from "@/app/_lib/pages/config";
 import { FONT_CATALOG } from "@/app/_lib/fonts/catalog";
+import { formatPriceDisplay } from "@/app/_lib/products/pricing";
+import { format, parseISO } from "date-fns";
+import { sv } from "date-fns/locale";
 import { resolveContrastPalette } from "@/app/_lib/color/contrast";
 
 const SANS_FALLBACK = "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
@@ -48,7 +51,9 @@ export default async function CheckoutPage({
       tenantId: true,
       token: true,
       status: true,
+      sessionType: true,
       expiresAt: true,
+      // Accommodation fields
       accommodationId: true,
       accommodationName: true,
       accommodationSlug: true,
@@ -68,6 +73,9 @@ export default async function CheckoutPage({
           media: { select: { url: true }, orderBy: { sortOrder: "asc" }, take: 1 },
         },
       },
+      // Cart fields
+      cartItems: true,
+      cartTotal: true,
     },
   });
 
@@ -76,12 +84,13 @@ export default async function CheckoutPage({
 
   // Expired or abandoned
   if (session.status === "EXPIRED" || session.status === "ABANDONED") {
-    redirect("/stays?error=session_expired");
+    const fallback = session.sessionType === "CART" ? "/shop" : "/stays";
+    redirect(`${fallback}?error=session_expired`);
   }
 
-  // Not yet at checkout
+  // Not yet at checkout (accommodation-only: addon selection)
   if (session.status === "PENDING" || session.status === "ADDON_SELECTION") {
-    redirect(`/stays/${session.accommodationSlug}/addons?session=${session.token}`);
+    redirect(`/stays/${session.accommodationSlug!}/addons?session=${session.token}`);
   }
 
   // Already completed
@@ -95,13 +104,21 @@ export default async function CheckoutPage({
       where: { id: session.id },
       data: { status: "EXPIRED" },
     });
-    redirect("/stays?error=session_expired");
+    const fallback = session.sessionType === "CART" ? "/shop" : "/stays";
+    redirect(`${fallback}?error=session_expired`);
   }
 
   // ── Compute totals from session snapshot ────────────────────
+  const isCart = session.sessionType === "CART";
+
+  type CartSnapshotItem = { title: string; variantTitle: string | null; variantOptions?: Record<string, string>; imageUrl: string | null; unitAmount: number; quantity: number; currency: string };
+  const cartItems = isCart ? ((session.cartItems as CartSnapshotItem[]) ?? []) : [];
+
   const addons = (session.selectedAddons ?? []) as unknown as SelectedAddon[];
   const addonTotal = addons.reduce((sum, a) => sum + a.totalAmount, 0);
-  const totalAmount = session.accommodationTotal + addonTotal;
+  const totalAmount = isCart
+    ? (session.cartTotal ?? 0)
+    : session.accommodationTotal! + addonTotal;
 
   // ── Fetch tenant config for header + payment methods + page settings ──
   const config = await getTenantConfig(tenant.id);
@@ -146,22 +163,98 @@ export default async function CheckoutPage({
     tenantPayments?.paymentMethodConfig as PaymentMethodConfig | null,
   );
 
+  // ── Build product prop based on session type ────────────────
+  const currency = session.currency;
+  const product = isCart
+    ? {
+        title: cartItems.length === 1 ? cartItems[0].title : `${cartItems.length} produkter`,
+        image: cartItems[0]?.imageUrl ?? null,
+        price: totalAmount,
+        currency,
+        ratePlanName: null,
+      }
+    : {
+        title: session.accommodationName!,
+        image: session.accommodation?.media[0]?.url ?? null,
+        price: totalAmount,
+        currency,
+        ratePlanName: session.ratePlanName,
+      };
+
+  // ── Build summary rows ─────────────────────────────────────
+  const summaryRows: Array<{ label: string; value: string; modifier?: string }> = [];
+
+  if (isCart) {
+    // Cart: total quantity + total price
+    const totalQty = cartItems.reduce((sum, i) => sum + i.quantity, 0);
+    summaryRows.push({
+      label: "Antal",
+      value: `${totalQty} st`,
+    });
+    // Show variant options (e.g. "Tid — 07:00")
+    for (const item of cartItems) {
+      const opts = item.variantOptions ?? {};
+      for (const [optionName, optionValue] of Object.entries(opts)) {
+        summaryRows.push({
+          label: optionName,
+          value: optionValue,
+        });
+      }
+    }
+    summaryRows.push({
+      label: "Totalt",
+      value: `${formatPriceDisplay(totalAmount, currency)} kr`,
+      modifier: "total",
+    });
+  } else {
+    // Accommodation: datum, gäster, boende, addons, skatt, totalt
+    const checkInStr = session.checkIn!.toISOString().split("T")[0];
+    const checkOutStr = session.checkOut!.toISOString().split("T")[0];
+    const nights = session.totalNights!;
+    const guests = session.adults!;
+    const accTotal = session.accommodationTotal!;
+
+    summaryRows.push({
+      label: "Datum",
+      value: `${format(parseISO(checkInStr), "EEE d", { locale: sv })} – ${format(parseISO(checkOutStr), "EEE d MMM", { locale: sv })}`,
+    });
+    summaryRows.push({
+      label: "Gäster",
+      value: `${guests} ${guests === 1 ? "vuxen" : "vuxna"}`,
+    });
+    for (const addon of addons) {
+      const qty = addon.quantity > 1 ? ` x${addon.quantity}` : "";
+      summaryRows.push({
+        label: addon.title + qty,
+        value: `${formatPriceDisplay(addon.totalAmount, addon.currency)} kr`,
+      });
+    }
+    const taxAmount = Math.round((accTotal + addonTotal) * 0.25);
+    summaryRows.push({
+      label: "Delsumma",
+      value: `${formatPriceDisplay(accTotal + addonTotal, currency)} kr`,
+      modifier: "sub",
+    });
+    summaryRows.push({
+      label: "Inkl. moms",
+      value: `${formatPriceDisplay(taxAmount, currency)} kr`,
+      modifier: "sub",
+    });
+    summaryRows.push({
+      label: "Totalt",
+      value: `${formatPriceDisplay(totalAmount + taxAmount, currency)} kr`,
+      modifier: "total",
+    });
+  }
+
   return (
     <CheckoutClient
       sessionToken={session.token}
-      product={{
-        title: session.accommodationName,
-        image: session.accommodation.media[0]?.url ?? null,
-        price: totalAmount,
-        currency: session.currency,
-        ratePlanName: session.ratePlanName,
-      }}
-      checkIn={session.checkIn.toISOString().split("T")[0]}
-      checkOut={session.checkOut.toISOString().split("T")[0]}
-      guests={session.adults}
-      nights={session.totalNights}
-      addons={addons}
-      accommodationTotal={session.accommodationTotal}
+      product={product}
+      summaryRows={summaryRows}
+      checkIn={isCart ? null : session.checkIn!.toISOString().split("T")[0]}
+      checkOut={isCart ? null : session.checkOut!.toISOString().split("T")[0]}
+      guests={isCart ? 0 : session.adults!}
       bookingTerms={bookingTerms?.content ?? null}
       header={{ logoUrl, logoWidth }}
       availableMethods={resolvedMethods.availableMethods}

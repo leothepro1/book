@@ -398,7 +398,7 @@ export function resolveThemeLayoutVars(
  *   - Theme has no sidebar slots
  *   - Theme layout is not sidebar-left
  */
-export function renderSidebarSlots(config: TenantConfig): React.ReactElement | null {
+export function renderSidebarSlots(config: TenantConfig, pageId?: string): React.ReactElement | null {
   const themeId = getActiveThemeId(config);
   if (!themeId) return null;
 
@@ -458,9 +458,25 @@ export function renderSidebarSlots(config: TenantConfig): React.ReactElement | n
     signatureCapturedAt: null,
   };
 
+  // Build a set of hidden section types from the current page only
+  const hiddenSectionTypes = new Set<string>();
+  const currentPage = pageId && config.pages ? config.pages[pageId as keyof typeof config.pages] : null;
+  if (currentPage?.sections) {
+    for (const sec of currentPage.sections) {
+      if (sec.isActive === false) {
+        hiddenSectionTypes.add(sec.definitionId);
+      }
+    }
+  }
+
+  // Filter out hidden slots before rendering — if all hidden, return null (no sidebar)
+  const visibleSlots = sortedSlots.filter((slot) => !hiddenSectionTypes.has(slot.type));
+  if (visibleSlots.length === 0) return null;
+
   return (
     <>
-      {sortedSlots.map((slot) => {
+      {visibleSlots.map((slot) => {
+
         const key = `${slot.type}/${slot.variant}`;
         const Component = SIDEBAR_RENDERER_MAP[key];
         if (!Component) {

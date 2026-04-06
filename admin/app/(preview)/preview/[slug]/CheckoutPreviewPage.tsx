@@ -116,12 +116,16 @@ export async function CheckoutPreviewPage() {
               ratePlanName: "Flexibel",
             }
       }
+      summaryRows={[
+        { label: "Datum", value: `${checkInStr} – ${checkOutStr}` },
+        { label: "Gäster", value: "2 vuxna" },
+        { label: "Boende (3 nätter)", value: "7 797 kr" },
+        { label: "Skatter", value: "1 949 kr" },
+        { label: "Totalt", value: "9 746 kr", modifier: "total" },
+      ]}
       checkIn={checkInStr}
       checkOut={checkOutStr}
       guests={2}
-      nights={3}
-      addons={[]}
-      accommodationTotal={259900 * 3}
       bookingTerms={bookingTerms?.content ?? null}
       header={{ logoUrl, logoWidth }}
       availableMethods={resolvedMethods.availableMethods}

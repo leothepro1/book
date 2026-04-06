@@ -1,3 +1,4 @@
+import React from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "../../_lib/tenant/resolveTenantFromHost";
@@ -59,7 +60,7 @@ export default async function CheckoutSuccessPage({
     });
     if (session) {
       addons = (session.selectedAddons ?? []) as unknown as SelectedAddon[];
-      accommodationTotal = session.accommodationTotal;
+      accommodationTotal = session.accommodationTotal!;
     }
   }
   const addonTotal = addons.reduce((sum, a) => sum + a.totalAmount, 0);
@@ -142,22 +143,15 @@ export default async function CheckoutSuccessPage({
           <section className="co__section">
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
               {isPending && (
-                <>
-                  <script src="https://unpkg.com/@lottiefiles/dotlottie-wc@0.7.1/dist/dotlottie-wc.js" type="module" />
-                  {/* @ts-expect-error — dotlottie-wc is a web component */}
-                  <dotlottie-wc
-                    src="https://lottie.host/cad7e099-f290-4f16-8367-be0894b75485/6vmxO7G18o.lottie"
-                    speed="1"
-                    style={{ width: 55, height: 55, flexShrink: 0 }}
-                    mode="forward"
-                    autoplay
-                  />
-                </>
+                <svg className="co__check-anim" width="55" height="55" viewBox="0 0 52 52" style={{ flexShrink: 0 }}>
+                  <circle className="co__check-anim-circle" cx="26" cy="26" r="24" fill="none" stroke="var(--accent, #121212)" strokeWidth="2.5" />
+                  <path className="co__check-anim-path" fill="none" stroke="var(--accent, #121212)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" d="M15 27l7 7 15-15" />
+                </svg>
               )}
               {!isPending && (
                 <span
                   className="material-symbols-rounded"
-                  style={{ fontSize: 48, color: "#16a34a", fontVariationSettings: "'FILL' 1", flexShrink: 0 }}
+                  style={{ fontSize: 48, color: "var(--accent, #121212)", fontVariationSettings: "'FILL' 1", flexShrink: 0 }}
                 >
                   check_circle
                 </span>
@@ -286,62 +280,44 @@ export default async function CheckoutSuccessPage({
             <h3 className="co__summary-title">{order.lineItems[0]?.title ?? "Boende"}</h3>
           </div>
 
-          <div className="co__summary-divider" />
-
-          {/* Datum */}
-          {checkIn && checkOut && (
-            <>
-              <div className="co__summary-section">
-                <span className="co__summary-label">Datum</span>
-                <span className="co__summary-value">
-                  {format(parseISO(checkIn), "EEE d", { locale: sv })} – {format(parseISO(checkOut), "EEE d MMM", { locale: sv })}
-                </span>
-              </div>
-              <div className="co__summary-divider" />
-            </>
-          )}
-
-          {/* Gäster */}
-          {guests && (
-            <>
-              <div className="co__summary-section">
-                <span className="co__summary-label">Gäster</span>
-                <span className="co__summary-value">{guests} {guests === 1 ? "vuxen" : "vuxna"}</span>
-              </div>
-              <div className="co__summary-divider" />
-            </>
-          )}
-
-          {/* Prisuppgifter */}
-          <div className="co__summary-prices">
-            <div className="co__summary-price-row">
-              <span>Boende{nights > 0 ? ` (${nights} nätter)` : ""}</span>
-              <span>{formatPriceDisplay(accommodationTotal, order.currency)} kr</span>
-            </div>
-            {addons.map((addon, i) => (
-              <div key={i} className="co__summary-price-row">
-                <span>{addon.title}{addon.quantity > 1 ? ` x${addon.quantity}` : ""}</span>
-                <span>{formatPriceDisplay(addon.totalAmount, addon.currency)} kr</span>
-              </div>
-            ))}
-            {order.discountAmount > 0 && (
-              <div className="co__summary-price-row co__summary-price-row--discount">
-                <span>Rabatt</span>
-                <span>−{formatPriceDisplay(order.discountAmount, order.currency)} kr</span>
-              </div>
-            )}
-            <div className="co__summary-price-row">
-              <span>Skatter</span>
-              <span>{formatPriceDisplay(Math.round(subtotal * 0.25), order.currency)} kr</span>
-            </div>
-          </div>
-
-          <div className="co__summary-divider" />
-
-          <div className="co__summary-row co__summary-row--total">
-            <span>Totalt</span>
-            <span>{formatPriceDisplay(order.totalAmount, order.currency)} kr</span>
-          </div>
+          {/* Summary rows */}
+          {(() => {
+            const rows: Array<{ label: string; value: string; modifier?: string }> = [];
+            if (checkIn && checkOut) {
+              rows.push({ label: "Datum", value: `${format(parseISO(checkIn), "EEE d", { locale: sv })} – ${format(parseISO(checkOut), "EEE d MMM", { locale: sv })}` });
+            }
+            if (guests) {
+              rows.push({ label: "Gäster", value: `${guests} ${guests === 1 ? "vuxen" : "vuxna"}` });
+            }
+            // Line items (works for both accommodation and cart)
+            if (nights > 0) {
+              for (const addon of addons) {
+                const qty = addon.quantity > 1 ? ` x${addon.quantity}` : "";
+                rows.push({ label: addon.title + qty, value: `${formatPriceDisplay(addon.totalAmount, addon.currency)} kr` });
+              }
+            } else {
+              for (const li of order.lineItems) {
+                const qty = li.quantity > 1 ? ` x${li.quantity}` : "";
+                rows.push({ label: li.title + qty, value: `${formatPriceDisplay(li.totalAmount, order.currency)} kr` });
+              }
+            }
+            if (order.discountAmount > 0) {
+              rows.push({ label: "Rabatt", value: `−${formatPriceDisplay(order.discountAmount, order.currency)} kr`, modifier: "discount" });
+            }
+            const taxAmount = Math.round(subtotal * 0.25);
+            rows.push({ label: "Delsumma", value: `${formatPriceDisplay(subtotal, order.currency)} kr`, modifier: "sub" });
+            rows.push({ label: "Inkl. moms", value: `${formatPriceDisplay(taxAmount, order.currency)} kr`, modifier: "sub" });
+            rows.push({ label: "Totalt", value: `${formatPriceDisplay(order.totalAmount, order.currency)} kr`, modifier: "total" });
+            return rows.map((row, i) => (
+              <React.Fragment key={i}>
+                <div className="co__summary-divider" />
+                <div className={`co__summary-section${row.modifier ? ` co__summary-section--${row.modifier}` : ""}`}>
+                  <span className="co__summary-label">{row.label}</span>
+                  <span className="co__summary-value">{row.value}</span>
+                </div>
+              </React.Fragment>
+            ));
+          })()}
 
         </div>
       </div>

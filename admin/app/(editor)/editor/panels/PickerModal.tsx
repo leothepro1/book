@@ -130,8 +130,9 @@ export function PickerModal({
 }: PickerModalProps) {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState(defaultTab ?? tabs?.[0]?.key ?? "");
-  // Default to first item so preview panel shows content immediately
+  // Always show a preview — start with first visible item, never clear to null
   const [activeItemId, setActiveItemId] = useState<string | null>(() => items[0]?.id ?? null);
+  const lastActiveRef = useRef<string | null>(activeItemId);
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -203,17 +204,18 @@ export function PickerModal({
     return groups;
   }, [filtered, categories, tabs, activeTab]);
 
-  // ── Hover with delay to allow mouse travel to preset panel ──
+  // ── Hover — preview sticks on last hovered item, never clears ──
   const handleItemEnter = useCallback((id: string) => {
     if (leaveTimerRef.current) {
       clearTimeout(leaveTimerRef.current);
       leaveTimerRef.current = null;
     }
+    lastActiveRef.current = id;
     setActiveItemId(id);
   }, []);
 
   const handleItemLeave = useCallback(() => {
-    leaveTimerRef.current = setTimeout(() => setActiveItemId(null), 150);
+    // Keep showing the last hovered item — no clearing
   }, []);
 
   const handlePresetPanelEnter = useCallback(() => {
@@ -224,7 +226,7 @@ export function PickerModal({
   }, []);
 
   const handlePresetPanelLeave = useCallback(() => {
-    leaveTimerRef.current = setTimeout(() => setActiveItemId(null), 150);
+    // Keep showing the last hovered item — no clearing
   }, []);
 
   // Clean up timer
@@ -251,11 +253,13 @@ export function PickerModal({
     [onSelect, onClose]
   );
 
-  // Active item name for preview header
-  const activeItemName = useMemo(() => {
+  // Active item for preview header
+  const activeItem = useMemo(() => {
     if (!activeItemId) return null;
-    return items.find((i) => i.id === activeItemId)?.name ?? null;
+    return items.find((i) => i.id === activeItemId) ?? null;
   }, [activeItemId, items]);
+
+  const activeItemName = activeItem?.name ?? null;
 
   return createPortal(
     <div
@@ -294,7 +298,13 @@ export function PickerModal({
             <SegmentedControl
               options={tabs.map((t) => ({ value: t.key, label: t.label }))}
               value={activeTab}
-              onChange={(v) => { setActiveTab(v); setActiveItemId(null); }}
+              onChange={(v) => {
+                setActiveTab(v);
+                const firstInTab = items.find((i) => i.tab === v);
+                const next = firstInTab?.id ?? null;
+                lastActiveRef.current = next;
+                setActiveItemId(next);
+              }}
             />
           </div>
         )}
@@ -327,12 +337,14 @@ export function PickerModal({
       >
         <div className="pk-popup__preview-wrap">
           {previewThumbnail ? (
-            <img
-              src={previewThumbnail}
-              alt={activeItemName ?? "Förhandsvisning"}
-              className="pk-popup__preview-img"
-              draggable={false}
-            />
+            <div className="pk-popup__preview-card">
+              <img
+                src={previewThumbnail}
+                alt={activeItemName ?? "Förhandsvisning"}
+                className="pk-popup__preview-img"
+                draggable={false}
+              />
+            </div>
           ) : (
             <div className="pk-popup__preview-empty">
               <EditorIcon name="dashboard" size={32} className="pk-popup__preview-empty-icon" />

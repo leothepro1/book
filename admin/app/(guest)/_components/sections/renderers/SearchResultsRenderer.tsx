@@ -16,9 +16,33 @@ import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { formatDateRange } from "@/app/_lib/search/dates";
 import type { SearchResult, SearchResultRatePlan, AvailabilityResponse } from "@/app/_lib/search/types";
 import { CommerceEngineProvider } from "@/app/_lib/commerce/CommerceEngineContext";
+import { FONT_CATALOG } from "@/app/_lib/fonts/catalog";
 import { useCommerceEngineContext } from "@/app/_lib/commerce/CommerceEngineContext";
 import "./search-results-renderer.css";
 import "@/app/(guest)/_components/spinner-button.css";
+
+// ── Font resolution ───────────────────────────────────────────
+
+function fontStack(key: string): string {
+  if (!key) return "";
+  const entry = FONT_CATALOG.find((f) => f.key === key);
+  if (!entry) return key;
+  return `${entry.label}, ${entry.serif ? "serif" : "sans-serif"}`;
+}
+
+function buildSectionStyle(s: Record<string, unknown>): React.CSSProperties {
+  return {
+    ...(s.bgColor ? { "--background": s.bgColor as string } : {}),
+    ...(s.textColor ? { "--text": s.textColor as string } : {}),
+    ...(s.buttonColor ? { "--button-bg": s.buttonColor as string, "--button-fg": "#fff" } : {}),
+    ...(s.accentColor ? { "--accent": s.accentColor as string } : {}),
+    ...(s.headingFont ? { "--font-heading": fontStack(s.headingFont as string) } : {}),
+    ...(s.bodyFont ? { "--font-body": fontStack(s.bodyFont as string) } : {}),
+    ...(s.buttonFont ? { "--font-button": fontStack(s.buttonFont as string) } : {}),
+    ...(s.bgColor ? { backgroundColor: s.bgColor as string } : {}),
+    ...(s.showShadow === false ? { "--sr-card-shadow": "none" } : {}),
+  } as React.CSSProperties;
+}
 
 // ── Compact Search Form ────────────────────────────────────────
 
@@ -206,13 +230,116 @@ function RoomCard({ entry, searchParams, nights, guests, checkIn, checkOut }: Ro
   );
 }
 
+// ── Empty State ───────────────────────────────────────────────
+
+type EmptyAccommodation = {
+  id: string;
+  displayName: string;
+  displayDescription: string;
+  maxGuests: number;
+  media: Array<{ url: string; altText: string | null }>;
+  slug: string;
+};
+
+function EmptyState({
+  heading,
+  description,
+  tenantId,
+}: {
+  heading: string;
+  description: string;
+  tenantId: string;
+}) {
+  const [accommodations, setAccommodations] = useState<EmptyAccommodation[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!tenantId) { setLoaded(true); return; }
+    fetch(`/api/accommodations?tenantId=${tenantId}&status=ACTIVE&visibleInSearch=true`, { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const json = await res.json();
+        setAccommodations((json.accommodations ?? []).slice(0, 10));
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, [tenantId]);
+
+  return (
+    <>
+      <h1 className="sr__heading" dangerouslySetInnerHTML={{ __html: heading }} />
+      <div className="sr__results-header" dangerouslySetInnerHTML={{ __html: description }} />
+      {!loaded ? (
+        <div className="sr__grid">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="sr__card sr__card--skeleton">
+              <div className="sr__card-image"><div className="sr__sk-shimmer" /></div>
+              <div className="sr__card-info">
+                <div className="sr__sk-shimmer sr__sk-title" />
+                <div className="sr__sk-shimmer sr__sk-desc" />
+                <div className="sr__sk-shimmer sr__sk-desc sr__sk-desc--short" />
+                <div className="sr__sk-meta">
+                  <div className="sr__sk-shimmer sr__sk-meta-line" />
+                </div>
+              </div>
+              <div className="sr__card-action">
+                <div className="sr__sk-pricing">
+                  <div className="sr__sk-shimmer sr__sk-price" />
+                  <div className="sr__sk-shimmer sr__sk-price-detail" />
+                </div>
+                <div className="sr__sk-shimmer sr__sk-btn" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : accommodations.length > 0 ? (
+        <div className="sr__grid">
+          {accommodations.map((acc) => {
+            const image = acc.media[0];
+            return (
+              <div key={acc.id} className="sr__card">
+                <div className="sr__card-image">
+                  {image ? <img src={image.url} alt={image.altText || acc.displayName} /> : <div className="sr__card-placeholder" />}
+                </div>
+                <div className="sr__card-info">
+                  <h3 className="sr__card-title">{acc.displayName}</h3>
+                  <p className="sr__card-desc" dangerouslySetInnerHTML={{ __html: acc.displayDescription }} />
+                  <div className="sr__card-meta">
+                    <span className="material-symbols-rounded" style={{ fontSize: 16 }}>person</span>
+                    Upp till {acc.maxGuests} gäster
+                  </div>
+                </div>
+                <div className="sr__card-action">
+                  <button type="button" className="sr__card-btn" onClick={() => {}}>Välj datum</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="sr__empty">
+          <p className="sr__empty-text">Inga boenden har lagts till ännu.</p>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Main Renderer ──────────────────────────────────────────────
 
 export function SearchResultsDefaultRenderer(props: SectionRendererProps) {
+  const { settings } = props;
   const searchParams = useSearchParams();
   const [data, setData] = useState<AvailabilityResponse | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const emptyHeading = (settings.emptyHeading as string) || "Sök lediga boenden";
+  const emptyDescription = (settings.emptyDescription as string) || "Välj datum och antal gäster för att se tillgänglighet.";
+  const emptyIcon = (settings.emptyIcon as string) || "travel_explore";
+  const noResultsHeading = (settings.noResultsHeading as string) || "Inga lediga boenden";
+  const noResultsDescription = (settings.noResultsDescription as string) || "Prova andra datum eller färre gäster.";
+  const noResultsIcon = (settings.noResultsIcon as string) || "hotel";
 
   const checkIn = searchParams.get("checkIn") ?? "";
   const checkOut = searchParams.get("checkOut") ?? "";
@@ -240,32 +367,51 @@ export function SearchResultsDefaultRenderer(props: SectionRendererProps) {
   }, [checkIn, checkOut, guests, categories, tenantId, hasSearch]);
 
   const searchParamsStr = hasSearch ? `checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}` : "";
+  const sectionStyle = buildSectionStyle(settings);
 
   return (
-    <section className="sr">
+    <section className="sr" style={sectionStyle}>
       <CommerceEngineProvider tenantId={tenantId}>
         {!hasSearch ? (
-          <div className="sr__empty">
-            <span className="material-symbols-rounded" style={{ fontSize: 48, opacity: 0.15 }}>travel_explore</span>
-            <h2 className="sr__empty-title">Sök lediga boenden</h2>
-            <p className="sr__empty-text">Välj datum och antal gäster för att se tillgänglighet.</p>
-          </div>
+          <EmptyState
+            heading={emptyHeading}
+            description={emptyDescription}
+            tenantId={tenantId}
+          />
         ) : !loaded ? (
-          <div className="sr__grid">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="sr__card sr__card--skeleton">
-                <div className="sr__card-image sr__skeleton-pulse" />
-                <div className="sr__card-info"><div className="sr__skeleton-line" /><div className="sr__skeleton-line sr__skeleton-line--lg" /></div>
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="sr__sk-shimmer sr__sk-heading" />
+            <div className="sr__sk-shimmer sr__sk-subheading" />
+            <div className="sr__grid">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="sr__card sr__card--skeleton">
+                  <div className="sr__card-image"><div className="sr__sk-shimmer" /></div>
+                  <div className="sr__card-info">
+                    <div className="sr__sk-shimmer sr__sk-title" />
+                    <div className="sr__sk-shimmer sr__sk-desc" />
+                    <div className="sr__sk-shimmer sr__sk-desc sr__sk-desc--short" />
+                    <div className="sr__sk-meta">
+                      <div className="sr__sk-shimmer sr__sk-meta-line" />
+                    </div>
+                  </div>
+                  <div className="sr__card-action">
+                    <div className="sr__sk-pricing">
+                      <div className="sr__sk-shimmer sr__sk-price" />
+                      <div className="sr__sk-shimmer sr__sk-price-detail" />
+                    </div>
+                    <div className="sr__sk-shimmer sr__sk-btn" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         ) : error ? (
           <div className="sr__empty">
             <p className="sr__empty-text" style={{ color: "var(--error, #dc2626)" }}>{error}</p>
           </div>
         ) : data && data.results.length > 0 ? (
           <>
-            <h1 className="sr__heading">Lediga boenden</h1>
+            <h1 className="sr__heading" dangerouslySetInnerHTML={{ __html: emptyHeading }} />
             <div className="sr__results-header">
               {data.results.length} boende{data.results.length !== 1 ? "n" : ""} ·{" "}
               {formatDateRange(new Date(data.searchParams.checkIn), new Date(data.searchParams.checkOut))} ·{" "}
@@ -278,11 +424,11 @@ export function SearchResultsDefaultRenderer(props: SectionRendererProps) {
             </div>
           </>
         ) : (
-          <div className="sr__empty">
-            <span className="material-symbols-rounded" style={{ fontSize: 48, opacity: 0.15 }}>hotel</span>
-            <h2 className="sr__empty-title">Inga lediga boenden</h2>
-            <p className="sr__empty-text">Prova andra datum eller färre gäster.</p>
-          </div>
+          <EmptyState
+            heading={noResultsHeading}
+            description={noResultsDescription}
+            tenantId={tenantId}
+          />
         )}
       </CommerceEngineProvider>
     </section>

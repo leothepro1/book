@@ -33,7 +33,7 @@
 .s-ps__grid {
   display: grid;
   gap: clamp(0.75rem, 2vw, 1.25rem);
-  margin-top: clamp(1.25rem, 3vw, 2rem);
+  margin-top: clamp(0.75rem, 2vw, 1.25rem);
 }
 
 /* ── Empty state ── */

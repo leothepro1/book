@@ -62,6 +62,13 @@ export function CartProvider({
     setHydrated(true);
   }, [tenantId]);
 
+  // Listen for cart:open events from outside the CartProvider tree (e.g. header)
+  useEffect(() => {
+    const handle = () => setIsOpen(true);
+    window.addEventListener("cart:open", handle);
+    return () => window.removeEventListener("cart:open", handle);
+  }, []);
+
   const addToCart = useCallback(
     (item: Omit<CartItem, "id" | "addedAt">) => {
       const fullItem: CartItem = {
@@ -72,6 +79,7 @@ export function CartProvider({
       const updated = addCartItem(tenantId, fullItem);
       setCart(updated);
       setIsOpen(true);
+      window.dispatchEvent(new Event("cart:updated"));
     },
     [tenantId],
   );
@@ -80,6 +88,7 @@ export function CartProvider({
     (itemId: string) => {
       const updated = removeCartItem(tenantId, itemId);
       setCart(updated);
+      window.dispatchEvent(new Event("cart:updated"));
     },
     [tenantId],
   );
@@ -88,6 +97,7 @@ export function CartProvider({
     (itemId: string, quantity: number) => {
       const updated = updateCartQty(tenantId, itemId, quantity);
       setCart(updated);
+      window.dispatchEvent(new Event("cart:updated"));
     },
     [tenantId],
   );
@@ -95,6 +105,7 @@ export function CartProvider({
   const clearCartFn = useCallback(() => {
     clearCartStorage(tenantId);
     setCart(emptyCart(tenantId));
+    window.dispatchEvent(new Event("cart:updated"));
   }, [tenantId]);
 
   const itemCount = hydrated

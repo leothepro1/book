@@ -87,17 +87,61 @@ export function EditorPublishBar() {
       </div>
 
       <Tooltip label="Spara">
-        <button
-          type="button"
-          className="editor-publish__btn"
-          onClick={handlePublish}
+        <PublishButton
+          isPublishing={isPublishing}
+          isLingeringAfterPublish={isLingeringAfterPublish}
           disabled={!canPublish}
-        >
-          <PublishSpinner visible={isPublishing} />
-          <span>{isLingeringAfterPublish ? "Publicerad" : "Publicera"}</span>
-        </button>
+          onClick={handlePublish}
+        />
       </Tooltip>
     </div>
+  );
+}
+
+/**
+ * Publish button that maintains its width when the spinner replaces the label.
+ * The label is always in the DOM (preserves intrinsic width) but becomes
+ * invisible when the spinner is active via opacity + position: absolute overlay.
+ */
+function PublishButton({
+  isPublishing,
+  isLingeringAfterPublish,
+  disabled,
+  onClick,
+}: {
+  isPublishing: boolean;
+  isLingeringAfterPublish: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="editor-publish__btn"
+      onClick={onClick}
+      disabled={disabled}
+      style={{ position: "relative" }}
+    >
+      {/* Label always rendered to preserve button width */}
+      <span style={{ opacity: isPublishing ? 0 : 1, transition: "opacity 0.15s" }}>
+        {isLingeringAfterPublish ? "Publicerad" : "Publicera"}
+      </span>
+      {/* Spinner overlaid centered when publishing */}
+      {isPublishing && (
+        <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg
+            className="publish-spinner"
+            width="18"
+            height="18"
+            viewBox="0 0 21 21"
+            fill="none"
+            aria-hidden="true"
+          >
+            <circle cx="10.5" cy="10.5" r="7.5" stroke="currentColor" strokeWidth="2" strokeDasharray="33 14.1" strokeLinecap="round" />
+          </svg>
+        </span>
+      )}
+    </button>
   );
 }
 

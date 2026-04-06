@@ -81,6 +81,7 @@ type SearchSidebarSettings = {
   title?: string;
   titleAlign?: "left" | "center";
   bgColor?: string;
+  fieldStyle?: "transparent" | "white";
   showShadow?: boolean;
   textColor?: string;
   buttonColor?: string;
@@ -115,6 +116,7 @@ function SearchSidebarSection({
   const title = settings.title || "Sök & boka";
   const titleAlign = settings.titleAlign ?? "left";
   const bgColor = settings.bgColor ?? "#FFFFFF";
+  const fieldStyle = (settings.fieldStyle as string) ?? "white";
   const showShadow = settings.showShadow ?? false;
   const textColor = settings.textColor ?? "#202020";
   const buttonColor = settings.buttonColor ?? "#207EA9";
@@ -134,12 +136,16 @@ function SearchSidebarSection({
   const maxAdults = settings.maxAdults ?? 10;
 
   // ── CSS custom properties from settings ──
+  const isTransparentFields = fieldStyle === "transparent";
   const sectionStyle: React.CSSProperties = {
     "--background": bgColor,
     "--text": textColor,
     "--button-bg": buttonColor,
     "--button-fg": resolveContrastPalette(buttonColor).text,
     "--accent": accentColor,
+    "--accent-fg": resolveContrastPalette(accentColor).text,
+    "--field-bg": isTransparentFields ? bgColor : "#fff",
+    "--field-text": isTransparentFields ? textColor : "#171717",
     ...(headingFont ? { "--font-heading": fontStack(headingFont) } : {}),
     ...(bodyFont ? { "--font-body": fontStack(bodyFont) } : {}),
     ...(buttonFont ? { "--font-button": fontStack(buttonFont) } : {}),

@@ -1249,3 +1249,60 @@ display:none;
   color: inherit;
   padding-top: 4px;
 }
+
+.co__summary-section--total {
+  padding-top: 4px;
+  flex-direction: row;
+  justify-content: space-between;
+}
+
+.co__summary-section--total .co__summary-label,
+.co__summary-section--total .co__summary-value {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.co__summary-section--sub {
+  flex-direction: row;
+  justify-content: space-between;
+}
+
+.co__summary-section--sub .co__summary-label,
+.co__summary-section--sub .co__summary-value {
+  font-size: 14px;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--text, #000) 72%, transparent);
+}
+
+/* Hide dividers between sub/sub/total, use tight 5px gap instead */
+.co__summary-section--sub + .co__summary-divider {
+  display: none;
+}
+
+.co__summary-section--sub + .co__summary-divider + .co__summary-section--sub,
+.co__summary-section--sub + .co__summary-divider + .co__summary-section--total {
+  margin-top: -7px;
+}
+
+/* ── Animated checkmark (success page) ── */
+
+.co__check-anim-circle {
+  stroke-dasharray: 151;
+  stroke-dashoffset: 151;
+  animation: co-circle-draw 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+}
+
+.co__check-anim-path {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: co-check-draw 0.35s cubic-bezier(0.65, 0, 0.45, 1) 0.4s forwards;
+}
+
+@keyframes co-circle-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes co-check-draw {
+  to { stroke-dashoffset: 0; }
+}

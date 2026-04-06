@@ -142,7 +142,7 @@ export async function ThankYouPreviewPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
                 <span
                   className="material-symbols-rounded"
-                  style={{ fontSize: 48, color: "#16a34a", fontVariationSettings: "'FILL' 1", flexShrink: 0 }}
+                  style={{ fontSize: 48, color: "var(--accent, #121212)", fontVariationSettings: "'FILL' 1", flexShrink: 0 }}
                 >
                   check_circle
                 </span>

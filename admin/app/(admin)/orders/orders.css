@@ -1164,7 +1164,28 @@
 }
 
 .ord-product-header__info {
+  flex: 1;
   min-width: 0;
+}
+
+.ord-product-header__price {
+  font-size: var(--font-sm);
+  color: var(--admin-text);
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  font-weight: 400;
+  display: flex;
+}
+
+.ord-product-header__qty {
+  font-size: var(--font-sm);
+  background: #f2f2f2;
+  border-radius: 12px;
+  padding: 3px 8px;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .ord-product-header__title {
@@ -1180,6 +1201,7 @@
   font-size: var(--font-sm);
   color: var(--admin-text-secondary);
   margin-top: 2px;
+  display: none;
 }
 
 .ord-product-details {

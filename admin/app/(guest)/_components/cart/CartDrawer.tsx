@@ -50,34 +50,28 @@ export function CartDrawer({ currency = "SEK" }: { currency?: string }) {
   const handleCheckout = () => {
     setCheckoutError(null);
     startTransition(async () => {
-      const res = await fetch("/api/checkout/create", {
+      const res = await fetch("/api/portal/checkout/session/cart", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-idempotency-key": checkoutIdempotencyKey.current,
-        },
-        body: JSON.stringify({
-          items: cart.items,
-          tenantId: cart.tenantId,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: cart.items }),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: "UNKNOWN" }));
         if (data.error === "STRIPE_NOT_CONFIGURED") {
           setCheckoutError("Betalning är inte tillgänglig just nu. Kontakta hotellet.");
-        } else if (data.errors) {
-          setCheckoutError("Varukorgen innehåller artiklar som inte längre är tillgängliga. Uppdatera och försök igen.");
+        } else if (data.error === "PRICE_MISMATCH") {
+          setCheckoutError("Priset har ändrats. Ladda om sidan och försök igen.");
+        } else if (data.error === "OUT_OF_STOCK" || data.error === "PRODUCT_UNAVAILABLE" || data.error === "VARIANT_UNAVAILABLE") {
+          setCheckoutError("Varukorgen innehåller artiklar som inte längre är tillgängliga.");
         } else {
           setCheckoutError(data.message || "Något gick fel. Försök igen.");
         }
         return;
       }
 
-      const { url } = await res.json();
-      // Regenerate key so returning from Stripe starts a fresh attempt
-      checkoutIdempotencyKey.current = crypto.randomUUID();
-      if (url) window.location.href = url;
+      const { token } = await res.json();
+      if (token) window.location.href = `/checkout?session=${token}`;
     });
   };
 

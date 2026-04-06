@@ -1,18 +1,8 @@
-import "@/app/_components/Loading/loading.css";
-
+/**
+ * Guest portal root loading boundary.
+ * Returns null — individual routes define their own loading states.
+ * Prevents the full-screen lottie overlay from blocking /search and /p/[token].
+ */
 export default function Loading() {
-  return (
-    <div className="loading-screen loading-screen--fixed">
-      <div className="loading-screen__content">
-        {/* @ts-expect-error — dotlottie-wc web component */}
-        <dotlottie-wc
-          src="/animations/loading.lottie"
-          speed="1.6"
-          style={{ width: 56, height: 56, filter: "brightness(0.3)" }}
-          loop
-          autoplay
-        />
-      </div>
-    </div>
-  );
+  return null;
 }

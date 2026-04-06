@@ -51,6 +51,7 @@
   flex-direction: column;
   gap: 0.125rem;
   padding: 0 0.25rem;
+  margin-bottom: clamp(1.25rem, 3vw, 2rem);
 }
 
 .pc__title {

@@ -231,6 +231,38 @@
   box-shadow: 0 0 0 3px rgba(0, 117, 222, 0.08);
 }
 
+/* ── Segmented ──────────────────────────────── */
+
+.tc-f__segmented {
+  display: flex;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tc-f__seg-btn {
+  flex: 1;
+  padding: 7px 12px;
+  border: none;
+  border-right: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  color: var(--admin-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tc-f__seg-btn:last-child {
+  border-right: none;
+}
+
+.tc-f__seg-btn--active {
+  background: var(--admin-bg);
+  color: var(--admin-text);
+  font-weight: 600;
+}
+
 /* ── Field Groups ───────────────────────────── */
 
 .tc__field-group {

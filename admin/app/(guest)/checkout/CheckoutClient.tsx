@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { Fragment, useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { sv } from "date-fns/locale";
@@ -30,6 +30,13 @@ interface CheckoutAddon {
   currency: string;
 }
 
+interface SummaryRow {
+  label: string;
+  value: string;
+  /** Optional modifier class, e.g. "discount" for negative amounts */
+  modifier?: string;
+}
+
 interface CheckoutProps {
   sessionToken: string;
   product: {
@@ -39,12 +46,12 @@ interface CheckoutProps {
     currency: string;
     ratePlanName: string | null;
   } | null;
+  /** Data-driven summary rows — built by page.tsx, rendered as-is */
+  summaryRows: SummaryRow[];
+  /** Used for discount validation + analytics (null for cart) */
   checkIn: string | null;
   checkOut: string | null;
   guests: number;
-  nights: number;
-  addons: CheckoutAddon[];
-  accommodationTotal: number;
   bookingTerms: string | null;
   header: {
     logoUrl: string | null;
@@ -60,8 +67,7 @@ interface CheckoutProps {
   pageStyles?: Record<string, string>;
 }
 
-type PaymentType = "full" | "klarna";
-type PaymentMethod = "card" | "paypal" | "gpay" | "applepay";
+type PaymentMethod = "card" | "paypal" | "gpay" | "applepay" | "klarna";
 
 function buildCardStyle(errorColor = "#c13515", bodyFont?: string) {
   const fontFamily = bodyFont || '"Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif';
@@ -106,6 +112,12 @@ const ALL_PAYMENT_METHODS: Array<{ id: PaymentMethod; title: string; svg: string
     title: "Apple Pay",
     walletType: "applepay",
     svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-label="Apple Pay" role="img" focusable="false" style="display: block; height: 32px; width: 32px;"><path d="M17.05 12.536c-.024-2.426 1.98-3.59 2.07-3.648-1.126-1.648-2.88-1.874-3.504-1.898-1.492-.152-2.912.88-3.67.88-.756 0-1.926-.858-3.166-.834-1.63.024-3.132.948-3.972 2.41-1.692 2.94-.432 7.296 1.216 9.684.806 1.166 1.768 2.476 3.032 2.43 1.216-.048 1.676-.788 3.148-.788 1.472 0 1.884.788 3.168.764 1.308-.024 2.142-1.188 2.94-2.358.928-1.352 1.308-2.662 1.332-2.73-.028-.012-2.556-.98-2.58-3.888z" fill="#1a1a1a"/></svg>`,
+  },
+  {
+    id: "klarna",
+    title: "Klarna",
+    redirectDesc: "Välj ett flexibelt betalningsalternativ som fungerar för dig.",
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-label="Klarna" role="img" focusable="false" style="display: block; height: 32px; width: 32px; padding: 4px;"><path fill="#FFB3C7" d="M0 4a4 4 0 0 1 4-4h24a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4H4a4 4 0 0 1-4-4V4z"/><path fill="#0A0B09" d="M15.4 8h-2.54a7.8 7.8 0 0 1-3.23 6.3L8.29 15.3l4.43 5.84h3.2l-4.17-5.5A10 10 0 0 0 15.4 8zm.7 13.14h2.3V8h-2.3v13.14zm5.92-2.97a1.62 1.62 0 1 0 0 3.24 1.62 1.62 0 0 0 0-3.24z"/></svg>`,
   },
 ];
 
@@ -345,14 +357,12 @@ function PaymentMethodAccordion({
 
 function ConfirmButton({
   paymentMethod,
-  paymentType,
   disabled,
   onSuccess,
   clientSecret,
   onBeforeConfirm,
 }: {
   paymentMethod: PaymentMethod;
-  paymentType: PaymentType;
   disabled: boolean;
   onSuccess: () => void;
   clientSecret: string | null;
@@ -401,7 +411,7 @@ function ConfirmButton({
         });
         if (result.error) { setError(result.error.message ?? "PayPal-betalningen misslyckades."); setProcessing(false); }
 
-      } else if (paymentType === "klarna") {
+      } else if (paymentMethod === "klarna") {
         const result = await stripe.confirmKlarnaPayment(clientSecret, {
           payment_method: { billing_details: { email: "", address: { country: "SE" } } },
           return_url: returnUrl,
@@ -415,7 +425,7 @@ function ConfirmButton({
       setError(err instanceof Error ? err.message : "Betalningen misslyckades.");
       setProcessing(false);
     }
-  }, [stripe, elements, paymentMethod, paymentType, clientSecret, onSuccess, returnUrl, onBeforeConfirm]);
+  }, [stripe, elements, paymentMethod, clientSecret, onSuccess, returnUrl, onBeforeConfirm]);
 
   // Payment Request for Google Pay / Apple Pay
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
@@ -498,7 +508,7 @@ function ConfirmButton({
     );
   }
 
-  if (paymentType === "klarna") {
+  if (paymentMethod === "klarna") {
     return (
       <>
         {error && <div className="co__payment-error">{error}</div>}
@@ -540,7 +550,7 @@ function FieldError({ error }: { error?: string }) {
 
 // ── Main Checkout ──────────────────────────────────────────
 
-export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guests, nights, addons: addonSnapshots, accommodationTotal, bookingTerms, header, availableMethods, walletsEnabled = true, klarnaEnabled = true, pageStyles }: CheckoutProps) {
+export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, checkOut, guests, bookingTerms, header, availableMethods, walletsEnabled = true, klarnaEnabled = true, pageStyles }: CheckoutProps) {
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
   const fontLinkRef = useRef<HTMLLinkElement | null>(null);
@@ -588,7 +598,6 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
     };
   }, []);
 
-  const [paymentType, setPaymentType] = useState<PaymentType>("full");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [cardInfo, setCardInfo] = useState<CardInfo | null>(null);
   const [cardName, setCardName] = useState("");
@@ -638,7 +647,6 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
   const guestPhone = "";
 
   const [piError, setPiError] = useState<string | null>(null);
-  const [priceBreakdownOpen, setPriceBreakdownOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
   const [klarnaInfoOpen, setKlarnaInfoOpen] = useState(false);
   const [paymentReady, setPaymentReady] = useState(false);
@@ -748,6 +756,7 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
 
   // Filter payment methods
   const paymentMethods = ALL_PAYMENT_METHODS.filter((m) => {
+    if (m.id === "klarna") return klarnaEnabled;
     if (availableMethods && !availableMethods.includes(m.id)) {
       const registryId = m.id === "gpay" ? "google_pay" : m.id === "applepay" ? "apple_pay" : m.id;
       if (!availableMethods.includes(registryId)) return false;
@@ -763,7 +772,7 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
 
   // Create Order + PaymentIntent on mount (no step gating)
   useEffect(() => {
-    if (clientSecret || orderId || !product || !checkIn || !checkOut) return;
+    if (clientSecret || orderId || !product) return;
     if (sessionToken === "preview") return;
     if (piIsLoading.current) return;
 
@@ -778,7 +787,7 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
       },
       body: JSON.stringify({
         sessionToken,
-        paymentType,
+        paymentType: paymentMethod === "klarna" ? "klarna" : "full",
         ...(discountApplied ? { discountCode: discountApplied.code } : {}),
       }),
     })
@@ -798,7 +807,7 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
       })
       .catch(() => setPiError("Nätverksfel — försök igen."))
       .finally(() => { piIsLoading.current = false; });
-  }, [clientSecret, orderId, product, sessionToken, checkIn, checkOut, guests, paymentType, discountApplied]);
+  }, [clientSecret, orderId, product, sessionToken, checkIn, checkOut, guests, paymentMethod, discountApplied]);
 
   const handlePaymentSuccess = () => {
     if (orderId) {
@@ -1008,44 +1017,6 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
             </div>
           </section>
 
-          {/* ── Payment type ────────────────────────── */}
-          <section className="co__section">
-            <h2 className="co__section-title">Välj hur du vill betala</h2>
-            <div className="co__methods">
-              {([
-                { id: "full" as PaymentType, title: `Betala ${product ? `${formatPriceDisplay(product.price, product.currency)} kr` : "—"} nu` },
-                ...(klarnaEnabled ? [{ id: "klarna" as PaymentType, title: "Betala över tid med Klarna", desc: "Välj ett flexibelt betalningsalternativ som fungerar för dig." }] : []),
-              ]).map((opt) => {
-                const isActive = paymentType === opt.id;
-                return (
-                  <div key={opt.id} className={`co__method${isActive ? " co__method--active" : ""}`}>
-                    <button
-                      type="button"
-                      className="co__method-header"
-                      onClick={() => setPaymentType(opt.id)}
-                    >
-                      <span className="co__method-info">
-                        <span className="co__method-title">{opt.title}</span>
-                        {opt.desc && <span className="co__method-desc">{opt.desc}</span>}
-                        {opt.id === "klarna" && (
-                          <span
-                            className="co__method-more"
-                            onClick={(e) => { e.stopPropagation(); setKlarnaInfoOpen(true); }}
-                          >
-                            Mer information
-                          </span>
-                        )}
-                      </span>
-                      <span className="co__method-radio">
-                        <span className="co__method-radio-dot" />
-                      </span>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
           {sessionToken === "preview" ? (
             <>
               {/* ── Preview mode: static payment method mockup ── */}
@@ -1078,30 +1049,21 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
             </>
           ) : clientSecret ? (
             <Elements stripe={stripePromise} options={{ clientSecret }}>
-              {/* ── Payment method (card/paypal/wallet) — hidden for Klarna ── */}
-              {paymentType !== "klarna" && (
-                <section className="co__section">
-                  <h2 className="co__section-title">Lägg till betalningsmetod</h2>
-                  <PaymentMethodAccordion
-                    methods={paymentMethods}
-                    onReady={() => setPaymentReady(true)}
-                    selectedMethod={paymentMethod}
-                    onMethodChange={setPaymentMethod}
-                    onCardChange={setCardInfo}
-                    cardName={cardName}
-                    onCardNameChange={setCardName}
-                    errorColor={pageStyles?.["--error"]}
-                    bodyFont={pageStyles?.["--font-body"]}
-                  />
-                </section>
-              )}
-
-              {/* ── Klarna legal (shown when Klarna selected) ── */}
-              {paymentType === "klarna" && (
-                <section className="co__section">
-                  <KlarnaAutoAdvance onAdvance={() => {}} />
-                </section>
-              )}
+              {/* ── Payment method (card/paypal/wallet/klarna) ── */}
+              <section className="co__section">
+                <h2 className="co__section-title">Lägg till betalningsmetod</h2>
+                <PaymentMethodAccordion
+                  methods={paymentMethods}
+                  onReady={() => setPaymentReady(true)}
+                  selectedMethod={paymentMethod}
+                  onMethodChange={setPaymentMethod}
+                  onCardChange={setCardInfo}
+                  cardName={cardName}
+                  onCardNameChange={setCardName}
+                  errorColor={pageStyles?.["--error"]}
+                  bodyFont={pageStyles?.["--font-body"]}
+                />
+              </section>
 
               {/* ── Confirm & pay ────────────────────────── */}
               <section className="co__section">
@@ -1114,7 +1076,6 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
                 {piError && <div className="co__payment-error">{piError}</div>}
                 <ConfirmButton
                   paymentMethod={paymentMethod}
-                  paymentType={paymentType}
                   disabled={!contactValid}
                   onSuccess={handlePaymentSuccess}
                   clientSecret={clientSecret}
@@ -1131,16 +1092,14 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
           ) : (
             <>
               {/* ── Skeleton while loading ── */}
-              {paymentType !== "klarna" && (
-                <section className="co__section">
-                  <h2 className="co__section-title">Lägg till betalningsmetod</h2>
-                  <div className="co__payment-skeleton">
-                    <div className="co__skel-method" />
-                    <div className="co__skel-method" />
-                    <div className="co__skel-method" />
-                  </div>
-                </section>
-              )}
+              <section className="co__section">
+                <h2 className="co__section-title">Lägg till betalningsmetod</h2>
+                <div className="co__payment-skeleton">
+                  <div className="co__skel-method" />
+                  <div className="co__skel-method" />
+                  <div className="co__skel-method" />
+                </div>
+              </section>
               <section className="co__section">
                 <button type="button" className="co__confirm-btn" disabled>
                   Bekräfta och betala
@@ -1184,7 +1143,7 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     code: discountCode.trim(),
-                    orderAmount: product?.price ? product.price * nights : 0,
+                    orderAmount: product?.price ?? 0,
                     productIds: product ? [product.title] : [],
                     itemCount: 1,
                     checkInDate: checkIn ?? undefined,
@@ -1225,129 +1184,19 @@ export function CheckoutClient({ sessionToken, product, checkIn, checkOut, guest
             )}
           </div>
 
-          <div className="co__summary-divider" />
-
-          {/* Datum */}
-          <div className="co__summary-section">
-            <span className="co__summary-label">Datum</span>
-            <span className="co__summary-value">
-              {checkIn && checkOut
-                ? `${format(parseISO(checkIn), "EEE d", { locale: sv })} – ${format(parseISO(checkOut), "EEE d MMM", { locale: sv })}`
-                : "—"}
-            </span>
-          </div>
-
-          <div className="co__summary-divider" />
-
-          {/* Gäster */}
-          <div className="co__summary-section">
-            <span className="co__summary-label">Gäster</span>
-            <span className="co__summary-value">{guests} {guests === 1 ? "vuxen" : "vuxna"}</span>
-          </div>
-
-          <div className="co__summary-divider" />
-
-          {/* Prisuppgifter */}
-          {product && nights != null && nights > 0 && (() => {
-            const addonSum = addonSnapshots.reduce((sum, a) => sum + a.totalAmount, 0);
-            const subtotal = accommodationTotal + addonSum;
-            const taxAmount = Math.round(subtotal * 0.25);
-            const total = subtotal + taxAmount;
-            return (
-              <>
-                <div className="co__summary-prices">
-                  <div className="co__summary-price-row">
-                    <span>Boende ({nights} nätter)</span>
-                    <span>{formatPriceDisplay(accommodationTotal, product.currency)} kr</span>
-                  </div>
-                  {addonSnapshots.map((addon, i) => (
-                    <div key={i} className="co__summary-price-row">
-                      <span>{addon.title}{addon.quantity > 1 ? ` x${addon.quantity}` : ""}</span>
-                      <span>{formatPriceDisplay(addon.totalAmount, addon.currency)} kr</span>
-                    </div>
-                  ))}
-                  {discountApplied && (
-                    <div className="co__summary-price-row co__summary-price-row--discount">
-                      <span>Rabatt</span>
-                      <span>−{formatPriceDisplay(discountApplied.discountAmount, product.currency)} kr</span>
-                    </div>
-                  )}
-                  <div className="co__summary-price-row">
-                    <span>Skatter</span>
-                    <span>{formatPriceDisplay(taxAmount, product.currency)} kr</span>
-                  </div>
-                </div>
-
-                <div className="co__summary-divider" />
-
-                <div className="co__summary-row co__summary-row--total">
-                  <span>Totalt</span>
-                  <span>{formatPriceDisplay(discountApplied ? total - discountApplied.discountAmount : total, product.currency)} kr</span>
-                </div>
-              </>
-            );
-          })()}
-
-          {(!product || nights == null || nights <= 0) && (
-            <>
+          {summaryRows.map((row, i) => (
+            <Fragment key={i}>
               <div className="co__summary-divider" />
-              <div className="co__summary-row co__summary-row--total">
-                <span>Totalt</span>
-                <span>—</span>
+              <div className={`co__summary-section${row.modifier ? ` co__summary-section--${row.modifier}` : ""}`}>
+                <span className="co__summary-label">{row.label}</span>
+                <span className="co__summary-value">{row.value}</span>
               </div>
-            </>
-          )}
+            </Fragment>
+          ))}
 
-          <button
-            type="button"
-            className="co__summary-breakdown-btn"
-            onClick={() => setPriceBreakdownOpen(true)}
-          >
-            Prisspecifikation
-          </button>
         </div>
       </div>
       </div>
-
-      {/* Prisspecifikation modal */}
-      {product && nights != null && nights > 0 && (() => {
-        const addonSum = addonSnapshots.reduce((sum, a) => sum + a.totalAmount, 0);
-        const subtotal = accommodationTotal + addonSum;
-        const taxAmount = Math.round(subtotal * 0.25);
-        const total = subtotal + taxAmount;
-        return (
-          <CheckoutModal
-            open={priceBreakdownOpen}
-            onClose={() => setPriceBreakdownOpen(false)}
-            title="Prisspecifikation"
-          >
-            <div className="co__breakdown">
-              <div className="co__breakdown-row">
-                <span>Boende · {nights} nätter · {checkIn && checkOut ? `${format(parseISO(checkIn), "d", { locale: sv })}–${format(parseISO(checkOut), "d MMM", { locale: sv })}` : ""}</span>
-                <span>{formatPriceDisplay(accommodationTotal, product.currency)} kr</span>
-              </div>
-              {addonSnapshots.map((addon, i) => (
-                <div key={i} className="co__breakdown-row">
-                  <span>{addon.title}{addon.quantity > 1 ? ` x${addon.quantity}` : ""}</span>
-                  <span>{formatPriceDisplay(addon.totalAmount, addon.currency)} kr</span>
-                </div>
-              ))}
-              <div className="co__breakdown-row">
-                <span>Skatter</span>
-                <span>{formatPriceDisplay(taxAmount, product.currency)} kr</span>
-              </div>
-              <div className="co__breakdown-divider" />
-              <div className="co__breakdown-row co__breakdown-row--total">
-                <div>
-                  <div>Totalt</div>
-                  <div className="co__breakdown-currency">{product.currency}</div>
-                </div>
-                <span>{formatPriceDisplay(total, product.currency)} kr</span>
-              </div>
-            </div>
-          </CheckoutModal>
-        );
-      })()}
 
       {/* Bokningsvillkor modal */}
       <CheckoutModal
