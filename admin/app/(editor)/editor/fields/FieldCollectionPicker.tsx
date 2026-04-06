@@ -4,7 +4,7 @@
  * FieldCollectionPicker — Collection selection with actions dropdown + replace popup.
  *
  * Identical interaction pattern to FieldMenuPicker:
- *   - No collection selected: "Välj kollektion" button → opens replace popup
+ *   - No collection selected: "Välj produktserie" button → opens replace popup
  *   - Collection selected: sf-dropdown trigger → actions (Ersätt / Ta bort)
  *
  * Data is fetched via server action (getCollectionSummaries) on mount,
@@ -149,7 +149,7 @@ export function FieldCollectionPicker({ field, value, onChange }: Props) {
         <input
           type="text"
           className="fmp-popup__search-input"
-          placeholder="Sök kollektion…"
+          placeholder="Sök produktserie…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -170,7 +170,7 @@ export function FieldCollectionPicker({ field, value, onChange }: Props) {
           </>
         ) : filteredCollections.length === 0 ? (
           <div className="fmp-popup__empty">
-            {!loaded ? "Laddar…" : "Inga kollektioner"}
+            {!loaded ? "Laddar…" : "Inga produktserier"}
           </div>
         ) : (
           filteredCollections.map((col) => (
@@ -180,15 +180,12 @@ export function FieldCollectionPicker({ field, value, onChange }: Props) {
               className={`fmp-popup__item${col.id === selectedId ? " fmp-popup__item--active" : ""}`}
               onClick={() => handleSelect(col.id)}
             >
-              <span className="fmp-popup__item-title">
-                {col.title}
-                <span style={{ color: "var(--admin-text-tertiary)", marginLeft: 6, fontSize: 12 }}>
-                  {col.productCount} {col.productCount === 1 ? "produkt" : "produkter"}
-                </span>
-              </span>
-              {col.id === selectedId && (
-                <span className="material-symbols-rounded sf-dropdown__check sf-dropdown__check--visible">check</span>
+              {col.imageUrl ? (
+                <img src={col.imageUrl} alt="" className="fmp-popup__item-thumb" />
+              ) : (
+                <span className="fmp-popup__item-thumb fmp-popup__item-thumb--empty" />
               )}
+              <span className="fmp-popup__item-title">{col.title}</span>
             </button>
           ))
         )}
@@ -202,7 +199,7 @@ export function FieldCollectionPicker({ field, value, onChange }: Props) {
         className="fmp-popup__create"
       >
         <EditorIcon name="add_circle" size={16} />
-        <span>Skapa kollektion</span>
+        <span>Skapa produktserie</span>
       </a>
     </div>,
     document.body,
@@ -218,8 +215,13 @@ export function FieldCollectionPicker({ field, value, onChange }: Props) {
             className="sf-dropdown__trigger"
             onClick={() => setActionsOpen(!actionsOpen)}
           >
+            {selected.imageUrl ? (
+              <img src={selected.imageUrl} alt="" className="fmp-trigger__thumb" />
+            ) : (
+              <span className="fmp-trigger__thumb fmp-trigger__thumb--empty" />
+            )}
             <span className="sf-dropdown__text">{selected.title}</span>
-            <EditorIcon name="expand_more" size={16} className="sf-dropdown__chevron" />
+            <EditorIcon name="unfold_more" size={16} className="sf-dropdown__chevron" />
           </button>
         ) : (
           <button
@@ -228,18 +230,18 @@ export function FieldCollectionPicker({ field, value, onChange }: Props) {
             className="fmp-select-btn"
             onClick={openPopup}
           >
-            Välj kollektion
+            Välj produktserie
           </button>
         )}
 
         {actionsOpen && selected && (
           <ul className={`sf-dropdown__menu${dir === "up" ? " sf-dropdown__menu--up" : ""}`}>
             <li className="sf-dropdown__item" onClick={openPopup}>
-              <EditorIcon name="replay" size={18} />
+              <EditorIcon name="cached" size={18} />
               <span style={{ flex: 1 }}>Ersätt</span>
             </li>
             <li className="sf-dropdown__item" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleRemove(); }}>
-              <EditorIcon name="remove" size={18} />
+              <EditorIcon name="delete" size={18} />
               <span style={{ flex: 1 }}>Ta bort</span>
             </li>
           </ul>

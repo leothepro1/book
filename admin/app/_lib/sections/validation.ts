@@ -66,14 +66,16 @@ export function validateSettingValue(
         : { valid: false, reason: `Expected boolean, got ${typeof value}` };
 
     case "number":
-    case "range":
-      if (typeof value !== "number" || Number.isNaN(value))
+    case "range": {
+      const num = typeof value === "string" ? Number(value) : value;
+      if (typeof num !== "number" || Number.isNaN(num))
         return { valid: false, reason: `Expected number, got ${typeof value}` };
-      if (field.min !== undefined && value < field.min)
-        return { valid: false, reason: `${value} < min ${field.min}` };
-      if (field.max !== undefined && value > field.max)
-        return { valid: false, reason: `${value} > max ${field.max}` };
+      if (field.min !== undefined && num < field.min)
+        return { valid: false, reason: `${num} < min ${field.min}` };
+      if (field.max !== undefined && num > field.max)
+        return { valid: false, reason: `${num} > max ${field.max}` };
       return { valid: true };
+    }
 
     case "select":
     case "segmented":

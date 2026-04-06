@@ -37,6 +37,9 @@ import type {
   UpdateCollectionInput,
 } from "./types";
 import type { InventoryChangeReason } from "@prisma/client";
+import { revalidatePath } from "next/cache";
+import type { ResolvedProduct } from "./types";
+import { resolveProduct } from "./resolve";
 
 // ── Result types ─────────────────────────────────────────────
 
@@ -258,6 +261,7 @@ export async function createProduct(
       return product;
     });
 
+    revalidatePath("/(guest)", "layout");
     return { ok: true, data: { id: product.id, slug: product.slug } };
   } catch (error) {
     // Handle slug collision at DB level (race condition safety net)
@@ -480,6 +484,7 @@ export async function updateProduct(
       return product;
     });
 
+    revalidatePath("/(guest)", "layout");
     return { ok: true, data: { id: product.id, slug: product.slug, version: product.version } };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -512,6 +517,7 @@ export async function archiveProduct(productId: string): Promise<ActionResult> {
     data: { status: "ARCHIVED", archivedAt: new Date(), version: { increment: 1 } },
   });
 
+  revalidatePath("/(guest)", "layout");
   return { ok: true, data: undefined };
 }
 
@@ -536,6 +542,7 @@ export async function restoreProduct(productId: string): Promise<ActionResult> {
     data: { status: "DRAFT", archivedAt: null, version: { increment: 1 } },
   });
 
+  revalidatePath("/(guest)", "layout");
   return { ok: true, data: undefined };
 }
 
@@ -718,6 +725,7 @@ export async function createCollection(
       }
       return col;
     });
+    revalidatePath("/(guest)", "layout");
     return { ok: true, data: { id: collection.id, slug: collection.slug } };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -792,6 +800,7 @@ export async function updateCollection(
       }
       return col;
     });
+    revalidatePath("/(guest)", "layout");
     return { ok: true, data: { id: collection.id, slug: collection.slug, version: collection.version } };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -815,6 +824,7 @@ export async function deleteCollection(collectionId: string): Promise<ActionResu
   if (!existing) return { ok: false, error: "Kategorin hittades inte" };
 
   await prisma.productCollection.delete({ where: { id: collectionId } });
+  revalidatePath("/(guest)", "layout");
   return { ok: true, data: undefined };
 }
 
@@ -997,4 +1007,97 @@ export async function getPreviewProductName(): Promise<string | null> {
  */
 export async function getAccommodationTypes(_tenantId: string) {
   return [] as { id: string; title: string; slug: string; imageUrl: string | null }[];
+}
+
+// ═════════════════════════════════════════════════════════════
+// GUEST-FACING: Product by slug
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * Fetch a single ACTIVE product by slug for the guest portal.
+ *
+ * Tenant resolved from Host header (same pattern as accommodation pages).
+ * Returns null if product not found or not ACTIVE.
+ * This is the single entry point — no direct Prisma queries in page components.
+ */
+/**
+ * Check if a slug belongs to an accommodation (not a product).
+ * Used by shop/products/[slug] to redirect to /stays/[slug].
+ */
+export async function isAccommodationSlug(slug: string): Promise<boolean> {
+  const { resolveTenantFromHost } = await import(
+    "@/app/(guest)/_lib/tenant/resolveTenantFromHost"
+  );
+  const tenant = await resolveTenantFromHost();
+  if (!tenant) return false;
+
+  const accommodation = await prisma.accommodation.findFirst({
+    where: { tenantId: tenant.id, slug, archivedAt: null },
+    select: { id: true },
+  });
+  return !!accommodation;
+}
+
+export async function getProductBySlug(slug: string): Promise<ResolvedProduct | null> {
+  // Lazy import to avoid pulling guest-only code into admin bundles
+  const { resolveTenantFromHost } = await import(
+    "@/app/(guest)/_lib/tenant/resolveTenantFromHost"
+  );
+  const tenant = await resolveTenantFromHost();
+  if (!tenant) return null;
+
+  const product = await prisma.product.findUnique({
+    where: { tenantId_slug: { tenantId: tenant.id, slug } },
+    include: {
+      media: { orderBy: { sortOrder: "asc" } },
+      options: { orderBy: { sortOrder: "asc" } },
+      variants: { orderBy: { sortOrder: "asc" } },
+      template: { select: { id: true, suffix: true } },
+    },
+  });
+
+  if (!product || product.status !== "ACTIVE") return null;
+
+  return resolveProduct(product);
+}
+
+// ═════════════════════════════════════════════════════════════
+// TEMPLATE ASSIGNMENT
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * Assign (or clear) a ProductTemplate on a product.
+ * This is the ONLY place Product.templateId is written.
+ */
+export async function assignProductTemplate(
+  productId: string,
+  templateId: string | null,
+): Promise<ActionResult> {
+  await requireAdmin();
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return { ok: false, error: "Unauthorized" };
+  const tenantId = tenantData.tenant.id;
+
+  // Verify product belongs to tenant
+  const product = await prisma.product.findFirst({
+    where: { id: productId, tenantId },
+    select: { id: true },
+  });
+  if (!product) return { ok: false, error: "Produkten hittades inte." };
+
+  // If assigning a template, verify it belongs to the same tenant
+  if (templateId) {
+    const template = await prisma.productTemplate.findFirst({
+      where: { id: templateId, tenantId },
+      select: { id: true },
+    });
+    if (!template) return { ok: false, error: "Mallen hittades inte." };
+  }
+
+  await prisma.product.update({
+    where: { id: productId },
+    data: { templateId },
+  });
+
+  return { ok: true, data: undefined };
 }

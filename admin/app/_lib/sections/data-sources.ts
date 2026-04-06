@@ -248,7 +248,7 @@ async function fetchCollections(
       id: col.id,
       title: col.title,
       slug: col.slug,
-      description: col.description,
+      description: col.description ?? "",
       imageUrl: col.imageUrl,
       products,
     });

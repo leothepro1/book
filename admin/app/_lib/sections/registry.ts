@@ -117,9 +117,10 @@ export function registerSectionDefinition(definition: SectionDefinition): void {
     throw new Error(`[SectionRegistry] Definition "${definition.id}" must have at least one preset`);
   }
 
+  const hasDataSources = (definition.dataSources ?? []).length > 0;
   const presetKeys = new Set<string>();
   for (const preset of definition.presets) {
-    validatePreset(definition.id, preset, presetKeys);
+    validatePreset(definition.id, preset, presetKeys, hasDataSources);
   }
 
   definitions.set(definition.id, deepFreeze(definition));
@@ -214,7 +215,8 @@ async function bootstrapSections(): Promise<void> {
 function validatePreset(
   defId: string,
   preset: import("./types").SectionPreset,
-  seenKeys: Set<string>
+  seenKeys: Set<string>,
+  hasDataSources = false,
 ): void {
   const ctx = `section "${defId}" preset`;
 
@@ -241,8 +243,8 @@ function validatePreset(
     );
   }
 
-  // Block types
-  if (!preset.blockTypes || preset.blockTypes.length === 0) {
+  // Block types — data-driven sections (with dataSources) may have zero block types
+  if (!hasDataSources && (!preset.blockTypes || preset.blockTypes.length === 0)) {
     throw new Error(`[SectionRegistry] ${ctx} "${preset.key}" must have at least one block type`);
   }
 

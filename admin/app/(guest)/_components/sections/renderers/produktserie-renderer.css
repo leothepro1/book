@@ -1,0 +1,58 @@
+/* ═══════════════════════════════════════════════════════════════
+   Produktserie (s-ps) — Featured Collection Grid
+   Card rendering delegated to shared ProductCard component.
+   ═══════════════════════════════════════════════════════════════ */
+
+.s-ps {
+  width: 100%;
+}
+
+/* ── Section heading ── */
+
+.s-ps__heading {
+  font-family: var(--font-heading, inherit);
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+/* ── Collection description ── */
+
+.s-ps__description {
+  font-family: var(--font-body, inherit);
+  font-size: clamp(0.875rem, 0.8rem + 0.3vw, 1rem);
+  font-weight: 400;
+  color: color-mix(in srgb, var(--text) 70%, transparent);
+  line-height: 1.6;
+  margin: 0 0 clamp(0.75rem, 2vw, 1.25rem);
+  max-width: 640px;
+}
+
+/* ── Grid ── */
+
+.s-ps__grid {
+  display: grid;
+  gap: clamp(0.75rem, 2vw, 1.25rem);
+}
+
+/* ── Empty state ── */
+
+.s-ps__empty {
+  padding: clamp(2rem, 4vw, 3rem) clamp(1rem, 2vw, 2rem);
+  text-align: center;
+  color: color-mix(in srgb, var(--text) 40%, transparent);
+  font-family: var(--font-body, inherit);
+  font-size: var(--font-sm, 13px);
+}
+
+/* ── Responsive: mobile column override ── */
+
+@media (max-width: 640px) {
+  .s-ps__grid--mobile-2 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .s-ps__grid--mobile-1 {
+    grid-template-columns: 1fr !important;
+  }
+}

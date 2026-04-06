@@ -2783,14 +2783,14 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 36px;
+  height: 34px;
   padding: 0 12px;
   border: none;
   border-radius: var(--admin-dropdown-trigger-radius);
-  background: #EBEBEB;
+  background: #F2F2F2;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 400;
+  font-weight: 500;
   color: #303030;
   cursor: pointer;
   transition: background 0.15s;
@@ -2893,6 +2893,32 @@
 
 .fmp-popup__item--active {
   background: none;
+}
+
+.fmp-popup__item-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-xs, 4px);
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--admin-border);
+}
+
+.fmp-popup__item-thumb--empty {
+  background: var(--admin-border);
+}
+
+.fmp-trigger__thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-xs, 4px);
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--admin-border);
+}
+
+.fmp-trigger__thumb--empty {
+  background: var(--admin-border);
 }
 
 .fmp-popup__item-title {
@@ -3130,13 +3156,12 @@
   width: var(--sf-range-input-width) !important;
   color: var(--admin-text);
   text-align: left;
-  font-variant-numeric: tabular-nums;
   background: var(--admin-surface);
   -moz-appearance: textfield;
   outline: none;
   padding: var(--sf-range-input-padding) !important;
   font-size: var(--sf-range-input-font-size);
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .sf-range-input::-webkit-inner-spin-button,
@@ -3622,7 +3647,7 @@
   gap: 8px;
   padding: 4px;
   border-bottom: 1px solid var(--admin-border);
-  background: var(--admin-surface-hover);
+  background: #f2f2f2;
 }
 
 .rt-toolbar__btn {

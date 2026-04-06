@@ -128,6 +128,7 @@ export type ElementType =
   | "product-price"
   | "product-booking-form"
   | "add-to-cart"
+  | "product-add-to-cart"
   | "accommodation-highlights"
   | "accommodation-capacity"
   | "accommodation-facilities";
@@ -205,7 +206,7 @@ export type ElementDefinition = {
    * Restricts this element to a specific page. If set, the element
    * cannot be added to any other page's sections.
    */
-  pageScope?: import("@/app/_lib/pages/types").PageId;
+  pageScope?: import("@/app/_lib/pages/types").PageId | import("@/app/_lib/pages/types").PageId[];
 
   /**
    * Restricts this element to a specific section definition.
@@ -572,7 +573,7 @@ export type SectionDefinition = {
    * When set, the section only appears in the picker on this page.
    * Does not affect locked sections (use lockedTo instead).
    */
-  pageScope?: import("@/app/_lib/pages/types").PageId;
+  pageScope?: import("@/app/_lib/pages/types").PageId | import("@/app/_lib/pages/types").PageId[];
 
   /**
    * Platform-admin contract for DetailPanel rendering.

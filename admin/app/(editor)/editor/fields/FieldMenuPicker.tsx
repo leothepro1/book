@@ -209,7 +209,7 @@ export function FieldMenuPicker({ field, value, onChange }: Props) {
             onClick={() => setActionsOpen(!actionsOpen)}
           >
             <span className="sf-dropdown__text">{selected.title}</span>
-            <EditorIcon name="expand_more" size={16} className="sf-dropdown__chevron" />
+            <EditorIcon name="unfold_more" size={16} className="sf-dropdown__chevron" />
           </button>
         ) : (
           <button
@@ -225,7 +225,7 @@ export function FieldMenuPicker({ field, value, onChange }: Props) {
         {actionsOpen && selected && (
           <ul className={`sf-dropdown__menu${dir === "up" ? " sf-dropdown__menu--up" : ""}`}>
             <li className="sf-dropdown__item" onClick={openPopup}>
-              <EditorIcon name="replay" size={18} />
+              <EditorIcon name="cached" size={18} />
               <span style={{ flex: 1 }}>Ersätt</span>
             </li>
             <li className="sf-dropdown__item" onClick={handleEdit}>
@@ -233,7 +233,7 @@ export function FieldMenuPicker({ field, value, onChange }: Props) {
               <span style={{ flex: 1 }}>Redigera</span>
             </li>
             <li className="sf-dropdown__item" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleRemove(); }}>
-              <EditorIcon name="remove" size={18} />
+              <EditorIcon name="delete" size={18} />
               <span style={{ flex: 1 }}>Ta bort</span>
             </li>
           </ul>

@@ -23,3 +23,4 @@ import "./product-gallery";
 import "./product-content";
 import "./search-results";
 import "./purchase-block";
+import "./produktserie";

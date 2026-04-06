@@ -45,6 +45,7 @@ import { ProductGalleryDefaultRenderer } from "./renderers/ProductGalleryRendere
 import { ProductContentDefaultRenderer } from "./renderers/ProductContentRenderer";
 import { SearchResultsDefaultRenderer } from "./renderers/SearchResultsRenderer";
 import { PurchaseBlockDefaultRenderer } from "./renderers/PurchaseBlockRenderer";
+import { ProduktseriRenderer } from "./renderers/ProduktseriRenderer";
 const RENDERER_MAP: Record<string, React.ComponentType<SectionRendererProps>> = {
   "tabs/underline": TabsUnderlineRenderer,
   "tabs/pill": TabsPillRenderer,
@@ -68,6 +69,7 @@ const RENDERER_MAP: Record<string, React.ComponentType<SectionRendererProps>> = 
   "product-content/default": ProductContentDefaultRenderer,
   "search-results/default": SearchResultsDefaultRenderer,
   "purchase-block/default": PurchaseBlockDefaultRenderer,
+  "produktserie/default": ProduktseriRenderer,
 };
 
 /**
