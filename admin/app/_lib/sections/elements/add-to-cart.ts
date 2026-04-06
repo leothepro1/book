@@ -16,7 +16,7 @@ export const addToCartElement: ElementDefinition = {
   icon: "shopping_cart",
   supportsAction: false,
   skipPresetPicker: true,
-  pageScope: "product",
+  pageScope: ["product", "shop-product"],
 
   settingsSchema: [
     {

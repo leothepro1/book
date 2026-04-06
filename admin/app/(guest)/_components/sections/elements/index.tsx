@@ -25,6 +25,7 @@ import { ProductHighlightsElement } from "./ProductHighlightsElement";
 import { ProductFeaturesElement } from "./ProductFeaturesElement";
 import { ProductPriceElement } from "./ProductPriceElement";
 import { ProductBookingFormElement } from "./ProductBookingFormElement";
+import { ProductAddToCartElement } from "./ProductAddToCartElement";
 import { AccommodationHighlightsElement } from "./AccommodationHighlightsElement";
 import { AccommodationCapacityElement } from "./AccommodationCapacityElement";
 import { AccommodationFacilitiesElement } from "./AccommodationFacilitiesElement";
@@ -50,6 +51,7 @@ const ELEMENT_RENDERERS: Record<string, React.ComponentType<{ resolved: Resolved
   "product-features": ProductFeaturesElement,
   "product-price": ProductPriceElement,
   "product-booking-form": ProductBookingFormElement,
+  "product-add-to-cart": ProductAddToCartElement,
   "accommodation-highlights": AccommodationHighlightsElement,
   "accommodation-capacity": AccommodationCapacityElement,
   "accommodation-facilities": AccommodationFacilitiesElement,

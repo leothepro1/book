@@ -24,10 +24,13 @@
 /**
  * Platform-defined page identifiers.
  *
- * Each key maps to a specific route and config path.
- * New pages are added here as the platform grows.
+ * BasePageId: static pages with hardcoded definitions in registry.
+ * TemplatePageId: dynamic suffixed IDs for alternate product templates.
+ *   e.g. "shop-product.highlight", "shop-product.minimal"
+ *   Maps to TenantConfig.pages["shop-product.highlight"].sections
+ *   Mirrors Shopify: product.json → "shop-product", product.highlight.json → "shop-product.highlight"
  */
-export type PageId =
+export type BasePageId =
   | "home"
   | "stays"
   | "account"
@@ -36,11 +39,17 @@ export type PageId =
   | "help-center"
   | "support"
   | "product"
+  | "shop-product"
   | "checkout"
   | "thank-you"
   | "bookings"
   | "order-status"
   | "profile";
+
+/** Dynamic template page IDs: "shop-product.{suffix}" */
+export type TemplatePageId = `shop-product.${string}`;
+
+export type PageId = BasePageId | TemplatePageId;
 
 // ═══════════════════════════════════════════════════════════════
 // EDITOR MODE

@@ -15,7 +15,7 @@ export const productHighlightsElement: ElementDefinition = {
   icon: "format_list_bulleted",
   supportsAction: false,
   skipPresetPicker: true,
-  pageScope: "product",
+  pageScope: ["product", "shop-product"],
 
   settingsSchema: [
     {

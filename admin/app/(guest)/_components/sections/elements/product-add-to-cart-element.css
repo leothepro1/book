@@ -1,0 +1,108 @@
+/* ── Product Add to Cart Element ── */
+
+.patc__price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.patc__price {
+  font-size: clamp(1.25rem, 1rem + 1vw, 1.5rem);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.patc__compare-price {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--text) 50%, transparent);
+  text-decoration: line-through;
+}
+
+.patc__option {
+  margin-bottom: 16px;
+}
+
+.patc__option-label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.patc__option-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.patc__option-btn {
+  padding: 8px 16px;
+  border: 1px solid color-mix(in srgb, var(--text) 20%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.patc__option-btn:hover {
+  border-color: color-mix(in srgb, var(--text) 40%, transparent);
+}
+
+.patc__option-btn--active {
+  border-color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  font-weight: 600;
+}
+
+.patc__stock {
+  margin-bottom: 12px;
+  font-size: 0.8125rem;
+  min-height: 1.25em;
+}
+
+.patc__stock-ok {
+  color: #16a34a;
+}
+
+.patc__stock-low {
+  color: #ea580c;
+  font-weight: 500;
+}
+
+.patc__stock-out {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.patc__add-btn {
+  width: 100%;
+  padding: 14px 24px;
+  border: none;
+  border-radius: 10px;
+  background: var(--button-bg, var(--text));
+  color: var(--button-fg, var(--background));
+  font-size: 0.9375rem;
+  font-weight: 600;
+  font-family: var(--font-button, var(--font-heading, inherit));
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.patc__add-btn:hover {
+  opacity: 0.9;
+}
+
+.patc__add-btn:active {
+  transform: scale(0.96);
+}
+
+.patc__add-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

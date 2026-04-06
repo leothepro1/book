@@ -11,7 +11,7 @@ import { useProduct } from "@/app/(guest)/_lib/product-context/ProductContext";
 
 export function AccommodationCapacityElement({ resolved }: { resolved: ResolvedElement }) {
   const product = useProduct();
-  if (!product) return null;
+  if (!product || product.productType !== "ACCOMMODATION") return null;
 
   const items: string[] = [];
 

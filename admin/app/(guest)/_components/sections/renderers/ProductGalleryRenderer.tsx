@@ -17,9 +17,10 @@
  * Clicking any image opens a fullscreen lightbox.
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import type { SectionRendererProps } from "@/app/_lib/sections/types";
 import { useProduct } from "@/app/(guest)/_lib/product-context/ProductContext";
+import { useOptionalProductEngineContext } from "@/app/_lib/products/engine";
 import "./product-gallery-renderer.css";
 
 // ── Lightbox ──────────────────────────────────────────────────
@@ -92,9 +93,18 @@ function Lightbox({
 export function ProductGalleryDefaultRenderer(props: SectionRendererProps) {
   const { section, presetSettings } = props;
   const product = useProduct();
+  const engine = useOptionalProductEngineContext();
+  const activeImageUrl = engine?.activeImageUrl ?? null;
   const gap = (presetSettings.gap as number) ?? 10;
   const radius = (presetSettings.cornerRadius as number) ?? 12;
-  const images: string[] = product?.images ?? [];
+  const baseImages: string[] = product?.images ?? [];
+
+  // When a variant with its own image is selected, show it first
+  const images = useMemo(() => {
+    if (!activeImageUrl || baseImages.includes(activeImageUrl)) return baseImages;
+    return [activeImageUrl, ...baseImages];
+  }, [activeImageUrl, baseImages]);
+
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   if (images.length === 0) {

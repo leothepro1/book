@@ -18,6 +18,15 @@
  *   └─────────────────────┴──────────────────┘
  */
 
+/** Check if a pageScope (single value or array) includes the given pageId. */
+function matchesPageScope(
+  scope: string | string[],
+  pageId: string | undefined,
+): boolean {
+  if (!pageId) return false;
+  return Array.isArray(scope) ? scope.includes(pageId) : scope === pageId;
+}
+
 import React, {
   useState,
   useMemo,
@@ -421,7 +430,7 @@ export function buildSectionPickerData(context?: { pageId?: string }): {
   const defs = getAllSectionDefinitions().filter(
     (d) => {
       if (d.scope === "locked") return false;
-      if (d.pageScope && d.pageScope !== context?.pageId) return false;
+      if (d.pageScope && !matchesPageScope(d.pageScope, context?.pageId)) return false;
       return true;
     },
   );
@@ -440,7 +449,7 @@ export function buildSectionPickerData(context?: { pageId?: string }): {
   // Each element type gets its own entry, categorized by ELEMENT_CATEGORY_MAP.
   // pageScope elements only appear on their designated page.
   const elementDefs = getAllElementDefinitions().filter(
-    (d) => !d.pageScope || d.pageScope === context?.pageId,
+    (d) => !d.pageScope || matchesPageScope(d.pageScope, context?.pageId),
   );
   const standaloneItems: PickerItem[] = elementDefs.map((def) => {
     const catInfo = ELEMENT_CATEGORY_MAP[def.type] ?? { primary: "el-other" };
@@ -536,7 +545,7 @@ export function buildElementPickerData(
   const allowed = new Set<string>(slotDef.allowedElements);
   const validElements = allElements.filter((el) => {
     if (!allowed.has(el.type)) return false;
-    if (el.pageScope && el.pageScope !== context?.pageId) return false;
+    if (el.pageScope && !matchesPageScope(el.pageScope, context?.pageId)) return false;
     if (el.sectionScope && el.sectionScope !== context?.sectionDefinitionId) return false;
     return true;
   });

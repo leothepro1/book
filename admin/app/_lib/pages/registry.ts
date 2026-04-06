@@ -14,7 +14,7 @@
  * No database migration required — page definitions are code-level constants.
  */
 
-import type { PageId, PageDefinition, PageLayout, LayoutVariant } from "./types";
+import type { PageId, BasePageId, PageDefinition, PageLayout, LayoutVariant } from "./types";
 
 // ═══════════════════════════════════════════════════════════════
 // PAGE DEFINITIONS
@@ -253,6 +253,21 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
     editorVisible: true,
     previewResource: {
       pickerType: "accommodationPicker",
+      label: "Förhandsvisar",
+      dataKey: "product",
+    },
+  },
+  {
+    id: "shop-product",
+    label: "Produktsida",
+    icon: "shopping_bag",
+    layout: { header: true, body: "sections", footer: true },
+    editorMode: "full",
+    availableLayouts: [{ id: "default", label: "Standard" }],
+    defaultLayout: "default",
+    editorVisible: true,
+    previewResource: {
+      pickerType: "productPicker",
       label: "Förhandsvisar",
       dataKey: "product",
     },
@@ -520,14 +535,17 @@ const PAGE_DEFINITIONS: readonly PageDefinition[] = [
 // LOOKUP
 // ═══════════════════════════════════════════════════════════════
 
-/** Index for O(1) lookup by page ID. */
-const PAGE_MAP = new Map<PageId, PageDefinition>(
-  PAGE_DEFINITIONS.map((p) => [p.id, p]),
+/** Index for O(1) lookup by base page ID. */
+const PAGE_MAP = new Map<BasePageId, PageDefinition>(
+  PAGE_DEFINITIONS.map((p) => [p.id as BasePageId, p]),
 );
 
-/** Type guard: checks whether a string is a valid PageId. */
+/** Pattern for template page IDs: "shop-product.{suffix}" where suffix is [a-z0-9-]+ */
+const TEMPLATE_PAGE_PATTERN = /^shop-product\.[a-z0-9-]+$/;
+
+/** Type guard: checks whether a string is a valid PageId (base or template). */
 export function isPageId(id: string): id is PageId {
-  return PAGE_MAP.has(id as PageId);
+  return PAGE_MAP.has(id as BasePageId) || TEMPLATE_PAGE_PATTERN.test(id);
 }
 
 /**
@@ -546,7 +564,7 @@ const DEFAULT_LAYOUT: PageLayout = {
  * Returns the full definition, or a safe fallback if the page is unknown.
  */
 export function getPageDefinition(pageId: PageId | string): PageDefinition {
-  const def = PAGE_MAP.get(pageId as PageId);
+  const def = PAGE_MAP.get(pageId as BasePageId);
   if (def) return def;
 
   // Unknown page → safe fallback (full layout)

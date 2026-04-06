@@ -238,7 +238,7 @@ function FacilitiesModal({ facilities, onClose }: { facilities: string[]; onClos
 export function AccommodationFacilitiesElement({ resolved }: { resolved: ResolvedElement }) {
   const product = useProduct();
   const [modalOpen, setModalOpen] = useState(false);
-  const facilities: string[] = product?.facilities ?? [];
+  const facilities: string[] = product?.productType === "ACCOMMODATION" ? product.facilities : [];
 
   if (facilities.length === 0) {
     return (

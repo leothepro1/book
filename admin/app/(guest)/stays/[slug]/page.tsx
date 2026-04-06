@@ -117,7 +117,7 @@ export default async function RoomDetailPage({
     compareAtPrice: null,
     featuredImage: resolved.media[0] ? { url: resolved.media[0].url, alt: resolved.media[0].altText ?? "" } : null,
     images: resolved.media.map((m) => ({ url: m.url, alt: m.altText ?? "" })),
-    productType: "PMS_ACCOMMODATION",
+    productType: "ACCOMMODATION",
     facilities: visibleFacilities,
     highlights: resolved.highlights.map((h) => ({ icon: h.icon, text: h.text, description: h.description })),
     capacity: {
@@ -130,10 +130,16 @@ export default async function RoomDetailPage({
   };
 
   // ── Build ProductContext data (extends display with PMS-specific fields) ──
-  const productData = {
-    ...productDisplay,
+  const productData: import("@/app/(guest)/_lib/product-context/ProductContext").AccommodationProductContext = {
     tenantId: tenant.id,
+    id: accommodation.id,
+    title: resolved.displayName,
+    description: resolved.displayDescription,
+    slug: resolved.slug,
     images: resolved.media.map((m) => m.url),
+    price: ratePlans[0]?.pricePerNight ?? resolved.basePricePerNight,
+    currency: resolved.currency,
+    productType: "ACCOMMODATION",
     facilities: visibleFacilities,
     highlights: resolved.highlights.map((h) => ({ icon: h.icon, text: h.text, description: h.description })),
     ratePlans,

@@ -22,7 +22,8 @@ import { PublishBarUI } from "@/app/(admin)/_components/PublishBar/PublishBar";
 import { RichTextEditor } from "@/app/_components/RichTextEditor";
 import { MediaLibraryModal } from "@/app/(admin)/_components/MediaLibrary";
 import type { MediaLibraryResult } from "@/app/(admin)/_components/MediaLibrary";
-import { createProduct, updateProduct, effectivePrice, listCollections } from "@/app/_lib/products";
+import { createProduct, updateProduct, effectivePrice, listCollections, assignProductTemplate } from "@/app/_lib/products";
+import { listProductTemplates } from "@/app/_lib/products/template-actions";
 import type { ProductMediaInput, ProductOptionInput, ProductVariantInput } from "@/app/_lib/products";
 import {
   DndContext,
@@ -143,6 +144,15 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
   const [collectionsSearch, setCollectionsSearch] = useState("");
   const collectionsRef = useRef<HTMLDivElement>(null);
 
+  // ── Templates ──
+  type TemplateItem = { id: string; name: string; suffix: string; isDefault: boolean };
+  const [allTemplates, setAllTemplates] = useState<TemplateItem[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(
+    () => (product as any)?.templateId ?? null,
+  );
+  const [templateDropdownOpen, setTemplateDropdownOpen] = useState(false);
+  const templateRef = useRef<HTMLDivElement>(null);
+
   // ── Options + Variants (pre-populated from product) ──
   const [options, setOptions] = useState<OptionWithId[]>(
     () => (product?.options ?? []).map((o) => ({
@@ -175,10 +185,13 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
   const [actionsOpen, setActionsOpen] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
 
-  // Load collections on mount
+  // Load collections + templates on mount
   useEffect(() => {
     listCollections().then((cols) => {
       setAllCollections(cols.map((c) => ({ id: c.id, title: c.title })));
+    });
+    listProductTemplates().then((tpls) => {
+      setAllTemplates(tpls.map((t) => ({ id: t.id, name: t.name, suffix: t.suffix, isDefault: t.isDefault })));
     });
   }, []);
 
@@ -217,6 +230,16 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
   }, [statusOpen]);
+
+  // Close template dropdown on outside click
+  useEffect(() => {
+    if (!templateDropdownOpen) return;
+    const handle = (e: MouseEvent) => {
+      if (templateRef.current && !templateRef.current.contains(e.target as Node)) setTemplateDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [templateDropdownOpen]);
 
   // Collection toggle
   const toggleCollection = useCallback((id: string) => {
@@ -821,6 +844,65 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
                 Ingen nylig försäljning av den här produkten
               </p>
             </div>
+
+            {/* Sidebar: Template */}
+            {isEdit && (
+              <div style={CARD}>
+                <div className="pf-card-header" style={{ marginBottom: 8 }}>
+                  <span className="pf-card-title">Produktmall</span>
+                </div>
+                {allTemplates.length === 0 ? (
+                  <p style={{ fontSize: 13, color: "#616161", margin: 0, lineHeight: 1.5 }}>
+                    Inga produktmallar skapade.{" "}
+                    <a href="/products/templates" style={{ color: "var(--admin-accent)" }}>Skapa en mall</a>
+                  </p>
+                ) : (
+                  <div className="admin-dropdown" ref={templateRef}>
+                    <button
+                      type="button"
+                      className="admin-dropdown__trigger"
+                      onClick={() => setTemplateDropdownOpen(!templateDropdownOpen)}
+                    >
+                      <span className="admin-dropdown__text" style={{ textAlign: "left" }}>
+                        {selectedTemplateId
+                          ? (allTemplates.find((t) => t.id === selectedTemplateId)?.name ?? "Standard")
+                          : "Standard (ingen mall)"}
+                      </span>
+                      <EditorIcon name="expand_more" size={18} className="admin-dropdown__chevron" />
+                    </button>
+                    {templateDropdownOpen && (
+                      <div className="admin-dropdown__list">
+                        <div
+                          className={`admin-dropdown__item${!selectedTemplateId ? " admin-dropdown__item--active" : ""}`}
+                          onClick={() => {
+                            setSelectedTemplateId(null);
+                            setTemplateDropdownOpen(false);
+                            if (product) assignProductTemplate(product.id, null);
+                          }}
+                        >
+                          Standard (ingen mall)
+                          {!selectedTemplateId && <span className="admin-dropdown__check">✓</span>}
+                        </div>
+                        {allTemplates.map((t) => (
+                          <div
+                            key={t.id}
+                            className={`admin-dropdown__item${selectedTemplateId === t.id ? " admin-dropdown__item--active" : ""}`}
+                            onClick={() => {
+                              setSelectedTemplateId(t.id);
+                              setTemplateDropdownOpen(false);
+                              if (product) assignProductTemplate(product.id, t.id);
+                            }}
+                          >
+                            {t.name}{t.isDefault ? " (standard)" : ""}
+                            {selectedTemplateId === t.id && <span className="admin-dropdown__check">✓</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Sidebar: Product organization */}
             <div style={CARD}>

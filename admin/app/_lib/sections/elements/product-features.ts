@@ -15,7 +15,7 @@ export const productFeaturesElement: ElementDefinition = {
   icon: "grid_view",
   supportsAction: false,
   skipPresetPicker: true,
-  pageScope: "product",
+  pageScope: ["product", "shop-product"],
 
   settingsSchema: [
     {

@@ -32,6 +32,7 @@ function CounterControl({ value, min, max, onChange }: { value: number; min: num
 
 export function ProductBookingSidebar() {
   const product = useProduct();
+  const isAccommodation = product?.productType === "ACCOMMODATION";
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -60,7 +61,7 @@ export function ProductBookingSidebar() {
   const nights = getNightCount(checkIn, checkOut);
   const totalGuests = adults + children_;
 
-  const ratePlans = product?.ratePlans ?? [];
+  const ratePlans = isAccommodation ? product.ratePlans : [];
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(
     () => ratePlans[0]?.externalId ?? null,
   );

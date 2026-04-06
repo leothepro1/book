@@ -1,10 +1,9 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { getRequestLocale } from "@/app/(guest)/_lib/locale/getRequestLocale";
 import { applyTranslations, applyTranslationsBatch } from "@/app/_lib/translations/apply-db-translations";
-import { formatPriceDisplay, getVariantPriceRange } from "@/app/_lib/products/pricing";
+import { ProductCard } from "@/app/(guest)/_components/cards/ProductCard";
 import "./collection-page.css";
 
 export const revalidate = 60;
@@ -28,7 +27,7 @@ export default async function CollectionPage({
           product: {
             include: {
               media: { orderBy: { sortOrder: "asc" }, take: 1 },
-              variants: { select: { price: true } },
+              variants: { select: { price: true, compareAtPrice: true } },
             },
           },
         },
@@ -68,33 +67,23 @@ export default async function CollectionPage({
       <div className="cp__grid">
         {products.map((product) => {
           const image = product.media[0];
-          const { min, max } = getVariantPriceRange(
-            product.price,
-            product.variants,
-          );
-
           return (
-            <Link
+            <ProductCard
               key={product.id}
-              href={`/shop/products/${product.slug}`}
-              className="cp__card"
-            >
-              <div className="cp__card-image">
-                {image ? (
-                  <img src={image.url} alt={image.alt || product.title} />
-                ) : (
-                  <div className="cp__card-placeholder" />
-                )}
-              </div>
-              <div className="cp__card-info">
-                <h3 className="cp__card-title">{product.title}</h3>
-                <span className="cp__card-price">
-                  {min === max
-                    ? `${formatPriceDisplay(min, product.currency)} kr`
-                    : `${formatPriceDisplay(min, product.currency)} – ${formatPriceDisplay(max, product.currency)} kr`}
-                </span>
-              </div>
-            </Link>
+              title={product.title}
+              slug={product.slug}
+              price={product.price}
+              currency={product.currency}
+              compareAtPrice={product.compareAtPrice}
+              variants={product.variants.map((v) => ({
+                price: v.price,
+                compareAtPrice: v.compareAtPrice,
+              }))}
+              featuredImage={image
+                ? { url: image.url, alt: image.alt }
+                : null}
+              aspectRatio="3:4"
+            />
           );
         })}
       </div>

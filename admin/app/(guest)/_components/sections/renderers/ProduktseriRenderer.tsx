@@ -42,7 +42,7 @@ function Heading({ html, size }: { html: string; size: string }) {
       className="s-ps__heading"
       style={{
         fontSize: SIZE_MAP[size] || SIZE_MAP.md,
-        margin: "0 0 clamp(0.75rem, 2vw, 1.25rem)",
+        margin: 0,
       }}
       dangerouslySetInnerHTML={{ __html: html }}
     />

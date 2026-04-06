@@ -280,6 +280,26 @@ export function isStandardProduct(product: { productType: string }): boolean {
 
 // ── Resolved product ────────────────────────────────────────
 
+export interface ResolvedProductOption {
+  id: string;
+  name: string;
+  values: string[];
+}
+
+export interface ResolvedProductVariant {
+  id: string;
+  option1: string | null;
+  option2: string | null;
+  option3: string | null;
+  price: number;
+  compareAtPrice: number | null;
+  imageUrl: string | null;
+  sku: string | null;
+  trackInventory: boolean;
+  inventoryQuantity: number;
+  continueSellingWhenOutOfStock: boolean;
+}
+
 /**
  * What the UI always works with.
  * displayTitle = title
@@ -304,6 +324,14 @@ export interface ResolvedProduct {
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  /** ProductTemplate ID (null = use tenant default). */
+  templateId: string | null;
+  /** Product options (axes of variation). Empty when not included in query. */
+  options: ResolvedProductOption[];
+  /** Product variants. Empty when not included in query. */
+  variants: ResolvedProductVariant[];
+  /** Product image URLs (sorted by sortOrder). Empty when not included in query. */
+  media: Array<{ id: string; url: string; type: string; alt: string }>;
 }
 
 // ── Product action error ────────────────────────────────────

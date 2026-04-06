@@ -14,7 +14,7 @@ export const productPriceElement: ElementDefinition = {
   icon: "payments",
   supportsAction: false,
   skipPresetPicker: true,
-  pageScope: "product",
+  pageScope: ["product", "shop-product"],
 
   settingsSchema: [
     {

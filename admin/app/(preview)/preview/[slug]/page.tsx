@@ -7,6 +7,7 @@ import SupportPage from "../../../(guest)/p/[token]/support/page";
 import CheckInPage from "../../../(guest)/check-in/page";
 import LoginPage from "../../../(guest)/login/page";
 import { ProductPreviewPage } from "./ProductPreviewPage";
+import { ShopProductPreviewPage } from "./ShopProductPreviewPage";
 import { CheckoutPreviewPage } from "./CheckoutPreviewPage";
 import { ThankYouPreviewPage } from "./ThankYouPreviewPage";
 import { ProfilePreviewPage } from "./ProfilePreviewPage";
@@ -53,7 +54,14 @@ export default async function PreviewPage(props: {
       return <ProfilePreviewPage />;
     case "bookings":
       return <BookingsPreviewPage />;
-    default:
+    default: {
+      // Handle shop-product and shop-product.{suffix} template pages
+      if (params.slug === "shop-product" || params.slug.startsWith("shop-product.")) {
+        const sp = await props.searchParams;
+        const productId = typeof sp?.product === "string" ? sp.product : undefined;
+        return <ShopProductPreviewPage productId={productId} templatePageId={params.slug} />;
+      }
       return notFound();
+    }
   }
 }

@@ -6,6 +6,7 @@ import GuestPageShell from "@/app/(guest)/_components/GuestPageShell";
 import { getRequestLocale } from "@/app/(guest)/_lib/locale/getRequestLocale";
 import { prisma } from "@/app/_lib/db/prisma";
 import { ProductProvider } from "@/app/(guest)/_lib/product-context/ProductContext";
+import type { AccommodationProductContext } from "@/app/(guest)/_lib/product-context/ProductContext";
 import { CommerceEngineProvider } from "@/app/_lib/commerce/CommerceEngineContext";
 import type { ResolvedProductDisplay } from "@/app/_lib/sections/data-sources";
 
@@ -59,7 +60,7 @@ export async function ProductPreviewPage({ productId }: { productId?: string }) 
         compareAtPrice: null,
         featuredImage: acc.media[0] ? { url: acc.media[0].url, alt: acc.media[0].altText ?? "" } : null,
         images: acc.media.map((m) => ({ url: m.url, alt: m.altText ?? "" })),
-        productType: "PMS_ACCOMMODATION",
+        productType: "ACCOMMODATION",
         facilities: acc.facilities.map((f) => f.facilityType),
         highlights: acc.highlights.map((h) => ({ icon: h.icon, text: h.text, description: h.description })),
         capacity: {
@@ -80,14 +81,14 @@ export async function ProductPreviewPage({ productId }: { productId?: string }) 
         compareAtPrice: null,
         featuredImage: null,
         images: [],
-        productType: "PMS_ACCOMMODATION",
+        productType: "ACCOMMODATION",
         facilities: [],
         highlights: [],
         capacity: { maxGuests: null, bedrooms: null, bathrooms: null, roomSizeSqm: null, extraBeds: 0 },
       };
 
   // ProductContext extends display data with PMS-specific fields
-  const productData = {
+  const productData: AccommodationProductContext = {
     tenantId,
     id: productDisplay.id,
     title: productDisplay.title,
@@ -96,10 +97,10 @@ export async function ProductPreviewPage({ productId }: { productId?: string }) 
     images: acc ? acc.media.map((m) => m.url) : [],
     price: productDisplay.price,
     currency: productDisplay.currency,
-    productType: productDisplay.productType,
+    productType: "ACCOMMODATION" as const,
     facilities: productDisplay.facilities ?? [],
     highlights: productDisplay.highlights ?? [],
-    ratePlans: [] as never[],
+    ratePlans: [],
     maxGuests: acc?.maxGuests ?? null,
     bedrooms: acc?.bedrooms ?? null,
     bathrooms: acc?.bathrooms ?? null,

@@ -58,7 +58,7 @@ export function ProductHighlightsElement({ resolved }: { resolved: ResolvedEleme
   const { settings } = resolved;
   const iconSize = (settings.iconSize as number) || 24;
 
-  const facilities: string[] = product?.facilities ?? [];
+  const facilities: string[] = product?.productType === "ACCOMMODATION" ? product.facilities : [];
 
   if (facilities.length === 0) {
     return (

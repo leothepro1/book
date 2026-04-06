@@ -1086,7 +1086,10 @@ export async function assignProductTemplate(
   if (!product) return { ok: false, error: "Produkten hittades inte." };
 
   // If assigning a template, verify it belongs to the same tenant
-  if (templateId) {
+  if (templateId !== null && templateId !== undefined) {
+    if (templateId === "") {
+      return { ok: false, error: "Ogiltigt mall-ID." };
+    }
     const template = await prisma.productTemplate.findFirst({
       where: { id: templateId, tenantId },
       select: { id: true },

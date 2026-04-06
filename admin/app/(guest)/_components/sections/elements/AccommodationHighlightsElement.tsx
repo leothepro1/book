@@ -15,7 +15,7 @@ export function AccommodationHighlightsElement({ resolved }: { resolved: Resolve
   const { settings } = resolved;
   const iconSize = (settings.iconSize as number) || 28;
   const gap = (settings.gap as number) || 20;
-  const highlights = product?.highlights ?? [];
+  const highlights = product?.productType === "ACCOMMODATION" ? product.highlights : [];
 
   if (highlights.length === 0) {
     return (

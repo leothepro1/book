@@ -16,7 +16,7 @@ export const productDescriptionElement: ElementDefinition = {
   icon: "view_headline",
   supportsAction: false,
   skipPresetPicker: true,
-  pageScope: "product",
+  pageScope: ["product", "shop-product"],
 
   settingsSchema: [
     {

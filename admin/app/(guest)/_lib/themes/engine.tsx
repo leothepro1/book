@@ -44,8 +44,10 @@ export type ThemeRendererProps = {
   /** Which page template to render (e.g. "home", "shop", "account"). */
   templateKey: string;
   config: TenantConfig;
-  booking: NormalizedBooking;
-  bookingStatus: NormalizedBookingStatus;
+  /** Booking context. Optional — not available on standard product pages. */
+  booking?: NormalizedBooking;
+  /** Booking status. Optional — not available on standard product pages. */
+  bookingStatus?: NormalizedBookingStatus;
   token?: string;
   /**
    * Page-level resolved data, injected into every section's resolvedData.
@@ -208,6 +210,18 @@ export async function ThemeRenderer({
   const templateSlots = [...template.sections].sort((a, b) => a.order - b.order);
   const footerSlots = [...manifest.sectionGroups.footer].sort((a, b) => a.order - b.order);
 
+  // Dummy booking for theme slots when no booking context exists (e.g. shop-product pages).
+  // Same pattern as renderSidebarSlots().
+  const now = new Date();
+  const slotBooking: NormalizedBooking = booking ?? {
+    externalId: "", tenantId: config.tenantId, firstName: "", lastName: "",
+    guestName: "", guestEmail: "", guestPhone: null, arrival: now, departure: now,
+    unit: "", unitType: null, status: "upcoming", adults: 0, children: 0,
+    extras: [], rawSource: "manual", checkedInAt: null, checkedOutAt: null,
+    signatureCapturedAt: null,
+  };
+  const slotBookingStatus: NormalizedBookingStatus = bookingStatus ?? "upcoming";
+
   const renderSlot = (slot: ThemeSectionSlot) => {
     const Component = getSectionComponent(slot.type, slot.variant);
 
@@ -228,8 +242,8 @@ export async function ThemeRenderer({
           slot={slot}
           settings={settings}
           config={config}
-          booking={booking}
-          bookingStatus={bookingStatus}
+          booking={slotBooking}
+          bookingStatus={slotBookingStatus}
           token={token}
           themeSettings={themeSettings}
         />

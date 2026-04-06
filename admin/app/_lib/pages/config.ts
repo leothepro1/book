@@ -513,29 +513,37 @@ export function getAllResourceBearingPageIds(): PageId[] {
 // PREVIEW ROUTE MAPPING
 // ═══════════════════════════════════════════════════════════════
 
-/** Maps PageId → the PreviewRoute expected by GuestPreviewFrame. */
-const PAGE_TO_PREVIEW_ROUTE: Record<PageId, string> = {
-  home: "/p/[token]",
-  stays: "/p/[token]/stays",
-  account: "/p/[token]/account",
-  "check-in": "/check-in",
-  login: "/login",
-  "help-center": "/p/[token]/help-center",
-  support: "/p/[token]/support",
-  product: "/preview/product",
-  checkout: "/preview/checkout",
-  "thank-you": "/preview/thank-you",
-  bookings: "/preview/bookings",
-  "order-status": "/preview/order-status",
-  profile: "/preview/profile",
-};
+/** Maps base PageId → the PreviewRoute expected by GuestPreviewFrame. */
+const PAGE_TO_PREVIEW_ROUTE = new Map<string, string>([
+  ["home", "/p/[token]"],
+  ["stays", "/p/[token]/stays"],
+  ["account", "/p/[token]/account"],
+  ["check-in", "/check-in"],
+  ["login", "/login"],
+  ["help-center", "/p/[token]/help-center"],
+  ["support", "/p/[token]/support"],
+  ["product", "/preview/product"],
+  ["shop-product", "/preview/shop-product"],
+  ["checkout", "/preview/checkout"],
+  ["thank-you", "/preview/thank-you"],
+  ["bookings", "/preview/bookings"],
+  ["order-status", "/preview/order-status"],
+  ["profile", "/preview/profile"],
+]);
 
 /**
  * Resolve the preview route for a given page.
  * Used by EditorCanvas to drive the iframe src.
+ * Template pages (shop-product.{suffix}) map to /preview/shop-product.
  */
 export function getPreviewRoute(pageId: PageId): string {
-  return PAGE_TO_PREVIEW_ROUTE[pageId] ?? PAGE_TO_PREVIEW_ROUTE.home;
+  const exact = PAGE_TO_PREVIEW_ROUTE.get(pageId);
+  if (exact) return exact;
+  // Template page IDs → same preview route as base shop-product
+  if (typeof pageId === "string" && pageId.startsWith("shop-product.")) {
+    return "/preview/shop-product";
+  }
+  return PAGE_TO_PREVIEW_ROUTE.get("home")!;
 }
 
 // ═══════════════════════════════════════════════════════════════

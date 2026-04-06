@@ -516,6 +516,7 @@ model Tenant {
   magicLinkTokens    MagicLinkToken[]
   guestAccounts      GuestAccount[]
   products           Product[]
+  productTemplates   ProductTemplate[]
   productCollections ProductCollection[]
   orders              Order[]
   giftCardProducts    GiftCardProduct[]
@@ -1416,6 +1417,12 @@ model Product {
   channelPublications ProductChannelPublication[]
   discountTargets     DiscountProduct[]
 
+  // ── Template ────────────────────────────────────────────────
+  /// Optional reference to a ProductTemplate for section layout.
+  /// Null = use tenant's default template. Deleting a template nullifies this.
+  templateId  String?
+  template    ProductTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
   @@unique([tenantId, slug])
   @@index([tenantId])
   @@index([tenantId, status])
@@ -1538,6 +1545,41 @@ model ProductVariant {
   @@index([productId])
   @@index([productId, sortOrder])
   @@index([productId, sku])
+}
+
+// ============================================================================
+// PRODUCT TEMPLATES (Shopify-style alternate templates)
+// ============================================================================
+
+/// Product template — metadata for alternate product detail page layouts.
+/// Each tenant can have multiple templates (e.g. "Standard", "Highlight", "Minimal").
+/// Exactly one template per tenant must have isDefault = true (enforced at app layer).
+///
+/// Shopify parity:
+///   - Alternate templates: product.json, product.highlight.json
+///   - We use page IDs: "shop-product", "shop-product.highlight"
+///   - Sections live in TenantConfig.pages["shop-product.{suffix}"], NOT here
+///   - Products reference a template; deleting a template nullifies the reference
+model ProductTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Display name shown in admin (e.g. "Standard", "Highlight", "Minimal")
+  name      String
+  /// URL/lookup key (e.g. "default", "highlight", "minimal")
+  suffix    String
+  /// Exactly one per tenant must be true (enforced at application layer)
+  isDefault Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products  Product[]
+
+  @@unique([tenantId, suffix])
+  @@index([tenantId])
+  @@index([tenantId, isDefault])
 }
 
 // ============================================================================

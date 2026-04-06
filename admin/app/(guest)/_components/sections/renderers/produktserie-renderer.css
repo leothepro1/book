@@ -24,7 +24,7 @@
   font-weight: 400;
   color: color-mix(in srgb, var(--text) 70%, transparent);
   line-height: 1.6;
-  margin: 0 0 clamp(0.75rem, 2vw, 1.25rem);
+  margin: 10px 0 0;
   max-width: 640px;
 }
 
@@ -33,6 +33,7 @@
 .s-ps__grid {
   display: grid;
   gap: clamp(0.75rem, 2vw, 1.25rem);
+  margin-top: clamp(1.25rem, 3vw, 2rem);
 }
 
 /* ── Empty state ── */

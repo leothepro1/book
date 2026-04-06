@@ -59,7 +59,7 @@ export function ProductFeaturesElement({ resolved }: { resolved: ResolvedElement
   const columns = (settings.columns as string) || "3";
   const iconSize = (settings.iconSize as number) || 20;
 
-  const facilities: string[] = product?.facilities ?? [];
+  const facilities: string[] = product?.productType === "ACCOMMODATION" ? product.facilities : [];
 
   if (facilities.length === 0) {
     return (
