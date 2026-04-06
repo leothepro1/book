@@ -62,6 +62,8 @@ export function CartDrawer({ currency = "SEK" }: { currency?: string }) {
           setCheckoutError("Betalning är inte tillgänglig just nu. Kontakta hotellet.");
         } else if (data.error === "PRICE_MISMATCH") {
           setCheckoutError("Priset har ändrats. Ladda om sidan och försök igen.");
+        } else if (data.error === "INSUFFICIENT_STOCK") {
+          setCheckoutError(`Endast ${data.available} st kvar i lager.`);
         } else if (data.error === "OUT_OF_STOCK" || data.error === "PRODUCT_UNAVAILABLE" || data.error === "VARIANT_UNAVAILABLE") {
           setCheckoutError("Varukorgen innehåller artiklar som inte längre är tillgängliga.");
         } else {

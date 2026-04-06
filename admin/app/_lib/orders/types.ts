@@ -100,9 +100,10 @@ export type CreateOrderInput = z.infer<typeof createOrderInput>;
  */
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   PENDING: ["PAID", "CANCELLED"],
-  PAID: ["FULFILLED", "CANCELLED", "REFUNDED"],
-  FULFILLED: ["REFUNDED"],
+  PAID: ["FULFILLED", "CANCELLED", "PARTIALLY_REFUNDED", "REFUNDED"],
+  FULFILLED: ["PARTIALLY_REFUNDED", "REFUNDED"],
   CANCELLED: [],
+  PARTIALLY_REFUNDED: ["PARTIALLY_REFUNDED", "REFUNDED"],
   REFUNDED: [],
 };
 

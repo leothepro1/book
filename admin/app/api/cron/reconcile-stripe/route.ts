@@ -79,6 +79,7 @@ export async function GET(req: Request) {
     pi: Stripe.PaymentIntent,
   ) {
     if (pi.status === "succeeded" && canTransition(order.status, "PAID")) {
+      // Mark as PAID
       await prisma.$transaction([
         prisma.order.update({
           where: { id: order.id },
@@ -87,6 +88,7 @@ export async function GET(req: Request) {
             financialStatus: "PAID",
             fulfillmentStatus: "UNFULFILLED",
             paidAt: new Date(),
+            stripePaymentIntentId: pi.id,
             guestEmail: order.guestEmail || (pi.receipt_email ?? ""),
           },
         }),
@@ -100,6 +102,12 @@ export async function GET(req: Request) {
           },
         }),
       ]);
+
+      // Run all side effects (email, PMS booking, guest account, analytics)
+      // Same idempotent function used by the webhook handler
+      const { processOrderPaidSideEffects } = await import("@/app/_lib/orders/process-paid-side-effects");
+      await processOrderPaidSideEffects(order.id, pi.id);
+
       log("info", "reconcile.healed_paid", { orderId: order.id, tenantId: order.tenantId, piId: pi.id });
       healed++;
     } else if (pi.status === "canceled" && canTransition(order.status, "CANCELLED")) {
@@ -125,8 +133,42 @@ export async function GET(req: Request) {
       ]);
       log("info", "reconcile.cancelled", { orderId: order.id, tenantId: order.tenantId, piId: pi.id });
       cancelled++;
+    } else if (pi.status === "requires_payment_method" || pi.status === "requires_action") {
+      // If order is >60 min old and still not paid, cancel it — guest abandoned
+      const ageMs = Date.now() - order.createdAt.getTime();
+      if (ageMs > 60 * 60 * 1000 && canTransition(order.status, "CANCELLED")) {
+        // Cancel the PI on Stripe side, then cancel the order
+        try {
+          const cancelOpts = order.tenant.stripeAccountId
+            ? { stripeAccount: order.tenant.stripeAccountId }
+            : undefined;
+          await stripe.paymentIntents.cancel(pi.id, cancelOpts);
+        } catch { /* PI may already be cancelled */ }
+        await prisma.$transaction([
+          prisma.order.update({
+            where: { id: order.id },
+            data: { status: "CANCELLED", financialStatus: "VOIDED", fulfillmentStatus: "CANCELLED", cancelledAt: new Date() },
+          }),
+          prisma.orderEvent.create({
+            data: {
+              orderId: order.id,
+              tenantId: order.tenantId,
+              type: "RECONCILED",
+              message: `Reconcilierad: PI ${pi.id} i ${pi.status} >60 min — avbruten`,
+              metadata: { paymentIntentId: pi.id, source: "cron", reason: "expired" },
+            },
+          }),
+        ]);
+        log("info", "reconcile.expired_cancelled", { orderId: order.id, piId: pi.id, piStatus: pi.status });
+        cancelled++;
+      } else {
+        log("warn", "reconcile.still_pending", {
+          orderId: order.id, tenantId: order.tenantId, piStatus: pi.status,
+        });
+        stillPending++;
+      }
     } else {
-      // requires_payment_method, requires_action, processing — guest may still complete
+      // processing — actively being processed by Stripe, wait
       log("warn", "reconcile.still_pending", {
         orderId: order.id, tenantId: order.tenantId, piStatus: pi.status,
       });
@@ -165,6 +207,10 @@ export async function GET(req: Request) {
           },
         }),
       ]);
+      // Run all side effects (same function as webhook)
+      const { processOrderPaidSideEffects: processSessionSideEffects } = await import("@/app/_lib/orders/process-paid-side-effects");
+      await processSessionSideEffects(order.id, piId);
+
       log("info", "reconcile.healed_paid", { orderId: order.id, tenantId: order.tenantId, sessionId: session.id });
       healed++;
     } else if (session.status === "expired" && canTransition(order.status, "CANCELLED")) {

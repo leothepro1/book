@@ -19,11 +19,12 @@ enum BookingStatus {
 }
 
 enum OrderStatus {
-  PENDING       // checkout started, payment not yet received
-  PAID          // payment confirmed via webhook
-  FULFILLED     // tenant marked as fulfilled
-  CANCELLED     // cancelled before or after payment
-  REFUNDED      // full refund issued
+  PENDING              // checkout started, payment not yet received
+  PAID                 // payment confirmed via webhook
+  FULFILLED            // tenant marked as fulfilled
+  CANCELLED            // cancelled before or after payment
+  PARTIALLY_REFUNDED   // partial refund issued — can be further refunded
+  REFUNDED             // full refund issued
 }
 
 /// What type of purchase this order represents.

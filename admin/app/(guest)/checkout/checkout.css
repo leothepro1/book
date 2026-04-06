@@ -998,6 +998,12 @@
 
 /* ── Discount code ────────────────────────────────── */
 
+.co__discount-locked {
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--text, #000) 50%, transparent);
+  margin: 10px 0 0;
+}
+
 .co__discount {
   display: flex;
   gap: 8px;

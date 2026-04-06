@@ -501,6 +501,22 @@ async function handleSessionPaymentIntent(
     );
   }
 
+  // ── Verify Stripe Connect is still active ───────────────────
+  const tenantForStripeCheck = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { stripeAccountId: true },
+  });
+  if (tenantForStripeCheck?.stripeAccountId) {
+    const chargesOk = await verifyChargesEnabled(tenantForStripeCheck.stripeAccountId);
+    if (!chargesOk) {
+      await failIdempotencyKey(tenantId, idempotencyKey, "payment-intent");
+      return NextResponse.json(
+        { error: "STRIPE_NOT_ACTIVE", message: "Betalning är inte aktiverad." },
+        { status: 503 },
+      );
+    }
+  }
+
   // ── CART session branch ────────────────────────────────────
   if (session.sessionType === "CART") {
     return handleCartSessionPaymentIntent(req, tenantId, session, input, idempotencyKey);
@@ -566,7 +582,17 @@ async function handleSessionPaymentIntent(
   const taxRate = getTaxRate("STANDARD", "SE");
   const taxAmount = taxRate > 0 ? Math.round(totalPrice * taxRate / 10000) : 0;
 
-  const order = await prisma.$transaction(async (tx) => {
+  let order;
+  try {
+  order = await prisma.$transaction(async (tx) => {
+    // Pessimistic lock: prevent double-submit from two browser tabs
+    const lockedSession = await tx.$queryRaw<{ status: string }[]>`
+      SELECT "status" FROM "CheckoutSession" WHERE "id" = ${session.id} FOR UPDATE
+    `;
+    if (!lockedSession[0] || lockedSession[0].status !== "CHECKOUT") {
+      throw new Error("SESSION_ALREADY_PROCESSING");
+    }
+
     const newOrder = await tx.order.create({
       data: {
         tenantId,
@@ -683,6 +709,16 @@ async function handleSessionPaymentIntent(
 
     return newOrder;
   });
+  } catch (err) {
+    if (err instanceof Error && err.message === "SESSION_ALREADY_PROCESSING") {
+      await failIdempotencyKey(tenantId, idempotencyKey, "payment-intent");
+      return NextResponse.json(
+        { error: "SESSION_ALREADY_PROCESSING", message: "Betalning pågår redan." },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 
   log("info", "checkout.session_order_created", {
     tenantId,
@@ -830,7 +866,17 @@ async function handleCartSessionPaymentIntent(
   const taxRate = getTaxRate("STANDARD", "SE");
   const taxAmount = taxRate > 0 ? Math.round(totalPrice * taxRate / 10000) : 0;
 
-  const order = await prisma.$transaction(async (tx) => {
+  let order;
+  try {
+  order = await prisma.$transaction(async (tx) => {
+    // Pessimistic lock: prevent double-submit from two browser tabs
+    const lockedSession = await tx.$queryRaw<{ status: string }[]>`
+      SELECT "status" FROM "CheckoutSession" WHERE "id" = ${session.id} FOR UPDATE
+    `;
+    if (!lockedSession[0] || lockedSession[0].status !== "CHECKOUT") {
+      throw new Error("SESSION_ALREADY_PROCESSING");
+    }
+
     const newOrder = await tx.order.create({
       data: {
         tenantId,
@@ -902,6 +948,16 @@ async function handleCartSessionPaymentIntent(
 
     return newOrder;
   });
+  } catch (err) {
+    if (err instanceof Error && err.message === "SESSION_ALREADY_PROCESSING") {
+      await failIdempotencyKey(tenantId, idempotencyKey, "payment-intent");
+      return NextResponse.json(
+        { error: "SESSION_ALREADY_PROCESSING", message: "Betalning pågår redan." },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 
   log("info", "checkout.cart_order_created", {
     tenantId,

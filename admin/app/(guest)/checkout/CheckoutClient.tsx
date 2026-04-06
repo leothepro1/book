@@ -1125,6 +1125,9 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
 
           {/* Rabattkod */}
           <div className="co__discount-wrap">
+            {clientSecret && !discountApplied && (
+              <p className="co__discount-locked">Rabattkod kan inte ändras efter att betalning initierats</p>
+            )}
             <div className="co__discount">
               <div className="co__float" data-filled={discountCode ? "" : undefined}>
                 <input
@@ -1133,10 +1136,11 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
                   placeholder="Rabattkod"
                   value={discountCode}
                   onChange={(e) => setDiscountCode(e.target.value)}
+                  disabled={!!clientSecret}
                 />
                 <span className="co__float-label">Rabattkod</span>
               </div>
-              <SpinnerButton className={`co__discount-btn${discountCode.trim() ? " co__discount-btn--active" : ""}`} disabled={!discountCode.trim() || !!discountApplied} onClick={async () => {
+              <SpinnerButton className={`co__discount-btn${discountCode.trim() ? " co__discount-btn--active" : ""}`} disabled={!discountCode.trim() || !!discountApplied || !!clientSecret} onClick={async () => {
                 setDiscountError(null);
                 const res = await fetch("/api/checkout/validate-discount", {
                   method: "POST",

@@ -56,11 +56,15 @@ export default async function CheckoutSuccessPage({
   if (sessionToken) {
     const session = await prisma.checkoutSession.findUnique({
       where: { token: sessionToken },
-      select: { accommodationTotal: true, selectedAddons: true },
+      select: { sessionType: true, accommodationTotal: true, cartTotal: true, selectedAddons: true },
     });
     if (session) {
       addons = (session.selectedAddons ?? []) as unknown as SelectedAddon[];
-      accommodationTotal = session.accommodationTotal!;
+      if (session.sessionType === "CART") {
+        accommodationTotal = session.cartTotal ?? order.totalAmount;
+      } else {
+        accommodationTotal = session.accommodationTotal ?? order.totalAmount;
+      }
     }
   }
   const addonTotal = addons.reduce((sum, a) => sum + a.totalAmount, 0);
@@ -176,7 +180,7 @@ export default async function CheckoutSuccessPage({
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
                 <h2 style={{ fontFamily: "var(--font-heading)", fontSize: "1rem", fontWeight: 600, color: "var(--text, #1a1a1a)", margin: 0 }}>
-                  Din bokning är bekräftad
+                  {(meta?.orderType === "PURCHASE") ? "Din beställning är bekräftad" : "Din bokning är bekräftad"}
                 </h2>
               </div>
               <p style={{ fontSize: "0.8125rem", color: "color-mix(in srgb, var(--text, #000) 65%, transparent)", margin: 0, paddingLeft: 0 }}>

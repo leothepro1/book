@@ -28,6 +28,7 @@ import { verifyChargesEnabled } from "@/app/_lib/stripe/verify-account";
 import { checkRateLimit } from "@/app/_lib/rate-limit/checkout";
 import { effectivePrice } from "@/app/_lib/products/pricing";
 import { log } from "@/app/_lib/logger";
+import { reserveInventoryForTenant } from "@/app/_lib/products/inventory";
 
 const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -45,7 +46,7 @@ const cartItemSchema = z.object({
 });
 
 const inputSchema = z.object({
-  items: z.array(cartItemSchema).min(1, "Varukorgen är tom"),
+  items: z.array(cartItemSchema).min(1, "Varukorgen är tom").max(100, "Max 100 artiklar"),
 });
 
 function generateToken(): string {
@@ -183,11 +184,19 @@ export async function POST(req: Request) {
     }
 
     // Inventory check
-    if (trackInventory && inventoryQty <= 0 && !continueOOS) {
-      return NextResponse.json(
-        { error: "OUT_OF_STOCK", productId: item.productId, title: item.title },
-        { status: 400 },
-      );
+    if (trackInventory && !continueOOS) {
+      if (inventoryQty <= 0) {
+        return NextResponse.json(
+          { error: "OUT_OF_STOCK", productId: item.productId, title: item.title },
+          { status: 400 },
+        );
+      }
+      if (item.quantity > inventoryQty) {
+        return NextResponse.json(
+          { error: "INSUFFICIENT_STOCK", productId: item.productId, title: item.title, available: inventoryQty },
+          { status: 400 },
+        );
+      }
     }
 
     // Build option name → value map from variant
@@ -223,6 +232,11 @@ export async function POST(req: Request) {
     0,
   );
 
+  // ── Invariant: CART session must always have cartItems ──────
+  if (resolvedItems.length === 0) {
+    return NextResponse.json({ error: "EMPTY_CART" }, { status: 400 });
+  }
+
   // ── Create CheckoutSession ─────────────────────────────────
   const token = generateToken();
 
@@ -239,6 +253,49 @@ export async function POST(req: Request) {
       expiresAt: new Date(Date.now() + SESSION_TTL_MS),
     },
   });
+
+  // ── Reserve inventory for tracked items ─────────────────────
+  // Reservations use session.id as sessionId — released by expire-reservations cron
+  // if session expires without payment. TTL matches session TTL (30 min).
+  for (const item of resolvedItems) {
+    const product = productMap.get(item.productId);
+    if (!product) continue;
+
+    let shouldReserve = product.trackInventory;
+    if (item.variantId) {
+      const variant = product.variants.find((v) => v.id === item.variantId);
+      if (variant) shouldReserve = variant.trackInventory;
+    }
+
+    if (shouldReserve) {
+      try {
+        await reserveInventoryForTenant({
+          tenantId: tenant.id,
+          productId: item.productId,
+          variantId: item.variantId,
+          quantity: item.quantity,
+          sessionId: session.id,
+          ttlMinutes: 30,
+        });
+      } catch (err) {
+        // Reservation failed — likely concurrent oversell. Cancel session and return error.
+        log("error", "checkout_session.cart_reservation_failed", {
+          tenantId: tenant.id,
+          sessionId: session.id,
+          productId: item.productId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        await prisma.checkoutSession.update({
+          where: { id: session.id },
+          data: { status: "ABANDONED" },
+        });
+        return NextResponse.json(
+          { error: "OUT_OF_STOCK", productId: item.productId, title: item.title },
+          { status: 400 },
+        );
+      }
+    }
+  }
 
   log("info", "checkout_session.cart_created", {
     tenantId: tenant.id,

@@ -82,6 +82,11 @@ export default async function CheckoutPage({
   // Session not found or wrong tenant → silent redirect
   if (!session || session.tenantId !== tenant.id) redirect("/stays");
 
+  // Unknown session type → 404
+  if (session.sessionType !== "ACCOMMODATION" && session.sessionType !== "CART") {
+    return notFound();
+  }
+
   // Expired or abandoned
   if (session.status === "EXPIRED" || session.status === "ABANDONED") {
     const fallback = session.sessionType === "CART" ? "/shop" : "/stays";

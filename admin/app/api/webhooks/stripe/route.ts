@@ -28,7 +28,7 @@ import { getStripe } from "@/app/_lib/stripe/client";
 import { adjustInventoryInTx } from "@/app/_lib/products/inventory";
 import { canTransition, canTransitionFinancial, canTransitionFulfillment } from "@/app/_lib/orders/types";
 import { log } from "@/app/_lib/logger";
-import { createPmsBookingAfterPayment } from "@/app/_lib/accommodations/create-pms-booking";
+// createPmsBookingAfterPayment now called via processOrderPaidSideEffects
 import { emitAnalyticsEvent } from "@/app/_lib/analytics";
 import type Stripe from "stripe";
 import { upsertGuestAccountFromOrder } from "@/app/_lib/guest-auth/account";
@@ -606,103 +606,21 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
     }
   });
 
-  // Emit analytics — fire-and-forget, OUTSIDE transaction
-  void emitAnalyticsEvent({
-    tenantId: order.tenantId,
-    eventType: "ORDER_PAID",
-    payload: {
-      orderId: order.id,
-      totalAmount: order.totalAmount,
-      currency: order.currency,
-      paymentMethod: order.paymentMethod,
-    },
-  });
+  // ── All side effects via shared idempotent function ─────────
+  // PMS booking, guest account, confirmation email, analytics,
+  // segment sync, platform webhooks — all handled here.
+  // Same function is called by the reconciliation cron for missed webhooks.
+  const { processOrderPaidSideEffects } = await import("@/app/_lib/orders/process-paid-side-effects");
+  await processOrderPaidSideEffects(order.id, pi.id);
 
-  // Segment sync — re-evaluate after payment (non-blocking)
-  if (order.guestAccountId) {
-    import("@/app/_lib/segments/sync").then(({ syncGuestSegments }) =>
-      syncGuestSegments(order.guestAccountId!, order.tenantId),
-    ).catch((err) => log("warn", "webhook.segment_sync_failed", { orderId: order.id, error: String(err) }));
-  }
-
-  // Emit platform event for app webhooks (non-blocking, fire-and-forget)
-  const piOrderMeta = (order.metadata ?? {}) as Record<string, unknown>;
-  import("@/app/_lib/apps/webhooks").then(({ emitPlatformEvent }) =>
-    emitPlatformEvent({
-      type: "order.paid",
-      tenantId: order.tenantId,
-      payload: {
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        totalAmount: order.totalAmount,
-        currency: order.currency,
-        guestEmail: order.guestEmail,
-        guestName: order.guestName,
-        orderType,
-        paidAt: new Date().toISOString(),
-        ...(piOrderMeta.gclid ? { gclid: piOrderMeta.gclid } : {}),
-      },
-    }),
-  ).catch((err) => log("error", "webhook.app_event_emit_failed", { orderId: order.id, error: String(err) }));
-
-  // ── ACCOMMODATION: create PMS booking after payment ──────────
-  if (orderType === "ACCOMMODATION") {
-    try {
-      const pmsResult = await createPmsBookingAfterPayment({
-        orderId: order.id,
-        tenantId: order.tenantId,
-      });
-
-      if (!pmsResult.ok) {
-        log("error", "webhook.pms_booking_failed_after_payment", {
-          orderId: order.id,
-          tenantId: order.tenantId,
-          error: pmsResult.error,
-          retryable: pmsResult.retryable,
-        });
-
-        if (pmsResult.retryable) {
-          // Set fulfillment to ON_HOLD so staff can see it needs attention
-          if (canTransitionFulfillment("UNFULFILLED", "ON_HOLD")) {
-            await prisma.order.update({
-              where: { id: order.id },
-              data: { fulfillmentStatus: "ON_HOLD" },
-            });
-            await prisma.orderEvent.create({
-              data: {
-                orderId: order.id,
-                tenantId: order.tenantId,
-                type: "ORDER_UPDATED",
-                message: `PMS-bokning misslyckades — manuell hantering krävs: ${pmsResult.error}`,
-              },
-            });
-          }
-        }
-      }
-    } catch (err) {
-      // Unexpected error — log but never crash the webhook
-      log("error", "webhook.pms_booking_unexpected_error", {
-        orderId: order.id,
-        tenantId: order.tenantId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-
-      // Set fulfillment to ON_HOLD
-      try {
-        if (canTransitionFulfillment("UNFULFILLED", "ON_HOLD")) {
-          await prisma.order.update({
-            where: { id: order.id },
-            data: { fulfillmentStatus: "ON_HOLD" },
-          });
-        }
-      } catch {
-        // Best effort — don't throw from error handler
-      }
-    }
-  }
-
-  // ── PURCHASE: create gift card + mark fulfilled ─────────────
-  if (orderType === "PURCHASE") {
+  // ── GIFT CARD: create gift card + mark fulfilled ────────────
+  // Only gift card purchases include designId in metadata.
+  // Standard cart/product purchases (also orderType "PURCHASE") skip this.
+  // TODO: Replace designId proxy check with explicit orderType === "GIFT_CARD".
+  // Gift card checkout should set orderType: "GIFT_CARD" in Stripe metadata,
+  // and this webhook should check orderType explicitly — not infer it from designId.
+  // Requires updating gift card checkout session creation. Tracked technical debt.
+  if (orderType === "PURCHASE" && pi.metadata?.designId) {
     try {
       const giftCard = await createGiftCard({
         orderId: order.id,
@@ -747,91 +665,12 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
         tenantId: order.tenantId,
       });
     } catch (err) {
-      // Gift card creation failed — order stays PAID, manual intervention needed
       log("error", "webhook.gift_card_creation_failed", {
         orderId: order.id,
         tenantId: order.tenantId,
         error: String(err),
       });
     }
-  }
-
-  // ── Shared: auto-create guest account (non-blocking) ────────
-  const effectiveEmail = order.guestEmail || (pi.receipt_email ?? "");
-  if (effectiveEmail) {
-    try {
-      const guestAccount = await upsertGuestAccountFromOrder(
-        order.tenantId,
-        order.id,
-        effectiveEmail,
-        order.guestName || undefined,
-        order.guestPhone || undefined,
-        order.billingAddress as Record<string, string> | null,
-      );
-
-      // Gift card orders are auto-fulfilled — enroll in ORDER_COMPLETED automations
-      if (orderType === "GIFT_CARD") {
-        import("@/app/_lib/email/enrollInAutomations").then(({ enrollInAutomations }) =>
-          enrollInAutomations({
-            tenantId: order.tenantId,
-            guestId: guestAccount.id,
-            trigger: "ORDER_COMPLETED",
-          }),
-        ).catch((err) => log("error", "webhook.automation_enroll.failed", { orderId: order.id, error: String(err) }));
-      }
-    } catch (err) {
-      log("warn", "webhook.guest_account_failed", { orderId: order.id, error: String(err) });
-    }
-  }
-
-  // ── Shared: send confirmation email (non-blocking) ──────────
-  try {
-    if (effectiveEmail) {
-      const { sendEmailEvent } = await import("@/app/_lib/email/send");
-      const { formatPriceDisplay } = await import("@/app/_lib/products/pricing");
-      const tenant = await prisma.tenant.findUnique({
-        where: { id: order.tenantId },
-        select: { name: true, portalSlug: true },
-      });
-
-      const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
-      const portalBase = tenant?.portalSlug
-        ? `https://${tenant.portalSlug}.${baseDomain}`
-        : null;
-
-      await sendEmailEvent(
-        order.tenantId,
-        "ORDER_CONFIRMED" as Parameters<typeof sendEmailEvent>[1],
-        effectiveEmail,
-        {
-          guestName: order.guestName,
-          orderNumber: String(order.orderNumber),
-          orderTotal: `${formatPriceDisplay(order.totalAmount, order.currency)} kr`,
-          currency: order.currency,
-          tenantName: tenant?.name ?? "",
-          orderStatusUrl: order.statusToken && portalBase
-            ? `${portalBase}/order-status/${order.statusToken}`
-            : "",
-          portalUrl: portalBase ? `${portalBase}/login` : "",
-        },
-      );
-
-      // Emit guest email event (non-blocking)
-      if (order.guestAccountId) {
-        import("@/app/_lib/guests/email-event").then(({ emitGuestEmailEvent }) =>
-          emitGuestEmailEvent({
-            tenantId: order.tenantId,
-            guestAccountId: order.guestAccountId!,
-            emailType: "Orderbekräftelse",
-            recipientEmail: effectiveEmail,
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-          }),
-        ).catch(() => {});
-      }
-    }
-  } catch (err) {
-    log("error", "webhook.email_failed", { orderId: order.id, orderNumber: order.orderNumber, error: String(err) });
   }
 }
 
