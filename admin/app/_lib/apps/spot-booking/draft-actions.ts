@@ -38,7 +38,6 @@ export type MapDraftConfig = {
   currency: string;
   imageUrl: string;
   imagePublicId: string;
-  accommodationCategoryId: string;
   markers: DraftMarker[];
 };
 
@@ -156,7 +155,6 @@ export async function publishMapDraft(
           currency: draft.currency,
           imageUrl: draft.imageUrl,
           imagePublicId: draft.imagePublicId,
-          accommodationCategoryId: draft.accommodationCategoryId,
           draftConfig: Prisma.DbNull,
           draftUpdatedAt: null,
           version: expectedVersion + 1,

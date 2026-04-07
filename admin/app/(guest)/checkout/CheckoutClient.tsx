@@ -765,7 +765,7 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
   const checkoutIdempotencyKey = useRef<string>(crypto.randomUUID());
   const piIsLoading = useRef(false);
 
-  // Create Order + PaymentIntent on mount (no step gating)
+  // Create Order + PaymentIntent on mount
   useEffect(() => {
     if (clientSecret || orderId || !product) return;
     if (sessionToken === "preview") return;
@@ -789,7 +789,6 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
       .then(async (res) => {
         const data = await res.json();
         if (res.status === 409) {
-          // Idempotency conflict — generate new key for next attempt
           checkoutIdempotencyKey.current = crypto.randomUUID();
           return;
         }
@@ -1090,9 +1089,21 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
               <section className="co__section">
                 <h2 className="co__section-title">Lägg till betalningsmetod</h2>
                 <div className="co__payment-skeleton">
-                  <div className="co__skel-method" />
-                  <div className="co__skel-method" />
-                  <div className="co__skel-method" />
+                  <div className="co__skel-method">
+                    <div className="co__skel-icon" />
+                    <span className="co__skel-label" style={{ width: 60 }} />
+                    <span className="co__skel-radio" />
+                  </div>
+                  <div className="co__skel-method">
+                    <div className="co__skel-icon" />
+                    <span className="co__skel-label" style={{ width: 45 }} />
+                    <span className="co__skel-radio" />
+                  </div>
+                  <div className="co__skel-method">
+                    <div className="co__skel-icon" />
+                    <span className="co__skel-label" style={{ width: 52 }} />
+                    <span className="co__skel-radio" />
+                  </div>
                 </div>
               </section>
               <section className="co__section">
@@ -1123,11 +1134,11 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
                   placeholder="Rabattkod"
                   value={discountCode}
                   onChange={(e) => setDiscountCode(e.target.value)}
-                  disabled={!!clientSecret}
+                  disabled={!!discountApplied}
                 />
                 <span className="co__float-label">Rabattkod</span>
               </div>
-              <SpinnerButton className={`co__discount-btn${discountCode.trim() ? " co__discount-btn--active" : ""}`} disabled={!discountCode.trim() || !!discountApplied || !!clientSecret} onClick={async () => {
+              <SpinnerButton className={`co__discount-btn${discountCode.trim() ? " co__discount-btn--active" : ""}`} disabled={!discountCode.trim() || !!discountApplied} onClick={async () => {
                 setDiscountError(null);
                 const res = await fetch("/api/checkout/validate-discount", {
                   method: "POST",
@@ -1143,6 +1154,10 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
                 });
                 const data = await res.json();
                 if (data.valid) {
+                  // Reset PI so a new one is created with the discount
+                  setClientSecret(null);
+                  setOrderId(null);
+                  checkoutIdempotencyKey.current = crypto.randomUUID();
                   setDiscountApplied({
                     code: discountCode.trim(),
                     discountAmount: data.discountAmount,
@@ -1168,7 +1183,7 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
               <div className="co__discount-pill">
                 <span className="material-symbols-rounded co__discount-pill__icon">shoppingmode</span>
                 <span className="co__discount-pill__code">{discountApplied.code}</span>
-                <button type="button" className="co__discount-pill__remove" onClick={() => { setDiscountApplied(null); setDiscountCode(""); }}>
+                <button type="button" className="co__discount-pill__remove" onClick={() => { setClientSecret(null); setOrderId(null); checkoutIdempotencyKey.current = crypto.randomUUID(); setDiscountApplied(null); setDiscountCode(""); }}>
                   <span className="material-symbols-rounded" style={{ fontSize: 21 }}>close</span>
                 </button>
               </div>

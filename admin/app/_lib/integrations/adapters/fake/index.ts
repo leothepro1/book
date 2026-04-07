@@ -91,7 +91,7 @@ function generateBlockedPeriods(externalId: string, year: number): BlockedPeriod
   return periods;
 }
 
-function isAvailableForDates(externalId: string, checkIn: Date, checkOut: Date): boolean {
+export function isAvailableForDates(externalId: string, checkIn: Date, checkOut: Date): boolean {
   const year = checkIn.getFullYear();
   const periods = [
     ...generateBlockedPeriods(externalId, year),

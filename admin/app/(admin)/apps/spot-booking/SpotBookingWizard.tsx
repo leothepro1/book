@@ -7,11 +7,11 @@ import { EditorIcon } from "@/app/_components/EditorIcon";
 import { MediaLibraryModal } from "@/app/(admin)/_components/MediaLibrary";
 import type { MediaLibraryResult } from "@/app/(admin)/_components/MediaLibrary";
 import {
-  getAccommodationCategories,
+  getAccommodations,
   createSpotMap,
   activateSpotMap,
 } from "@/app/_lib/apps/spot-booking/wizard-actions";
-import type { CategoryOption } from "@/app/_lib/apps/spot-booking/wizard-actions";
+import type { AccommodationOption } from "@/app/_lib/apps/spot-booking/wizard-actions";
 import type { WizardState } from "@/app/_lib/apps/types";
 import "./spot-booking-wizard.css";
 
@@ -24,9 +24,9 @@ export function SpotBookingWizard({ wizardState }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   // Collected state
-  const [categories, setCategories] = useState<CategoryOption[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [accommodations, setAccommodations] = useState<AccommodationOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [imageUrl, setImageUrl] = useState("");
   const [imagePublicId, setImagePublicId] = useState("");
   const [addonPriceSek, setAddonPriceSek] = useState(""); // displayed in SEK
@@ -37,19 +37,28 @@ export function SpotBookingWizard({ wizardState }: Props) {
   const clearError = () => setError(null);
   const { app } = wizardState;
 
-  // Load categories on mount
+  // Load accommodations on mount
   useEffect(() => {
     let cancelled = false;
-    getAccommodationCategories().then((result) => {
+    getAccommodations().then((result) => {
       if (cancelled) return;
-      if (result.ok) setCategories(result.data);
+      if (result.ok) setAccommodations(result.data);
       else setError(result.error);
-      setCategoriesLoading(false);
+      setLoading(false);
     });
     return () => { cancelled = true; };
   }, []);
 
-  const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
+  const toggleAccommodation = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    clearError();
+  };
+
   const addonPriceOre = Math.round(Number(addonPriceSek) * 100);
 
   switch (step) {
@@ -65,9 +74,9 @@ export function SpotBookingWizard({ wizardState }: Props) {
             </Link>
 
             <div className="sbw__step-badge">Steg 1 av 4</div>
-            <h2 className="sbw__title">Valj boendetyp</h2>
+            <h2 className="sbw__title">Valj boenden</h2>
             <p className="sbw__subtitle">
-              Valj vilken boendetyp som ska visas pa kartan. Alla boenden i kategorin blir valbara platser.
+              Valj vilka boenden som ska visas pa kartan.
             </p>
 
             {error && (
@@ -77,31 +86,31 @@ export function SpotBookingWizard({ wizardState }: Props) {
               </div>
             )}
 
-            {categoriesLoading ? (
+            {loading ? (
               <div className="sbw__loading">
                 <div className="sbw__spinner" />
-                <span className="sbw__loading-text">Hamtar boendetyper...</span>
+                <span className="sbw__loading-text">Hamtar boenden...</span>
               </div>
-            ) : categories.length === 0 ? (
+            ) : accommodations.length === 0 ? (
               <div className="sbw__empty">
-                Inga boendetyper hittades. Skapa en boendetyp under Boenden forst.
+                Inga lediga boenden hittades. Skapa boenden under Boenden forst.
               </div>
             ) : (
               <div className="sbw__category-list">
-                {categories.map((cat) => (
+                {accommodations.map((acc) => (
                   <div
-                    key={cat.id}
-                    className={`sbw__category-item${selectedCategoryId === cat.id ? " sbw__category-item--selected" : ""}`}
-                    onClick={() => { clearError(); setSelectedCategoryId(cat.id); }}
+                    key={acc.id}
+                    className={`sbw__category-item${selectedIds.has(acc.id) ? " sbw__category-item--selected" : ""}`}
+                    onClick={() => toggleAccommodation(acc.id)}
                   >
                     <span className="sbw__category-radio">
-                      {selectedCategoryId === cat.id && <EditorIcon name="check" size={12} />}
+                      {selectedIds.has(acc.id) && <EditorIcon name="check" size={12} />}
                     </span>
                     <div>
-                      <div className="sbw__category-name">{cat.title}</div>
-                      <div className="sbw__category-count">
-                        {cat.accommodationCount} {cat.accommodationCount === 1 ? "boende" : "boenden"}
-                      </div>
+                      <div className="sbw__category-name">{acc.name}</div>
+                      {acc.categoryTitle && (
+                        <div className="sbw__category-count">{acc.categoryTitle}</div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -111,7 +120,7 @@ export function SpotBookingWizard({ wizardState }: Props) {
             <div className="sbw__footer">
               <button
                 className="admin-btn admin-btn--accent"
-                disabled={!selectedCategoryId || isPending}
+                disabled={selectedIds.size === 0 || isPending}
                 onClick={() => { clearError(); setStep(2); }}
               >
                 Nasta
@@ -258,7 +267,7 @@ export function SpotBookingWizard({ wizardState }: Props) {
                   }
                   startTransition(async () => {
                     const result = await createSpotMap({
-                      accommodationCategoryId: selectedCategoryId!,
+                      accommodationIds: Array.from(selectedIds),
                       imageUrl,
                       imagePublicId,
                       addonPrice: addonPriceOre,
@@ -304,8 +313,8 @@ export function SpotBookingWizard({ wizardState }: Props) {
 
             <div className="sbw__summary">
               <div className="sbw__summary-row">
-                <span className="sbw__summary-key">Boendetyp</span>
-                <span className="sbw__summary-value">{selectedCategory?.title ?? "—"}</span>
+                <span className="sbw__summary-key">Boenden</span>
+                <span className="sbw__summary-value">{selectedIds.size} valda</span>
               </div>
 
               <div className="sbw__summary-image">

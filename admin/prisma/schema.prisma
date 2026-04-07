@@ -1731,6 +1731,7 @@ model Accommodation {
   bookings         Booking[]
   categoryItems AccommodationCategoryItem[]
   spotMarkers   SpotMarker[]
+  spotMapItem   SpotMapAccommodation?
 
   @@unique([tenantId, slug])
   @@unique([tenantId, externalId, pmsProvider])
@@ -1920,7 +1921,6 @@ model AccommodationCategory {
   tenant Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   items  AccommodationCategoryItem[]
   addonCollections AccommodationCategoryAddon[]
-  spotMaps SpotMap[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -3320,31 +3320,44 @@ model AnalyticsDailyMetric {
 /// Interactive map for spot-based booking. Multiple maps per installation,
 /// one per accommodation category.
 model SpotMap {
-  id                      String   @id @default(cuid())
-  tenantId                String
-  tenantAppId             String   // FK → TenantApp (the installation)
-  accommodationCategoryId String   // FK → AccommodationCategory
-  imageUrl                String   // Cloudinary URL
-  imagePublicId           String   // Cloudinary public_id (for deletion)
-  title                   String   @default("Välj din plats")
-  subtitle                String   @default("")
-  addonPrice              Int      // fixed surcharge in öre
-  currency                String   @default("SEK")
-  isActive                Boolean  @default(false) // activated on wizard completion
-  draftConfig             Json?    // draft snapshot of desired state (markers + settings)
-  draftUpdatedAt          DateTime?
-  version                 Int      @default(0) // optimistic lock — incremented on each publish
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenantAppId   String   // FK → TenantApp (the installation)
+  imageUrl      String   // Cloudinary URL
+  imagePublicId String   // Cloudinary public_id (for deletion)
+  title         String   @default("Välj din plats")
+  subtitle      String   @default("")
+  addonPrice    Int      // fixed surcharge in öre
+  currency      String   @default("SEK")
+  isActive      Boolean  @default(false) // activated on wizard completion
+  draftConfig   Json?    // draft snapshot of desired state (markers + settings)
+  draftUpdatedAt DateTime?
+  version       Int      @default(0) // optimistic lock — incremented on each publish
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  tenant                Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tenantApp             TenantApp             @relation(fields: [tenantAppId], references: [id], onDelete: Cascade)
-  accommodationCategory AccommodationCategory @relation(fields: [accommodationCategoryId], references: [id])
-  markers               SpotMarker[]
+  tenant             Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantApp          TenantApp               @relation(fields: [tenantAppId], references: [id], onDelete: Cascade)
+  markers            SpotMarker[]
+  accommodationItems SpotMapAccommodation[]
 
-  @@unique([tenantAppId, accommodationCategoryId]) // one map per category per installation
   @@index([tenantId])
-  @@index([accommodationCategoryId])
+}
+
+/// Join table: which accommodations belong to a SpotMap.
+/// @@unique([accommodationId]) ensures each accommodation belongs to at most one map.
+model SpotMapAccommodation {
+  id              String   @id @default(cuid())
+  spotMapId       String
+  accommodationId String
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  spotMap       SpotMap       @relation(fields: [spotMapId], references: [id], onDelete: Cascade)
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+
+  @@unique([accommodationId])
+  @@index([spotMapId])
 }
 
 /// A bookable spot on a SpotMap — pinned to an Accommodation unit.

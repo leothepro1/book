@@ -464,6 +464,16 @@
   text-overflow: ellipsis;
 }
 
+.ord-row__customer-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.ord-row__customer-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .ord-row__total {
   font-variant-numeric: normal;
   white-space: nowrap;

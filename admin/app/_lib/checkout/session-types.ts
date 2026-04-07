@@ -34,6 +34,7 @@ export type SelectedAddon = {
   variantId: string | null;
   title: string;
   variantTitle: string | null;
+  imageUrl: string | null;
   quantity: number;
   unitAmount: number;    // öre
   totalAmount: number;   // öre

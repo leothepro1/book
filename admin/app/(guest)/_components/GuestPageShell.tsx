@@ -3,6 +3,7 @@ import { LAYOUT_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
 import { themeToStyleAttr, backgroundStyle, googleFontsUrl } from "../_lib/theme";
 import type { FontKey } from "../_lib/theme";
 import { resolveThemeLayout, resolveThemeLayoutVars, renderSidebarSlots } from "../_lib/themes/engine";
+import { getGuestSession } from "@/app/_lib/magic-link/session";
 import GuestHeader from "./GuestHeader";
 import GuestFooter from "./GuestFooter";
 import { SidebarLayout } from "./SidebarLayout";
@@ -62,6 +63,10 @@ export default async function GuestPageShell({
   // SidebarLayout handles route-based exclusion (e.g. checkout).
   const sidebarContent = isSidebar ? renderSidebarSlots(config, pageId) : null;
 
+  // Check guest login state for header account icon
+  const guestSession = await getGuestSession();
+  const guestLoggedIn = guestSession !== null && guestSession.tenantId === config.tenantId;
+
   return (
     <div style={shellVars} className="g-body">
       {fontsUrl && (
@@ -70,7 +75,7 @@ export default async function GuestPageShell({
       )}
       <div style={bgStyle} className="min-h-dvh flex flex-col">
         <EmbedProvider>
-          <GuestHeader config={config} />
+          <GuestHeader config={config} guestLoggedIn={guestLoggedIn} />
           <main className="g-main flex-1">
             {sidebarContent ? (
               <SidebarLayout sidebar={sidebarContent}>

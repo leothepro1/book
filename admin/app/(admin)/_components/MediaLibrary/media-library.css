@@ -39,7 +39,7 @@
   flex-direction: column;
   width: 980px;
   max-width: 100%;
-  max-height: calc(84vh - 48px);
+  max-height: calc(87vh - 0px);
   background: var(--admin-surface);
   border-radius: 16px;
   opacity: 0;

@@ -10,6 +10,7 @@ export {
   createProduct,
   updateProduct,
   archiveProduct,
+  deleteProduct,
   restoreProduct,
   getProduct,
   getProductBySlug,

@@ -546,6 +546,38 @@ export async function restoreProduct(productId: string): Promise<ActionResult> {
   return { ok: true, data: undefined };
 }
 
+/**
+ * Permanently delete a product and all related data.
+ * Only allowed if the product has no associated orders.
+ */
+export async function deleteProduct(productId: string): Promise<ActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return { ok: false, error: "Inte inloggad" };
+
+  const existing = await prisma.product.findFirst({
+    where: { id: productId, tenantId: tenantData.tenant.id },
+    select: { id: true },
+  });
+  if (!existing) return { ok: false, error: "Produkten hittades inte" };
+
+  // Check for order line items referencing this product
+  const orderCount = await prisma.orderLineItem.count({
+    where: { productId },
+  });
+  if (orderCount > 0) {
+    return { ok: false, error: "Produkten kan inte raderas — den har kopplingar till ordrar. Arkivera istället." };
+  }
+
+  await prisma.product.delete({ where: { id: productId } });
+
+  revalidatePath("/(admin)/products", "page");
+  revalidatePath("/(guest)", "layout");
+  return { ok: true, data: undefined };
+}
+
 export async function getProduct(productId: string) {
   const tenantData = await getCurrentTenant();
   if (!tenantData) return null;

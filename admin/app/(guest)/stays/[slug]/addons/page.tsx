@@ -72,9 +72,12 @@ export default async function AddonsPage({
     redirect(`/checkout/confirmation/${session.token}`);
   }
 
-  // Already at checkout — skip addons
+  // Returning from checkout — allow re-editing addons
   if (session.status === "CHECKOUT") {
-    redirect(`/checkout?session=${session.token}`);
+    await prisma.checkoutSession.update({
+      where: { id: session.id },
+      data: { status: "ADDON_SELECTION" },
+    });
   }
 
   // Expired by time
@@ -100,61 +103,51 @@ export default async function AddonsPage({
     session.tenantId,
   );
 
-  // ── Check for active SpotMap for this accommodation's category ──
-  const accWithCategories = await prisma.accommodation.findFirst({
-    where: { id: session.accommodationId!, tenantId: session.tenantId },
-    select: { categoryItems: { select: { categoryId: true } } },
-  });
-
+  // ── Check for active SpotMap linked to this accommodation ──
   let spotAddon: SpotAddon | null = null;
 
-  if (accWithCategories && accWithCategories.categoryItems.length > 0) {
-    const categoryIds = accWithCategories.categoryItems.map((i) => i.categoryId);
-    const activeSpotMap = await prisma.spotMap.findFirst({
-      where: {
-        tenantId: session.tenantId,
-        accommodationCategoryId: { in: categoryIds },
-        isActive: true,
-      },
-      select: {
-        id: true,
-        title: true,
-        subtitle: true,
-        imageUrl: true,
-        addonPrice: true,
-        currency: true,
-        accommodationCategoryId: true,
-      },
+  const activeSpotMap = await prisma.spotMap.findFirst({
+    where: {
+      tenantId: session.tenantId,
+      isActive: true,
+      accommodationItems: { some: { accommodationId: session.accommodationId! } },
+    },
+    select: {
+      id: true,
+      title: true,
+      subtitle: true,
+      imageUrl: true,
+      addonPrice: true,
+      currency: true,
+    },
+  });
+
+  if (activeSpotMap) {
+    // Resolve min price across all markers to determine "Från" display
+    const markers = await prisma.spotMarker.findMany({
+      where: { spotMapId: activeSpotMap.id },
+      select: { priceOverride: true },
     });
 
-    if (activeSpotMap) {
-      // Resolve min price across all markers to determine "Från" display
-      const markers = await prisma.spotMarker.findMany({
-        where: { spotMapId: activeSpotMap.id },
-        select: { priceOverride: true },
-      });
+    const prices = markers.map((m) =>
+      m.priceOverride != null && m.priceOverride >= 0
+        ? m.priceOverride
+        : activeSpotMap.addonPrice,
+    );
+    const minPrice = prices.length > 0 ? Math.min(...prices) : activeSpotMap.addonPrice;
+    const maxPrice = prices.length > 0 ? Math.max(...prices) : activeSpotMap.addonPrice;
 
-      const prices = markers.map((m) =>
-        m.priceOverride != null && m.priceOverride >= 0
-          ? m.priceOverride
-          : activeSpotMap.addonPrice,
-      );
-      const minPrice = prices.length > 0 ? Math.min(...prices) : activeSpotMap.addonPrice;
-      const maxPrice = prices.length > 0 ? Math.max(...prices) : activeSpotMap.addonPrice;
-
-      spotAddon = {
-        id: "spot-booking-virtual",
-        type: "spot_map" as const,
-        title: activeSpotMap.title,
-        description: activeSpotMap.subtitle,
-        imageUrl: activeSpotMap.imageUrl,
-        addonPrice: minPrice,
-        hasVariedPricing: minPrice !== maxPrice,
-        currency: activeSpotMap.currency,
-        spotMapId: activeSpotMap.id,
-        accommodationCategoryId: activeSpotMap.accommodationCategoryId,
-      };
-    }
+    spotAddon = {
+      id: "spot-booking-virtual",
+      type: "spot_map" as const,
+      title: activeSpotMap.title,
+      description: activeSpotMap.subtitle,
+      imageUrl: activeSpotMap.imageUrl,
+      addonPrice: minPrice,
+      hasVariedPricing: minPrice !== maxPrice,
+      currency: activeSpotMap.currency,
+      spotMapId: activeSpotMap.id,
+    };
   }
 
   // Serialize for client
@@ -173,6 +166,7 @@ export default async function AddonsPage({
       addons={serializedAddons}
       spotAddon={spotAddon}
       snapshot={{
+        accommodationId: session.accommodationId!,
         accommodationName: session.accommodationName!,
         accommodationImage: session.accommodation?.media[0]?.url ?? null,
         accommodationSlug: session.accommodationSlug!,

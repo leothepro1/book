@@ -30,7 +30,6 @@ export interface SpotAddon {
   hasVariedPricing: boolean;
   currency: string;
   spotMapId: string;
-  accommodationCategoryId: string;
 }
 
 export interface SelectedSpot {
@@ -41,6 +40,7 @@ export interface SelectedSpot {
 }
 
 interface Snapshot {
+  accommodationId: string;
   accommodationName: string;
   accommodationImage: string | null;
   accommodationSlug: string;
@@ -746,7 +746,7 @@ function SpotSelectionModal({
   useEffect(() => {
     let cancelled = false;
     const params = new URLSearchParams({
-      accommodationCategoryId: spotAddon.accommodationCategoryId,
+      accommodationId: snapshot.accommodationId,
       checkIn: snapshot.checkIn,
       checkOut: snapshot.checkOut,
       adults: String(snapshot.adults),
@@ -787,7 +787,7 @@ function SpotSelectionModal({
       });
 
     return () => { cancelled = true; };
-  }, [spotAddon.accommodationCategoryId, snapshot.checkIn, snapshot.checkOut, snapshot.adults]);
+  }, [snapshot.accommodationId, snapshot.checkIn, snapshot.checkOut, snapshot.adults]);
 
   // Clamp pan so the map can't be dragged outside viewport.
   // Transform is: scale(z) translate(px, py) with transform-origin: 0 0

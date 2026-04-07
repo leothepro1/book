@@ -410,7 +410,17 @@ export function OrdersClient() {
                   <span className="ord-row__date">{formatDate(order.createdAt)}</span>
                 </div>
                 <div className="ord-col ord-col--customer">
-                  <span className="ord-row__customer-name ord-row__hoverable">{order.guestName || "—"}<EditorIcon name="expand_more" size={16} className="ord-row__hover-chevron" /></span>
+                  {order.guestAccountId ? (
+                    <Link
+                      href={`/customers/${order.guestAccountId}`}
+                      className="ord-row__customer-name ord-row__customer-link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {order.guestName || "—"}
+                    </Link>
+                  ) : (
+                    <span className="ord-row__customer-name">{order.guestName || "—"}</span>
+                  )}
                 </div>
                 <div className="ord-col ord-col--total">
                   <span className="ord-row__total">{formatPriceDisplay(order.totalAmount, order.currency)} kr</span>

@@ -8,8 +8,8 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 85vh;
-  max-height: 85vh;
+  height: 95vh;
+  max-height: 95vh;
   overflow: hidden;
 }
 

@@ -732,10 +732,10 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
             {/* Kund */}
             <div style={CARD}>
               <div className="ord-sidebar-label">Kund</div>
-              <a className="ord-sidebar-link" href={order.guestAccountId ? `/guests/${order.guestAccountId}` : "#"}>
+              <a className="ord-sidebar-link" href={order.guestAccountId ? `/customers/${order.guestAccountId}` : "#"}>
                 {order.guestName || "—"}
               </a>
-              <a className="ord-sidebar-link ord-sidebar-link--secondary" href={order.guestAccountId ? `/guests/${order.guestAccountId}` : "#"}>
+              <a className="ord-sidebar-link ord-sidebar-link--secondary" href={order.guestAccountId ? `/customers/${order.guestAccountId}` : "#"}>
                 {order.guestOrderCount === 1 ? "1 order" : `${order.guestOrderCount} ordrar`}
               </a>
 

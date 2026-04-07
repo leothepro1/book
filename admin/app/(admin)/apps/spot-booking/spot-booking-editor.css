@@ -139,13 +139,14 @@
 .sbe__canvas {
   position: relative;
   overflow: hidden;
+  border-radius: .75rem;
   background: #f1f1f1;
   display: flex;
   justify-content: center;
   align-items: center;
   cursor: grab;
   user-select: none;
-  padding: 7px;
+  margin: 7px;
 }
 
 .sbe__canvas--placing {
@@ -160,13 +161,15 @@
   position: absolute;
   top: 0;
   left: 0;
+  border-radius: .75rem;
   transform-origin: 0 0;
   will-change: transform;
 }
 
 .sbe__canvas-image {
-  display: block;
-  pointer-events: none;
+    pointer-events: none;
+    display: block;
+    border-radius: .75rem;
 }
 
 /* ── Markers on map ── */

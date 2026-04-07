@@ -186,7 +186,7 @@ function MenuPanel({
 
 // ─── Component ───────────────────────────────────────────────
 
-export default function GuestHeader({ config }: { config: TenantConfig }) {
+export default function GuestHeader({ config, guestLoggedIn = false }: { config: TenantConfig; guestLoggedIn?: boolean }) {
   const pathname = usePathname();
 
   const currentLocale = config._currentLocale ?? "sv";
@@ -349,6 +349,31 @@ export default function GuestHeader({ config }: { config: TenantConfig }) {
     if (menuButton && menuPos === "right") rightButtons.push(<Fragment key="menu">{menuButton}</Fragment>);
     if (langButton) rightButtons.push(<Fragment key="lang">{langButton}</Fragment>);
   }
+
+  // Account button — links to /login (logged out) or /account (logged in)
+  const accountHref = guestLoggedIn ? "/account" : "/login";
+  rightButtons.push(
+    <Fragment key="account">
+      <a href={accountHref} className="inline-flex items-center justify-center" style={{ width: "max-content", height: "max-content" }} aria-label="Konto">
+        <span
+          className="material-symbols-rounded"
+          style={{
+            fontSize: 28,
+            width: 28,
+            height: 28,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "var(--text)",
+            fontVariationSettings: "'wght' 300, 'opsz' 28",
+          }}
+          aria-hidden="true"
+        >
+          person
+        </span>
+      </a>
+    </Fragment>,
+  );
 
   // Cart button — always last on the right, only visible when items in cart
   rightButtons.push(<Fragment key="cart"><CartHeaderButton tenantId={config.tenantId} /></Fragment>);

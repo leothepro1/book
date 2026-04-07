@@ -33,8 +33,11 @@ export default async function SpotBookingEditorPage({ params }: Props) {
         },
         orderBy: { createdAt: "asc" },
       },
-      accommodationCategory: {
-        select: { id: true, title: true },
+      accommodationItems: {
+        select: {
+          accommodation: { select: { id: true, name: true } },
+        },
+        orderBy: { sortOrder: "asc" },
       },
     },
   });
@@ -42,13 +45,6 @@ export default async function SpotBookingEditorPage({ params }: Props) {
   if (!spotMap) {
     redirect("/apps/spot-booking");
   }
-
-  // Load all active accommodation categories for settings picker
-  const categories = await prisma.accommodationCategory.findMany({
-    where: { tenantId, status: "ACTIVE" },
-    orderBy: { sortOrder: "asc" },
-    select: { id: true, title: true, imageUrl: true },
-  });
 
   // Load all tenant accommodations for linking
   const accommodations = await prisma.accommodation.findMany({
@@ -58,6 +54,8 @@ export default async function SpotBookingEditorPage({ params }: Props) {
       name: true,
       slug: true,
       externalCode: true,
+      media: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } },
+      spotMapItem: { select: { spotMapId: true } },
     },
     orderBy: { name: "asc" },
   });
@@ -73,7 +71,10 @@ export default async function SpotBookingEditorPage({ params }: Props) {
       imagePublicId: spotMap.imagePublicId,
       addonPrice: spotMap.addonPrice,
       currency: spotMap.currency,
-      category: spotMap.accommodationCategory,
+      accommodationItems: spotMap.accommodationItems.map((ai) => ({
+        id: ai.accommodation.id,
+        name: ai.accommodation.name,
+      })),
       version: spotMap.version,
       draftConfig: spotMap.draftConfig as Record<string, unknown> | null,
     },
@@ -93,9 +94,11 @@ export default async function SpotBookingEditorPage({ params }: Props) {
       name: a.name,
       slug: a.slug,
       externalCode: a.externalCode,
+      imageUrl: a.media[0]?.url ?? null,
       linked: linkedIds.has(a.id),
+      assignedToThisMap: a.spotMapItem?.spotMapId === mapId,
+      assignedToOtherMap: a.spotMapItem != null && a.spotMapItem.spotMapId !== mapId,
     })),
-    categories,
   };
 
   return <SpotBookingEditor initialData={initialData} />;

@@ -73,6 +73,18 @@ export async function POST(req: Request) {
     );
   }
 
+  // Verify accommodation is assigned to this SpotMap
+  const mapLink = await prisma.spotMapAccommodation.findFirst({
+    where: { spotMapId, accommodationId },
+    select: { id: true },
+  });
+  if (!mapLink) {
+    return NextResponse.json(
+      { error: "Boendet ar inte kopplat till denna karta" },
+      { status: 400 },
+    );
+  }
+
   // Create marker + hide accommodation atomically
   try {
     const marker = await prisma.$transaction(async (tx) => {

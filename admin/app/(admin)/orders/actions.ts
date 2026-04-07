@@ -18,6 +18,7 @@ export type OrderListItem = {
   fulfillmentStatus: string;
   guestName: string;
   guestEmail: string;
+  guestAccountId: string | null;
   totalAmount: number;
   currency: string;
   createdAt: string;
@@ -226,6 +227,7 @@ export async function getOrders(opts?: {
       fulfillmentStatus: o.fulfillmentStatus,
       guestName: o.guestName,
       guestEmail: o.guestEmail,
+      guestAccountId: o.guestAccountId ?? null,
       totalAmount: o.totalAmount,
       currency: o.currency,
       createdAt: o.createdAt.toISOString(),

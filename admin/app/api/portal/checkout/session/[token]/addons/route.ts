@@ -114,7 +114,7 @@ export async function PATCH(
     );
   }
 
-  if (session.status !== "ADDON_SELECTION") {
+  if (session.status !== "ADDON_SELECTION" && session.status !== "CHECKOUT") {
     return NextResponse.json(
       { error: "INVALID_STATUS", message: `Sessionen har status ${session.status} — tillägg kan inte ändras.` },
       { status: 409 },
@@ -225,7 +225,6 @@ export async function PATCH(
             imageUrl: true,
             addonPrice: true,
             currency: true,
-            accommodationCategoryId: true,
           },
         },
       },
@@ -238,18 +237,18 @@ export async function PATCH(
       );
     }
 
-    // Verify the spot map's category matches the session's accommodation
-    const accCategory = await prisma.accommodationCategoryItem.findFirst({
+    // Verify the spot map is linked to the session's accommodation
+    const mapLink = await prisma.spotMapAccommodation.findFirst({
       where: {
-        categoryId: marker.spotMap.accommodationCategoryId,
-        accommodation: { id: session.accommodationId! },
+        spotMapId: marker.spotMap.id,
+        accommodationId: session.accommodationId!,
       },
       select: { id: true },
     });
 
-    if (!accCategory) {
+    if (!mapLink) {
       return NextResponse.json(
-        { error: "SPOT_CATEGORY_MISMATCH", code: "SPOT_UNAVAILABLE", label: marker.label },
+        { error: "SPOT_MAP_MISMATCH", code: "SPOT_UNAVAILABLE", label: marker.label },
         { status: 409 },
       );
     }

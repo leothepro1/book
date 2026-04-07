@@ -7,7 +7,9 @@ export const dynamic = "force-dynamic";
  * Guest portal endpoint — returns the SpotMap with markers
  * and availability status for the given dates.
  *
- * Calls adapter.getAvailability() ONCE for all markers.
+ * Finds the SpotMap linked to the given accommodationId via
+ * SpotMapAccommodation join table.
+ *
  * Tenant resolved from Host header — never from body.
  */
 
@@ -21,7 +23,7 @@ import { isAvailableForDates } from "@/app/_lib/integrations/adapters/fake";
 const NO_STORE = { "Cache-Control": "no-store" };
 
 const paramsSchema = z.object({
-  accommodationCategoryId: z.string().min(1),
+  accommodationId: z.string().min(1),
   checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   adults: z.coerce.number().int().min(1).max(99),
@@ -45,14 +47,14 @@ export async function GET(req: Request) {
     );
   }
 
-  const { accommodationCategoryId, checkIn, checkOut, adults } = parsed.data;
+  const { accommodationId, checkIn, checkOut } = parsed.data;
 
-  // Load active SpotMap for this category + tenant
+  // Find SpotMap linked to this accommodation via join table
   const spotMap = await prisma.spotMap.findFirst({
     where: {
       tenantId,
-      accommodationCategoryId,
       isActive: true,
+      accommodationItems: { some: { accommodationId } },
     },
     select: {
       id: true,
@@ -75,11 +77,6 @@ export async function GET(req: Request) {
               id: true,
               externalId: true,
               name: true,
-              categoryItems: {
-                select: {
-                  category: { select: { pmsRef: true } },
-                },
-              },
             },
           },
         },

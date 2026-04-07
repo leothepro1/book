@@ -639,7 +639,7 @@ async function handleSessionPaymentIntent(
               title: addon.title,
               variantTitle: addon.variantTitle,
               sku: null,
-              imageUrl: null,
+              imageUrl: addon.imageUrl ?? null,
               quantity: addon.quantity,
               unitAmount: addon.unitAmount,
               totalAmount: addon.totalAmount,
@@ -701,11 +701,8 @@ async function handleSessionPaymentIntent(
       });
     }
 
-    // Transition session to COMPLETED — release dedupKey so same booking can be made again
-    await tx.checkoutSession.update({
-      where: { id: session.id },
-      data: { status: "COMPLETED", dedupKey: null },
-    });
+    // Keep session as CHECKOUT — COMPLETED is set by webhook after successful payment.
+    // This allows guests to go back and modify addons before paying.
 
     return newOrder;
   });
@@ -940,11 +937,7 @@ async function handleCartSessionPaymentIntent(
       });
     }
 
-    // Transition session to COMPLETED
-    await tx.checkoutSession.update({
-      where: { id: session.id },
-      data: { status: "COMPLETED", dedupKey: null },
-    });
+    // Keep session as CHECKOUT — COMPLETED is set by webhook after successful payment.
 
     return newOrder;
   });

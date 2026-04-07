@@ -22,7 +22,7 @@ import { PublishBarUI } from "@/app/(admin)/_components/PublishBar/PublishBar";
 import { RichTextEditor } from "@/app/_components/RichTextEditor";
 import { MediaLibraryModal } from "@/app/(admin)/_components/MediaLibrary";
 import type { MediaLibraryResult } from "@/app/(admin)/_components/MediaLibrary";
-import { createProduct, updateProduct, effectivePrice, listCollections, assignProductTemplate } from "@/app/_lib/products";
+import { createProduct, updateProduct, archiveProduct, deleteProduct, effectivePrice, listCollections, assignProductTemplate } from "@/app/_lib/products";
 import { listProductTemplates } from "@/app/_lib/products/template-actions";
 import type { ProductMediaInput, ProductOptionInput, ProductVariantInput } from "@/app/_lib/products";
 import {
@@ -488,11 +488,39 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
               </button>
               {actionsOpen && (
                 <div className="pf-actions-dropdown">
-                  <button className="pf-actions-dropdown__item" onClick={() => setActionsOpen(false)} disabled>
+                  <button
+                    className="pf-actions-dropdown__item"
+                    onClick={async () => {
+                      setActionsOpen(false);
+                      if (!product?.id) return;
+                      if (!confirm("Vill du arkivera denna produkt? Den kan återställas senare.")) return;
+                      const result = await archiveProduct(product.id);
+                      if (result.ok) {
+                        router.push("/products");
+                      } else {
+                        alert(result.error);
+                      }
+                    }}
+                    disabled={!product?.id}
+                  >
                     <EditorIcon name="archive" size={18} />
                     Arkivera produkt
                   </button>
-                  <button className="pf-actions-dropdown__item pf-actions-dropdown__item--danger" onClick={() => setActionsOpen(false)} disabled>
+                  <button
+                    className="pf-actions-dropdown__item pf-actions-dropdown__item--danger"
+                    onClick={async () => {
+                      setActionsOpen(false);
+                      if (!product?.id) return;
+                      if (!confirm("Vill du permanent radera denna produkt? Detta kan inte ångras.")) return;
+                      const result = await deleteProduct(product.id);
+                      if (result.ok) {
+                        router.push("/products");
+                      } else {
+                        alert(result.error);
+                      }
+                    }}
+                    disabled={!product?.id}
+                  >
                     <EditorIcon name="delete" size={18} />
                     Radera produkt
                   </button>

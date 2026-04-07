@@ -52,8 +52,11 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { createdAt: "asc" },
       },
-      accommodationCategory: {
-        select: { id: true, title: true },
+      accommodationItems: {
+        select: {
+          accommodation: { select: { id: true, name: true } },
+        },
+        orderBy: { sortOrder: "asc" },
       },
     },
   });
@@ -90,7 +93,10 @@ export async function GET(request: NextRequest) {
       addonPrice: spotMap.addonPrice,
       currency: spotMap.currency,
       isActive: spotMap.isActive,
-      category: spotMap.accommodationCategory,
+      accommodationItems: spotMap.accommodationItems.map((ai) => ({
+        id: ai.accommodation.id,
+        name: ai.accommodation.name,
+      })),
     },
     markers: spotMap.markers.map((m) => ({
       id: m.id,

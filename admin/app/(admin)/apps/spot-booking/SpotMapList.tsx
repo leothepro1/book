@@ -11,24 +11,24 @@ import "./spot-map-list.css";
 
 type SpotMapSummary = {
   id: string;
+  title: string;
   imageUrl: string;
   addonPrice: number;
   currency: string;
   isActive: boolean;
   markerCount: number;
-  category: { id: string; title: string };
+  accommodationNames: string[];
 };
 
-type CategoryOption = {
+type AccommodationOption = {
   id: string;
-  title: string;
-  accommodationCount: number;
-  used: boolean;
+  name: string;
+  categoryTitle: string;
 };
 
 type Props = {
   maps: SpotMapSummary[];
-  categories: CategoryOption[];
+  accommodations: AccommodationOption[];
 };
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -40,13 +40,12 @@ function formatPrice(ore: number, currency: string): string {
 
 // ── Component ───────────────────────────────────────────────────
 
-export function SpotMapList({ maps, categories }: Props) {
+export function SpotMapList({ maps, accommodations }: Props) {
   const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
   const [, startTransition] = useTransition();
 
-  const availableCategories = categories.filter((c) => !c.used);
   const filteredMaps = maps.filter((m) => {
     if (statusFilter === "ACTIVE") return m.isActive;
     if (statusFilter === "INACTIVE") return !m.isActive;
@@ -77,7 +76,7 @@ export function SpotMapList({ maps, categories }: Props) {
               className="settings-btn--connect"
               style={{ fontSize: 13, padding: "5px 12px" }}
               onClick={() => setShowCreate(true)}
-              disabled={availableCategories.length === 0}
+              disabled={accommodations.length === 0}
             >
               Skapa ny karta
             </button>
@@ -131,10 +130,13 @@ export function SpotMapList({ maps, categories }: Props) {
                 onClick={() => router.push(`/apps/spot-booking/${m.id}`)}
               >
                 <div className="products-col products-col--thumb">
-                  <img src={m.imageUrl} alt={m.category.title} className="products-thumb" />
+                  <img src={m.imageUrl} alt={m.title} className="products-thumb" />
                 </div>
                 <div className="products-col products-col--name">
-                  <span className="products-row__title">{m.category.title}</span>
+                  <span className="products-row__title">
+                    {m.accommodationNames[0] ?? m.title}
+                    {m.accommodationNames.length > 1 && ` + ${m.accommodationNames.length - 1}`}
+                  </span>
                 </div>
                 <div className="products-col products-col--detail">
                   <span className={`products-status ${m.isActive ? "products-status--active" : "products-status--archived"}`}>
@@ -159,7 +161,7 @@ export function SpotMapList({ maps, categories }: Props) {
       {/* Create modal */}
       {showCreate && (
         <CreateMapModal
-          categories={availableCategories}
+          accommodations={accommodations}
           onClose={() => setShowCreate(false)}
           onCreated={handleCreated}
         />

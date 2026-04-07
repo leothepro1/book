@@ -22,8 +22,12 @@ import {
   type DraftMarker,
 } from "@/app/_lib/apps/spot-booking/draft-actions";
 import { resolveMarkerPrice } from "@/app/_lib/apps/spot-booking/pricing";
+import { updateSpotMapAccommodations } from "@/app/_lib/apps/spot-booking/wizard-actions";
 import { resolveContrastPalette } from "@/app/_lib/color/contrast";
 import { ColorTokenField } from "@/app/(editor)/editor/panels/ColorTokenField";
+import { MediaLibraryModal } from "@/app/(admin)/_components/MediaLibrary";
+import type { MediaLibraryResult } from "@/app/(admin)/_components/MediaLibrary";
+import "@/app/(admin)/_components/ImageUpload/image-upload.css";
 import "./spot-booking-editor.css";
 
 // ── Types ───────────────────────────────────────────────────────
@@ -45,7 +49,10 @@ type AccommodationOption = {
   name: string;
   slug: string;
   externalCode: string | null;
+  imageUrl: string | null;
   linked: boolean;
+  assignedToThisMap: boolean;
+  assignedToOtherMap: boolean;
 };
 
 type SpotMapData = {
@@ -56,22 +63,15 @@ type SpotMapData = {
   imagePublicId: string;
   addonPrice: number;
   currency: string;
-  category: { id: string; title: string };
+  accommodationItems: { id: string; name: string }[];
   version: number;
   draftConfig: Record<string, unknown> | null;
-};
-
-type CategoryOption = {
-  id: string;
-  title: string;
-  imageUrl: string | null;
 };
 
 export type EditorInitialData = {
   spotMap: SpotMapData;
   markers: MarkerData[];
   accommodations: AccommodationOption[];
-  categories: CategoryOption[];
 };
 
 type Props = {
@@ -129,7 +129,6 @@ function buildConfigFromInitial(data: EditorInitialData): MapDraftConfig {
     currency: data.spotMap.currency,
     imageUrl: data.spotMap.imageUrl,
     imagePublicId: data.spotMap.imagePublicId,
-    accommodationCategoryId: data.spotMap.category.id,
     markers: data.markers.map((m) => ({
       id: m.id,
       label: m.label,
@@ -191,6 +190,8 @@ export function SpotBookingEditor({ initialData }: Props) {
   const [activePanel, setActivePanel] = useState<PanelView>("spots");
 
   // UI state
+  const markers = currentConfig.markers;
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const [placingMode, setPlacingMode] = useState(false);
@@ -199,12 +200,9 @@ export function SpotBookingEditor({ initialData }: Props) {
   const [toast, setToast] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
+  const [mapLibraryOpen, setMapLibraryOpen] = useState(false);
   const [editLabelValue, setEditLabelValue] = useState("");
 
-  // New marker form
-  const [newLabel, setNewLabel] = useState("");
-  const [newAccId, setNewAccId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
 
   // Pan/zoom
   const [zoom, setZoom] = useState(1);
@@ -457,48 +455,42 @@ export function SpotBookingEditor({ initialData }: Props) {
 
       if (x < 0 || x > 100 || y < 0 || y > 100) return;
 
-      setPending({ x, y });
+      // Create marker immediately with auto-generated label
+      const nextNum = markers.length + 1;
+      const autoLabel = String(nextNum);
+      const firstAcc = accommodations[0];
+
+      pushUndo(currentConfig);
+
+      const newMarker: DraftMarker = {
+        label: autoLabel,
+        x,
+        y,
+        accommodationId: firstAcc?.id ?? "",
+        accommodationName: firstAcc?.name ?? "",
+        priceOverride: null,
+        color: null,
+      };
+
+      setCurrentConfig((prev) => {
+        const updated = { ...prev, markers: [...prev.markers, newMarker] };
+        // Open detail panel for the newly added marker
+        const newIndex = updated.markers.length - 1;
+        setTimeout(() => {
+          setDetailIndex(newIndex);
+          setSelectedId(getMarkerKey(newMarker, newIndex));
+        }, 0);
+        return updated;
+      });
+
       setPlacingMode(false);
-      setSelectedId(null);
-      setNewLabel("");
-      setNewAccId(null);
-      setSearchQuery("");
+      setPending(null);
       setError(null);
     },
-    [placingMode, isDragging],
+    [placingMode, isDragging, markers.length, accommodations, currentConfig, pushUndo],
   );
 
   // ── Draft mutations (in-memory, no API calls) ─────────────────
-
-  const addMarker = useCallback(() => {
-    if (!pending || !newAccId || !newLabel.trim()) return;
-
-    const acc = accommodations.find((a) => a.id === newAccId);
-    if (!acc) return;
-
-    pushUndo(currentConfig);
-
-    const newMarker: DraftMarker = {
-      label: newLabel.trim(),
-      x: pending.x,
-      y: pending.y,
-      accommodationId: newAccId,
-      accommodationName: acc.name,
-      priceOverride: null,
-      color: null,
-    };
-
-    setCurrentConfig((prev) => ({
-      ...prev,
-      markers: [...prev.markers, newMarker],
-    }));
-
-    setPending(null);
-    setNewLabel("");
-    setNewAccId(null);
-    setSearchQuery("");
-    showToast("Plats tillagd");
-  }, [pending, newAccId, newLabel, accommodations, currentConfig, pushUndo, showToast]);
 
   const deleteMarker = useCallback(
     (index: number) => {
@@ -542,19 +534,10 @@ export function SpotBookingEditor({ initialData }: Props) {
 
   // ── Derived state ─────────────────────────────────────────────
 
-  const markers = currentConfig.markers;
   const linkedAccIds = new Set(markers.map((m) => m.accommodationId));
   const availableAccommodations = accommodations.filter(
     (a) => !linkedAccIds.has(a.id),
   );
-  const filteredAccommodations = searchQuery
-    ? availableAccommodations.filter((a) =>
-        a.name.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
-    : availableAccommodations;
-
-  const showForm = pending !== null;
-
   let canvasClass = "sbe__canvas";
   if (placingMode) canvasClass += " sbe__canvas--placing";
   else if (isDragging) canvasClass += " sbe__canvas--dragging";
@@ -602,7 +585,7 @@ export function SpotBookingEditor({ initialData }: Props) {
         <div className="editor-header__spacer" />
 
         <div className="sbe__header-center">
-          <span className="sbe__header-info">{spotMap.category.title}</span>
+          <span className="sbe__header-info">{spotMap.accommodationItems.length} boenden</span>
           <span className={`editor-header__status ${hasChanges ? "editor-header__status--unsaved" : "editor-header__status--live"}`}>
             <span className="editor-header__status-dot" />
             {hasChanges ? "Utkast" : "Live"}
@@ -669,6 +652,47 @@ export function SpotBookingEditor({ initialData }: Props) {
                   </div>
                 )}
                 <div className="sbe__form">
+                  <div className="sbe__field">
+                    <label className="sbe__field-label">Boenden</label>
+                    <span className="sbe__field-hint">Kartan visas vid bokning av dessa boenden</span>
+                    <MapAccommodationPicker
+                      mapId={spotMap.id}
+                      accommodations={initialData.accommodations}
+                      assigned={spotMap.accommodationItems}
+                      onUpdated={(items) => {
+                        spotMap.accommodationItems = items;
+                      }}
+                    />
+                  </div>
+                  <div className="sf-field">
+                    <label className="sf-label">Kartbild</label>
+                    <div className="img-upload">
+                      <div
+                        className="img-upload-result"
+                        onClick={() => setMapLibraryOpen(true)}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={currentConfig.imageUrl} alt="Karta" className="img-upload-result-img" />
+                        <span className="img-upload-result-filename">Ändra kartbild</span>
+                      </div>
+                    </div>
+                    <MediaLibraryModal
+                      open={mapLibraryOpen}
+                      onClose={() => setMapLibraryOpen(false)}
+                      onConfirm={(asset: MediaLibraryResult) => {
+                        setMapLibraryOpen(false);
+                        pushUndo(currentConfig);
+                        setCurrentConfig((prev) => ({
+                          ...prev,
+                          imageUrl: asset.url,
+                          imagePublicId: asset.publicId ?? prev.imagePublicId,
+                        }));
+                      }}
+                      currentValue={currentConfig.imageUrl}
+                      uploadFolder="spot-maps"
+                      accept="image"
+                    />
+                  </div>
                   <div className="sf-field">
                     <label className="sf-label">Rubrik</label>
                     <input
@@ -687,15 +711,6 @@ export function SpotBookingEditor({ initialData }: Props) {
                       value={currentConfig.subtitle}
                       onChange={(e) => updateSetting("subtitle", e.target.value)}
                       rows={2}
-                    />
-                  </div>
-                  <div className="sbe__field">
-                    <label className="sbe__field-label">Boendetyp</label>
-                    <span className="sbe__field-hint">Kartan visas vid bokning av denna boendetyp</span>
-                    <CategoryPicker
-                      categories={initialData.categories}
-                      selectedId={currentConfig.accommodationCategoryId}
-                      onSelect={(id) => updateSetting("accommodationCategoryId", id)}
                     />
                   </div>
                   <div className="sbe__field">
@@ -728,12 +743,8 @@ export function SpotBookingEditor({ initialData }: Props) {
                 {/* ── Pane 1: Marker list ── */}
                 <div className="sp-transition__pane">
                   <div className="sbe__panel-header">
-                    <span className="sbe__panel-title">
-                      {showForm ? "Konfigurera plats" : "Platser"}
-                    </span>
-                    {!showForm && (
-                      <span className="sbe__panel-count">{markers.length}</span>
-                    )}
+                    <span className="sbe__panel-title">Platser</span>
+                    <span className="sbe__panel-count">{markers.length}</span>
                   </div>
                   <div className="sbe__panel-body">
                     {error && (
@@ -742,116 +753,40 @@ export function SpotBookingEditor({ initialData }: Props) {
                         {error}
                       </div>
                     )}
-                    {showForm ? (
-                      <div className="sbe__form">
-                        <div className="sbe__field">
-                          <label className="sbe__field-label">Etikett</label>
-                          <input
-                            type="text"
-                            className="admin-input--sm"
-                            placeholder="t.ex. 32a"
-                            maxLength={20}
-                            value={newLabel}
-                            onChange={(e) => setNewLabel(e.target.value)}
-                            autoFocus
-                          />
-                          <span className="sbe__field-hint">Max 20 tecken</span>
-                        </div>
-                        <div className="sbe__field">
-                          <label className="sbe__field-label">Boende</label>
-                          <div className="sbe__search-select">
-                            <input
-                              type="text"
-                              className="admin-input--sm sbe__search-input"
-                              placeholder="Sok boende..."
-                              value={searchQuery}
-                              onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                            <div className="sbe__search-list">
-                              {filteredAccommodations.length === 0 ? (
-                                <div className="sbe__search-empty">Inga tillgangliga boenden</div>
-                              ) : (
-                                filteredAccommodations.map((a) => (
-                                  <div
-                                    key={a.id}
-                                    className={`sbe__search-item${newAccId === a.id ? " sbe__search-item--selected" : ""}`}
-                                    onClick={() => { setNewAccId(a.id); setSearchQuery(a.name); }}
-                                  >
-                                    {a.name}
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="sbe__field">
-                          <span className="sbe__field-hint">
-                            Position: ({pending!.x.toFixed(1)}%, {pending!.y.toFixed(1)}%)
-                          </span>
-                        </div>
-                        <div className="sbe__form-actions">
-                          <button
-                            className="admin-btn admin-btn--outline admin-btn--sm"
-                            onClick={() => { setPending(null); setError(null); }}
+                    <div className="sbe__marker-list">
+                      {markers.map((m, i) => {
+                        const key = getMarkerKey(m, i);
+                        return (
+                          <div
+                            key={key}
+                            className={`sbe__marker-row${selectedId === key ? " sbe__marker-row--selected" : ""}`}
+                            onClick={() => {
+                              setSelectedId(key);
+                              setDetailIndex(i);
+                            }}
                           >
-                            Avbryt
-                          </button>
-                          <button
-                            className="admin-btn admin-btn--accent admin-btn--sm"
-                            disabled={!newLabel.trim() || !newAccId}
-                            onClick={addMarker}
-                          >
-                            Lagg till
-                          </button>
-                        </div>
-                      </div>
-                    ) : markers.length === 0 ? (
-                      <div className="editor-panel__empty">
-                        <div className="editor-panel__empty-icon">
-                          <EditorIcon name="location_on" size={40} />
-                        </div>
-                        <p className="editor-panel__empty-text">
-                          Inga platser tillagda an. Klicka pa &quot;Lagg till plats&quot; och sedan pa kartan.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="sbe__marker-list">
-                        {markers.map((m, i) => {
-                          const key = getMarkerKey(m, i);
-                          const effectivePrice = resolveMarkerPrice(m.priceOverride, currentConfig.addonPrice);
-                          const hasOverride = m.priceOverride != null;
-                          return (
                             <div
-                              key={key}
-                              className={`sbe__marker-row${selectedId === key ? " sbe__marker-row--selected" : ""}`}
-                              onClick={() => {
-                                setSelectedId(key);
-                                setDetailIndex(i);
-                              }}
+                              className="sbe__marker-row-dot"
+                              style={m.color ? { background: m.color, color: resolveContrastPalette(m.color).text } : undefined}
                             >
-                              <div
-                                className="sbe__marker-row-dot"
-                                style={m.color ? { background: m.color, color: resolveContrastPalette(m.color).text } : undefined}
-                              >
-                                {m.label.slice(0, 2)}
-                              </div>
-                              <div className="sbe__marker-row-info">
-                                <span className="sbe__marker-row-acc">{m.accommodationName}</span>
-                              </div>
-                              <EditorIcon name="chevron_right" size={18} className="sbe__marker-row-chevron" />
+                              {m.label.slice(0, 2)}
                             </div>
-                          );
-                        })}
-                        <button
-                          type="button"
-                          className="sbe__add-marker-btn"
-                          onClick={() => { setPlacingMode(true); setSelectedId(null); }}
-                        >
-                          <EditorIcon name="add_circle" size={20} />
-                          Lägg till markör
-                        </button>
-                      </div>
-                    )}
+                            <div className="sbe__marker-row-info">
+                              <span className="sbe__marker-row-acc">{m.accommodationName}</span>
+                            </div>
+                            <EditorIcon name="chevron_right" size={18} className="sbe__marker-row-chevron" />
+                          </div>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        className="sbe__add-marker-btn"
+                        onClick={() => { setPlacingMode(true); setSelectedId(null); }}
+                      >
+                        <EditorIcon name="add_circle" size={20} />
+                        Lägg till markör
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -928,17 +863,6 @@ export function SpotBookingEditor({ initialData }: Props) {
               );
             })}
 
-            {pending && (
-              <div
-                className="sbe__marker sbe__marker--pending"
-                style={{ left: `${pending.x}%`, top: `${pending.y}%` }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="sbe__marker-dot">
-                  <EditorIcon name="add" size={16} />
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -1132,6 +1056,174 @@ function MarkerDetailPanel({
   );
 }
 
+// ── Map accommodation picker (multi-select) ─────────────────────
+
+function MapAccommodationPicker({
+  mapId,
+  accommodations,
+  assigned,
+  onUpdated,
+}: {
+  mapId: string;
+  accommodations: AccommodationOption[];
+  assigned: { id: string; name: string }[];
+  onUpdated: (items: { id: string; name: string }[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(assigned.map((a) => a.id)));
+  const [saving, setSaving] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [popupTop, setPopupTop] = useState(0);
+
+  // Only show accommodations that are available (assigned to this map OR unassigned)
+  const pickable = accommodations.filter((a) => a.assignedToThisMap || !a.assignedToOtherMap);
+
+  const query = search.trim().toLowerCase();
+  const filtered = query
+    ? pickable.filter((a) => a.name.toLowerCase().includes(query))
+    : pickable;
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        popupRef.current && !popupRef.current.contains(e.target as Node) &&
+        triggerRef.current && !triggerRef.current.contains(e.target as Node)
+      ) {
+        handleClose();
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open, selected]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleClose();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open, selected]);
+
+  const openPopup = () => {
+    if (triggerRef.current) {
+      setPopupTop(triggerRef.current.getBoundingClientRect().top);
+    }
+    setOpen(true);
+    setSearch("");
+  };
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleClose = async () => {
+    // Check if selection changed
+    const originalIds = new Set(assigned.map((a) => a.id));
+    const changed = selected.size !== originalIds.size || [...selected].some((id) => !originalIds.has(id));
+
+    if (changed && selected.size > 0) {
+      setSaving(true);
+      const result = await updateSpotMapAccommodations(mapId, Array.from(selected));
+      setSaving(false);
+      if (result.ok) {
+        const newItems = Array.from(selected).map((id) => {
+          const acc = accommodations.find((a) => a.id === id);
+          return { id, name: acc?.name ?? "" };
+        });
+        onUpdated(newItems);
+      }
+    }
+
+    setOpen(false);
+    setSearch("");
+  };
+
+  const displayName = assigned[0]?.name ?? "Välj boenden...";
+  const extra = assigned.length > 1 ? ` + ${assigned.length - 1}` : "";
+
+  const popupContent = open && typeof document !== "undefined" && createPortal(
+    <div className="sp-resource-popup" ref={popupRef} style={{ top: popupTop }}>
+      <div className="pk-popup__search">
+        <svg className="pk-popup__search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M11.5 11.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+        <input
+          type="text"
+          className="pk-popup__search-input"
+          placeholder="Sök boende..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          autoComplete="off"
+        />
+        {search && (
+          <button type="button" className="pk-popup__search-clear" onClick={() => setSearch("")}>
+            <EditorIcon name="close" size={14} />
+          </button>
+        )}
+      </div>
+      <div className="sp-resource-popup__list">
+        {filtered.length === 0 ? (
+          <div className="sp-resource-popup__empty">Inga resultat</div>
+        ) : (
+          filtered.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              className={`sp-resource-popup__item${selected.has(a.id) ? " sp-resource-popup__item--active" : ""}`}
+              onClick={() => toggle(a.id)}
+            >
+              {a.imageUrl ? (
+                <img src={a.imageUrl} alt="" className="sp-resource-popup__item-img" />
+              ) : (
+                <div className="sp-resource-popup__item-img sp-resource-popup__item-img--empty">
+                  <EditorIcon name="hotel" size={12} />
+                </div>
+              )}
+              <span className="sp-resource-popup__item-title">{a.name}</span>
+              {selected.has(a.id) && (
+                <EditorIcon name="check" size={16} style={{ color: "var(--admin-accent)", flexShrink: 0 }} />
+              )}
+            </button>
+          ))
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+
+  return (
+    <div className="sp-resource-picker">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="sp-resource-picker__trigger"
+        onClick={() => open ? handleClose() : openPopup()}
+      >
+        <div className="sp-resource-picker__thumb sp-resource-popup__item-img--empty">
+          <EditorIcon name="hotel" size={14} />
+        </div>
+        <span className="sp-resource-picker__trigger-text">
+          <span className="sp-resource-picker__value">
+            {saving ? "Sparar..." : `${displayName}${extra}`}
+          </span>
+        </span>
+        <EditorIcon name="unfold_more" size={16} className="sp-resource-picker__icon" />
+      </button>
+      {popupContent}
+    </div>
+  );
+}
+
 // ── Accommodation picker (sp-resource-picker pattern) ─────────────
 
 function AccommodationPicker({
@@ -1224,141 +1316,15 @@ function AccommodationPicker({
               className={`sp-resource-popup__item${a.id === selectedId ? " sp-resource-popup__item--active" : ""}`}
               onClick={() => { onSelect(a.id); setOpen(false); setSearch(""); }}
             >
-              <div className="sp-resource-popup__item-img sp-resource-popup__item-img--empty">
-                <EditorIcon name="hotel" size={12} />
-              </div>
-              <span className="sp-resource-popup__item-title">{a.name}</span>
-              {a.id === selectedId && (
-                <EditorIcon name="check" size={16} style={{ color: "var(--admin-accent)", flexShrink: 0 }} />
-              )}
-            </button>
-          ))
-        )}
-      </div>
-    </div>,
-    document.body,
-  );
-
-  return (
-    <div className="sp-resource-picker">
-      <button
-        ref={triggerRef}
-        type="button"
-        className="sp-resource-picker__trigger"
-        onClick={() => open ? setOpen(false) : openPopup()}
-      >
-        <div className="sp-resource-picker__thumb sp-resource-popup__item-img--empty">
-          <EditorIcon name="hotel" size={14} />
-        </div>
-        <span className="sp-resource-picker__trigger-text">
-          <span className="sp-resource-picker__value">
-            {selected?.name ?? "Välj boende..."}
-          </span>
-        </span>
-        <EditorIcon name="unfold_more" size={16} className="sp-resource-picker__icon" />
-      </button>
-      {popupContent}
-    </div>
-  );
-}
-
-// ── Category picker (sp-resource-picker pattern) ────────────────
-
-function CategoryPicker({
-  categories,
-  selectedId,
-  onSelect,
-}: {
-  categories: CategoryOption[];
-  selectedId: string;
-  onSelect: (id: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
-  const [popupTop, setPopupTop] = useState(0);
-
-  const selected = categories.find((c) => c.id === selectedId);
-
-  const query = search.trim().toLowerCase();
-  const filtered = query
-    ? categories.filter((c) => c.title.toLowerCase().includes(query))
-    : categories;
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (
-        popupRef.current && !popupRef.current.contains(e.target as Node) &&
-        triggerRef.current && !triggerRef.current.contains(e.target as Node)
-      ) {
-        setOpen(false);
-        setSearch("");
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { setOpen(false); setSearch(""); }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [open]);
-
-  const openPopup = () => {
-    if (triggerRef.current) {
-      setPopupTop(triggerRef.current.getBoundingClientRect().top);
-    }
-    setOpen(true);
-    setSearch("");
-  };
-
-  const popupContent = open && typeof document !== "undefined" && createPortal(
-    <div className="sp-resource-popup" ref={popupRef} style={{ top: popupTop }}>
-      <div className="pk-popup__search">
-        <svg className="pk-popup__search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M11.5 11.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
-        </svg>
-        <input
-          type="text"
-          className="pk-popup__search-input"
-          placeholder="Sök..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          autoComplete="off"
-        />
-        {search && (
-          <button type="button" className="pk-popup__search-clear" onClick={() => setSearch("")}>
-            <EditorIcon name="close" size={14} />
-          </button>
-        )}
-      </div>
-      <div className="sp-resource-popup__list">
-        {filtered.length === 0 ? (
-          <div className="sp-resource-popup__empty">Inga resultat</div>
-        ) : (
-          filtered.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className={`sp-resource-popup__item${c.id === selectedId ? " sp-resource-popup__item--active" : ""}`}
-              onClick={() => { onSelect(c.id); setOpen(false); setSearch(""); }}
-            >
-              {c.imageUrl ? (
-                <img src={c.imageUrl} alt="" className="sp-resource-popup__item-img" />
+              {a.imageUrl ? (
+                <img src={a.imageUrl} alt="" className="sp-resource-popup__item-img" />
               ) : (
                 <div className="sp-resource-popup__item-img sp-resource-popup__item-img--empty">
-                  <EditorIcon name="image" size={12} />
+                  <EditorIcon name="hotel" size={12} />
                 </div>
               )}
-              <span className="sp-resource-popup__item-title">{c.title}</span>
-              {c.id === selectedId && (
+              <span className="sp-resource-popup__item-title">{a.name}</span>
+              {a.id === selectedId && (
                 <EditorIcon name="check" size={16} style={{ color: "var(--admin-accent)", flexShrink: 0 }} />
               )}
             </button>
@@ -1381,12 +1347,12 @@ function CategoryPicker({
           <img src={selected.imageUrl} alt="" className="sp-resource-picker__thumb" />
         ) : (
           <div className="sp-resource-picker__thumb sp-resource-popup__item-img--empty">
-            <EditorIcon name="image" size={14} />
+            <EditorIcon name="hotel" size={14} />
           </div>
         )}
         <span className="sp-resource-picker__trigger-text">
           <span className="sp-resource-picker__value">
-            {selected?.title ?? "Välj..."}
+            {selected?.name ?? "Välj boende..."}
           </span>
         </span>
         <EditorIcon name="unfold_more" size={16} className="sp-resource-picker__icon" />

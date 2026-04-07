@@ -24,16 +24,16 @@ async function resolveTenantId(): Promise<string | null> {
   return tenantData?.tenant.id ?? null;
 }
 
-// ── Fetch AccommodationCategories ───────────────────────────────
+// ── Fetch available Accommodations ─────────────────────────────
 
-export type CategoryOption = {
+export type AccommodationOption = {
   id: string;
-  title: string;
-  accommodationCount: number;
+  name: string;
+  categoryTitle: string;
 };
 
-export async function getAccommodationCategories(): Promise<
-  ActionResult<CategoryOption[]>
+export async function getAccommodations(): Promise<
+  ActionResult<AccommodationOption[]>
 > {
   const auth = await requireAdmin();
   if (!auth.ok) return { ok: false, error: auth.error };
@@ -41,22 +41,25 @@ export async function getAccommodationCategories(): Promise<
   const tenantId = await resolveTenantId();
   if (!tenantId) return { ok: false, error: "Inte inloggad" };
 
-  const categories = await prisma.accommodationCategory.findMany({
-    where: { tenantId, status: "ACTIVE" },
-    orderBy: { sortOrder: "asc" },
+  const accommodations = await prisma.accommodation.findMany({
+    where: { tenantId, status: "ACTIVE", spotMapItem: null },
+    orderBy: { name: "asc" },
     select: {
       id: true,
-      title: true,
-      _count: { select: { items: true } },
+      name: true,
+      categoryItems: {
+        select: { category: { select: { title: true } } },
+        take: 1,
+      },
     },
   });
 
   return {
     ok: true,
-    data: categories.map((c) => ({
-      id: c.id,
-      title: c.title,
-      accommodationCount: c._count.items,
+    data: accommodations.map((a) => ({
+      id: a.id,
+      name: a.name,
+      categoryTitle: a.categoryItems[0]?.category.title ?? "",
     })),
   };
 }
@@ -64,7 +67,7 @@ export async function getAccommodationCategories(): Promise<
 // ── Create SpotMap ──────────────────────────────────────────────
 
 export type CreateSpotMapInput = {
-  accommodationCategoryId: string;
+  accommodationIds: string[];
   imageUrl: string;
   imagePublicId: string;
   addonPrice: number; // in ore
@@ -93,13 +96,23 @@ export async function createSpotMap(
     return { ok: false, error: "Appen ar redan konfigurerad" };
   }
 
-  // Verify category belongs to tenant
-  const category = await prisma.accommodationCategory.findFirst({
-    where: { id: input.accommodationCategoryId, tenantId },
-    select: { id: true },
+  if (input.accommodationIds.length === 0) {
+    return { ok: false, error: "Valj minst ett boende" };
+  }
+
+  // Verify all accommodations belong to tenant and are unassigned
+  const accommodations = await prisma.accommodation.findMany({
+    where: { id: { in: input.accommodationIds }, tenantId, status: "ACTIVE" },
+    select: { id: true, spotMapItem: { select: { id: true } } },
   });
-  if (!category) {
-    return { ok: false, error: "Boendetypen tillhor inte din organisation" };
+
+  if (accommodations.length !== input.accommodationIds.length) {
+    return { ok: false, error: "Ett eller flera boenden tillhor inte din organisation" };
+  }
+
+  const alreadyAssigned = accommodations.filter((a) => a.spotMapItem);
+  if (alreadyAssigned.length > 0) {
+    return { ok: false, error: "Ett eller flera boenden tillhor redan en annan karta" };
   }
 
   // Validate addonPrice
@@ -108,35 +121,34 @@ export async function createSpotMap(
   }
 
   try {
-    const spotMap = await prisma.spotMap.upsert({
-      where: {
-        tenantAppId_accommodationCategoryId: {
+    const spotMap = await prisma.$transaction(async (tx) => {
+      const map = await tx.spotMap.create({
+        data: {
+          tenantId,
           tenantAppId: tenantApp.id,
-          accommodationCategoryId: input.accommodationCategoryId,
+          imageUrl: input.imageUrl,
+          imagePublicId: input.imagePublicId,
+          addonPrice: input.addonPrice,
+          currency: input.currency,
+          isActive: false,
         },
-      },
-      create: {
-        tenantId,
-        tenantAppId: tenantApp.id,
-        accommodationCategoryId: input.accommodationCategoryId,
-        imageUrl: input.imageUrl,
-        imagePublicId: input.imagePublicId,
-        addonPrice: input.addonPrice,
-        currency: input.currency,
-        isActive: false,
-      },
-      update: {
-        imageUrl: input.imageUrl,
-        imagePublicId: input.imagePublicId,
-        addonPrice: input.addonPrice,
-        currency: input.currency,
-      },
+      });
+
+      await tx.spotMapAccommodation.createMany({
+        data: input.accommodationIds.map((accId, i) => ({
+          spotMapId: map.id,
+          accommodationId: accId,
+          sortOrder: i,
+        })),
+      });
+
+      return map;
     });
 
     log("info", "spot_booking.map_created", {
       tenantId,
       spotMapId: spotMap.id,
-      categoryId: input.accommodationCategoryId,
+      accommodationCount: input.accommodationIds.length,
     });
 
     return { ok: true, data: { id: spotMap.id } };
@@ -173,10 +185,6 @@ export async function activateSpotMap(
   if (!spotMap) {
     return { ok: false, error: "Kartan hittades inte" };
   }
-
-  // Note: markers are added in Prompt 2 (map editor).
-  // For initial activation we skip the marker check so the wizard
-  // can complete. The map editor will be built next.
 
   // Atomic activation
   const result = await prisma.$transaction(async (tx) => {
@@ -216,7 +224,7 @@ export async function activateSpotMap(
 // ── Create Additional SpotMap (post-setup) ─────────────────────
 
 export type CreateAdditionalSpotMapInput = {
-  accommodationCategoryId: string;
+  accommodationIds: string[];
   imageUrl: string;
   imagePublicId: string;
   addonPrice: number;
@@ -241,27 +249,23 @@ export async function createAdditionalSpotMap(
     return { ok: false, error: "Appen ar inte aktiv" };
   }
 
-  // Verify category belongs to tenant
-  const category = await prisma.accommodationCategory.findFirst({
-    where: { id: input.accommodationCategoryId, tenantId },
-    select: { id: true },
-  });
-  if (!category) {
-    return { ok: false, error: "Boendetypen tillhor inte din organisation" };
+  if (input.accommodationIds.length === 0) {
+    return { ok: false, error: "Valj minst ett boende" };
   }
 
-  // Check no map already exists for this category
-  const existing = await prisma.spotMap.findUnique({
-    where: {
-      tenantAppId_accommodationCategoryId: {
-        tenantAppId: tenantApp.id,
-        accommodationCategoryId: input.accommodationCategoryId,
-      },
-    },
-    select: { id: true },
+  // Verify all accommodations belong to tenant and are unassigned
+  const accommodations = await prisma.accommodation.findMany({
+    where: { id: { in: input.accommodationIds }, tenantId, status: "ACTIVE" },
+    select: { id: true, spotMapItem: { select: { id: true } } },
   });
-  if (existing) {
-    return { ok: false, error: "Det finns redan en karta for denna boendetyp" };
+
+  if (accommodations.length !== input.accommodationIds.length) {
+    return { ok: false, error: "Ett eller flera boenden tillhor inte din organisation" };
+  }
+
+  const alreadyAssigned = accommodations.filter((a) => a.spotMapItem);
+  if (alreadyAssigned.length > 0) {
+    return { ok: false, error: "Ett eller flera boenden tillhor redan en annan karta" };
   }
 
   if (!Number.isInteger(input.addonPrice) || input.addonPrice <= 0) {
@@ -269,23 +273,34 @@ export async function createAdditionalSpotMap(
   }
 
   try {
-    const spotMap = await prisma.spotMap.create({
-      data: {
-        tenantId,
-        tenantAppId: tenantApp.id,
-        accommodationCategoryId: input.accommodationCategoryId,
-        imageUrl: input.imageUrl,
-        imagePublicId: input.imagePublicId,
-        addonPrice: input.addonPrice,
-        currency: input.currency,
-        isActive: true,
-      },
+    const spotMap = await prisma.$transaction(async (tx) => {
+      const map = await tx.spotMap.create({
+        data: {
+          tenantId,
+          tenantAppId: tenantApp.id,
+          imageUrl: input.imageUrl,
+          imagePublicId: input.imagePublicId,
+          addonPrice: input.addonPrice,
+          currency: input.currency,
+          isActive: true,
+        },
+      });
+
+      await tx.spotMapAccommodation.createMany({
+        data: input.accommodationIds.map((accId, i) => ({
+          spotMapId: map.id,
+          accommodationId: accId,
+          sortOrder: i,
+        })),
+      });
+
+      return map;
     });
 
     log("info", "spot_booking.map_created", {
       tenantId,
       spotMapId: spotMap.id,
-      categoryId: input.accommodationCategoryId,
+      accommodationCount: input.accommodationIds.length,
     });
 
     return { ok: true, data: { id: spotMap.id } };
@@ -380,4 +395,72 @@ export async function updateSpotMapSettings(
   });
 
   return { ok: true, data: { id: updated.id } };
+}
+
+// ── Update SpotMap accommodations ─────────────────────────────
+
+export async function updateSpotMapAccommodations(
+  mapId: string,
+  accommodationIds: string[],
+): Promise<ActionResult> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const tenantId = await resolveTenantId();
+  if (!tenantId) return { ok: false, error: "Inte inloggad" };
+
+  const spotMap = await prisma.spotMap.findFirst({
+    where: { id: mapId, tenantId },
+    select: { id: true },
+  });
+
+  if (!spotMap) {
+    return { ok: false, error: "Kartan hittades inte" };
+  }
+
+  if (accommodationIds.length === 0) {
+    return { ok: false, error: "Valj minst ett boende" };
+  }
+
+  // Verify all accommodations belong to tenant
+  const accs = await prisma.accommodation.findMany({
+    where: { id: { in: accommodationIds }, tenantId, status: "ACTIVE" },
+    select: { id: true },
+  });
+
+  if (accs.length !== accommodationIds.length) {
+    return { ok: false, error: "Ett eller flera boenden tillhor inte din organisation" };
+  }
+
+  // Check none are assigned to a DIFFERENT map
+  const conflicts = await prisma.spotMapAccommodation.findMany({
+    where: {
+      accommodationId: { in: accommodationIds },
+      spotMapId: { not: mapId },
+    },
+    select: { accommodationId: true },
+  });
+
+  if (conflicts.length > 0) {
+    return { ok: false, error: "Ett eller flera boenden tillhor redan en annan karta" };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.spotMapAccommodation.deleteMany({ where: { spotMapId: mapId } });
+    await tx.spotMapAccommodation.createMany({
+      data: accommodationIds.map((accId, i) => ({
+        spotMapId: mapId,
+        accommodationId: accId,
+        sortOrder: i,
+      })),
+    });
+  });
+
+  log("info", "spot_booking.map_accommodations_updated", {
+    tenantId,
+    spotMapId: mapId,
+    count: accommodationIds.length,
+  });
+
+  return { ok: true, data: undefined };
 }

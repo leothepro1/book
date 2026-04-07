@@ -47,44 +47,45 @@ export default async function SpotBookingPage() {
   const spotMaps = await prisma.spotMap.findMany({
     where: { tenantAppId: tenantApp.id },
     include: {
-      accommodationCategory: {
-        select: { id: true, title: true },
+      accommodationItems: {
+        select: { accommodation: { select: { id: true, name: true } } },
+        orderBy: { sortOrder: "asc" },
       },
       _count: { select: { markers: true } },
     },
     orderBy: { createdAt: "asc" },
   });
 
-  // If no maps exist (edge case: all deleted), show empty list
-  // Load available categories for the "create new map" modal
-  const categories = await prisma.accommodationCategory.findMany({
-    where: { tenantId, status: "ACTIVE" },
-    orderBy: { sortOrder: "asc" },
+  // Load unassigned accommodations for the "create new map" modal
+  const unassigned = await prisma.accommodation.findMany({
+    where: { tenantId, status: "ACTIVE", spotMapItem: null },
+    orderBy: { name: "asc" },
     select: {
       id: true,
-      title: true,
-      _count: { select: { items: true } },
+      name: true,
+      categoryItems: {
+        select: { category: { select: { title: true } } },
+        take: 1,
+      },
     },
   });
 
-  const usedCategoryIds = new Set(spotMaps.map((m) => m.accommodationCategoryId));
-
   const maps = spotMaps.map((m) => ({
     id: m.id,
+    title: m.title,
     imageUrl: m.imageUrl,
     addonPrice: m.addonPrice,
     currency: m.currency,
     isActive: m.isActive,
     markerCount: m._count.markers,
-    category: m.accommodationCategory,
+    accommodationNames: m.accommodationItems.map((ai) => ai.accommodation.name),
   }));
 
-  const availableCategories = categories.map((c) => ({
-    id: c.id,
-    title: c.title,
-    accommodationCount: c._count.items,
-    used: usedCategoryIds.has(c.id),
+  const availableAccommodations = unassigned.map((a) => ({
+    id: a.id,
+    name: a.name,
+    categoryTitle: a.categoryItems[0]?.category.title ?? "",
   }));
 
-  return <SpotMapList maps={maps} categories={availableCategories} />;
+  return <SpotMapList maps={maps} accommodations={availableAccommodations} />;
 }
