@@ -21,6 +21,11 @@ export interface SearchParams {
 
 // ── Search Results ──────────────────────────────────────────
 
+export interface SearchResultHighlight {
+  icon: string;
+  text: string;
+}
+
 export interface SearchResultCategory {
   externalId: string;
   name: string;
@@ -30,6 +35,7 @@ export interface SearchResultCategory {
   imageUrls: string[];
   maxGuests: number;
   facilities: string[];
+  highlights: SearchResultHighlight[];
   basePricePerNight: number;    // ören
 }
 

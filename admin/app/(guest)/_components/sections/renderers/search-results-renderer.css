@@ -114,10 +114,78 @@
   grid-row: 1 / -1;
   height: 100%;
   min-height: 270px;
+  position: relative;
 }
 
 .sr__card-image img { width: 100%; height: 100%; object-fit: cover; }
 .sr__card-placeholder { width: 100%; height: 100%; background: color-mix(in srgb, var(--text, #000) 6%, var(--background, #fff)); }
+
+/* ── Image carousel nav ── */
+
+.sr__card-image-nav {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.sr__card-image:hover .sr__card-image-nav { opacity: 1; }
+
+.sr__card-image-btn {
+  pointer-events: auto;
+  width: 33px;
+  height: 33px;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  backdrop-filter: blur(4px);
+  color: #333;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  transition: background 0.12s, transform 0.12s;
+}
+
+.sr__card-image-btn:hover {
+  background: #fff;
+  transform: scale(1.06);
+}
+
+.sr__card-image-btn:active { transform: scale(0.96); }
+
+.sr__card-image-btn--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Dot indicators ── */
+
+.sr__card-image-dots {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 5px;
+  pointer-events: none;
+}
+
+.sr__card-image-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transition: background 0.15s;
+}
+
+.sr__card-image-dot--active { background: #fff; }
 
 .sr__card-info { padding: 20px; display: flex; flex-direction: column; gap: 0.25rem; }
 
@@ -136,6 +204,7 @@
 }
 
 .sr__card-readmore {
+  font-family: var(--font-body, inherit);
   font-size: 0.9125rem;
   color: var(--text, #1a1a1a);
   font-weight: 400;
@@ -146,6 +215,9 @@
 
 .sr__card-readmore:hover { text-decoration: underline; }
 .sr__card-meta { display: flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: color-mix(in srgb, var(--text, #000) 50%, transparent); margin-top: 0.375rem; }
+
+.sr__card-highlights { display: flex; flex-direction: column; gap: 4px; margin-top: 0.375rem; }
+.sr__card-highlight { display: flex; align-items: center; gap: 6px; font-family: var(--font-body, inherit); font-size: .9125rem; font-weight: 500; color: color-mix(in srgb, var(--text, #000) 65%, transparent); }
 
 .sr__card-action {
   display: flex;
@@ -158,8 +230,8 @@
 }
 
 .sr__card-pricing { display: flex; flex-direction: column; gap: 0.125rem; }
-.sr__card-price { font-size: 1rem; font-weight: 700; color: var(--text); white-space: nowrap; }
-.sr__card-price-detail { font-size: 0.75rem; font-weight: 400; color: color-mix(in srgb, var(--text, #000) 50%, transparent); white-space: nowrap; }
+.sr__card-price { font-family: var(--font-body, inherit); font-size: 1rem; font-weight: 700; color: var(--text); white-space: nowrap; }
+.sr__card-price-detail { font-family: var(--font-body, inherit); font-size: 0.75rem; font-weight: 400; color: color-mix(in srgb, var(--text, #000) 50%, transparent); white-space: nowrap; }
 
 .sr__card-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
@@ -234,6 +306,7 @@
 }
 
 .sr__plan-desc {
+  font-family: var(--font-body, inherit);
   font-size: 0.8125rem;
   color: color-mix(in srgb, var(--text, #000) 55%, transparent);
   line-height: 1.4;
@@ -248,6 +321,7 @@
 }
 
 .sr__plan-price {
+  font-family: var(--font-body, inherit);
   font-size: 1rem;
   font-weight: 600;
   color: var(--text);
@@ -255,6 +329,7 @@
 }
 
 .sr__plan-price-detail {
+  font-family: var(--font-body, inherit);
   font-size: 0.75rem;
   color: color-mix(in srgb, var(--text, #000) 50%, transparent);
   white-space: nowrap;

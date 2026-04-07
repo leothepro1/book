@@ -67,6 +67,8 @@ export default async function SpotBookingEditorPage({ params }: Props) {
   const initialData = {
     spotMap: {
       id: spotMap.id,
+      title: spotMap.title,
+      subtitle: spotMap.subtitle,
       imageUrl: spotMap.imageUrl,
       imagePublicId: spotMap.imagePublicId,
       addonPrice: spotMap.addonPrice,

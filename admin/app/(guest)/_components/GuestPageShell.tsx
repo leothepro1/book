@@ -1,6 +1,7 @@
 import type { TenantConfig } from "@/app/(guest)/_lib/tenant/types";
 import { LAYOUT_DEFAULTS } from "@/app/(guest)/_lib/tenant/types";
-import { themeToStyleAttr, backgroundStyle } from "../_lib/theme";
+import { themeToStyleAttr, backgroundStyle, googleFontsUrl } from "../_lib/theme";
+import type { FontKey } from "../_lib/theme";
 import { resolveThemeLayout, resolveThemeLayoutVars, renderSidebarSlots } from "../_lib/themes/engine";
 import GuestHeader from "./GuestHeader";
 import GuestFooter from "./GuestFooter";
@@ -34,6 +35,15 @@ export default async function GuestPageShell({
     : {};
   const maxWidth = config.layout?.maxWidth ?? LAYOUT_DEFAULTS.maxWidth;
 
+  // Load Google Fonts for the tenant's selected fonts
+  const typo = config.theme?.typography;
+  const fontKeys: FontKey[] = [
+    typo?.headingFont ?? "inter",
+    typo?.bodyFont ?? "inter",
+    typo?.buttonFont ?? typo?.headingFont ?? "inter",
+  ];
+  const fontsUrl = googleFontsUrl(fontKeys);
+
   const shellVars: React.CSSProperties = {
     ...cssVars,
     "--layout-max-width": `${maxWidth}px`,
@@ -54,6 +64,10 @@ export default async function GuestPageShell({
 
   return (
     <div style={shellVars} className="g-body">
+      {fontsUrl && (
+        // eslint-disable-next-line @next/next/no-page-custom-font
+        <link rel="stylesheet" href={fontsUrl} />
+      )}
       <div style={bgStyle} className="min-h-dvh flex flex-col">
         <EmbedProvider>
           <GuestHeader config={config} />

@@ -17,13 +17,63 @@
 /* ── Left column ────────────────────────────────── */
 
 .ao__left {
+  display: grid;
+  grid-template-columns: 50px 1fr;
+  gap: 0;
   min-width: 0;
-  padding: 40px 40px 120px max(var(--page-padding, 32px), calc((100vw - var(--layout-max-width, 1250px)) / 2 + var(--page-padding, 32px)));
+  padding: 40px 0 120px max(var(--page-padding, 32px), calc((100vw - var(--layout-max-width, 1250px)) / 2 + var(--page-padding, 32px)));
 }
 
 @media (max-width: 900px) {
   .ao__left {
-    padding: 20px var(--page-padding, 16px) 120px;
+    grid-template-columns: 1fr;
+    padding: 20px 16px 120px;
+  }
+}
+
+/* ── Back button column ────────────────────── */
+
+.ao__back-col {
+  height: max-content;
+  position: relative;
+  top: 0;
+}
+
+@media (max-width: 900px) {
+  .ao__back-col {
+    position: static;
+    margin-bottom: 16px;
+  }
+}
+
+.ao__back-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text, #000) 6%, transparent);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text, #1a1a1a);
+  transition: background 0.15s;
+  text-decoration: none;
+}
+
+.ao__back-btn:hover {
+  background: color-mix(in srgb, var(--text, #000) 10%, transparent);
+}
+
+/* ── Main content column ───────────────────── */
+
+.ao__main-col {
+  padding: 0 40px 40px 20px;
+}
+
+@media (max-width: 900px) {
+  .ao__main-col {
+    padding: 0;
   }
 }
 
@@ -44,120 +94,11 @@
   }
 }
 
-/* ── Step indicator ──────────────────────────────── */
-
-.ao__steps {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  position: relative;
-  margin-bottom: clamp(1.5rem, 3vw, 2rem);
-}
-
-/* Track: continuous line behind all pins */
-.ao__steps-track {
-  position: absolute;
-  top: 15px;
-  left: 16px;
-  right: 16px;
-  height: 2px;
-  pointer-events: none;
-  grid-column: 1 / -1;
-  grid-row: 1;
-}
-
-/* Full grey background line */
-.ao__steps-line {
-  position: absolute;
-  inset: 0;
-  background: #e6e6e6;
-}
-
-/* Filled portion — between step 2 and 3 */
-.ao__steps-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: calc(75% - 24px);
-  background: #207ea9;
-}
-
-.ao__step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 400;
-  color: color-mix(in srgb, var(--text, #000) 35%, transparent);
-  position: relative;
-  z-index: 1;
-  justify-self: center;
-  margin: 0 24px;
-}
-
-.ao__step--done {
-  grid-column: 1;
-  justify-self: start;
-}
-
-.ao__step--active {
-  grid-column: 2;
-  justify-self: center;
-}
-
-.ao__step--future {
-  grid-column: 3;
-  justify-self: end;
-}
-
-.ao__step--done {
-  color: var(--text, #1a1a1a);
-  cursor: pointer;
-}
-
-.ao__step--done:hover .ao__step-label {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.ao__step--active {
-  color: var(--text, #1a1a1a);
-  font-weight: 400;
-}
-
-.ao__step--future {
-  color: color-mix(in srgb, var(--text, #000) 100%, transparent);
-}
-
-.ao__step-num {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.ao__step--done .ao__step-num,
-.ao__step--active .ao__step-num {
-  background: #207ea9;
-  color: var(--background, #fff);
-}
-
-.ao__step--future .ao__step-num {
-  background: #e6e6e6;
-  color: color-mix(in srgb, var(--text, #000) 100%, transparent);
-  border: none;
-}
-
 .ao__title {
   font-family: var(--font-heading, inherit);
-  font-size: clamp(1.25rem, 1rem + 1vw, 1.75rem);
+  font-size: 32px;
   font-weight: 600;
+  line-height: 1.4em;
   color: var(--text, #1a1a1a);
   margin: 0 0 1.25rem;
 }
@@ -496,12 +437,13 @@
 }
 
 .ao__bar-continue {
-  padding: 12px 28px;
-  font-size: 0.9375rem;
+  padding: 7px 24px;
+  height: 44px;
+  font-size: 15px;
   font-weight: 600;
   border: none;
-  border-radius: 10px;
-  background: var(--button-bg, #1a1a1a);
+  border-radius: 500px;
+  background: #207ea9;
   color: var(--button-fg, #fff);
   cursor: pointer;
   transition: opacity 0.15s;
@@ -513,8 +455,7 @@
 }
 
 .ao__bar-continue:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* ── Summary modal content ───────────────────────── */
@@ -767,8 +708,13 @@
   transition: opacity 0.15s;
 }
 
-.ao__modal-confirm:hover {
+.ao__modal-confirm:hover:not(:disabled) {
   opacity: 0.88;
+}
+
+.ao__modal-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ── Spot booking error ── */

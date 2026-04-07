@@ -50,6 +50,8 @@ type AccommodationOption = {
 
 type SpotMapData = {
   id: string;
+  title: string;
+  subtitle: string;
   imageUrl: string;
   imagePublicId: string;
   addonPrice: number;
@@ -121,6 +123,8 @@ function normalizeForCompare(config: MapDraftConfig): MapDraftConfig {
 
 function buildConfigFromInitial(data: EditorInitialData): MapDraftConfig {
   return {
+    title: data.spotMap.title,
+    subtitle: data.spotMap.subtitle,
     addonPrice: data.spotMap.addonPrice,
     currency: data.spotMap.currency,
     imageUrl: data.spotMap.imageUrl,
@@ -157,7 +161,19 @@ export function SpotBookingEditor({ initialData }: Props) {
   // Working config — initialized from draft if resuming, else live
   const [currentConfig, setCurrentConfig] = useState<MapDraftConfig>(() => {
     if (spotMap.draftConfig) {
-      return spotMap.draftConfig as unknown as MapDraftConfig;
+      const draft = spotMap.draftConfig as unknown as MapDraftConfig;
+      // Backfill fields added after draft was saved
+      return {
+        ...buildConfigFromInitial(initialData),
+        ...draft,
+        title: draft.title ?? spotMap.title,
+        subtitle: draft.subtitle ?? spotMap.subtitle,
+        markers: (draft.markers ?? []).map((m) => ({
+          ...m,
+          priceOverride: m.priceOverride ?? null,
+          color: m.color ?? null,
+        })),
+      };
     }
     return buildConfigFromInitial(initialData);
   });
@@ -262,7 +278,10 @@ export function SpotBookingEditor({ initialData }: Props) {
     const config = pendingConfig.current;
     if (!config) return;
     pendingConfig.current = null;
-    await saveMapDraft(spotMap.id, config);
+    const result = await saveMapDraft(spotMap.id, config);
+    if (!result.ok) {
+      setError(`Autospar misslyckades: ${result.error}`);
+    }
   }, [spotMap.id]);
 
   useEffect(() => {
@@ -302,7 +321,12 @@ export function SpotBookingEditor({ initialData }: Props) {
       saveTimer.current = null;
     }
     pendingConfig.current = null;
-    await saveMapDraft(spotMap.id, currentConfig);
+    const saveResult = await saveMapDraft(spotMap.id, currentConfig);
+    if (!saveResult.ok) {
+      setError(`Kunde inte spara utkast: ${saveResult.error}`);
+      setIsPublishing(false);
+      return;
+    }
 
     const result = await publishMapDraft(spotMap.id, versionRef.current);
 
@@ -645,6 +669,26 @@ export function SpotBookingEditor({ initialData }: Props) {
                   </div>
                 )}
                 <div className="sbe__form">
+                  <div className="sf-field">
+                    <label className="sf-label">Rubrik</label>
+                    <input
+                      type="text"
+                      className="sf-input"
+                      placeholder="Välj din plats"
+                      value={currentConfig.title}
+                      onChange={(e) => updateSetting("title", e.target.value)}
+                    />
+                  </div>
+                  <div className="sf-field">
+                    <label className="sf-label">Beskrivning</label>
+                    <textarea
+                      className="sf-textarea"
+                      placeholder="Välj exakt var du vill bo på området"
+                      value={currentConfig.subtitle}
+                      onChange={(e) => updateSetting("subtitle", e.target.value)}
+                      rows={2}
+                    />
+                  </div>
                   <div className="sbe__field">
                     <label className="sbe__field-label">Boendetyp</label>
                     <span className="sbe__field-hint">Kartan visas vid bokning av denna boendetyp</span>
@@ -880,7 +924,6 @@ export function SpotBookingEditor({ initialData }: Props) {
                   <div className="sbe__marker-dot" style={dotStyle}>
                     {m.label.slice(0, 3)}
                   </div>
-                  <div className="sbe__marker-label">{m.label}</div>
                 </div>
               );
             })}

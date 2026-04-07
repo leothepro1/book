@@ -8,7 +8,7 @@
  * Data fetched client-side from /api/availability.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import type { SectionRendererProps } from "@/app/_lib/sections/types";
@@ -93,6 +93,52 @@ function CompactSearchForm({
   );
 }
 
+// ── Card Image Carousel ───────────────────────────────────────
+
+function CardImageCarousel({ images, alt }: { images: string[]; alt: string }) {
+  const [idx, setIdx] = useState(0);
+  const hasMultiple = images.length > 1;
+
+  const prev = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIdx((i) => Math.max(0, i - 1));
+  }, []);
+
+  const next = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIdx((i) => Math.min(images.length - 1, i + 1));
+  }, [images.length]);
+
+  if (images.length === 0) {
+    return <div className="sr__card-image"><div className="sr__card-placeholder" /></div>;
+  }
+
+  return (
+    <div className="sr__card-image">
+      <img src={images[idx]} alt={alt} />
+      {hasMultiple && (
+        <div className="sr__card-image-nav">
+          <button type="button" className={`sr__card-image-btn sr__card-image-btn--prev${idx === 0 ? " sr__card-image-btn--hidden" : ""}`} onClick={prev} aria-label="Föregående bild" tabIndex={idx === 0 ? -1 : 0}>
+            <span className="material-symbols-rounded" style={{ fontSize: 23 }}>chevron_left</span>
+          </button>
+          <button type="button" className={`sr__card-image-btn sr__card-image-btn--next${idx === images.length - 1 ? " sr__card-image-btn--hidden" : ""}`} onClick={next} aria-label="Nästa bild" tabIndex={idx === images.length - 1 ? -1 : 0}>
+            <span className="material-symbols-rounded" style={{ fontSize: 23 }}>chevron_right</span>
+          </button>
+        </div>
+      )}
+      {hasMultiple && (
+        <div className="sr__card-image-dots">
+          {images.map((_, i) => (
+            <span key={i} className={`sr__card-image-dot${i === idx ? " sr__card-image-dot--active" : ""}`} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Room Card ──────────────────────────────────────────────────
 
 type RoomCardProps = {
@@ -107,7 +153,7 @@ type RoomCardProps = {
 function RoomCard({ entry, searchParams, nights, guests, checkIn, checkOut }: RoomCardProps) {
   const { category, ratePlans, available, restrictionViolations, accommodationId } = entry;
   const lowestTotal = ratePlans.length > 0 ? Math.min(...ratePlans.map((rp) => rp.totalAmount)) : 0;
-  const image = category.imageUrls[0];
+  const images = category.imageUrls ?? [];
   const description = category.longDescription || category.shortDescription;
   const descRef = useRef<HTMLParagraphElement>(null);
   const [isClamped, setIsClamped] = useState(false);
@@ -155,17 +201,21 @@ function RoomCard({ entry, searchParams, nights, guests, checkIn, checkOut }: Ro
 
   return (
     <div className={`sr__card${expanded ? " sr__card--expanded" : ""}`}>
-      <div className="sr__card-image">
-        {image ? <img src={image} alt={category.name} /> : <div className="sr__card-placeholder" />}
-      </div>
+      <CardImageCarousel images={images} alt={category.name} />
       <div className="sr__card-info">
         <h3 className="sr__card-title">{category.name}</h3>
         <p ref={descRef} className="sr__card-desc">{description}</p>
         {isClamped && available && <Link href={`/stays/${category.externalId}?${searchParams}`} className="sr__card-readmore">Läs mer</Link>}
-        <div className="sr__card-meta">
-          <span className="material-symbols-rounded" style={{ fontSize: 16 }}>person</span>
-          Upp till {category.maxGuests} gäster
-        </div>
+        {category.highlights && category.highlights.length > 0 && (
+          <div className="sr__card-highlights">
+            {category.highlights.map((h, i) => (
+              <div key={i} className="sr__card-highlight">
+                <span className="material-symbols-rounded" style={{ fontSize: 20 }}>{h.icon}</span>
+                {h.text}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       <div className="sr__card-action">
         {available ? (

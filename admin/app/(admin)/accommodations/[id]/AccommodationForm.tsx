@@ -302,7 +302,7 @@ export default function AccommodationForm({
         setTimeout(() => setSaveError(null), 5000);
       }
     });
-  }, [nameInput, descInput, status, externalCode, highlights, bedConfigs, selectedFacilities, capMaxGuests, capMinGuests, capExtraBeds, capRoomSize, capBedrooms, capBathrooms, accommodation.id, router]);
+  }, [nameInput, descInput, status, externalCode, media, highlights, bedConfigs, selectedFacilities, selectedCategoryIds, capMaxGuests, capMinGuests, capExtraBeds, capRoomSize, capBedrooms, capBathrooms, accommodation.id, router]);
 
   const handleDiscard = useCallback(() => {
     setIsDiscarding(true);

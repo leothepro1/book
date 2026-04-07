@@ -180,7 +180,6 @@
 }
 
 .sbe__marker:hover {
-  transform: translate(-50%, -50%) scale(1.1);
   z-index: 6;
 }
 
@@ -189,17 +188,17 @@
 }
 
 .sbe__marker-dot {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-full);
   background: var(--admin-accent);
-  border: 2px solid var(--admin-surface);
-  box-shadow: var(--admin-shadow-md);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 1.75px #0000001f, 0 -.5px 1.5px #00000017, 0 3px 4px #00000008;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 500;
   color: var(--admin-accent-text);
 }
 
@@ -214,22 +213,6 @@
   color: var(--admin-accent);
 }
 
-.sbe__marker-label {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: 2px;
-  padding: 1px var(--space-2);
-  background: var(--admin-surface);
-  border-radius: var(--radius-xs);
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--admin-text);
-  white-space: nowrap;
-  box-shadow: var(--admin-shadow-sm);
-  pointer-events: none;
-}
 
 /* ── Marker list ── */
 
@@ -652,6 +635,18 @@
 }
 .admin-input--sm {
 border: 1px solid var(--admin-border);
+}
+
+.sf-label {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--admin-text);
+}
+.sf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px 8px 0px 8px;
 }
 .sbe__dp-label {
   font-size: 13px;

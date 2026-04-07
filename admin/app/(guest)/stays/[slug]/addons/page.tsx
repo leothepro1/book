@@ -118,6 +118,8 @@ export default async function AddonsPage({
       },
       select: {
         id: true,
+        title: true,
+        subtitle: true,
         imageUrl: true,
         addonPrice: true,
         currency: true,
@@ -126,13 +128,28 @@ export default async function AddonsPage({
     });
 
     if (activeSpotMap) {
+      // Resolve min price across all markers to determine "Från" display
+      const markers = await prisma.spotMarker.findMany({
+        where: { spotMapId: activeSpotMap.id },
+        select: { priceOverride: true },
+      });
+
+      const prices = markers.map((m) =>
+        m.priceOverride != null && m.priceOverride >= 0
+          ? m.priceOverride
+          : activeSpotMap.addonPrice,
+      );
+      const minPrice = prices.length > 0 ? Math.min(...prices) : activeSpotMap.addonPrice;
+      const maxPrice = prices.length > 0 ? Math.max(...prices) : activeSpotMap.addonPrice;
+
       spotAddon = {
         id: "spot-booking-virtual",
         type: "spot_map" as const,
-        title: "Valj din plats",
-        description: "Valj exakt var du vill bo pa omradet",
+        title: activeSpotMap.title,
+        description: activeSpotMap.subtitle,
         imageUrl: activeSpotMap.imageUrl,
-        addonPrice: activeSpotMap.addonPrice,
+        addonPrice: minPrice,
+        hasVariedPricing: minPrice !== maxPrice,
         currency: activeSpotMap.currency,
         spotMapId: activeSpotMap.id,
         accommodationCategoryId: activeSpotMap.accommodationCategoryId,

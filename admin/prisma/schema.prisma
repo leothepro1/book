@@ -3326,6 +3326,8 @@ model SpotMap {
   accommodationCategoryId String   // FK → AccommodationCategory
   imageUrl                String   // Cloudinary URL
   imagePublicId           String   // Cloudinary public_id (for deletion)
+  title                   String   @default("Välj din plats")
+  subtitle                String   @default("")
   addonPrice              Int      // fixed surcharge in öre
   currency                String   @default("SEK")
   isActive                Boolean  @default(false) // activated on wizard completion

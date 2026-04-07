@@ -234,6 +234,14 @@ export async function GET(req: Request) {
           description: true,
           descriptionOverride: true,
           maxGuests: true,
+          media: {
+            select: { url: true },
+            orderBy: { sortOrder: "asc" as const },
+          },
+          highlights: {
+            select: { icon: true, text: true },
+            orderBy: { sortOrder: "asc" as const },
+          },
         },
       })
     : [];
@@ -284,6 +292,7 @@ export async function GET(req: Request) {
     // Enrich category with tenant-configured data (overrides PMS defaults)
     const acc = accommodationMap.get(entry.category.externalId);
     const rawDesc = acc ? (acc.descriptionOverride ?? acc.description) : "";
+    const dbImageUrls = acc?.media.map((m) => m.url).filter(Boolean) ?? [];
     const enrichedCategory = {
       ...entry.category,
       ...(acc ? {
@@ -291,7 +300,10 @@ export async function GET(req: Request) {
         shortDescription: stripHtml(rawDesc),
         longDescription: stripHtml(rawDesc),
         maxGuests: acc.maxGuests,
+        highlights: acc.highlights.map((h) => ({ icon: h.icon, text: h.text })),
       } : {}),
+      // DB-configured images take priority over PMS-provided images
+      ...(dbImageUrls.length > 0 ? { imageUrls: dbImageUrls } : {}),
     };
 
     return {

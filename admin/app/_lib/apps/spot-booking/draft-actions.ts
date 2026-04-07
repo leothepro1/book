@@ -32,6 +32,8 @@ export type DraftMarker = {
 };
 
 export type MapDraftConfig = {
+  title: string;
+  subtitle: string;
   addonPrice: number;
   currency: string;
   imageUrl: string;
@@ -148,6 +150,8 @@ export async function publishMapDraft(
       const updated = await tx.spotMap.updateMany({
         where: { id: map.id, version: expectedVersion },
         data: {
+          title: draft.title,
+          subtitle: draft.subtitle,
           addonPrice: draft.addonPrice,
           currency: draft.currency,
           imageUrl: draft.imageUrl,

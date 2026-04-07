@@ -57,6 +57,8 @@ export async function GET(req: Request) {
     },
     select: {
       id: true,
+      title: true,
+      subtitle: true,
       imageUrl: true,
       addonPrice: true,
       currency: true,
@@ -112,6 +114,8 @@ export async function GET(req: Request) {
     {
       spotMap: {
         id: spotMap.id,
+        title: spotMap.title,
+        subtitle: spotMap.subtitle,
         imageUrl: spotMap.imageUrl,
         addonPrice: spotMap.addonPrice,
         currency: spotMap.currency,
@@ -121,6 +125,7 @@ export async function GET(req: Request) {
           x: m.x,
           y: m.y,
           accommodationId: m.accommodationId,
+          accommodationName: m.accommodation.name,
           effectivePrice: resolveMarkerPrice(m.priceOverride, spotMap.addonPrice),
           color: m.color ?? null,
           available: m.accommodation.externalId

@@ -11,6 +11,7 @@ import { CheckoutModal } from "@/app/(guest)/checkout/CheckoutModal";
 import { SummaryCol } from "@/app/(guest)/_components/SummaryCol";
 import type { SummaryRow } from "@/app/(guest)/_components/SummaryCol";
 import type { AddonProduct, AddonVariant } from "@/app/_lib/accommodations/addons";
+import "@/app/(guest)/_components/spinner-button.css";
 import "./addons.css";
 import "./spot-booking-modal.css";
 
@@ -26,6 +27,7 @@ export interface SpotAddon {
   description: string;
   imageUrl: string;
   addonPrice: number;
+  hasVariedPricing: boolean;
   currency: string;
   spotMapId: string;
   accommodationCategoryId: string;
@@ -438,14 +440,17 @@ export function AddonsClient({ token, addons, spotAddon, snapshot, backUrl }: Pr
       const data = await res.json();
       if (!res.ok) {
         if (data.code === "SPOT_UNAVAILABLE") {
-          setSpotError(`Plats ${data.label} ar inte langre tillganglig. Valj en annan plats.`);
+          setSpotError(`Plats ${data.label} är inte längre tillgänglig. Välj en annan plats.`);
           setSelectedSpot(null);
+        } else {
+          setSpotError(data.message || "Kunde inte spara tillägg. Försök igen.");
         }
         setSubmitting(false);
         return;
       }
       router.push(data.redirect);
     } catch {
+      setSpotError("Nätverksfel — försök igen.");
       setSubmitting(false);
     }
   }, [selections, selectedSpot, token, router]);
@@ -454,28 +459,12 @@ export function AddonsClient({ token, addons, spotAddon, snapshot, backUrl }: Pr
     <div className="ao">
       {/* ── Left: main content ─────────────────────── */}
       <div className="ao__left">
-        {/* ── Step indicator ──────────────────────────── */}
-        <div className="ao__steps">
-          <div className="ao__steps-track">
-            <div className="ao__steps-line" />
-            <div className="ao__steps-fill" />
-          </div>
-          <Link href={backUrl} className="ao__step ao__step--done">
-            <span className="ao__step-num">
-              <span className="material-symbols-rounded" style={{ fontSize: 22 }}>check</span>
-            </span>
-            <span className="ao__step-label">Välj boende</span>
+        <div className="ao__back-col">
+          <Link href={backUrl} className="ao__back-btn" aria-label="Tillbaka">
+            <span className="material-symbols-rounded" style={{ fontSize: 20 }}>arrow_back</span>
           </Link>
-          <span className="ao__step ao__step--active">
-            <span className="ao__step-num">2</span>
-            <span className="ao__step-label">Välj tillägg</span>
-          </span>
-          <span className="ao__step ao__step--future">
-            <span className="ao__step-num">3</span>
-            <span className="ao__step-label">Utcheckning</span>
-          </span>
         </div>
-
+        <div className="ao__main-col">
           <h1 className="ao__title">Välj tillägg</h1>
 
           {addons.length === 0 && (
@@ -505,20 +494,19 @@ export function AddonsClient({ token, addons, spotAddon, snapshot, backUrl }: Pr
                 </div>
                 <div className="ao__card-right">
                   <div className="ao__card-price">
-                    +{formatPriceDisplay(spotAddon.addonPrice, spotAddon.currency)} {spotAddon.currency}
+                    {selectedSpot ? (
+                      <>+{formatPriceDisplay(selectedSpot.addonPrice, spotAddon.currency)} {spotAddon.currency}</>
+                    ) : (
+                      <>
+                        {spotAddon.hasVariedPricing && <span className="ao__card-price-from">Från</span>}
+                        {spotAddon.hasVariedPricing ? "" : "+"}{formatPriceDisplay(spotAddon.addonPrice, spotAddon.currency)} {spotAddon.currency}
+                      </>
+                    )}
                   </div>
                   {selectedSpot ? (
-                    <div className="ao__card-selected-row">
-                      <span className="ao__card-selected-count">
-                        Plats {selectedSpot.label} vald ✓
-                      </span>
-                      <button type="button" className="ao__card-edit" onClick={() => setSpotModalOpen(true)}>
-                        Byt plats
-                      </button>
-                      <button type="button" className="ao__card-remove" onClick={() => setSelectedSpot(null)}>
-                        Ta bort
-                      </button>
-                    </div>
+                    <button type="button" className="ao__card-add ao__card-add--edit" onClick={() => setSpotModalOpen(true)}>
+                      Ändra
+                    </button>
                   ) : (
                     <button type="button" className="ao__card-add" onClick={() => setSpotModalOpen(true)}>
                       Välj plats
@@ -589,6 +577,7 @@ export function AddonsClient({ token, addons, spotAddon, snapshot, backUrl }: Pr
               );
             })}
           </div>
+        </div>
       </div>
 
       {/* ── Right: Summary column ──────────────────── */}
@@ -609,11 +598,12 @@ export function AddonsClient({ token, addons, spotAddon, snapshot, backUrl }: Pr
           </Link>
           <button
             type="button"
-            className="ao__bar-continue"
+            className="ao__bar-continue sb"
             onClick={handleContinue}
             disabled={submitting}
           >
-            {submitting ? "Sparar..." : "Fortsätt"}
+            <span className={`sb__label${submitting ? " sb__label--hidden" : ""}`}>Fortsätt</span>
+            <span className={`sb__spinner${submitting ? " sb__spinner--visible" : ""}`} />
           </button>
         </div>
       </div>
@@ -677,10 +667,15 @@ export function AddonsClient({ token, addons, spotAddon, snapshot, backUrl }: Pr
         <SpotSelectionModal
           spotAddon={spotAddon}
           snapshot={snapshot}
+          currentSpot={selectedSpot}
           onSelect={(spot) => {
             setSelectedSpot(spot);
             setSpotModalOpen(false);
             setSpotError(null);
+          }}
+          onDeselect={() => {
+            setSelectedSpot(null);
+            setSpotModalOpen(false);
           }}
           onClose={() => setSpotModalOpen(false)}
         />
@@ -697,6 +692,7 @@ type SpotMarkerData = {
   x: number;
   y: number;
   accommodationId: string;
+  accommodationName: string;
   effectivePrice: number;
   color: string | null;
   available: boolean;
@@ -705,18 +701,26 @@ type SpotMarkerData = {
 function SpotSelectionModal({
   spotAddon,
   snapshot,
+  currentSpot,
   onSelect,
+  onDeselect,
   onClose,
 }: {
   spotAddon: SpotAddon;
   snapshot: Snapshot;
+  currentSpot: SelectedSpot | null;
   onSelect: (spot: SelectedSpot) => void;
+  onDeselect: () => void;
   onClose: () => void;
 }) {
   const [markers, setMarkers] = useState<SpotMarkerData[]>([]);
+  const [mapTitle, setMapTitle] = useState("Välj din plats");
+  const [mapSubtitle, setMapSubtitle] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    currentSpot?.spotMarkerId ?? null,
+  );
 
   // Scroll lock
   useEffect(() => {
@@ -752,7 +756,24 @@ function SpotSelectionModal({
       .then((data) => {
         if (cancelled) return;
         if (data.spotMap?.markers) {
-          setMarkers(data.spotMap.markers);
+          const fetched = data.spotMap.markers as SpotMarkerData[];
+          setMarkers(fetched);
+          if (data.spotMap.title) setMapTitle(data.spotMap.title);
+          if (data.spotMap.subtitle) setMapSubtitle(data.spotMap.subtitle);
+
+          if (fetched.length === 0) {
+            setError("Inga platser har konfigurerats för denna karta");
+          } else {
+            // Edge case: previously selected marker no longer exists or
+            // is unavailable — clear selection so we don't show a stale tooltip
+            if (currentSpot) {
+              const still = fetched.find((m: SpotMarkerData) => m.id === currentSpot.spotMarkerId);
+              if (!still) {
+                setSelectedId(null);
+                onDeselect();
+              }
+            }
+          }
         } else {
           setError("Kunde inte ladda kartan");
         }
@@ -801,7 +822,7 @@ function SpotSelectionModal({
     };
     el.addEventListener("wheel", handleWheel, { passive: false });
     return () => el.removeEventListener("wheel", handleWheel);
-  }, []);
+  }, [loading]);
 
   // Touch handlers for pan + pinch-to-zoom
   useEffect(() => {
@@ -858,7 +879,7 @@ function SpotSelectionModal({
   }, [isDragging, zoom, pan]);
 
   const availableCount = markers.filter((m) => m.available).length;
-  const selectedMarker = markers.find((m) => m.id === selectedId);
+  const activeMarker = markers.find((m) => m.id === selectedId);
 
   return (
     <div className="ao__modal-overlay" onClick={onClose}>
@@ -868,10 +889,10 @@ function SpotSelectionModal({
         </button>
         <div className="ao__modal sbm__modal" onClick={(e) => e.stopPropagation()}>
           <div className="sbm__modal-header">
-            <h3 className="ao__modal-title">Välj din plats</h3>
+            <h3 className="ao__modal-title">{mapTitle}</h3>
             {!loading && !error && (
               <p className="sbm__modal-subtitle">
-                {availableCount} av {markers.length} platser lediga
+                {mapSubtitle || `${availableCount} av ${markers.length} platser lediga`}
               </p>
             )}
           </div>
@@ -880,8 +901,8 @@ function SpotSelectionModal({
 
           {loading ? (
             <div className="sbm__loading">
-              <div className="sbm__spinner" />
-              <span className="sbm__loading-text">Laddar karta...</span>
+              {/* @ts-expect-error — dotlottie-wc web component */}
+              <dotlottie-wc src="/animations/loading.lottie" speed="1.6" style={{ width: 48, height: 48, filter: "brightness(0.3)" }} loop autoplay />
             </div>
           ) : (
             <div
@@ -905,10 +926,10 @@ function SpotSelectionModal({
                 />
 
                 {markers.map((m) => {
-                  const isSelected = selectedId === m.id;
+                  const isActive = selectedId === m.id;
                   let cls = "sbm__marker";
                   if (!m.available) cls += " sbm__marker--unavailable";
-                  if (isSelected) cls += " sbm__marker--selected";
+                  if (isActive) cls += " sbm__marker--selected";
 
                   return (
                     <div
@@ -917,44 +938,62 @@ function SpotSelectionModal({
                       style={{ left: `${m.x}%`, top: `${m.y}%` }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (m.available) setSelectedId(isSelected ? null : m.id);
+                        if (m.available) setSelectedId(isActive ? null : m.id);
                       }}
                     >
+                      {/* Tooltip */}
+                      {isActive && (
+                        <div className={`sbm__tooltip${m.y < 15 ? " sbm__tooltip--below" : ""}`} onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="sbm__tooltip-close"
+                            onClick={(e) => { e.stopPropagation(); setSelectedId(null); }}
+                          >
+                            <span className="material-symbols-rounded" style={{ fontSize: 20, color: "#6c6c6c" }}>close</span>
+                          </button>
+                          <span className="sbm__tooltip-name">{m.accommodationName}</span>
+                          <span className="sbm__tooltip-price">
+                            {formatPriceDisplay(m.effectivePrice, spotAddon.currency)} {spotAddon.currency}
+                          </span>
+                          {currentSpot?.spotMarkerId === m.id ? (
+                            <button
+                              type="button"
+                              className="sbm__tooltip-select sbm__tooltip-select--deselect"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeselect();
+                              }}
+                            >
+                              Avmarkera
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="sbm__tooltip-select"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelect({
+                                  spotMarkerId: m.id,
+                                  accommodationId: m.accommodationId,
+                                  label: m.label,
+                                  addonPrice: m.effectivePrice,
+                                });
+                              }}
+                            >
+                              Välj
+                            </button>
+                          )}
+                          <div className="sbm__tooltip-arrow" />
+                        </div>
+                      )}
                       <div
                         className="sbm__marker-dot"
                         style={m.color ? { background: m.color, color: resolveContrastPalette(m.color).text } : undefined}
                       >{m.label.slice(0, 3)}</div>
-                      <div className="sbm__marker-label">{m.label}</div>
                     </div>
                   );
                 })}
               </div>
-            </div>
-          )}
-
-          {/* Confirmation footer */}
-          {selectedMarker && selectedMarker.available && (
-            <div className="ao__modal-footer sbm__footer">
-              <div className="sbm__footer-info">
-                <span className="sbm__footer-label">Plats {selectedMarker.label}</span>
-                <span className="sbm__footer-price">
-                  +{formatPriceDisplay(selectedMarker.effectivePrice, spotAddon.currency)} {spotAddon.currency}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="ao__modal-confirm"
-                onClick={() =>
-                  onSelect({
-                    spotMarkerId: selectedMarker.id,
-                    accommodationId: selectedMarker.accommodationId,
-                    label: selectedMarker.label,
-                    addonPrice: selectedMarker.effectivePrice,
-                  })
-                }
-              >
-                Välj denna plats
-              </button>
             </div>
           )}
         </div>
