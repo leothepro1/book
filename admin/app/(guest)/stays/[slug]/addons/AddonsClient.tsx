@@ -733,6 +733,7 @@ function SpotSelectionModal({
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
   const mapRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -788,14 +789,118 @@ function SpotSelectionModal({
     return () => { cancelled = true; };
   }, [spotAddon.accommodationCategoryId, snapshot.checkIn, snapshot.checkOut, snapshot.adults]);
 
-  // Mouse pan
+  // Clamp pan so the map can't be dragged outside viewport.
+  // Transform is: scale(z) translate(px, py) with transform-origin: 0 0
+  // So the image spans from (px*z, py*z) to (px*z + imgW*z, py*z + imgH*z)
+  // We want: left edge <= 0 and right edge >= mapW
+  //   px*z <= 0  →  px <= 0
+  //   px*z + imgW*z >= mapW  →  px >= (mapW - imgW*z) / z  →  px >= mapW/z - imgW
+  const clampPan = useCallback((p: { x: number; y: number }, z: number) => {
+    if (z <= 1) return { x: 0, y: 0 };
+    const img = imageRef.current;
+    const map = mapRef.current;
+    if (!img || !map) return p;
+    const imgW = img.clientWidth;
+    const imgH = img.clientHeight;
+    const mapW = map.clientWidth;
+    const mapH = map.clientHeight;
+    const minPanX = mapW / z - imgW;
+    const minPanY = mapH / z - imgH;
+    return {
+      x: Math.max(minPanX, Math.min(0, p.x)),
+      y: Math.max(minPanY, Math.min(0, p.y)),
+    };
+  }, []);
+
+  // Snap-to-marker: smoothly animate pan so tooltip is fully visible
+  const snapAnimRef = useRef<number | null>(null);
+
+  const snapToMarker = useCallback((m: SpotMarkerData) => {
+    const img = imageRef.current;
+    const map = mapRef.current;
+    if (!img || !map) return;
+
+    const imgW = img.clientWidth;
+    const imgH = img.clientHeight;
+    const mapW = map.clientWidth;
+    const mapH = map.clientHeight;
+
+    // Current pixel position of marker in map viewport
+    const markerPxX = (m.x / 100) * imgW * zoom + pan.x * zoom;
+    const markerPxY = (m.y / 100) * imgH * zoom + pan.y * zoom;
+
+    // Tooltip dimensions (approximate)
+    const tooltipW = 190;
+    const tooltipH = 140;
+    const tooltipAbove = m.y >= 15;
+    const padding = 24;
+
+    // Combo bounds: marker + tooltip
+    const comboTop = tooltipAbove ? markerPxY - tooltipH - 20 : markerPxY - 20;
+    const comboBottom = tooltipAbove ? markerPxY + 20 : markerPxY + tooltipH + 20;
+    const comboLeft = markerPxX - tooltipW / 2;
+    const comboRight = markerPxX + tooltipW / 2;
+
+    // Check if already comfortably visible
+    const isVisible = comboLeft > padding && comboRight < mapW - padding
+      && comboTop > padding && comboBottom < mapH - padding;
+    if (isVisible) return;
+
+    // Blend: 60% toward center, 40% just-enough-to-fit
+    const centerDx = mapW / 2 - markerPxX;
+    const centerDy = mapH / 2 - (comboTop + comboBottom) / 2;
+
+    let fitDx = 0;
+    let fitDy = 0;
+    if (comboLeft < padding) fitDx = padding - comboLeft;
+    else if (comboRight > mapW - padding) fitDx = mapW - padding - comboRight;
+    if (comboTop < padding) fitDy = padding - comboTop;
+    else if (comboBottom > mapH - padding) fitDy = mapH - padding - comboBottom;
+
+    const blend = 0.6;
+    const dx = fitDx + (centerDx - fitDx) * blend;
+    const dy = fitDy + (centerDy - fitDy) * blend;
+
+    const targetPan = clampPan(
+      { x: pan.x + dx / zoom, y: pan.y + dy / zoom },
+      zoom,
+    );
+
+    // Animate with JS — ease-out cubic over 350ms
+    if (snapAnimRef.current) cancelAnimationFrame(snapAnimRef.current);
+    const startPan = { ...pan };
+    const startTime = performance.now();
+    const duration = 350;
+
+    const ease = (t: number) => 1 - Math.pow(1 - t, 3); // cubic ease-out
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      const e = ease(progress);
+      setPan({
+        x: startPan.x + (targetPan.x - startPan.x) * e,
+        y: startPan.y + (targetPan.y - startPan.y) * e,
+      });
+      if (progress < 1) {
+        snapAnimRef.current = requestAnimationFrame(animate);
+      } else {
+        snapAnimRef.current = null;
+      }
+    };
+
+    snapAnimRef.current = requestAnimationFrame(animate);
+  }, [zoom, pan, clampPan]);
+
+  // Mouse pan — only when zoomed in
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || zoom <= 1) return;
+      if (snapAnimRef.current) { cancelAnimationFrame(snapAnimRef.current); snapAnimRef.current = null; }
       setIsDragging(true);
       dragStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
     },
-    [pan],
+    [pan, zoom],
   );
 
   useEffect(() => {
@@ -803,13 +908,19 @@ function SpotSelectionModal({
     const handleMove = (e: globalThis.MouseEvent) => {
       const dx = e.clientX - dragStart.current.x;
       const dy = e.clientY - dragStart.current.y;
-      setPan({ x: dragStart.current.panX + dx / zoom, y: dragStart.current.panY + dy / zoom });
+      const raw = { x: dragStart.current.panX + dx / zoom, y: dragStart.current.panY + dy / zoom };
+      setPan(clampPan(raw, zoom));
     };
     const handleUp = () => setIsDragging(false);
     window.addEventListener("mousemove", handleMove);
     window.addEventListener("mouseup", handleUp);
     return () => { window.removeEventListener("mousemove", handleMove); window.removeEventListener("mouseup", handleUp); };
-  }, [isDragging, zoom]);
+  }, [isDragging, zoom, clampPan]);
+
+  // Reset pan when zoom returns to 1
+  useEffect(() => {
+    if (zoom <= 1) setPan({ x: 0, y: 0 });
+  }, [zoom]);
 
   // Scroll zoom
   useEffect(() => {
@@ -818,7 +929,11 @@ function SpotSelectionModal({
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      setZoom((z) => Math.min(4, Math.max(1, z * delta)));
+      setZoom((z) => {
+        const next = Math.min(4, Math.max(1, z * delta));
+        if (next <= 1) setPan({ x: 0, y: 0 });
+        return next;
+      });
     };
     el.addEventListener("wheel", handleWheel, { passive: false });
     return () => el.removeEventListener("wheel", handleWheel);
@@ -830,7 +945,7 @@ function SpotSelectionModal({
     if (!el) return;
 
     const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 1) {
+      if (e.touches.length === 1 && zoom > 1) {
         const t = e.touches[0];
         dragStart.current = { x: t.clientX, y: t.clientY, panX: pan.x, panY: pan.y };
         setIsDragging(true);
@@ -851,7 +966,8 @@ function SpotSelectionModal({
         const t = e.touches[0];
         const dx = t.clientX - dragStart.current.x;
         const dy = t.clientY - dragStart.current.y;
-        setPan({ x: dragStart.current.panX + dx / zoom, y: dragStart.current.panY + dy / zoom });
+        const raw = { x: dragStart.current.panX + dx / zoom, y: dragStart.current.panY + dy / zoom };
+        setPan(clampPan(raw, zoom));
       } else if (e.touches.length === 2 && lastTouchDist.current !== null) {
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -907,10 +1023,9 @@ function SpotSelectionModal({
           ) : (
             <div
               ref={mapRef}
-              className={`sbm__map${isDragging ? " sbm__map--dragging" : ""}`}
+              className={`sbm__map${zoom > 1 ? (isDragging ? " sbm__map--dragging" : " sbm__map--zoomedIn") : ""}`}
               onMouseDown={handleMouseDown}
             >
-              <div className="sbm__zoom">{Math.round(zoom * 100)}%</div>
 
               <div
                 className="sbm__map-inner"
@@ -923,77 +1038,92 @@ function SpotSelectionModal({
                   alt="Karta"
                   className="sbm__map-image"
                   draggable={false}
+                  onLoad={() => setImgLoaded(true)}
                 />
+              </div>
 
-                {markers.map((m) => {
-                  const isActive = selectedId === m.id;
-                  let cls = "sbm__marker";
-                  if (!m.available) cls += " sbm__marker--unavailable";
-                  if (isActive) cls += " sbm__marker--selected";
+              {/* Markers rendered outside scale transform — always crisp */}
+              {imgLoaded && imageRef.current && markers.map((m) => {
+                const isActive = selectedId === m.id;
+                let cls = "sbm__marker";
+                if (!m.available) cls += " sbm__marker--unavailable";
+                if (isActive) cls += " sbm__marker--selected";
 
-                  return (
-                    <div
-                      key={m.id}
-                      className={cls}
-                      style={{ left: `${m.x}%`, top: `${m.y}%` }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (m.available) setSelectedId(isActive ? null : m.id);
-                      }}
-                    >
-                      {/* Tooltip */}
-                      {isActive && (
-                        <div className={`sbm__tooltip${m.y < 15 ? " sbm__tooltip--below" : ""}`} onClick={(e) => e.stopPropagation()}>
+                // Convert % position to pixel position relative to sbm__map
+                const imgW = imageRef.current!.clientWidth;
+                const imgH = imageRef.current!.clientHeight;
+                const pxX = (m.x / 100) * imgW * zoom + pan.x * zoom;
+                const pxY = (m.y / 100) * imgH * zoom + pan.y * zoom;
+
+                return (
+                  <div
+                    key={m.id}
+                    className={cls}
+                    style={{ left: pxX, top: pxY, transform: "translate(-50%, -50%)" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!m.available) return;
+                      if (isActive) {
+                        setSelectedId(null);
+                      } else {
+                        setSelectedId(m.id);
+                        // Wait one frame for tooltip to be positioned, then snap
+                        requestAnimationFrame(() => snapToMarker(m));
+                      }
+                    }}
+                  >
+                    {/* Tooltip */}
+                    {isActive && (
+                      <div className={`sbm__tooltip${m.y < 15 ? " sbm__tooltip--below" : ""}`} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="sbm__tooltip-close"
+                          onClick={(e) => { e.stopPropagation(); setSelectedId(null); }}
+                        >
+                          <span className="material-symbols-rounded" style={{ fontSize: 20, color: "#6c6c6c" }}>close</span>
+                        </button>
+                        <span className="sbm__tooltip-name">{m.accommodationName}</span>
+                        <span className="sbm__tooltip-price">
+                          {formatPriceDisplay(m.effectivePrice, spotAddon.currency)} {spotAddon.currency}
+                        </span>
+                        {currentSpot?.spotMarkerId === m.id ? (
                           <button
                             type="button"
-                            className="sbm__tooltip-close"
-                            onClick={(e) => { e.stopPropagation(); setSelectedId(null); }}
+                            className="sbm__tooltip-select sbm__tooltip-select--deselect"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeselect();
+                            }}
                           >
-                            <span className="material-symbols-rounded" style={{ fontSize: 20, color: "#6c6c6c" }}>close</span>
+                            Avmarkera
                           </button>
-                          <span className="sbm__tooltip-name">{m.accommodationName}</span>
-                          <span className="sbm__tooltip-price">
-                            {formatPriceDisplay(m.effectivePrice, spotAddon.currency)} {spotAddon.currency}
-                          </span>
-                          {currentSpot?.spotMarkerId === m.id ? (
-                            <button
-                              type="button"
-                              className="sbm__tooltip-select sbm__tooltip-select--deselect"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDeselect();
-                              }}
-                            >
-                              Avmarkera
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="sbm__tooltip-select"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onSelect({
-                                  spotMarkerId: m.id,
-                                  accommodationId: m.accommodationId,
-                                  label: m.label,
-                                  addonPrice: m.effectivePrice,
-                                });
-                              }}
-                            >
-                              Välj
-                            </button>
-                          )}
-                          <div className="sbm__tooltip-arrow" />
-                        </div>
-                      )}
-                      <div
-                        className="sbm__marker-dot"
-                        style={m.color ? { background: m.color, color: resolveContrastPalette(m.color).text } : undefined}
-                      >{m.label.slice(0, 3)}</div>
-                    </div>
-                  );
-                })}
-              </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="sbm__tooltip-select"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelect({
+                                spotMarkerId: m.id,
+                                accommodationId: m.accommodationId,
+                                label: m.label,
+                                addonPrice: m.effectivePrice,
+                              });
+                            }}
+                          >
+                            Välj
+                          </button>
+                        )}
+                        <div className="sbm__tooltip-arrow" />
+                      </div>
+                    )}
+                    <div
+                      className="sbm__marker-dot"
+                      style={m.color ? { background: m.color, color: resolveContrastPalette(m.color).text } : undefined}
+                    >{m.label.slice(0, 3)}</div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

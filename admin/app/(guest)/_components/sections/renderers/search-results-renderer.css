@@ -67,7 +67,7 @@
   font-size: clamp(1.5rem, 1.25rem + 1vw, 2rem);
   font-weight: 700;
   color: var(--text);
-  margin: 0 0 0.2rem;
+  margin: 0 0 9px;
   line-height: 1.2em;
   font-family: var(--font-heading, inherit);
 }
@@ -189,7 +189,7 @@
 
 .sr__card-info { padding: 20px; display: flex; flex-direction: column; gap: 0.25rem; }
 
-.sr__card-title { font-size: 1.5625rem; font-weight: 700; color: var(--text); margin: 0; font-family: var(--font-heading, inherit); }
+.sr__card-title { font-size: 1.7625rem; font-weight: 600; color: var(--text); margin: 0; font-family: var(--font-heading, inherit); }
 
 .sr__card-desc {
   font-family: var(--font-body, inherit);
@@ -216,8 +216,8 @@
 .sr__card-readmore:hover { text-decoration: underline; }
 .sr__card-meta { display: flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: color-mix(in srgb, var(--text, #000) 50%, transparent); margin-top: 0.375rem; }
 
-.sr__card-highlights { display: flex; flex-direction: column; gap: 4px; margin-top: 0.375rem; }
-.sr__card-highlight { display: flex; align-items: center; gap: 6px; font-family: var(--font-body, inherit); font-size: .9125rem; font-weight: 500; color: color-mix(in srgb, var(--text, #000) 65%, transparent); }
+.sr__card-highlights { display: flex; flex-direction: row; gap: 24px; margin-top: 0.975rem; }
+.sr__card-highlight { display: flex; align-items: center; gap: 6px; font-family: var(--font-body, inherit); font-size: .8425rem; font-weight: 500; color: color-mix(in srgb, var(--text, #000) 65%, transparent); }
 
 .sr__card-action {
   display: flex;
@@ -231,7 +231,7 @@
 
 .sr__card-pricing { display: flex; flex-direction: column; gap: 0.125rem; }
 .sr__card-price { font-family: var(--font-body, inherit); font-size: 1rem; font-weight: 700; color: var(--text); white-space: nowrap; }
-.sr__card-price-detail { font-family: var(--font-body, inherit); font-size: 0.75rem; font-weight: 400; color: color-mix(in srgb, var(--text, #000) 50%, transparent); white-space: nowrap; }
+.sr__card-price-detail { font-family: var(--font-body, inherit); font-size: .8425rem; font-weight: 400; color: color-mix(in srgb, var(--text, #000) 65%, transparent); white-space: nowrap; }
 
 .sr__card-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
@@ -274,7 +274,7 @@
 .sr__plans-inner {
   overflow: hidden;
   border-top: none;
-  background: color-mix(in srgb, var(--text, #000) 2%, var(--background, #fff));
+  background: #f5f5f5;
   display: flex;
   flex-direction: column;
 }
@@ -307,8 +307,8 @@
 
 .sr__plan-desc {
   font-family: var(--font-body, inherit);
-  font-size: 0.8125rem;
-  color: color-mix(in srgb, var(--text, #000) 55%, transparent);
+  font-size: .8425rem;
+  color: color-mix(in srgb, var(--text, #000) 65%, transparent);
   line-height: 1.4;
 }
 
@@ -330,8 +330,8 @@
 
 .sr__plan-price-detail {
   font-family: var(--font-body, inherit);
-  font-size: 0.75rem;
-  color: color-mix(in srgb, var(--text, #000) 50%, transparent);
+  font-size: .8425rem;
+  color: color-mix(in srgb, var(--text, #000) 65%, transparent);
   white-space: nowrap;
 }
 

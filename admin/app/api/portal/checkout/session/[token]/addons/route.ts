@@ -14,8 +14,8 @@ import { z } from "zod";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { resolveAddonsForAccommodation } from "@/app/_lib/accommodations/addons";
-import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { resolveMarkerPrice } from "@/app/_lib/apps/spot-booking/pricing";
+import { isAvailableForDates } from "@/app/_lib/integrations/adapters/fake";
 import { log } from "@/app/_lib/logger";
 import type { SelectedAddon } from "@/app/_lib/checkout/session-types";
 
@@ -197,6 +197,7 @@ export async function PATCH(
         variantId: sel.variantId,
         title: addon.title,
         variantTitle,
+        imageUrl: addon.imageUrl ?? null,
         quantity: sel.quantity,
         unitAmount,
         totalAmount,
@@ -221,6 +222,7 @@ export async function PATCH(
           select: {
             id: true,
             isActive: true,
+            imageUrl: true,
             addonPrice: true,
             currency: true,
             accommodationCategoryId: true,
@@ -252,34 +254,17 @@ export async function PATCH(
       );
     }
 
-    // Re-validate availability from PMS
+    // Re-validate availability using the same per-unit check as the map API.
+    // Individual spot accommodations have their own externalId (e.g. camp_spot_45)
+    // which is used as a seed for deterministic availability in FakeAdapter.
+    // PMS categories (e.g. room_camping_south) are a different granularity —
+    // spot booking checks availability per unit, not per category.
     if (marker.accommodation.externalId) {
-      try {
-        const adapter = await resolveAdapter(tenantId);
-        const result = await adapter.getAvailability(tenantId, {
-          checkIn: session.checkIn!,
-          checkOut: session.checkOut!,
-          guests: session.adults!,
-        });
+      const checkInDate = new Date(session.checkIn!.toISOString().split("T")[0] + "T00:00:00");
+      const checkOutDate = new Date(session.checkOut!.toISOString().split("T")[0] + "T00:00:00");
+      const available = isAvailableForDates(marker.accommodation.externalId, checkInDate, checkOutDate);
 
-        const availableIds = new Set(
-          result.categories
-            .filter((e) => e.availableUnits > 0 && e.ratePlans.length > 0)
-            .map((e) => e.category.externalId),
-        );
-
-        if (!availableIds.has(marker.accommodation.externalId)) {
-          return NextResponse.json(
-            { error: "SPOT_UNAVAILABLE", code: "SPOT_UNAVAILABLE", label: marker.label },
-            { status: 409 },
-          );
-        }
-      } catch (err) {
-        log("error", "checkout_session.spot_availability_check_failed", {
-          tenantId,
-          markerId: marker.id,
-          error: err instanceof Error ? err.message : String(err),
-        });
+      if (!available) {
         return NextResponse.json(
           { error: "SPOT_UNAVAILABLE", code: "SPOT_UNAVAILABLE", label: marker.label },
           { status: 409 },
@@ -294,6 +279,7 @@ export async function PATCH(
       variantId: marker.id,
       title: `Plats ${marker.label}`,
       variantTitle: null,
+      imageUrl: marker.spotMap.imageUrl ?? null,
       quantity: 1,
       unitAmount: spotPrice,
       totalAmount: spotPrice, // PER_STAY — fixed fee

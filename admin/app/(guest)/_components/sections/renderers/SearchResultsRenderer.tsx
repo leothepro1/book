@@ -288,6 +288,7 @@ type EmptyAccommodation = {
   displayDescription: string;
   maxGuests: number;
   media: Array<{ url: string; altText: string | null }>;
+  highlights: Array<{ icon: string; text: string }>;
   slug: string;
 };
 
@@ -345,21 +346,25 @@ function EmptyState({
       ) : accommodations.length > 0 ? (
         <div className="sr__grid">
           {accommodations.map((acc) => {
-            const image = acc.media[0];
+            const imageUrls = acc.media.map((m) => m.url);
             return (
               <div key={acc.id} className="sr__card">
-                <div className="sr__card-image">
-                  {image ? <img src={image.url} alt={image.altText || acc.displayName} /> : <div className="sr__card-placeholder" />}
-                </div>
+                <CardImageCarousel images={imageUrls} alt={acc.displayName} />
                 <div className="sr__card-info">
                   <h3 className="sr__card-title">{acc.displayName}</h3>
                   <p className="sr__card-desc" dangerouslySetInnerHTML={{ __html: acc.displayDescription }} />
-                  <div className="sr__card-meta">
-                    <span className="material-symbols-rounded" style={{ fontSize: 16 }}>person</span>
-                    Upp till {acc.maxGuests} gäster
-                  </div>
+                  {acc.highlights.length > 0 && (
+                    <div className="sr__card-highlights">
+                      {acc.highlights.map((h, i) => (
+                        <div key={i} className="sr__card-highlight">
+                          <span className="material-symbols-rounded" style={{ fontSize: 20 }}>{h.icon}</span>
+                          {h.text}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="sr__card-action">
+                <div className="sr__card-action" style={{ justifyContent: "flex-end" }}>
                   <button type="button" className="sr__card-btn" onClick={() => {}}>Välj datum</button>
                 </div>
               </div>
@@ -463,7 +468,6 @@ export function SearchResultsDefaultRenderer(props: SectionRendererProps) {
           <>
             <h1 className="sr__heading" dangerouslySetInnerHTML={{ __html: emptyHeading }} />
             <div className="sr__results-header">
-              {data.results.length} boende{data.results.length !== 1 ? "n" : ""} ·{" "}
               {formatDateRange(new Date(data.searchParams.checkIn), new Date(data.searchParams.checkOut))} ·{" "}
               {data.searchParams.nights} nätter · {data.searchParams.guests} gäster
             </div>

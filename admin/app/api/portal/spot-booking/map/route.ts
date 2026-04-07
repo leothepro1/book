@@ -15,9 +15,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
-import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { resolveMarkerPrice } from "@/app/_lib/apps/spot-booking/pricing";
-import { log } from "@/app/_lib/logger";
+import { isAvailableForDates } from "@/app/_lib/integrations/adapters/fake";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -72,7 +71,16 @@ export async function GET(req: Request) {
           priceOverride: true,
           color: true,
           accommodation: {
-            select: { id: true, externalId: true, name: true },
+            select: {
+              id: true,
+              externalId: true,
+              name: true,
+              categoryItems: {
+                select: {
+                  category: { select: { pmsRef: true } },
+                },
+              },
+            },
           },
         },
       },
@@ -83,32 +91,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ spotMap: null }, { headers: NO_STORE });
   }
 
-  // Get availability from PMS — ONCE for all markers
-  let availableExternalIds = new Set<string>();
-
-  try {
-    const adapter = await resolveAdapter(tenantId);
-    const checkInDate = new Date(checkIn + "T00:00:00");
-    const checkOutDate = new Date(checkOut + "T00:00:00");
-
-    const result = await adapter.getAvailability(tenantId, {
-      checkIn: checkInDate,
-      checkOut: checkOutDate,
-      guests: adults,
-    });
-
-    for (const entry of result.categories) {
-      if (entry.availableUnits > 0 && entry.ratePlans.length > 0) {
-        availableExternalIds.add(entry.category.externalId);
-      }
-    }
-  } catch (err) {
-    // Degrade gracefully — all markers shown as unavailable
-    log("error", "spot_booking.portal_availability_failed", {
-      tenantId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
+  // Resolve availability per marker using externalId as seed
+  const checkInDate = new Date(checkIn + "T00:00:00");
+  const checkOutDate = new Date(checkOut + "T00:00:00");
 
   return NextResponse.json(
     {
@@ -129,8 +114,8 @@ export async function GET(req: Request) {
           effectivePrice: resolveMarkerPrice(m.priceOverride, spotMap.addonPrice),
           color: m.color ?? null,
           available: m.accommodation.externalId
-            ? availableExternalIds.has(m.accommodation.externalId)
-            : false,
+            ? isAvailableForDates(m.accommodation.externalId, checkInDate, checkOutDate)
+            : true,
         })),
       },
     },
