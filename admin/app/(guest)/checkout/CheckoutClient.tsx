@@ -12,6 +12,8 @@ import { CheckoutModal } from "./CheckoutModal";
 import { LoadingScreen } from "@/app/_components/Loading";
 import { track } from "@/app/_lib/analytics/client";
 import { SpinnerButton } from "@/app/(guest)/_components/SpinnerButton";
+import { SummaryCol } from "@/app/(guest)/_components/SummaryCol";
+import type { SummaryRow } from "@/app/(guest)/_components/SummaryCol";
 import "./checkout.css";
 
 const stripePromise = loadStripe(
@@ -28,13 +30,6 @@ interface CheckoutAddon {
   totalAmount: number;
   pricingMode: string;
   currency: string;
-}
-
-interface SummaryRow {
-  label: string;
-  value: string;
-  /** Optional modifier class, e.g. "discount" for negative amounts */
-  modifier?: string;
 }
 
 interface CheckoutProps {
@@ -1113,21 +1108,13 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
 
       {/* Right: Summary */}
       <div className="co__right">
-      <div className="co__summary-col">
-        <div className="co__summary">
-          {/* Product header */}
-          <div className="co__summary-header">
-            {product?.image && (
-              <img src={product.image} alt={product?.title ?? ""} className="co__summary-image" />
-            )}
-            <h3 className="co__summary-title">{product?.title ?? "Boende"}</h3>
-          </div>
-
+        <SummaryCol
+          title={product?.title ?? "Boende"}
+          image={product?.image}
+          rows={summaryRows}
+        >
           {/* Rabattkod */}
           <div className="co__discount-wrap">
-            {clientSecret && !discountApplied && (
-              <p className="co__discount-locked">Rabattkod kan inte ändras efter att betalning initierats</p>
-            )}
             <div className="co__discount">
               <div className="co__float" data-filled={discountCode ? "" : undefined}>
                 <input
@@ -1187,19 +1174,7 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
               </div>
             )}
           </div>
-
-          {summaryRows.map((row, i) => (
-            <Fragment key={i}>
-              <div className="co__summary-divider" />
-              <div className={`co__summary-section${row.modifier ? ` co__summary-section--${row.modifier}` : ""}`}>
-                <span className="co__summary-label">{row.label}</span>
-                <span className="co__summary-value">{row.value}</span>
-              </div>
-            </Fragment>
-          ))}
-
-        </div>
-      </div>
+        </SummaryCol>
       </div>
 
       {/* Bokningsvillkor modal */}

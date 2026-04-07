@@ -1,0 +1,113 @@
+/* ── Shared summary column — used by checkout + addons ──────── */
+
+.sc {
+  border: none;
+  border-radius: 24px;
+  height: max-content;
+  margin-top: 0;
+  padding: 0;
+  position: sticky;
+  top: 3.5rem;
+}
+
+@media (max-width: 900px) {
+  .sc {
+    padding-left: 0;
+    border-left: none;
+    border-top: 1px solid color-mix(in srgb, var(--text, #000) 8%, transparent);
+    padding-top: 24px;
+    position: static;
+  }
+}
+
+.sc__inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sc__header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sc__image {
+  width: 97px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 10px;
+  flex-shrink: 0;
+  box-shadow: 0 1px 1.75px 0 rgba(0, 0, 0, .12), 0 -.5px 1.5px 0 rgba(0, 0, 0, .09), 0 3px 4px 0 rgba(0, 0, 0, .03);
+  border: 2px solid #fff;
+}
+
+.sc__title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: inherit;
+  margin: 0;
+}
+
+.sc__divider {
+  height: 1px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.sc__section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sc__label {
+  font-size: 14px;
+  font-weight: 500;
+  color: inherit;
+}
+
+.sc__value {
+  font-size: 14px;
+  color: inherit;
+  font-weight: 400;
+}
+
+/* ── Modifier: total row ──────────────────────────── */
+
+.sc__section--total {
+  padding-top: 4px;
+  flex-direction: row;
+  justify-content: space-between;
+}
+
+.sc__section--total .sc__label,
+.sc__section--total .sc__value {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* ── Modifier: sub row ────────────────────────────── */
+
+.sc__section--sub {
+  flex-direction: row;
+  justify-content: space-between;
+}
+
+.sc__section--sub .sc__label,
+.sc__section--sub .sc__value {
+  font-size: 14px;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--text, #000) 72%, transparent);
+}
+
+/* Hide dividers between sub/sub/total — tight spacing */
+.sc__section--sub + .sc__divider {
+  display: none;
+}
+
+.sc__section--sub + .sc__divider + .sc__section--sub,
+.sc__section--sub + .sc__divider + .sc__section--total {
+  margin-top: -5px;
+}

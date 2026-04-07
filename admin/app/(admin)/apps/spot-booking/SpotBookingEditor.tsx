@@ -21,6 +21,9 @@ import {
   type MapDraftConfig,
   type DraftMarker,
 } from "@/app/_lib/apps/spot-booking/draft-actions";
+import { resolveMarkerPrice } from "@/app/_lib/apps/spot-booking/pricing";
+import { resolveContrastPalette } from "@/app/_lib/color/contrast";
+import { ColorTokenField } from "@/app/(editor)/editor/panels/ColorTokenField";
 import "./spot-booking-editor.css";
 
 // ── Types ───────────────────────────────────────────────────────
@@ -33,6 +36,8 @@ type MarkerData = {
   accommodationId: string;
   accommodationName: string;
   accommodationSlug: string;
+  priceOverride: number | null;
+  color: string | null;
 };
 
 type AccommodationOption = {
@@ -108,6 +113,8 @@ function normalizeForCompare(config: MapDraftConfig): MapDraftConfig {
         y: m.y,
         accommodationId: m.accommodationId,
         accommodationName: m.accommodationName,
+        priceOverride: m.priceOverride ?? null,
+        color: m.color ?? null,
       })),
   };
 }
@@ -126,6 +133,8 @@ function buildConfigFromInitial(data: EditorInitialData): MapDraftConfig {
       y: m.y,
       accommodationId: m.accommodationId,
       accommodationName: m.accommodationName,
+      priceOverride: m.priceOverride ?? null,
+      color: m.color ?? null,
     })),
   };
 }
@@ -167,6 +176,7 @@ export function SpotBookingEditor({ initialData }: Props) {
 
   // UI state
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailIndex, setDetailIndex] = useState<number | null>(null);
   const [placingMode, setPlacingMode] = useState(false);
   const [pending, setPending] = useState<PendingMarker | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -450,6 +460,8 @@ export function SpotBookingEditor({ initialData }: Props) {
       y: pending.y,
       accommodationId: newAccId,
       accommodationName: acc.name,
+      priceOverride: null,
+      color: null,
     };
 
     setCurrentConfig((prev) => ({
@@ -620,236 +632,209 @@ export function SpotBookingEditor({ initialData }: Props) {
       <div className="sbe__body">
         {/* ── Left panel ── */}
         <div className="sbe__panel">
-          <div className="sbe__panel-header">
-            <span className="sbe__panel-title">
-              {activePanel === "settings"
-                ? "Inställningar"
-                : showForm
-                  ? "Konfigurera plats"
-                  : "Platser"}
-            </span>
-            {activePanel === "spots" && !showForm && (
-              <span className="sbe__panel-count">
-                {markers.length}
-              </span>
-            )}
-          </div>
-
-          <div className="sbe__panel-body">
-            {error && (
-              <div className="sbe__error">
-                <EditorIcon name="error" size={14} />
-                {error}
+          {activePanel === "settings" ? (
+            <>
+              <div className="sbe__panel-header">
+                <span className="sbe__panel-title">Inställningar</span>
               </div>
-            )}
-
-            {activePanel === "settings" ? (
-              /* ── Settings panel ── */
-              <div className="sbe__form">
-                {/* Category picker */}
-                <div className="sbe__field">
-                  <label className="sbe__field-label">Boendetyp</label>
-                  <span className="sbe__field-hint">Kartan visas vid bokning av denna boendetyp</span>
-                  <CategoryPicker
-                    categories={initialData.categories}
-                    selectedId={currentConfig.accommodationCategoryId}
-                    onSelect={(id) => updateSetting("accommodationCategoryId", id)}
-                  />
-                </div>
-
-                <div className="sbe__field">
-                  <label className="sbe__field-label">Tilläggsavgift</label>
-                  <span className="sbe__field-hint">
-                    Gästen betalar detta tillägg för att välja en specifik plats
-                  </span>
-                  <div className="sbe__price-input-wrap">
-                    <input
-                      type="number"
-                      className="admin-input--sm sbe__price-input"
-                      value={Math.round(currentConfig.addonPrice / 100)}
-                      onChange={(e) => {
-                        const v = parseInt(e.target.value, 10);
-                        if (!isNaN(v) && v >= 0) updateSetting("addonPrice", v * 100);
-                      }}
-                      min={0}
-                      step={1}
-                    />
-                    <span className="sbe__price-suffix">kr</span>
+              <div className="sbe__panel-body">
+                {error && (
+                  <div className="sbe__error">
+                    <EditorIcon name="error" size={14} />
+                    {error}
                   </div>
-                </div>
-              </div>
-            ) : showForm ? (
-              <div className="sbe__form">
-                <div className="sbe__field">
-                  <label className="sbe__field-label">Etikett</label>
-                  <input
-                    type="text"
-                    className="admin-input--sm"
-                    placeholder="t.ex. 32a"
-                    maxLength={20}
-                    value={newLabel}
-                    onChange={(e) => setNewLabel(e.target.value)}
-                    autoFocus
-                  />
-                  <span className="sbe__field-hint">Max 20 tecken</span>
-                </div>
-
-                <div className="sbe__field">
-                  <label className="sbe__field-label">Boende</label>
-                  <div className="sbe__search-select">
-                    <input
-                      type="text"
-                      className="admin-input--sm sbe__search-input"
-                      placeholder="Sok boende..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                )}
+                <div className="sbe__form">
+                  <div className="sbe__field">
+                    <label className="sbe__field-label">Boendetyp</label>
+                    <span className="sbe__field-hint">Kartan visas vid bokning av denna boendetyp</span>
+                    <CategoryPicker
+                      categories={initialData.categories}
+                      selectedId={currentConfig.accommodationCategoryId}
+                      onSelect={(id) => updateSetting("accommodationCategoryId", id)}
                     />
-                    <div className="sbe__search-list">
-                      {filteredAccommodations.length === 0 ? (
-                        <div className="sbe__search-empty">
-                          Inga tillgangliga boenden
-                        </div>
-                      ) : (
-                        filteredAccommodations.map((a) => (
-                          <div
-                            key={a.id}
-                            className={`sbe__search-item${newAccId === a.id ? " sbe__search-item--selected" : ""}`}
-                            onClick={() => {
-                              setNewAccId(a.id);
-                              setSearchQuery(a.name);
-                            }}
-                          >
-                            {a.name}
-                          </div>
-                        ))
-                      )}
+                  </div>
+                  <div className="sbe__field">
+                    <label className="sbe__field-label">Tilläggsavgift</label>
+                    <span className="sbe__field-hint">
+                      Standardpris — gästen betalar detta för att välja en specifik plats
+                    </span>
+                    <div className="sbe__price-input-wrap">
+                      <input
+                        type="number"
+                        className="admin-input--sm sbe__price-input"
+                        value={Math.round(currentConfig.addonPrice / 100)}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!isNaN(v) && v >= 0) updateSetting("addonPrice", v * 100);
+                        }}
+                        min={0}
+                        step={1}
+                      />
+                      <span className="sbe__price-suffix">kr</span>
                     </div>
                   </div>
                 </div>
-
-                <div className="sbe__field">
-                  <span className="sbe__field-hint">
-                    Position: ({pending.x.toFixed(1)}%, {pending.y.toFixed(1)}%)
-                  </span>
-                </div>
               </div>
-            ) : markers.length === 0 ? (
-              <div className="editor-panel__empty">
-                <div className="editor-panel__empty-icon">
-                  <EditorIcon name="location_on" size={40} />
-                </div>
-                <p className="editor-panel__empty-text">
-                  Inga platser tillagda an. Klicka pa &quot;Lagg till plats&quot; och sedan pa kartan.
-                </p>
-              </div>
-            ) : (
-              <div className="sbe__marker-list">
-                {markers.map((m, i) => {
-                  const key = getMarkerKey(m, i);
-                  const isSelected = selectedId === key;
-                  return (
-                    <div
-                      key={key}
-                      className={`sbe__marker-row${isSelected ? " sbe__marker-row--selected" : ""}`}
-                      onClick={() => setSelectedId(isSelected ? null : key)}
-                    >
-                      <div className="sbe__marker-row-dot">
-                        {m.label.slice(0, 2)}
+            </>
+          ) : (
+            /* ── Spots panel — two-pane slide (mirrors editor section tree) ── */
+            <div className="sp-transition">
+              <div className={`sp-transition__track${detailIndex !== null ? " sp-transition__track--detail" : ""}`}>
+                {/* ── Pane 1: Marker list ── */}
+                <div className="sp-transition__pane">
+                  <div className="sbe__panel-header">
+                    <span className="sbe__panel-title">
+                      {showForm ? "Konfigurera plats" : "Platser"}
+                    </span>
+                    {!showForm && (
+                      <span className="sbe__panel-count">{markers.length}</span>
+                    )}
+                  </div>
+                  <div className="sbe__panel-body">
+                    {error && (
+                      <div className="sbe__error">
+                        <EditorIcon name="error" size={14} />
+                        {error}
                       </div>
-                      <div className="sbe__marker-row-info">
-                        {editingLabel === key ? (
-                          <div className="sbe__inline-edit">
+                    )}
+                    {showForm ? (
+                      <div className="sbe__form">
+                        <div className="sbe__field">
+                          <label className="sbe__field-label">Etikett</label>
+                          <input
+                            type="text"
+                            className="admin-input--sm"
+                            placeholder="t.ex. 32a"
+                            maxLength={20}
+                            value={newLabel}
+                            onChange={(e) => setNewLabel(e.target.value)}
+                            autoFocus
+                          />
+                          <span className="sbe__field-hint">Max 20 tecken</span>
+                        </div>
+                        <div className="sbe__field">
+                          <label className="sbe__field-label">Boende</label>
+                          <div className="sbe__search-select">
                             <input
                               type="text"
-                              className="admin-input--sm sbe__inline-edit-input"
-                              value={editLabelValue}
-                              maxLength={20}
-                              onChange={(e) => setEditLabelValue(e.target.value)}
-                              onClick={(e) => e.stopPropagation()}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") saveLabel(i);
-                                if (e.key === "Escape") setEditingLabel(null);
-                              }}
-                              autoFocus
+                              className="admin-input--sm sbe__search-input"
+                              placeholder="Sok boende..."
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
                             />
-                            <button
-                              className="sbe__action-btn"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                saveLabel(i);
+                            <div className="sbe__search-list">
+                              {filteredAccommodations.length === 0 ? (
+                                <div className="sbe__search-empty">Inga tillgangliga boenden</div>
+                              ) : (
+                                filteredAccommodations.map((a) => (
+                                  <div
+                                    key={a.id}
+                                    className={`sbe__search-item${newAccId === a.id ? " sbe__search-item--selected" : ""}`}
+                                    onClick={() => { setNewAccId(a.id); setSearchQuery(a.name); }}
+                                  >
+                                    {a.name}
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="sbe__field">
+                          <span className="sbe__field-hint">
+                            Position: ({pending!.x.toFixed(1)}%, {pending!.y.toFixed(1)}%)
+                          </span>
+                        </div>
+                        <div className="sbe__form-actions">
+                          <button
+                            className="admin-btn admin-btn--outline admin-btn--sm"
+                            onClick={() => { setPending(null); setError(null); }}
+                          >
+                            Avbryt
+                          </button>
+                          <button
+                            className="admin-btn admin-btn--accent admin-btn--sm"
+                            disabled={!newLabel.trim() || !newAccId}
+                            onClick={addMarker}
+                          >
+                            Lagg till
+                          </button>
+                        </div>
+                      </div>
+                    ) : markers.length === 0 ? (
+                      <div className="editor-panel__empty">
+                        <div className="editor-panel__empty-icon">
+                          <EditorIcon name="location_on" size={40} />
+                        </div>
+                        <p className="editor-panel__empty-text">
+                          Inga platser tillagda an. Klicka pa &quot;Lagg till plats&quot; och sedan pa kartan.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="sbe__marker-list">
+                        {markers.map((m, i) => {
+                          const key = getMarkerKey(m, i);
+                          const effectivePrice = resolveMarkerPrice(m.priceOverride, currentConfig.addonPrice);
+                          const hasOverride = m.priceOverride != null;
+                          return (
+                            <div
+                              key={key}
+                              className={`sbe__marker-row${selectedId === key ? " sbe__marker-row--selected" : ""}`}
+                              onClick={() => {
+                                setSelectedId(key);
+                                setDetailIndex(i);
                               }}
                             >
-                              <EditorIcon name="check" size={16} />
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="sbe__marker-row-label">{m.label}</div>
-                            <div className="sbe__marker-row-acc">
-                              {m.accommodationName}
+                              <div
+                                className="sbe__marker-row-dot"
+                                style={m.color ? { background: m.color, color: resolveContrastPalette(m.color).text } : undefined}
+                              >
+                                {m.label.slice(0, 2)}
+                              </div>
+                              <div className="sbe__marker-row-info">
+                                <span className="sbe__marker-row-acc">{m.accommodationName}</span>
+                              </div>
+                              <EditorIcon name="chevron_right" size={18} className="sbe__marker-row-chevron" />
                             </div>
-                          </>
-                        )}
-                      </div>
-                      <div className="sbe__marker-row-actions">
+                          );
+                        })}
                         <button
-                          className="sbe__action-btn"
-                          title="Redigera etikett"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingLabel(key);
-                            setEditLabelValue(m.label);
-                          }}
+                          type="button"
+                          className="sbe__add-marker-btn"
+                          onClick={() => { setPlacingMode(true); setSelectedId(null); }}
                         >
-                          <EditorIcon name="edit" size={14} />
-                        </button>
-                        <button
-                          className="sbe__action-btn sbe__action-btn--danger"
-                          title="Ta bort"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setConfirmDelete(String(i));
-                          }}
-                        >
-                          <EditorIcon name="delete" size={14} />
+                          <EditorIcon name="add_circle" size={20} />
+                          Lägg till markör
                         </button>
                       </div>
-                    </div>
-                  );
-                })}
-                <button
-                  type="button"
-                  className="sbe__add-marker-btn"
-                  onClick={() => {
-                    setPlacingMode(true);
-                    setSelectedId(null);
-                  }}
-                >
-                  <EditorIcon name="add_circle" size={20} />
-                  Lägg till markör
-                </button>
-              </div>
-            )}
-          </div>
+                    )}
+                  </div>
+                </div>
 
-          {activePanel === "spots" && showForm && (
-            <div className="sbe__panel-footer">
-              <button
-                className="admin-btn admin-btn--outline admin-btn--sm"
-                onClick={() => {
-                  setPending(null);
-                  setError(null);
-                }}
-              >
-                Avbryt
-              </button>
-              <button
-                className="admin-btn admin-btn--accent admin-btn--sm"
-                disabled={!newLabel.trim() || !newAccId}
-                onClick={addMarker}
-              >
-                Lagg till
-              </button>
+                {/* ── Pane 2: Marker detail panel ── */}
+                <div className="sp-transition__pane">
+                  {detailIndex !== null && markers[detailIndex] && (
+                    <MarkerDetailPanel
+                      marker={markers[detailIndex]}
+                      index={detailIndex}
+                      defaultPrice={currentConfig.addonPrice}
+                      accommodations={accommodations}
+                      allMarkers={markers}
+                      onBack={() => { setDetailIndex(null); setSelectedId(null); }}
+                      onUpdate={(index, patch) => {
+                        pushUndo(currentConfig);
+                        setCurrentConfig((prev) => ({
+                          ...prev,
+                          markers: prev.markers.map((mk, idx) =>
+                            idx === index ? { ...mk, ...patch } : mk,
+                          ),
+                        }));
+                      }}
+                      onDelete={(index) => setConfirmDelete(String(index))}
+                    />
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -878,6 +863,9 @@ export function SpotBookingEditor({ initialData }: Props) {
 
             {markers.map((m, i) => {
               const key = getMarkerKey(m, i);
+              const dotStyle: React.CSSProperties = m.color
+                ? { background: m.color, color: resolveContrastPalette(m.color).text }
+                : {};
               return (
                 <div
                   key={key}
@@ -889,7 +877,7 @@ export function SpotBookingEditor({ initialData }: Props) {
                     setPending(null);
                   }}
                 >
-                  <div className="sbe__marker-dot">
+                  <div className="sbe__marker-dot" style={dotStyle}>
                     {m.label.slice(0, 3)}
                   </div>
                   <div className="sbe__marker-label">{m.label}</div>
@@ -947,6 +935,286 @@ export function SpotBookingEditor({ initialData }: Props) {
       {/* Toast */}
       {toast && <div className="sbe__toast">{toast}</div>}
 
+    </div>
+  );
+}
+
+// ── Marker detail panel (mirrors editor DetailPanel) ──────────────
+
+function MarkerDetailPanel({
+  marker,
+  index,
+  defaultPrice,
+  accommodations,
+  allMarkers,
+  onBack,
+  onUpdate,
+  onDelete,
+}: {
+  marker: DraftMarker;
+  index: number;
+  defaultPrice: number;
+  accommodations: AccommodationOption[];
+  allMarkers: DraftMarker[];
+  onBack: () => void;
+  onUpdate: (index: number, patch: Partial<DraftMarker>) => void;
+  onDelete: (index: number) => void;
+}) {
+  const [labelValue, setLabelValue] = useState(marker.label);
+  const [priceValue, setPriceValue] = useState(
+    marker.priceOverride != null ? String(Math.round(marker.priceOverride / 100)) : "",
+  );
+
+  // Sync local state when marker changes (undo/redo, external update)
+  useEffect(() => { setLabelValue(marker.label); }, [marker.label]);
+  useEffect(() => {
+    if (marker.priceOverride != null) {
+      setPriceValue(String(Math.round(marker.priceOverride / 100)));
+    } else {
+      setPriceValue("");
+    }
+  }, [marker.priceOverride]);
+
+  // Available accommodations: exclude those already linked by OTHER markers
+  const linkedByOthers = new Set(
+    allMarkers
+      .filter((_, i) => i !== index)
+      .map((m) => m.accommodationId),
+  );
+
+  return (
+    <>
+      <div className="dp-header">
+        <button
+          type="button"
+          className="dp-header__back"
+          onClick={onBack}
+          aria-label="Tillbaka"
+        >
+          <EditorIcon name="arrow_back" size={18} />
+        </button>
+        <span className="dp-header__title">{marker.label}</span>
+        <div className="dp-header__spacer" />
+        <button
+          type="button"
+          className="sbe__action-btn sbe__action-btn--danger"
+          title="Ta bort"
+          onClick={() => onDelete(index)}
+        >
+          <EditorIcon name="delete" size={16} />
+        </button>
+      </div>
+      <div className="dp-divider" />
+      <div className="dp-body">
+        {/* ── Label ── */}
+        <div className="sbe__dp-section">
+          <label className="sbe__dp-label">Etikett</label>
+          <input
+            type="text"
+            className="admin-input--sm"
+            value={labelValue}
+            maxLength={20}
+            onChange={(e) => setLabelValue(e.target.value)}
+            onBlur={() => {
+              const trimmed = labelValue.trim();
+              if (trimmed && trimmed !== marker.label) {
+                onUpdate(index, { label: trimmed });
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const trimmed = labelValue.trim();
+                if (trimmed && trimmed !== marker.label) {
+                  onUpdate(index, { label: trimmed });
+                }
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+          />
+        </div>
+
+        {/* ── Accommodation (resource picker) ── */}
+        <div className="sbe__dp-section">
+          <label className="sbe__dp-label">Boende</label>
+          <AccommodationPicker
+            accommodations={accommodations}
+            selectedId={marker.accommodationId}
+            linkedByOthers={linkedByOthers}
+            onSelect={(id) => {
+              const acc = accommodations.find((a) => a.id === id);
+              if (acc) {
+                onUpdate(index, {
+                  accommodationId: id,
+                  accommodationName: acc.name,
+                });
+              }
+            }}
+          />
+        </div>
+
+        {/* ── Price ── */}
+        <div className="sbe__dp-section">
+          <label className="sbe__dp-label">Pris</label>
+          <div className="sbe__price-input-wrap sbe__dp-price-input">
+            <input
+              type="number"
+              className="admin-input--sm sbe__price-input"
+              value={priceValue || String(Math.round(defaultPrice / 100))}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setPriceValue(raw);
+                const v = parseInt(raw, 10);
+                if (!isNaN(v) && v >= 0) {
+                  const isDefault = v * 100 === defaultPrice;
+                  onUpdate(index, { priceOverride: isDefault ? null : v * 100 });
+                }
+              }}
+              min={0}
+              step={1}
+            />
+            <span className="sbe__price-suffix">kr</span>
+          </div>
+        </div>
+
+        {/* ── Marker color ── */}
+        <div className="sbe__dp-section">
+          <ColorTokenField
+            label="Markörfärg"
+            value={marker.color ?? "#4f6df5"}
+            onChange={(hex) => onUpdate(index, { color: hex })}
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Accommodation picker (sp-resource-picker pattern) ─────────────
+
+function AccommodationPicker({
+  accommodations,
+  selectedId,
+  linkedByOthers,
+  onSelect,
+}: {
+  accommodations: AccommodationOption[];
+  selectedId: string;
+  linkedByOthers: Set<string>;
+  onSelect: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [popupTop, setPopupTop] = useState(0);
+
+  const selected = accommodations.find((a) => a.id === selectedId);
+
+  const query = search.trim().toLowerCase();
+  const filtered = (query
+    ? accommodations.filter((a) => a.name.toLowerCase().includes(query))
+    : accommodations
+  ).filter((a) => a.id === selectedId || !linkedByOthers.has(a.id));
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        popupRef.current && !popupRef.current.contains(e.target as Node) &&
+        triggerRef.current && !triggerRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setOpen(false); setSearch(""); }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open]);
+
+  const openPopup = () => {
+    if (triggerRef.current) {
+      setPopupTop(triggerRef.current.getBoundingClientRect().top);
+    }
+    setOpen(true);
+    setSearch("");
+  };
+
+  const popupContent = open && typeof document !== "undefined" && createPortal(
+    <div className="sp-resource-popup" ref={popupRef} style={{ top: popupTop }}>
+      <div className="pk-popup__search">
+        <svg className="pk-popup__search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M11.5 11.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+        <input
+          type="text"
+          className="pk-popup__search-input"
+          placeholder="Sök boende..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          autoComplete="off"
+          autoFocus
+        />
+        {search && (
+          <button type="button" className="pk-popup__search-clear" onClick={() => setSearch("")}>
+            <EditorIcon name="close" size={14} />
+          </button>
+        )}
+      </div>
+      <div className="sp-resource-popup__list">
+        {filtered.length === 0 ? (
+          <div className="sp-resource-popup__empty">Inga tillgängliga boenden</div>
+        ) : (
+          filtered.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              className={`sp-resource-popup__item${a.id === selectedId ? " sp-resource-popup__item--active" : ""}`}
+              onClick={() => { onSelect(a.id); setOpen(false); setSearch(""); }}
+            >
+              <div className="sp-resource-popup__item-img sp-resource-popup__item-img--empty">
+                <EditorIcon name="hotel" size={12} />
+              </div>
+              <span className="sp-resource-popup__item-title">{a.name}</span>
+              {a.id === selectedId && (
+                <EditorIcon name="check" size={16} style={{ color: "var(--admin-accent)", flexShrink: 0 }} />
+              )}
+            </button>
+          ))
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+
+  return (
+    <div className="sp-resource-picker">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="sp-resource-picker__trigger"
+        onClick={() => open ? setOpen(false) : openPopup()}
+      >
+        <div className="sp-resource-picker__thumb sp-resource-popup__item-img--empty">
+          <EditorIcon name="hotel" size={14} />
+        </div>
+        <span className="sp-resource-picker__trigger-text">
+          <span className="sp-resource-picker__value">
+            {selected?.name ?? "Välj boende..."}
+          </span>
+        </span>
+        <EditorIcon name="unfold_more" size={16} className="sp-resource-picker__icon" />
+      </button>
+      {popupContent}
     </div>
   );
 }

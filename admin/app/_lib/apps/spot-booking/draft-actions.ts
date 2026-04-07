@@ -27,6 +27,8 @@ export type DraftMarker = {
   y: number;
   accommodationId: string;
   accommodationName: string;
+  priceOverride?: number | null; // null/undefined = inherit SpotMap.addonPrice
+  color?: string | null; // null/undefined = default accent color
 };
 
 export type MapDraftConfig = {
@@ -176,7 +178,9 @@ export async function publishMapDraft(
             label: m.label,
             x: m.x,
             y: m.y,
-            accommodationId: m.accommodationId,
+            accommodation: { connect: { id: m.accommodationId } },
+            priceOverride: m.priceOverride ?? null,
+            color: m.color ?? null,
           },
         });
       }
@@ -191,6 +195,8 @@ export async function publishMapDraft(
             x: m.x,
             y: m.y,
             accommodationId: m.accommodationId,
+            priceOverride: m.priceOverride ?? null,
+            color: m.color ?? null,
           })),
         });
       }

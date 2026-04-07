@@ -53,6 +53,9 @@ export default async function AddonsPage({
       checkOut: true,
       adults: true,
       ratePlanId: true,
+      accommodation: {
+        select: { media: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } } },
+      },
     },
   });
 
@@ -154,6 +157,7 @@ export default async function AddonsPage({
       spotAddon={spotAddon}
       snapshot={{
         accommodationName: session.accommodationName!,
+        accommodationImage: session.accommodation?.media[0]?.url ?? null,
         accommodationSlug: session.accommodationSlug!,
         ratePlanName: session.ratePlanName!,
         ratePlanCancellationPolicy: session.ratePlanCancellationPolicy!,

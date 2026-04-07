@@ -123,7 +123,7 @@
 .sbe__panel-body {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 4px;
 }
 
 .sbe__panel-footer {
@@ -236,7 +236,7 @@
 .sbe__marker-list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
 }
 
 .sbe__add-marker-btn {
@@ -244,7 +244,7 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 8px;
   border: none;
   background: none;
   cursor: pointer;
@@ -262,11 +262,11 @@
 .sbe__marker-row {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 8px;
   padding: 8px;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background 0.15s;
 }
 
 .sbe__marker-row:hover {
@@ -306,24 +306,14 @@
 }
 
 .sbe__marker-row-acc {
-  font-size: 12px;
-  color: var(--admin-text-tertiary);
+  font-size: 13px;
+  color: #303030;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.sbe__marker-row-actions {
-  display: flex;
-  gap: var(--space-1);
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.sbe__marker-row:hover .sbe__marker-row-actions {
-  opacity: 1;
-}
+/* marker-row-actions kept for potential reuse but hidden in list view */
 
 .sbe__action-btn {
   width: 28px;
@@ -361,6 +351,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  padding: 8px 8px 0 8px;
 }
 
 .sbe__field-label {
@@ -555,6 +546,197 @@
 @keyframes sbe-toast-in {
   from { opacity: 0; transform: translateX(-50%) translateY(8px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ── Marker row meta (acc + price on same line) ── */
+
+.sbe__marker-row-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.sbe__marker-row-price {
+  font-size: 11px;
+  color: var(--admin-text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sbe__marker-row-price--override {
+  color: var(--admin-accent);
+  font-weight: 600;
+}
+
+.sbe__marker-row-chevron {
+  flex-shrink: 0;
+  color: var(--admin-text-tertiary);
+  transition: color 0.15s;
+}
+
+.sbe__marker-row:hover .sbe__marker-row-chevron {
+  color: var(--admin-text);
+}
+
+/* ── Detail panel (mirrors editor dp-* classes from editor.css) ── */
+
+.sbe__panel .dp-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--admin-border);
+  flex-shrink: 0;
+}
+
+.sbe__panel .dp-header__back {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--admin-text-secondary);
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.sbe__panel .dp-header__back:hover {
+  background: color-mix(in srgb, var(--admin-text) 8%, transparent);
+  color: var(--admin-text);
+}
+
+.sbe__panel .dp-header__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--admin-text);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sbe__panel .dp-header__spacer {
+  flex: 1;
+}
+
+.sbe__panel .dp-divider {
+  height: 0;
+}
+
+.sbe__panel .dp-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+/* ── Detail panel sections ── */
+
+.sbe__dp-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 18px;
+  border-bottom: none;
+}
+
+.sbe__dp-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.admin-input--sm {
+border: 1px solid var(--admin-border);
+}
+.sbe__dp-label {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--admin-text);
+  margin: 0;
+}
+.dp-body {
+    gap: 0px;
+}
+.sbe__dp-hint {
+  font-size: 11px;
+  color: var(--admin-text-tertiary);
+  margin-bottom: 4px;
+}
+
+.sbe__dp-value {
+  font-size: 13px;
+  color: var(--admin-text-secondary);
+}
+
+.sbe__dp-value--mono {
+  font-family: var(--sf-mono, monospace);
+  font-size: 12px;
+}
+
+.sbe__dp-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.sbe__dp-toggle-label {
+  font-size: 12px;
+  color: var(--admin-text-secondary);
+}
+
+.sbe__dp-price-input {
+  max-width: 100%;
+}
+
+.sbe__dp-effective {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--admin-accent) 6%, var(--admin-surface));
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--admin-text-secondary);
+  line-height: 1.4;
+}
+
+.sbe__dp-effective .material-symbols-rounded {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--admin-accent);
+}
+
+/* ── Reset button ── */
+
+.sbe__dp-reset-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--admin-text-tertiary);
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
+  align-self: flex-start;
+}
+
+.sbe__dp-reset-btn:hover {
+  color: var(--admin-text);
+}
+
+/* ── Form actions row ── */
+
+.sbe__form-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  padding-top: 8px;
 }
 
 /* ── Inline label edit ── */

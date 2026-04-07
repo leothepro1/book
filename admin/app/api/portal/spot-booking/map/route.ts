@@ -16,6 +16,7 @@ import { z } from "zod";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
+import { resolveMarkerPrice } from "@/app/_lib/apps/spot-booking/pricing";
 import { log } from "@/app/_lib/logger";
 
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -66,6 +67,8 @@ export async function GET(req: Request) {
           x: true,
           y: true,
           accommodationId: true,
+          priceOverride: true,
+          color: true,
           accommodation: {
             select: { id: true, externalId: true, name: true },
           },
@@ -118,6 +121,8 @@ export async function GET(req: Request) {
           x: m.x,
           y: m.y,
           accommodationId: m.accommodationId,
+          effectivePrice: resolveMarkerPrice(m.priceOverride, spotMap.addonPrice),
+          color: m.color ?? null,
           available: m.accommodation.externalId
             ? availableExternalIds.has(m.accommodation.externalId)
             : false,

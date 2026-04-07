@@ -3354,6 +3354,8 @@ model SpotMarker {
   label           String   // "32a", "Sjöutsikt" etc
   x               Float    // 0.0–100.0, percentage of image width
   y               Float    // 0.0–100.0, percentage of image height
+  priceOverride   Int?     // null = inherit SpotMap.addonPrice; set = override in öre
+  color           String?  // null = default accent; set = custom hex e.g. "#e53935"
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

@@ -15,6 +15,7 @@ import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { resolveAddonsForAccommodation } from "@/app/_lib/accommodations/addons";
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
+import { resolveMarkerPrice } from "@/app/_lib/apps/spot-booking/pricing";
 import { log } from "@/app/_lib/logger";
 import type { SelectedAddon } from "@/app/_lib/checkout/session-types";
 
@@ -214,6 +215,7 @@ export async function PATCH(
         id: true,
         label: true,
         accommodationId: true,
+        priceOverride: true,
         accommodation: { select: { externalId: true } },
         spotMap: {
           select: {
@@ -285,15 +287,16 @@ export async function PATCH(
       }
     }
 
-    // Build SelectedAddon snapshot for spot
+    // Build SelectedAddon snapshot for spot — resolve per-marker price
+    const spotPrice = resolveMarkerPrice(marker.priceOverride, marker.spotMap.addonPrice);
     selectedAddons.push({
       productId: `spot-map:${marker.spotMap.id}`,
       variantId: marker.id,
       title: `Plats ${marker.label}`,
       variantTitle: null,
       quantity: 1,
-      unitAmount: marker.spotMap.addonPrice,
-      totalAmount: marker.spotMap.addonPrice, // PER_STAY — fixed fee
+      unitAmount: spotPrice,
+      totalAmount: spotPrice, // PER_STAY — fixed fee
       pricingMode: "PER_STAY",
       currency: marker.spotMap.currency,
     });

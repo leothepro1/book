@@ -100,6 +100,8 @@ export async function GET(request: NextRequest) {
       accommodationId: m.accommodationId,
       accommodationName: m.accommodation.name,
       accommodationSlug: m.accommodation.slug,
+      priceOverride: m.priceOverride ?? null,
+      color: m.color ?? null,
     })),
     accommodations: accommodations.map((a) => ({
       id: a.id,
