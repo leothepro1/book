@@ -17,8 +17,12 @@ export async function resolveTenantFromHost() {
   const h = await headers();
   const host = h.get("host") ?? "";
 
-  // Development fallback — no subdomain on localhost
-  if (host.startsWith("localhost") || host.startsWith("127.0.0.1")) {
+  // Development fallback — no subdomain on localhost or Codespaces
+  const isDev =
+    host.startsWith("localhost") ||
+    host.startsWith("127.0.0.1") ||
+    host.endsWith(".app.github.dev");
+  if (isDev) {
     if (!env.DEV_ORG_ID) return null;
     const tenant = await getCachedTenantByClerkOrg(env.DEV_ORG_ID);
     if (tenant) setSentryTenantContext(tenant.id, tenant.portalSlug ?? undefined);

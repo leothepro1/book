@@ -560,7 +560,7 @@ function OtpStep({
           <span className="co__float-label">{t.otpLabel}</span>
         </div>
         <ErrorSlide message={error} />
-        <button
+<button
           type="submit"
           disabled={isPending || code.length !== OTP_LENGTH}
           className="otp-login__button"

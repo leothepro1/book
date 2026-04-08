@@ -27,6 +27,7 @@ const billingAddressSchema = z.object({
 
 const inputSchema = z.object({
   orderId: z.string().min(1).max(50),
+  sessionToken: z.string().max(100).optional(),
   guestEmail: z.string().email("Ogiltig e-postadress").max(254),
   guestFirstName: z.string().min(1, "Förnamn krävs").max(100).trim(),
   guestLastName: z.string().min(1, "Efternamn krävs").max(100).trim(),
@@ -90,6 +91,21 @@ export async function POST(req: Request) {
       },
     }),
   ]);
+
+  // ── Write contact info to CheckoutSession (non-blocking) ──
+  if (body.sessionToken) {
+    prisma.checkoutSession.updateMany({
+      where: { token: body.sessionToken, tenantId: tenant.id },
+      data: {
+        guestEmail: body.guestEmail,
+        guestFirstName: body.guestFirstName,
+        guestLastName: body.guestLastName,
+        guestPhone: body.guestPhone ?? null,
+      },
+    }).catch(() => {
+      // Non-blocking — contact info on session is for analytics/recovery only
+    });
+  }
 
   // ── Upsert GuestAccount + link order + create ORDER_PLACED event ──
   try {

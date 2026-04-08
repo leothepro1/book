@@ -46,6 +46,11 @@ export async function sendOtp(
     ? `${booking.firstName} ${booking.lastName}`.trim()
     : normalizedEmail;
 
+  // Dev mode: skip OTP creation and email — use static code "247853"
+  if (process.env.NODE_ENV === "development") {
+    return { sent: true };
+  }
+
   const rawCode = await createOtp(guestAccount.id);
 
   const tenant = await prisma.tenant.findUniqueOrThrow({

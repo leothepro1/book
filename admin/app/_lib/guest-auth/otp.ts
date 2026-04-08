@@ -65,6 +65,11 @@ export async function verifyOtp(
   guestAccountId: string,
   rawCode: string,
 ): Promise<boolean> {
+  // Dev mode: accept static code without DB lookup
+  if (process.env.NODE_ENV === "development" && rawCode === "247853") {
+    return true;
+  }
+
   // Find the active OTP code (there should be at most one)
   const record = await prisma.guestOtpCode.findFirst({
     where: {

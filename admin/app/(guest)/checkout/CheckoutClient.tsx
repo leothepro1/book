@@ -20,6 +20,16 @@ const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "",
 );
 
+export interface PrefillContact {
+  email: string;
+  firstName: string;
+  lastName: string;
+  address: string;
+  city: string;
+  postalCode: string;
+  country: string;
+}
+
 interface CheckoutAddon {
   productId: string;
   variantId: string | null;
@@ -60,6 +70,8 @@ interface CheckoutProps {
   klarnaEnabled?: boolean;
   /** CSS variables from page settings (colors, fonts). Applied to root element. */
   pageStyles?: Record<string, string>;
+  /** Prefill from logged-in guest's GuestAccount. Null if not logged in. */
+  prefillContact?: PrefillContact | null;
 }
 
 type PaymentMethod = "card" | "paypal" | "gpay" | "applepay" | "klarna";
@@ -545,7 +557,7 @@ function FieldError({ error }: { error?: string }) {
 
 // ── Main Checkout ──────────────────────────────────────────
 
-export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, checkOut, guests, bookingTerms, header, availableMethods, walletsEnabled = true, klarnaEnabled = true, pageStyles }: CheckoutProps) {
+export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, checkOut, guests, bookingTerms, header, availableMethods, walletsEnabled = true, klarnaEnabled = true, pageStyles, prefillContact }: CheckoutProps) {
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
   const fontLinkRef = useRef<HTMLLinkElement | null>(null);
@@ -624,13 +636,13 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Contact info ───────────────────────────────────
-  const [contactEmail, setContactEmail] = useState("");
-  const [contactCountry, setContactCountry] = useState("SE");
-  const [contactFirstName, setContactFirstName] = useState("");
-  const [contactLastName, setContactLastName] = useState("");
-  const [contactAddress, setContactAddress] = useState("");
-  const [contactPostalCode, setContactPostalCode] = useState("");
-  const [contactCity, setContactCity] = useState("");
+  const [contactEmail, setContactEmail] = useState(prefillContact?.email ?? "");
+  const [contactCountry, setContactCountry] = useState(prefillContact?.country ?? "SE");
+  const [contactFirstName, setContactFirstName] = useState(prefillContact?.firstName ?? "");
+  const [contactLastName, setContactLastName] = useState(prefillContact?.lastName ?? "");
+  const [contactAddress, setContactAddress] = useState(prefillContact?.address ?? "");
+  const [contactPostalCode, setContactPostalCode] = useState(prefillContact?.postalCode ?? "");
+  const [contactCity, setContactCity] = useState(prefillContact?.city ?? "");
   const [contactDirty, setContactDirty] = useState<Record<string, boolean>>({});
   const [contactTouched, setContactTouched] = useState<Record<string, boolean>>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -818,6 +830,7 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId,
+          sessionToken,
           guestEmail: contactEmail,
           guestFirstName: contactFirstName,
           guestLastName: contactLastName,

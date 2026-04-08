@@ -178,8 +178,12 @@ function SearchSidebarSection({
   const pendingCommit = useRef(false);
 
   // ── Calendar state (pure UI) ──
-  const today = startOfDay(new Date());
-  const [viewMonth, setViewMonth] = useState(() => startOfMonth(today));
+  // `today` is set only after mount to prevent hydration mismatch:
+  // server (UTC) and client (user TZ) can disagree on the current date.
+  // Before mount, no days are disabled — client corrects on first paint.
+  const [today, setToday] = useState<Date | null>(null);
+  useEffect(() => { setToday(startOfDay(new Date())); }, []);
+  const [viewMonth, setViewMonth] = useState(() => startOfMonth(startOfDay(new Date())));
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
   const [slideDirection, setSlideDirection] = useState<"next" | "prev">("next");
 
@@ -318,7 +322,7 @@ function SearchSidebarSection({
             onDayHover={handleDayHover}
             onMouseLeave={() => setHoverDate(null)}
             onPrevMonth={
-              isAfter(viewMonth, startOfMonth(today))
+              !today || isAfter(viewMonth, startOfMonth(today))
                 ? () => { setSlideDirection("prev"); setViewMonth(addMonths(viewMonth, -1)); }
                 : undefined
             }
@@ -448,7 +452,7 @@ function CalendarMonth({
   checkIn: Date | null;
   checkOut: Date | null;
   hoverDate: Date | null;
-  minDate: Date;
+  minDate: Date | null;
   onDayClick: (d: Date) => void;
   onDayHover: (d: Date) => void;
   onMouseLeave: () => void;
@@ -477,7 +481,7 @@ function CalendarMonth({
         <div key={`e-${i}`} className="ss__cal-cell" />
       ))}
       {days.map((date) => {
-        const disabled = isBefore(date, minDate);
+        const disabled = minDate !== null && isBefore(date, minDate);
         const isStart = checkIn !== null && isSameDay(date, checkIn);
         const isEnd = effectiveEnd !== null && isSameDay(date, effectiveEnd);
         const isHoverEnd =

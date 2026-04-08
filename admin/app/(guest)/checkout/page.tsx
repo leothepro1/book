@@ -3,6 +3,7 @@ import { resolveTenantFromHost } from "../_lib/tenant/resolveTenantFromHost";
 import { getTenantConfig } from "../_lib/tenant/getTenantConfig";
 import { prisma } from "@/app/_lib/db/prisma";
 import { CheckoutClient } from "./CheckoutClient";
+import type { PrefillContact } from "./CheckoutClient";
 import { resolvePaymentMethods } from "@/app/_lib/payments/resolve";
 import type { PaymentMethodConfig } from "@/app/_lib/payments/types";
 import type { SelectedAddon } from "@/app/_lib/checkout/session-types";
@@ -12,6 +13,7 @@ import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { format, parseISO } from "date-fns";
 import { sv } from "date-fns/locale";
 import { resolveContrastPalette } from "@/app/_lib/color/contrast";
+import { getGuestSession } from "@/app/_lib/magic-link/session";
 
 const SANS_FALLBACK = "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
 
@@ -168,6 +170,39 @@ export default async function CheckoutPage({
     tenantPayments?.paymentMethodConfig as PaymentMethodConfig | null,
   );
 
+  // ── Prefill contact from guest session (if logged in) ───────
+  let prefillContact: PrefillContact | null = null;
+  try {
+    const guestSession = await getGuestSession();
+    if (guestSession?.guestAccountId) {
+      const ga = await prisma.guestAccount.findUnique({
+        where: { id: guestSession.guestAccountId },
+        select: {
+          email: true,
+          firstName: true,
+          lastName: true,
+          address1: true,
+          city: true,
+          postalCode: true,
+          country: true,
+        },
+      });
+      if (ga && ga.email) {
+        prefillContact = {
+          email: ga.email,
+          firstName: ga.firstName ?? "",
+          lastName: ga.lastName ?? "",
+          address: ga.address1 ?? "",
+          city: ga.city ?? "",
+          postalCode: ga.postalCode ?? "",
+          country: ga.country ?? "SE",
+        };
+      }
+    }
+  } catch {
+    // Non-blocking — prefill is a convenience, not a requirement
+  }
+
   // ── Build product prop based on session type ────────────────
   const currency = session.currency;
   const product = isCart
@@ -266,6 +301,7 @@ export default async function CheckoutPage({
       walletsEnabled={resolvedMethods.walletsEnabled}
       klarnaEnabled={resolvedMethods.klarnaEnabled}
       pageStyles={pageStyles}
+      prefillContact={prefillContact}
     />
   );
 }

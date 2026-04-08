@@ -2019,6 +2019,12 @@ model CheckoutSession {
   selectedAddons Json @default("[]")
   // Shape: Array<{ productId, variantId, title, quantity, unitAmount, totalAmount, pricingMode }>
 
+  // Guest contact — written by update-guest before payment confirmation
+  guestEmail     String?
+  guestFirstName String?
+  guestLastName  String?
+  guestPhone     String?
+
   // Dedup: prevents rapid double-clicks from creating duplicate sessions
   dedupKey   String?  @unique
 

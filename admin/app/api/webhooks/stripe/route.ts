@@ -40,23 +40,35 @@ export async function POST(req: Request) {
   const rawBody = await req.text();
   const signature = req.headers.get("stripe-signature");
 
-  if (!signature) {
-    return new NextResponse("Missing stripe-signature header", { status: 400 });
-  }
-
   // Verify webhook signature
-  let _event: Stripe.Event;
-  try {
-    _event = stripe.webhooks.constructEvent(
-      rawBody,
-      signature,
-      env.STRIPE_WEBHOOK_SECRET,
-    );
-  } catch (err) {
-    log("error", "webhook.signature_failed", { error: String(err) });
-    return new NextResponse("Invalid signature", { status: 400 });
+  let event: Stripe.Event;
+
+  if (process.env.NODE_ENV === "development" && !process.env.STRIPE_WEBHOOK_SECRET) {
+    // Dev without webhook secret — parse raw body directly, skip signature check
+    if (!rawBody) {
+      return new NextResponse("Empty body", { status: 400 });
+    }
+    try {
+      event = JSON.parse(rawBody) as Stripe.Event;
+    } catch {
+      return new NextResponse("Invalid JSON", { status: 400 });
+    }
+    log("warn", "webhook.dev_no_signature_check", { eventId: event.id });
+  } else {
+    if (!signature) {
+      return new NextResponse("Missing stripe-signature header", { status: 400 });
+    }
+    try {
+      event = stripe.webhooks.constructEvent(
+        rawBody,
+        signature,
+        env.STRIPE_WEBHOOK_SECRET,
+      );
+    } catch (err) {
+      log("error", "webhook.signature_failed", { error: String(err) });
+      return new NextResponse("Invalid signature", { status: 400 });
+    }
   }
-  const event: Stripe.Event = _event;
 
   // ── Resolve tenant — verify Connect account matches ──────────
   const obj = event.data.object as { metadata?: Record<string, string> };
