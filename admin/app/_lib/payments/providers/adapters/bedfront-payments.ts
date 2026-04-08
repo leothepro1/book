@@ -94,9 +94,12 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
       const stripe = getStripe();
       const tenant = await prisma.tenant.findUnique({
         where: { id: tenantId },
-        select: { stripeAccountId: true },
+        select: { stripeAccountId: true, stripeOnboardingComplete: true },
       });
-      const connectParams = tenant?.stripeAccountId
+      // Dev bypass: skip Connect routing in test mode
+      const devOrTest = process.env.NODE_ENV === "development"
+        || env.STRIPE_SECRET_KEY.startsWith("sk_test_");
+      const connectParams = !devOrTest && tenant?.stripeAccountId && tenant.stripeOnboardingComplete
         ? { stripeAccount: tenant.stripeAccountId }
         : undefined;
 
@@ -129,8 +132,12 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
       },
     });
 
+    // Dev bypass: skip Connect routing in test mode
+    const isDevOrTest = process.env.NODE_ENV === "development"
+      || env.STRIPE_SECRET_KEY.startsWith("sk_test_");
+
     // If Connect onboarding is not complete, process on platform account directly
-    const useConnect = tenant.stripeAccountId && tenant.stripeOnboardingComplete;
+    const useConnect = !isDevOrTest && tenant.stripeAccountId && tenant.stripeOnboardingComplete;
 
     if (useConnect) {
       const chargesOk = await verifyChargesEnabled(tenant.stripeAccountId!);
@@ -212,7 +219,10 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
       },
     });
 
-    const useConnect = tenant.stripeAccountId && tenant.stripeOnboardingComplete;
+    // Dev bypass: skip Connect routing in test mode
+    const isDevOrTestSession = process.env.NODE_ENV === "development"
+      || env.STRIPE_SECRET_KEY.startsWith("sk_test_");
+    const useConnect = !isDevOrTestSession && tenant.stripeAccountId && tenant.stripeOnboardingComplete;
 
     if (useConnect) {
       await verifyChargesEnabled(tenant.stripeAccountId!);
@@ -410,11 +420,14 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
 
     const tenant = await prisma.tenant.findUnique({
       where: { id: session.tenantId },
-      select: { stripeAccountId: true },
+      select: { stripeAccountId: true, stripeOnboardingComplete: true },
     });
 
     const stripe = getStripe();
-    const connectParams = tenant?.stripeAccountId
+    // Dev bypass: skip Connect routing in test mode
+    const devOrTestStatus = process.env.NODE_ENV === "development"
+      || env.STRIPE_SECRET_KEY.startsWith("sk_test_");
+    const connectParams = !devOrTestStatus && tenant?.stripeAccountId && tenant.stripeOnboardingComplete
       ? { stripeAccount: tenant.stripeAccountId }
       : undefined;
 
@@ -464,11 +477,14 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
 
     const tenant = await prisma.tenant.findUnique({
       where: { id: session.tenantId },
-      select: { stripeAccountId: true },
+      select: { stripeAccountId: true, stripeOnboardingComplete: true },
     });
 
     const stripe = getStripe();
-    const connectParams = tenant?.stripeAccountId
+    // Dev bypass: skip Connect routing in test mode
+    const devOrTestRefund = process.env.NODE_ENV === "development"
+      || env.STRIPE_SECRET_KEY.startsWith("sk_test_");
+    const connectParams = !devOrTestRefund && tenant?.stripeAccountId && tenant.stripeOnboardingComplete
       ? { stripeAccount: tenant.stripeAccountId }
       : undefined;
 

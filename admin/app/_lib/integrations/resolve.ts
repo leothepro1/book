@@ -31,14 +31,14 @@ export async function resolveAdapter(tenantId: string): Promise<PmsAdapter> {
     return getAdapter("manual");
   }
 
-  // Demo environment: use FakeAdapter with happy scenario
-  // This lets tenants preview the full booking flow with realistic data
-  // before connecting their real PMS credentials.
-  if (integration.isDemoEnvironment) {
+  // If no encrypted credentials stored, fall back to FakeAdapter
+  // (demo environment without real PMS credentials)
+  if (!integration.credentialsEncrypted) {
     return getAdapter("fake", { scenario: "happy", delayMs: "200" });
   }
 
-  // Decrypt credentials for PMS adapters
+  // Decrypt credentials and use the real adapter — even in demo mode,
+  // real credentials take precedence so testConnection() hits the PMS.
   const credentials = decryptCredentials(
     Buffer.from(integration.credentialsEncrypted),
     Buffer.from(integration.credentialsIv),

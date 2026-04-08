@@ -95,7 +95,7 @@ export async function createPmsBookingAfterPayment(
 
   const accommodation = await prisma.accommodation.findFirst({
     where: { id: booking.accommodationId, tenantId },
-    select: { externalId: true, ratePlans: { select: { id: true, externalId: true } } },
+    select: { externalId: true },
   });
 
   if (!accommodation?.externalId) {
@@ -106,12 +106,7 @@ export async function createPmsBookingAfterPayment(
     };
   }
 
-  // 4. Resolve ratePlan externalId
-  const ratePlanExternalId = booking.ratePlanId
-    ? accommodation.ratePlans.find((r) => r.id === booking.ratePlanId)?.externalId ?? null
-    : null;
-
-  // 5. Call PMS adapter
+  // 4. Call PMS adapter
   const adapter = await resolveAdapter(tenantId);
 
   const [firstName, ...lastParts] = (order.guestName || "Guest").split(" ");
@@ -121,7 +116,7 @@ export async function createPmsBookingAfterPayment(
   try {
     confirmation = await adapter.createBooking(tenantId, {
       categoryId: accommodation.externalId,
-      ratePlanId: ratePlanExternalId ?? accommodation.externalId,
+      ratePlanId: booking.ratePlanId ?? accommodation.externalId,
       checkIn: booking.checkIn?.toISOString().split("T")[0] ?? "",
       checkOut: booking.checkOut?.toISOString().split("T")[0] ?? "",
       guests: booking.guestCount ?? 1,

@@ -30,18 +30,22 @@ export const MewsPersonCountSchema = z.object({
 export const MewsReservationSchema = z.object({
   Id: z.string(),
   ServiceId: z.string(),
-  AccountId: z.string(),
+  AccountId: z.string().optional(),
   AccountType: z.enum(["Customer", "Company"]).optional(),
   Number: z.string().optional(),
   State: MewsReservationStateSchema,
   CreatedUtc: z.string(),
   UpdatedUtc: z.string(),
   CancelledUtc: z.string().nullable().optional(),
-  ScheduledStartUtc: z.string(),
-  ScheduledEndUtc: z.string(),
+  // getAll returns ScheduledStartUtc/ScheduledEndUtc; add returns StartUtc/EndUtc
+  ScheduledStartUtc: z.string().optional(),
+  ScheduledEndUtc: z.string().optional(),
+  StartUtc: z.string().optional(),
+  EndUtc: z.string().optional(),
   ActualStartUtc: z.string().nullable().optional(),
   ActualEndUtc: z.string().nullable().optional(),
   AssignedResourceId: z.string().nullable().optional(),
+  AssignedSpaceId: z.string().nullable().optional(),
   PersonCounts: z.array(MewsPersonCountSchema).optional(),
   CancellationReason: z.string().nullable().optional(),
   Purpose: z.string().nullable().optional(),
@@ -108,6 +112,7 @@ export const MewsServiceSchema = z.object({
   Id: z.string(),
   EnterpriseId: z.string(),
   IsActive: z.boolean(),
+  Type: z.string().optional(),
 });
 
 export type MewsService = z.infer<typeof MewsServiceSchema>;
@@ -117,6 +122,163 @@ export const MewsGetServicesResponseSchema = z.object({
 });
 
 export type MewsGetServicesResponse = z.infer<typeof MewsGetServicesResponseSchema>;
+
+// ── Localized String (Mews multi-culture text) ─────────────
+
+export const MewsLocalizedStringSchema = z.record(z.string(), z.string());
+
+// ── Resource Category (Room Type) ──────────────────────────
+
+export const MewsResourceCategorySchema = z.object({
+  Id: z.string(),
+  Names: MewsLocalizedStringSchema.optional().nullable(),
+  ShortDescriptions: MewsLocalizedStringSchema.optional().nullable(),
+  Descriptions: MewsLocalizedStringSchema.optional().nullable(),
+  Capacity: z.number().optional().nullable(),
+  Classification: z.string().optional().nullable(),
+  ImageIds: z.array(z.string()).optional().nullable(),
+  IsActive: z.boolean().optional(),
+  Ordering: z.number().optional().nullable(),
+});
+
+export type MewsResourceCategory = z.infer<typeof MewsResourceCategorySchema>;
+
+export const MewsGetResourceCategoriesResponseSchema = z.object({
+  ResourceCategories: z.array(MewsResourceCategorySchema),
+});
+
+export type MewsGetResourceCategoriesResponse = z.infer<typeof MewsGetResourceCategoriesResponseSchema>;
+
+// ── File (for image URLs) ──────────────────────────────────
+
+export const MewsFileSchema = z.object({
+  Id: z.string(),
+  Url: z.string(),
+});
+
+export type MewsFile = z.infer<typeof MewsFileSchema>;
+
+export const MewsGetFilesResponseSchema = z.object({
+  Files: z.array(MewsFileSchema),
+});
+
+export type MewsGetFilesResponse = z.infer<typeof MewsGetFilesResponseSchema>;
+
+// ── Rate ────────────────────────────────────────────────────
+
+export const MewsAmountSchema = z.object({
+  Currency: z.string(),
+  GrossValue: z.number(),
+  NetValue: z.number().optional(),
+});
+
+export const MewsBaseRatePricingSchema = z.object({
+  Amount: MewsAmountSchema.optional().nullable(),
+});
+
+export const MewsRatePricingInlineSchema = z.object({
+  Discriminator: z.string().optional(),
+  BaseRatePricing: MewsBaseRatePricingSchema.optional().nullable(),
+  DependentRatePricing: z.unknown().optional().nullable(),
+});
+
+export const MewsRateSchema = z.object({
+  Id: z.string(),
+  ServiceId: z.string(),
+  IsActive: z.boolean(),
+  IsEnabled: z.boolean(),
+  IsPublic: z.boolean(),
+  IsBaseRate: z.boolean().optional(),
+  BaseRateId: z.string().optional().nullable(),
+  Names: MewsLocalizedStringSchema.optional().nullable(),
+  ShortDescriptions: MewsLocalizedStringSchema.optional().nullable(),
+  Description: MewsLocalizedStringSchema.optional().nullable(),
+  Pricing: MewsRatePricingInlineSchema.optional().nullable(),
+});
+
+export type MewsRate = z.infer<typeof MewsRateSchema>;
+
+export const MewsGetRatesResponseSchema = z.object({
+  Rates: z.array(MewsRateSchema),
+});
+
+export type MewsGetRatesResponse = z.infer<typeof MewsGetRatesResponseSchema>;
+
+// ── Rate Pricing ────────────────────────────────────────────
+
+export const MewsCurrencyValueSchema = z.object({
+  Currency: z.string(),
+  Value: z.number().nullable(),
+});
+
+export const MewsResourceCategoryPricingSchema = z.object({
+  ResourceCategoryId: z.string(),
+  Prices: z.array(MewsCurrencyValueSchema),
+});
+
+export const MewsRatePricingSchema = z.object({
+  RateId: z.string(),
+  ResourceCategoryPrices: z.array(MewsResourceCategoryPricingSchema),
+});
+
+export const MewsGetRatePricingResponseSchema = z.object({
+  RatePrices: z.array(MewsRatePricingSchema),
+});
+
+export type MewsGetRatePricingResponse = z.infer<typeof MewsGetRatePricingResponseSchema>;
+
+// ── Service Availability ────────────────────────────────────
+
+export const MewsCategoryAvailabilitySchema = z.object({
+  CategoryId: z.string(),
+  Availabilities: z.array(z.number()),
+});
+
+export const MewsGetServiceAvailabilityResponseSchema = z.object({
+  CategoryAvailabilities: z.array(MewsCategoryAvailabilitySchema),
+});
+
+export type MewsGetServiceAvailabilityResponse = z.infer<typeof MewsGetServiceAvailabilityResponseSchema>;
+
+// ── Age Category ────────────────────────────────────────────
+
+export const MewsAgeCategorySchema = z.object({
+  Id: z.string(),
+  Classification: z.string().optional().nullable(),
+  Names: MewsLocalizedStringSchema.optional().nullable(),
+});
+
+export type MewsAgeCategory = z.infer<typeof MewsAgeCategorySchema>;
+
+export const MewsGetAgeCategoriesResponseSchema = z.object({
+  AgeCategories: z.array(MewsAgeCategorySchema),
+});
+
+export type MewsGetAgeCategoriesResponse = z.infer<typeof MewsGetAgeCategoriesResponseSchema>;
+
+// ── Customer Add Response ───────────────────────────────────
+
+export const MewsCustomerAddResponseSchema = z.object({
+  Id: z.string(),
+  FirstName: z.string().nullable().optional(),
+  LastName: z.string().nullable().optional(),
+  Email: z.string().nullable().optional(),
+});
+
+export type MewsCustomerAddResponse = z.infer<typeof MewsCustomerAddResponseSchema>;
+
+// ── Reservation Add Response ────────────────────────────────
+
+export const MewsReservationAddItemSchema = z.object({
+  Identifier: z.string().nullable().optional(),
+  Reservation: MewsReservationSchema,
+});
+
+export const MewsReservationAddResponseSchema = z.object({
+  Reservations: z.array(MewsReservationAddItemSchema),
+});
+
+export type MewsReservationAddResponse = z.infer<typeof MewsReservationAddResponseSchema>;
 
 // ── Webhook Payload ─────────────────────────────────────────
 

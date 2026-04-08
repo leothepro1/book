@@ -32,7 +32,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, "").trim();
 }
-const PMS_TIMEOUT_MS = 8_000;
+const PMS_TIMEOUT_MS = 15_000;
 
 const paramsSchema = z.object({
   checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ogiltigt datumformat (YYYY-MM-DD)"),

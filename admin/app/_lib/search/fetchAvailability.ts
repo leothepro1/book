@@ -23,7 +23,7 @@ export interface FetchAvailabilityResult {
   response: AvailabilityResponse | null;
 }
 
-const TIMEOUT_MS = 10_000;
+const TIMEOUT_MS = 18_000;
 
 export async function fetchAvailability(
   tenantId: string,
