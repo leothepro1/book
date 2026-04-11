@@ -35,6 +35,7 @@ import {
   MewsGetResourceCategoriesResponseSchema,
   MewsGetFilesResponseSchema,
   MewsGetRatesResponseSchema,
+  MewsGetRatePricingResponseSchema,
   MewsGetServiceAvailabilityResponseSchema,
   MewsGetCustomersResponseSchema,
   MewsCustomerAddResponseSchema,
@@ -43,6 +44,7 @@ import {
   MewsReservationUpdateResponseSchema,
   MewsGetResourceBlocksResponseSchema,
   MewsGetResourcesResponseSchema,
+  MewsGetOrderItemsResponseSchema,
 } from "./mews-types";
 import type {
   MewsResource,
@@ -51,6 +53,7 @@ import type {
   MewsGetResourceCategoriesResponse,
   MewsGetFilesResponse,
   MewsGetRatesResponse,
+  MewsGetRatePricingResponse,
   MewsGetServiceAvailabilityResponse,
   MewsGetCustomersResponse,
   MewsCustomerAddResponse,
@@ -59,7 +62,9 @@ import type {
   MewsReservationUpdateResponse,
   MewsGetResourceBlocksResponse,
   MewsGetResourcesResponse,
+  MewsGetOrderItemsResponse,
 } from "./mews-types";
+import { log } from "@/app/_lib/logger";
 
 // ── Derived types ───────────────────────────────────────────
 
@@ -228,7 +233,7 @@ export class MewsAdapter implements PmsAdapter {
     );
     const serviceId = await this.getStayServiceId();
 
-    // Fire all three API calls in parallel
+    // Phase 1: Fire categories, availability, and rates in parallel
     const [categories, availabilityRaw, ratesRaw] = await Promise.all([
       this.fetchResourceCategories(),
       this.client.post<Record<string, unknown>, MewsGetServiceAvailabilityResponse>(
@@ -265,44 +270,105 @@ export class MewsAdapter implements PmsAdapter {
       }
     }
 
-    // Filter to active, enabled, public rates with inline pricing
+    // Filter to active, enabled, public rates
     const activeRates = rates.Rates.filter(
       (r) => r.IsActive && r.IsEnabled && r.IsPublic,
     );
 
-    // Extract per-night price from inline Pricing on each rate.
-    // Mews rates include Pricing.BaseRatePricing.Amount with a GrossValue
-    // (price per night in major currency units, e.g. 350 SEK).
-    // Dependent rates (non-base) derive pricing from their BaseRateId.
-    const rateBasePrices = new Map<string, { grossPerNight: number; currency: string }>();
-    for (const rate of activeRates) {
-      const amount = rate.Pricing?.BaseRatePricing?.Amount;
-      if (amount && amount.GrossValue > 0) {
-        rateBasePrices.set(rate.Id, {
-          grossPerNight: amount.GrossValue,
-          currency: amount.Currency,
-        });
-      } else if (rate.BaseRateId) {
-        // Dependent rate — inherit from base rate if available
-        const baseRate = activeRates.find((r) => r.Id === rate.BaseRateId);
-        const baseAmount = baseRate?.Pricing?.BaseRatePricing?.Amount;
-        if (baseAmount && baseAmount.GrossValue > 0) {
-          rateBasePrices.set(rate.Id, {
-            grossPerNight: baseAmount.GrossValue,
-            currency: baseAmount.Currency,
-          });
-        }
-      }
-    }
+    // Phase 2: Fetch date-accurate pricing and images in parallel.
+    // rates/getPricing returns per-night prices per category per rate —
+    // unlike BaseRatePricing.Amount which is a static rate-level default.
+    const activeRateIds = activeRates.map((r) => r.Id);
 
-    // Collect all image IDs for available categories
+    // Mews expects StartUtc/EndUtc with time components for pricing
+    const pricingStartUtc = new Date(params.checkIn);
+    pricingStartUtc.setUTCHours(15, 0, 0, 0);
+    const pricingEndUtc = new Date(params.checkOut);
+    pricingEndUtc.setUTCHours(11, 0, 0, 0);
+
     const allImageIds: string[] = [];
     for (const cat of categories) {
       if (availableCategoryIds.has(cat.Id) && cat.ImageIds) {
         allImageIds.push(...cat.ImageIds);
       }
     }
-    const imageUrlMap = await this.fetchImageUrls(allImageIds);
+
+    // pricingMap: rateId → categoryId → { totalPrice, pricePerNight, currency }
+    type CategoryPricing = { totalPrice: number; pricePerNight: number; currency: string };
+    const pricingMap = new Map<string, Map<string, CategoryPricing>>();
+    let usedDatePricing = false;
+
+    const [imageUrlMap] = await Promise.all([
+      this.fetchImageUrls(allImageIds),
+      // Fetch date-accurate pricing; on failure, fall back to static pricing
+      (async () => {
+        if (activeRateIds.length === 0) return;
+        try {
+          const pricingRaw = await this.client.post<Record<string, unknown>, MewsGetRatePricingResponse>(
+            "rates/getPricing",
+            {
+              RateIds: activeRateIds,
+              StartUtc: pricingStartUtc.toISOString(),
+              EndUtc: pricingEndUtc.toISOString(),
+            },
+          );
+          const pricing = MewsGetRatePricingResponseSchema.parse(pricingRaw);
+
+          for (const ratePricing of pricing.RatePrices) {
+            const categoryMap = new Map<string, CategoryPricing>();
+            for (const catPricing of ratePricing.ResourceCategoryPrices) {
+              const validPrices = catPricing.Prices
+                .map((p) => p.Value)
+                .filter((v): v is number => v != null && v > 0);
+
+              // Skip if we don't have a price for every night
+              if (validPrices.length < nights) continue;
+
+              const totalOren = toOren(validPrices.reduce((sum, v) => sum + v, 0));
+              categoryMap.set(catPricing.ResourceCategoryId, {
+                totalPrice: totalOren,
+                pricePerNight: Math.round(totalOren / nights),
+                currency: catPricing.Prices[0]?.Currency ?? "SEK",
+              });
+            }
+            if (categoryMap.size > 0) {
+              pricingMap.set(ratePricing.RateId, categoryMap);
+            }
+          }
+          usedDatePricing = pricingMap.size > 0;
+        } catch (err) {
+          log("warn", "mews.rates_get_pricing_failed", {
+            error: err instanceof Error ? err.message : String(err),
+            rateCount: activeRateIds.length,
+          });
+          // pricingMap stays empty → fallback to static pricing below
+        }
+      })(),
+    ]);
+
+    // Fallback: static pricing from BaseRatePricing.Amount.GrossValue
+    // Used when rates/getPricing fails or returns no data.
+    const rateBasePrices = new Map<string, { grossPerNight: number; currency: string }>();
+    if (!usedDatePricing) {
+      for (const rate of activeRates) {
+        const amount = rate.Pricing?.BaseRatePricing?.Amount;
+        if (amount && amount.GrossValue > 0) {
+          rateBasePrices.set(rate.Id, {
+            grossPerNight: amount.GrossValue,
+            currency: amount.Currency,
+          });
+        } else if (rate.BaseRateId) {
+          const baseRate = activeRates.find((r) => r.Id === rate.BaseRateId);
+          const baseAmount = baseRate?.Pricing?.BaseRatePricing?.Amount;
+          if (baseAmount && baseAmount.GrossValue > 0) {
+            rateBasePrices.set(rate.Id, {
+              grossPerNight: baseAmount.GrossValue,
+              currency: baseAmount.Currency,
+            });
+          }
+        }
+      }
+    }
 
     // Build AvailabilityEntry per available category
     const entries: AvailabilityEntry[] = [];
@@ -326,14 +392,28 @@ export class MewsAdapter implements PmsAdapter {
         basePricePerNight: 0,
       };
 
-      // Build rate plans for this category using inline rate pricing
+      // Build rate plans for this category
       const ratePlans: RatePlan[] = [];
       for (const rate of activeRates) {
-        const basePrice = rateBasePrices.get(rate.Id);
-        if (!basePrice) continue;
+        let pricePerNightOren: number;
+        let totalOren: number;
+        let currency: string;
 
-        const pricePerNightOren = toOren(basePrice.grossPerNight);
-        const totalOren = pricePerNightOren * nights;
+        if (usedDatePricing) {
+          // Date-accurate, category-specific pricing from rates/getPricing
+          const catPricing = pricingMap.get(rate.Id)?.get(cat.Id);
+          if (!catPricing) continue;
+          pricePerNightOren = catPricing.pricePerNight;
+          totalOren = catPricing.totalPrice;
+          currency = catPricing.currency;
+        } else {
+          // Fallback: static per-rate pricing (same price for all categories)
+          const basePrice = rateBasePrices.get(rate.Id);
+          if (!basePrice) continue;
+          pricePerNightOren = toOren(basePrice.grossPerNight);
+          totalOren = pricePerNightOren * nights;
+          currency = basePrice.currency;
+        }
 
         ratePlans.push({
           externalId: rate.Id,
@@ -343,7 +423,7 @@ export class MewsAdapter implements PmsAdapter {
           cancellationDescription: "",
           pricePerNight: pricePerNightOren,
           totalPrice: totalOren,
-          currency: basePrice.currency,
+          currency,
           validFrom: null,
           validTo: null,
           includedAddons: [],
@@ -623,16 +703,95 @@ export class MewsAdapter implements PmsAdapter {
       }
     }
 
-    // Derive total amount from rate inline pricing
-    const ratesRaw = await this.client.post<Record<string, unknown>, MewsGetRatesResponse>(
-      "rates/getAll",
-      { ServiceIds: [serviceId] },
-    );
-    const rates = MewsGetRatesResponseSchema.parse(ratesRaw);
-    const matchedRate = rates.Rates.find((r) => r.Id === params.ratePlanId);
-    const grossPerNight = matchedRate?.Pricing?.BaseRatePricing?.Amount?.GrossValue ?? 0;
-    const currency = matchedRate?.Pricing?.BaseRatePricing?.Amount?.Currency ?? "SEK";
-    const totalAmountOren = toOren(grossPerNight) * nights;
+    // Step 3: Derive total amount from what Mews actually charged.
+    // Primary: orderItems/getAll returns revenue items posted to the reservation.
+    // Fallback: rates/getPricing for date-accurate per-night pricing.
+    let totalAmountOren = 0;
+    let currency = "SEK";
+
+    try {
+      const orderItemsRaw = await this.client.post<Record<string, unknown>, MewsGetOrderItemsResponse>(
+        "orderItems/getAll",
+        {
+          ServiceOrderIds: [reservation.Id],
+          Limitation: { Count: 1000 },
+        },
+      );
+      const orderItems = MewsGetOrderItemsResponseSchema.parse(orderItemsRaw);
+
+      // Sum GrossValue from all items belonging to this reservation
+      let grossSum = 0;
+      let foundCurrency = false;
+      for (const item of orderItems.OrderItems) {
+        if (item.ServiceOrderId !== reservation.Id) continue;
+        const gross = item.Amount?.GrossValue;
+        if (gross != null) {
+          grossSum += gross;
+          if (!foundCurrency && item.Amount?.Currency) {
+            currency = item.Amount.Currency;
+            foundCurrency = true;
+          }
+        }
+      }
+
+      if (grossSum > 0) {
+        totalAmountOren = toOren(grossSum);
+      }
+    } catch (err) {
+      log("warn", "mews.order_items_fetch_failed", {
+        reservationId: reservation.Id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    // Fallback: rates/getPricing for date-accurate pricing
+    if (totalAmountOren === 0) {
+      try {
+        const pricingStartUtc = new Date(checkInDate);
+        pricingStartUtc.setUTCHours(15, 0, 0, 0);
+        const pricingEndUtc = new Date(checkOutDate);
+        pricingEndUtc.setUTCHours(11, 0, 0, 0);
+
+        const pricingRaw = await this.client.post<Record<string, unknown>, MewsGetRatePricingResponse>(
+          "rates/getPricing",
+          {
+            RateIds: [params.ratePlanId],
+            StartUtc: pricingStartUtc.toISOString(),
+            EndUtc: pricingEndUtc.toISOString(),
+          },
+        );
+        const pricing = MewsGetRatePricingResponseSchema.parse(pricingRaw);
+
+        const ratePricing = pricing.RatePrices.find((rp) => rp.RateId === params.ratePlanId);
+        const catPricing = ratePricing?.ResourceCategoryPrices.find(
+          (cp) => cp.ResourceCategoryId === params.categoryId,
+        );
+
+        if (catPricing && catPricing.Prices.length >= nights) {
+          let grossSum = 0;
+          let allValid = true;
+          for (const p of catPricing.Prices) {
+            if (p.Value != null && p.Value > 0) {
+              grossSum += p.Value;
+            } else {
+              allValid = false;
+              break;
+            }
+            if (!currency && p.Currency) currency = p.Currency;
+          }
+          if (allValid && grossSum > 0) {
+            totalAmountOren = toOren(grossSum);
+            currency = catPricing.Prices[0]?.Currency ?? currency;
+          }
+        }
+      } catch (err) {
+        log("warn", "mews.rates_get_pricing_fallback_failed", {
+          reservationId: reservation.Id,
+          ratePlanId: params.ratePlanId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
 
     return {
       externalId: reservation.Id,

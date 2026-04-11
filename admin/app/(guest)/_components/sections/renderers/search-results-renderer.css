@@ -230,7 +230,7 @@
 }
 
 .sr__card-pricing { display: flex; flex-direction: column; gap: 0.125rem; }
-.sr__card-price { font-family: var(--font-body, inherit); font-size: 1rem; font-weight: 700; color: var(--text); white-space: nowrap; }
+.sr__card-price { font-family: var(--font-body, inherit); font-size: 1rem; font-weight: 600; color: var(--text); white-space: nowrap; }
 .sr__card-price-detail { font-family: var(--font-body, inherit); font-size: .8425rem; font-weight: 400; color: color-mix(in srgb, var(--text, #000) 65%, transparent); white-space: nowrap; }
 
 .sr__card-btn {
@@ -303,6 +303,13 @@
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text);
+}
+
+.sr__plan-description {
+  font-family: var(--font-body, inherit);
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--text, #000) 60%, transparent);
+  line-height: 1.4;
 }
 
 .sr__plan-desc {

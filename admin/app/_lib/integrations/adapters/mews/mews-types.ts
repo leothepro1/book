@@ -321,6 +321,27 @@ export const MewsReservationUpdateResponseSchema = z.object({
 
 export type MewsReservationUpdateResponse = z.infer<typeof MewsReservationUpdateResponseSchema>;
 
+// ── Order Items (revenue items on a reservation) ───────────
+
+export const MewsOrderItemSchema = z.object({
+  Id: z.string(),
+  ServiceOrderId: z.string().optional().nullable(),
+  Amount: z.object({
+    Currency: z.string(),
+    GrossValue: z.number().optional().nullable(),
+    NetValue: z.number().optional().nullable(),
+  }).optional().nullable(),
+});
+
+export type MewsOrderItem = z.infer<typeof MewsOrderItemSchema>;
+
+export const MewsGetOrderItemsResponseSchema = z.object({
+  OrderItems: z.array(MewsOrderItemSchema),
+  Cursor: z.string().optional().nullable(),
+});
+
+export type MewsGetOrderItemsResponse = z.infer<typeof MewsGetOrderItemsResponseSchema>;
+
 // ── Webhook Payload ─────────────────────────────────────────
 
 export const MewsWebhookEventSchema = z.object({

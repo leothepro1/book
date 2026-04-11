@@ -241,6 +241,9 @@ function RoomCard({ entry, searchParams, nights, guests, checkIn, checkOut }: Ro
                 <div key={rp.externalId} className="sr__plan">
                   <div className="sr__plan-info">
                     <div className="sr__plan-name">{rp.name}</div>
+                    {rp.description && (
+                      <div className="sr__plan-description">{rp.description}</div>
+                    )}
                     {rp.cancellationDescription && (
                       <div className="sr__plan-desc">{rp.cancellationDescription}</div>
                     )}
