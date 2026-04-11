@@ -15,7 +15,7 @@ import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { resolveAddonsForAccommodation } from "@/app/_lib/accommodations/addons";
 import { resolveMarkerPrice } from "@/app/_lib/apps/spot-booking/pricing";
-import { isAvailableForDates } from "@/app/_lib/integrations/adapters/fake";
+import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { log } from "@/app/_lib/logger";
 import type { SelectedAddon } from "@/app/_lib/checkout/session-types";
 
@@ -208,27 +208,54 @@ export async function PATCH(
   }
 
   // ── Validate spot_map selections ─────────────────────────────
-  for (const spotSel of spotSelections) {
-    // Load marker + spot map with tenant isolation
-    const marker = await prisma.spotMarker.findFirst({
-      where: { id: spotSel.spotMarkerId, tenantId },
-      select: {
-        id: true,
-        label: true,
-        accommodationId: true,
-        priceOverride: true,
-        accommodation: { select: { externalId: true } },
-        spotMap: {
-          select: {
-            id: true,
-            isActive: true,
-            imageUrl: true,
-            addonPrice: true,
-            currency: true,
+
+  // Pre-load all spot markers in one pass, then batch availability check
+  const spotMarkers = await Promise.all(
+    spotSelections.map((spotSel) =>
+      prisma.spotMarker.findFirst({
+        where: { id: spotSel.spotMarkerId, tenantId },
+        select: {
+          id: true,
+          label: true,
+          accommodationId: true,
+          priceOverride: true,
+          unit: { select: { externalId: true } },
+          spotMap: {
+            select: {
+              id: true,
+              isActive: true,
+              imageUrl: true,
+              addonPrice: true,
+              currency: true,
+            },
           },
         },
-      },
-    });
+      }),
+    ),
+  );
+
+  // Batch-resolve per-unit availability via PMS adapter
+  const spotExternalIds = spotMarkers
+    .filter((m): m is NonNullable<typeof m> => m != null && m.spotMap.isActive)
+    .map((m) => m.unit?.externalId)
+    .filter((id): id is string => id != null);
+
+  let spotUnitAvailability = new Map<string, boolean>();
+  if (spotExternalIds.length > 0 && session.checkIn && session.checkOut) {
+    const checkInDate = new Date(session.checkIn.toISOString().split("T")[0] + "T00:00:00");
+    const checkOutDate = new Date(session.checkOut.toISOString().split("T")[0] + "T00:00:00");
+    const adapter = await resolveAdapter(tenantId);
+    spotUnitAvailability = await adapter.getUnitAvailability(
+      tenantId,
+      spotExternalIds,
+      checkInDate,
+      checkOutDate,
+    );
+  }
+
+  for (let i = 0; i < spotSelections.length; i++) {
+    const spotSel = spotSelections[i];
+    const marker = spotMarkers[i];
 
     if (!marker || !marker.spotMap.isActive) {
       return NextResponse.json(
@@ -253,15 +280,11 @@ export async function PATCH(
       );
     }
 
-    // Re-validate availability using the same per-unit check as the map API.
-    // Individual spot accommodations have their own externalId (e.g. camp_spot_45)
-    // which is used as a seed for deterministic availability in FakeAdapter.
-    // PMS categories (e.g. room_camping_south) are a different granularity —
-    // spot booking checks availability per unit, not per category.
-    if (marker.accommodation.externalId) {
-      const checkInDate = new Date(session.checkIn!.toISOString().split("T")[0] + "T00:00:00");
-      const checkOutDate = new Date(session.checkOut!.toISOString().split("T")[0] + "T00:00:00");
-      const available = isAvailableForDates(marker.accommodation.externalId, checkInDate, checkOutDate);
+    // Re-validate availability using per-unit PMS adapter check.
+    // unit.externalId is a Mews Resource.Id (physical unit), not a ResourceCategory.Id.
+    // If no unit is assigned or unit has no externalId, skip availability check (fail open).
+    if (marker.unit?.externalId) {
+      const available = spotUnitAvailability.get(marker.unit.externalId) ?? true;
 
       if (!available) {
         return NextResponse.json(

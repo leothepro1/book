@@ -22,6 +22,7 @@ const patchSchema = z.object({
   label: z.string().min(1).max(20).optional(),
   x: z.number().min(0).max(100).optional(),
   y: z.number().min(0).max(100).optional(),
+  accommodationUnitId: z.string().nullable().optional(),
 });
 
 export async function PATCH(req: Request, ctx: RouteCtx) {
@@ -66,6 +67,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
   if (parsed.data.label !== undefined) data.label = parsed.data.label;
   if (parsed.data.x !== undefined) data.x = parsed.data.x;
   if (parsed.data.y !== undefined) data.y = parsed.data.y;
+  if (parsed.data.accommodationUnitId !== undefined) data.accommodationUnitId = parsed.data.accommodationUnitId;
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "Inget att uppdatera" }, { status: 400 });

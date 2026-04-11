@@ -30,11 +30,15 @@ export default async function SpotBookingEditorPage({ params }: Props) {
           accommodation: {
             select: { id: true, name: true, slug: true },
           },
+          unit: {
+            select: { name: true },
+          },
         },
         orderBy: { createdAt: "asc" },
       },
       accommodationItems: {
         select: {
+          accommodationId: true,
           accommodation: { select: { id: true, name: true } },
         },
         orderBy: { sortOrder: "asc" },
@@ -62,6 +66,28 @@ export default async function SpotBookingEditorPage({ params }: Props) {
 
   const linkedIds = new Set(spotMap.markers.map((m) => m.accommodationId));
 
+  // Load AccommodationUnit rows for accommodations linked to this SpotMap
+  const linkedAccommodationIds = spotMap.accommodationItems.map((ai) => ai.accommodationId);
+  const accommodationUnits = await prisma.accommodationUnit.findMany({
+    where: {
+      tenantId,
+      accommodationId: { in: linkedAccommodationIds },
+      status: "AVAILABLE",
+    },
+    select: {
+      id: true,
+      name: true,
+      externalId: true,
+      accommodationId: true,
+      accommodation: { select: { name: true } },
+    },
+    orderBy: [{ accommodationId: "asc" }, { name: "asc" }],
+  });
+
+  const assignedUnitIds = new Set(
+    spotMap.markers.map((m) => m.accommodationUnitId).filter(Boolean),
+  );
+
   const initialData = {
     spotMap: {
       id: spotMap.id,
@@ -86,6 +112,8 @@ export default async function SpotBookingEditorPage({ params }: Props) {
       accommodationId: m.accommodationId,
       accommodationName: m.accommodation.name,
       accommodationSlug: m.accommodation.slug,
+      accommodationUnitId: m.accommodationUnitId ?? null,
+      unitName: m.unit?.name ?? null,
       priceOverride: m.priceOverride ?? null,
       color: m.color ?? null,
     })),
@@ -98,6 +126,14 @@ export default async function SpotBookingEditorPage({ params }: Props) {
       linked: linkedIds.has(a.id),
       assignedToThisMap: a.spotMapItem?.spotMapId === mapId,
       assignedToOtherMap: a.spotMapItem != null && a.spotMapItem.spotMapId !== mapId,
+    })),
+    units: accommodationUnits.map((u) => ({
+      id: u.id,
+      name: u.name,
+      externalId: u.externalId,
+      accommodationId: u.accommodationId,
+      accommodationName: u.accommodation.name,
+      assigned: assignedUnitIds.has(u.id),
     })),
   };
 

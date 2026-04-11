@@ -14,6 +14,18 @@
   margin-left: calc(50% - 50vw);
 }
 
+/* Inside sidebar layout — stay within grid column */
+.sl__main .acc {
+  width: 100%;
+  margin-left: 0;
+}
+
+.sl__main .acc__container {
+  max-width: 100%;
+  margin: 0;
+  padding: 40px;
+}
+
 .acc__container {
   max-width: 480px;
   margin: 0 auto;

@@ -242,7 +242,7 @@
 }
 
 .ao__card-add--edit {
-  background: #f2f2f2;
+  background: #ececec;
   color: var(--text, #1a1a1a);
   border-color: transparent;
 }
@@ -315,12 +315,12 @@
   height: 30px;
   border-radius: 50%;
   border: none;
-  background: #207EA9;
+  background: #ececec;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: #1a1a1a;
   transition: background 0.12s;
 }
 
@@ -537,7 +537,7 @@
   border-radius: 16px;
   width: calc(100dvw - 172px);
   max-width: 1032px;
-  max-height: 55vh;
+  max-height: 65vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -609,8 +609,9 @@
 }
 
 .ao__modal-title {
-  font-size: 25px;
+  font-size: 32px;
   font-weight: 600;
+  font-family: var(--font-heading, inherit);
   color: var(--text, #1a1a1a);
   margin: 0;
 }
@@ -647,15 +648,18 @@
 }
 
 .ao__modal-body {
-  padding: 12px 24px;
+  padding: 4px 12px;
+  border: 1px solid #e6e6e6;
+  border-radius: 12px;
+  margin: 0 20px 20px 20px;
 }
 
 .ao__modal-variant {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--text, #000) 6%, transparent);
+  padding: 10px 0;
+  border-bottom: 1px solid #e6e6e6;
 }
 
 .ao__modal-variant:last-child {
@@ -670,13 +674,14 @@
 
 .ao__modal-variant-title {
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text, #1a1a1a);
 }
 
 .ao__modal-variant-price {
-  font-size: 0.75rem;
-  color: color-mix(in srgb, var(--text, #000) 50%, transparent);
+  font-size: 12px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--text, #000) 60%, transparent);
 }
 
 .ao__modal-variant-right {
@@ -697,13 +702,14 @@
 
 
 .ao__modal-confirm {
-  padding: 10px 24px;
-  font-size: 0.875rem;
+  padding: 7px 24px;
+  height: 44px;
+  font-size: 15px;
   font-weight: 600;
   border: none;
-  border-radius: 8px;
-  background: var(--text, #1a1a1a);
-  color: var(--background, #fff);
+  border-radius: 500px;
+  background: #207ea9;
+  color: var(--button-fg, #fff);
   cursor: pointer;
   transition: opacity 0.15s;
 }

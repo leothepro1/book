@@ -17,7 +17,9 @@
 
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
+import { isMewsAdapter } from "@/app/_lib/integrations/adapters/mews";
 import { log } from "@/app/_lib/logger";
+import type { PmsAdapter } from "@/app/_lib/integrations/adapter";
 import type { RoomCategory } from "@/app/_lib/integrations/types";
 import {
   AccommodationType,
@@ -215,6 +217,19 @@ export async function syncAccommodations(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log("error", "sync_accommodations.seed_categories_failed", { tenantId, error: msg });
+  }
+
+  // Sync physical units (rooms/pitches) from PMS — Mews-specific, skipped for other adapters
+  try {
+    const unitResult = await syncAccommodationUnits(tenantId, adapter);
+    log("info", "sync_accommodations.units_complete", {
+      tenantId,
+      synced: unitResult.synced,
+      skipped: unitResult.skipped,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log("error", "sync_accommodations.unit_sync_failed", { tenantId, error: msg });
   }
 
   log("info", "sync_accommodations.complete", {
@@ -473,6 +488,107 @@ async function resolveUniqueCategorySlug(
     if (!conflict) return candidate;
   }
   return `${slug}-${Date.now().toString(36)}`;
+}
+
+// ── Unit sync (physical rooms/pitches from PMS) ─────────────────
+
+/**
+ * syncAccommodationUnits — syncs PMS resources (physical units) into AccommodationUnit.
+ *
+ * Only supported for Mews (uses resources/getAll API).
+ * Other adapters return immediately.
+ * Idempotent: upserts by (tenantId, accommodationId, name).
+ */
+async function syncAccommodationUnits(
+  tenantId: string,
+  adapter: PmsAdapter,
+): Promise<{ synced: number; skipped: number }> {
+  if (!isMewsAdapter(adapter)) {
+    log("info", "sync_accommodation_units.not_supported", {
+      tenantId,
+      provider: adapter.provider,
+    });
+    return { synced: 0, skipped: 0 };
+  }
+
+  // Load all accommodations with PMS externalId for category matching
+  const accommodations = await prisma.accommodation.findMany({
+    where: { tenantId, externalId: { not: null } },
+    select: { id: true, externalId: true },
+  });
+
+  const categoryToAccommodationId = new Map<string, string>();
+  for (const acc of accommodations) {
+    if (acc.externalId) {
+      categoryToAccommodationId.set(acc.externalId, acc.id);
+    }
+  }
+
+  if (categoryToAccommodationId.size === 0) {
+    return { synced: 0, skipped: 0 };
+  }
+
+  let resources;
+  try {
+    resources = await adapter.getResources(tenantId);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log("error", "sync_accommodation_units.get_resources_failed", { tenantId, error: msg });
+    return { synced: 0, skipped: 0 };
+  }
+
+  let synced = 0;
+  let skipped = 0;
+
+  for (const resource of resources) {
+    if (!resource.CategoryId) {
+      skipped++;
+      continue;
+    }
+
+    if (resource.IsActive === false) {
+      skipped++;
+      continue;
+    }
+
+    const accommodationId = categoryToAccommodationId.get(resource.CategoryId);
+    if (!accommodationId) {
+      skipped++;
+      continue;
+    }
+
+    const unitName = resource.Name ?? resource.Id;
+
+    try {
+      await prisma.accommodationUnit.upsert({
+        where: {
+          tenantId_accommodationId_name: { tenantId, accommodationId, name: unitName },
+        },
+        create: {
+          tenantId,
+          accommodationId,
+          name: unitName,
+          externalId: resource.Id,
+          status: "AVAILABLE",
+        },
+        update: {
+          externalId: resource.Id,
+          name: unitName,
+        },
+      });
+      synced++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log("warn", "sync_accommodation_units.upsert_failed", {
+        tenantId,
+        resourceId: resource.Id,
+        error: msg,
+      });
+      skipped++;
+    }
+  }
+
+  return { synced, skipped };
 }
 
 // ── Slug helpers ──────────────────────────────────────────────────

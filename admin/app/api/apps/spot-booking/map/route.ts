@@ -49,11 +49,15 @@ export async function GET(request: NextRequest) {
               slug: true,
             },
           },
+          unit: {
+            select: { name: true },
+          },
         },
         orderBy: { createdAt: "asc" },
       },
       accommodationItems: {
         select: {
+          accommodationId: true,
           accommodation: { select: { id: true, name: true } },
         },
         orderBy: { sortOrder: "asc" },
@@ -85,6 +89,28 @@ export async function GET(request: NextRequest) {
   // Build set of already-linked accommodation IDs
   const linkedIds = new Set(spotMap.markers.map((m) => m.accommodationId));
 
+  // Load AccommodationUnit rows for accommodations linked to this SpotMap
+  const linkedAccommodationIds = spotMap.accommodationItems.map((ai) => ai.accommodationId);
+  const accommodationUnits = await prisma.accommodationUnit.findMany({
+    where: {
+      tenantId,
+      accommodationId: { in: linkedAccommodationIds },
+      status: "AVAILABLE",
+    },
+    select: {
+      id: true,
+      name: true,
+      externalId: true,
+      accommodationId: true,
+      accommodation: { select: { name: true } },
+    },
+    orderBy: [{ accommodationId: "asc" }, { name: "asc" }],
+  });
+
+  const assignedUnitIds = new Set(
+    spotMap.markers.map((m) => m.accommodationUnitId).filter(Boolean),
+  );
+
   return NextResponse.json({
     spotMap: {
       id: spotMap.id,
@@ -106,6 +132,8 @@ export async function GET(request: NextRequest) {
       accommodationId: m.accommodationId,
       accommodationName: m.accommodation.name,
       accommodationSlug: m.accommodation.slug,
+      accommodationUnitId: m.accommodationUnitId ?? null,
+      unitName: m.unit?.name ?? null,
       priceOverride: m.priceOverride ?? null,
       color: m.color ?? null,
     })),
@@ -115,6 +143,14 @@ export async function GET(request: NextRequest) {
       slug: a.slug,
       externalCode: a.externalCode,
       linked: linkedIds.has(a.id),
+    })),
+    units: accommodationUnits.map((u) => ({
+      id: u.id,
+      name: u.name,
+      externalId: u.externalId,
+      accommodationId: u.accommodationId,
+      accommodationName: u.accommodation.name,
+      assigned: assignedUnitIds.has(u.id),
     })),
   });
 }

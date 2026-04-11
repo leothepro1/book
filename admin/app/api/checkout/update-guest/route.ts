@@ -16,6 +16,7 @@ import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFr
 import { upsertGuestAccountFromOrder } from "@/app/_lib/guest-auth/account";
 import { log } from "@/app/_lib/logger";
 import { checkRateLimit } from "@/app/_lib/rate-limit/checkout";
+import { canTransition } from "@/app/_lib/orders/types";
 
 const billingAddressSchema = z.object({
   address1: z.string().min(1).max(200).trim(),
@@ -134,6 +135,59 @@ export async function POST(req: Request) {
     tenantId: tenant.id, orderId: order.id, guestEmail: body.guestEmail,
     hasAddress: !!body.billingAddress,
   });
+
+  // Dev-only: auto-trigger post-payment side effects.
+  // Guest info is now saved — simulate a successful Stripe webhook
+  // so PMS booking, email, and analytics fire without real payment.
+  if (process.env.NODE_ENV === "development") {
+    setImmediate(async () => {
+      try {
+        const freshOrder = await prisma.order.findUnique({
+          where: { id: order.id },
+          select: { status: true },
+        });
+        if (!freshOrder || !canTransition(freshOrder.status, "PAID")) return;
+
+        const paymentSession = await prisma.paymentSession.findUnique({
+          where: { orderId: order.id },
+          select: { externalSessionId: true },
+        });
+        const piId = paymentSession?.externalSessionId ?? "dev_simulated_pi";
+
+        await prisma.$transaction(async (tx) => {
+          await tx.order.update({
+            where: { id: order.id },
+            data: {
+              status: "PAID",
+              financialStatus: "PAID",
+              paidAt: new Date(),
+              stripePaymentIntentId: piId,
+            },
+          });
+          await tx.orderEvent.create({
+            data: {
+              orderId: order.id,
+              tenantId: tenant.id,
+              type: "PAYMENT_CAPTURED",
+              message: "[DEV] Betalning simulerad",
+            },
+          });
+        });
+
+        const { processOrderPaidSideEffects } = await import(
+          "@/app/_lib/orders/process-paid-side-effects"
+        );
+        await processOrderPaidSideEffects(order.id, piId);
+
+        log("info", "dev.auto_trigger_payment_complete", { orderId: order.id });
+      } catch (err) {
+        log("error", "dev.auto_trigger_payment_failed", {
+          orderId: order.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

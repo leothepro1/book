@@ -84,6 +84,20 @@ export class ManualAdapter implements PmsAdapter {
     return null;
   }
 
+  async getUnitAvailability(
+    _tenantId: string,
+    externalIds: string[],
+    _checkIn: Date,
+    _checkOut: Date,
+  ): Promise<Map<string, boolean>> {
+    // No PMS = assume all units available
+    const result = new Map<string, boolean>();
+    for (const id of externalIds) {
+      result.set(id, true);
+    }
+    return result;
+  }
+
   async createBooking(
     _tenantId: string,
     _params: CreateBookingParams,

@@ -305,6 +305,39 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* ── Account button ── */
+
+.gh-account {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  height: max-content;
+  text-decoration: none;
+}
+
+.gh-account--active {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #3F87AC;
+  transition: opacity 0.15s;
+}
+
+.gh-account--active:hover {
+  opacity: 0.8;
+}
+
+.gh-account__initials {
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-body, inherit);
+  color: var(--background, #fff);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
 .cart-header-btn__badge {
   position: absolute;
   top: -5px;

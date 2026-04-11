@@ -95,16 +95,49 @@ export const MewsResourceSchema = z.object({
   Id: z.string(),
   Name: z.string().nullable().optional(),
   State: z.string().optional(),
+  IsActive: z.boolean().optional(),
 });
+
+// ── Resource Category Assignment (links Resource → ResourceCategory) ──
+
+export const MewsResourceCategoryAssignmentSchema = z.object({
+  Id: z.string(),
+  IsActive: z.boolean().optional(),
+  ResourceId: z.string(),
+  CategoryId: z.string(),
+});
+
+export type MewsResourceCategoryAssignment = z.infer<typeof MewsResourceCategoryAssignmentSchema>;
 
 export type MewsResource = z.infer<typeof MewsResourceSchema>;
 
 export const MewsGetResourcesResponseSchema = z.object({
   Resources: z.array(MewsResourceSchema),
+  ResourceCategoryAssignments: z.array(MewsResourceCategoryAssignmentSchema).optional(),
   Cursor: z.string().nullable().optional(),
 });
 
 export type MewsGetResourcesResponse = z.infer<typeof MewsGetResourcesResponseSchema>;
+
+// ── Resource Block (Out of Order / Out of Use) ─────────────
+
+export const MewsResourceBlockSchema = z.object({
+  Id: z.string(),
+  ResourceId: z.string(),
+  StartUtc: z.string(),
+  EndUtc: z.string(),
+  Type: z.string().optional(),
+  IsActive: z.boolean().optional(),
+});
+
+export type MewsResourceBlock = z.infer<typeof MewsResourceBlockSchema>;
+
+export const MewsGetResourceBlocksResponseSchema = z.object({
+  ResourceBlocks: z.array(MewsResourceBlockSchema),
+  Cursor: z.string().nullable().optional(),
+});
+
+export type MewsGetResourceBlocksResponse = z.infer<typeof MewsGetResourceBlocksResponseSchema>;
 
 // ── Service ─────────────────────────────────────────────────
 
@@ -279,6 +312,14 @@ export const MewsReservationAddResponseSchema = z.object({
 });
 
 export type MewsReservationAddResponse = z.infer<typeof MewsReservationAddResponseSchema>;
+
+// ── Reservation Update Response ─────────────────────────────
+
+export const MewsReservationUpdateResponseSchema = z.object({
+  Reservations: z.array(MewsReservationSchema),
+});
+
+export type MewsReservationUpdateResponse = z.infer<typeof MewsReservationUpdateResponseSchema>;
 
 // ── Webhook Payload ─────────────────────────────────────────
 

@@ -18,7 +18,7 @@ import { z } from "zod";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { resolveMarkerPrice } from "@/app/_lib/apps/spot-booking/pricing";
-import { isAvailableForDates } from "@/app/_lib/integrations/adapters/fake";
+import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -75,8 +75,12 @@ export async function GET(req: Request) {
           accommodation: {
             select: {
               id: true,
-              externalId: true,
               name: true,
+            },
+          },
+          unit: {
+            select: {
+              externalId: true,
             },
           },
         },
@@ -88,9 +92,24 @@ export async function GET(req: Request) {
     return NextResponse.json({ spotMap: null }, { headers: NO_STORE });
   }
 
-  // Resolve availability per marker using externalId as seed
+  // Resolve per-unit availability via PMS adapter
   const checkInDate = new Date(checkIn + "T00:00:00");
   const checkOutDate = new Date(checkOut + "T00:00:00");
+
+  const externalIds = spotMap.markers
+    .map((m) => m.unit?.externalId)
+    .filter((id): id is string => id != null);
+
+  let unitAvailability = new Map<string, boolean>();
+  if (externalIds.length > 0) {
+    const adapter = await resolveAdapter(tenantId);
+    unitAvailability = await adapter.getUnitAvailability(
+      tenantId,
+      externalIds,
+      checkInDate,
+      checkOutDate,
+    );
+  }
 
   return NextResponse.json(
     {
@@ -110,8 +129,8 @@ export async function GET(req: Request) {
           accommodationName: m.accommodation.name,
           effectivePrice: resolveMarkerPrice(m.priceOverride, spotMap.addonPrice),
           color: m.color ?? null,
-          available: m.accommodation.externalId
-            ? isAvailableForDates(m.accommodation.externalId, checkInDate, checkOutDate)
+          available: m.unit?.externalId
+            ? (unitAvailability.get(m.unit.externalId) ?? true)
             : true,
         })),
       },

@@ -34,7 +34,7 @@ export async function createPmsBookingAfterPayment(
 ): Promise<CreatePmsBookingResult> {
   const { orderId, tenantId } = params;
 
-  // 1. Load Order with linked Booking
+  // 1. Load Order with linked Booking and line items
   const order = await prisma.order.findFirst({
     where: { id: orderId, tenantId, orderType: "ACCOMMODATION" },
     select: {
@@ -56,6 +56,12 @@ export async function createPmsBookingAfterPayment(
           externalId: true,
         },
         take: 1,
+      },
+      lineItems: {
+        select: {
+          productId: true,
+          variantId: true,
+        },
       },
     },
   });
@@ -106,7 +112,61 @@ export async function createPmsBookingAfterPayment(
     };
   }
 
-  // 4. Call PMS adapter
+  // 4. Resolve spot marker for unit-level PMS assignment (if guest selected a specific spot)
+  //    requestedResourceId must be a Mews Resource.Id (physical unit), NOT a ResourceCategory.Id.
+  //    AccommodationUnit.externalId stores the correct Resource.Id from PMS sync.
+  let requestedResourceId: string | undefined;
+  const spotLineItem = order.lineItems.find((li) => li.productId.startsWith("spot-map:"));
+  if (spotLineItem?.variantId) {
+    try {
+      const spotMarker = await prisma.spotMarker.findUnique({
+        where: { id: spotLineItem.variantId },
+        select: {
+          id: true,
+          accommodationUnitId: true,
+          unit: { select: { externalId: true, name: true } },
+        },
+      });
+
+      if (!spotMarker) {
+        log("warn", "create_pms_booking.spot_marker_not_found", {
+          orderId,
+          bookingId: booking.id,
+          variantId: spotLineItem.variantId,
+        });
+      } else if (!spotMarker.accommodationUnitId) {
+        log("warn", "create_pms_booking.spot_marker_no_unit", {
+          orderId,
+          bookingId: booking.id,
+          markerId: spotMarker.id,
+        });
+      } else if (!spotMarker.unit?.externalId) {
+        log("warn", "create_pms_booking.spot_unit_no_external_id", {
+          orderId,
+          bookingId: booking.id,
+          markerId: spotMarker.id,
+          unitName: spotMarker.unit?.name ?? null,
+        });
+      } else {
+        requestedResourceId = spotMarker.unit.externalId;
+        log("info", "create_pms_booking.spot_unit_resolved", {
+          orderId,
+          bookingId: booking.id,
+          markerId: spotMarker.id,
+          unitExternalId: spotMarker.unit.externalId,
+        });
+      }
+    } catch (err) {
+      log("warn", "create_pms_booking.spot_marker_lookup_failed", {
+        orderId,
+        bookingId: booking.id,
+        spotMarkerId: spotLineItem.variantId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // 5. Call PMS adapter
   const adapter = await resolveAdapter(tenantId);
 
   const [firstName, ...lastParts] = (order.guestName || "Guest").split(" ");
@@ -128,6 +188,7 @@ export async function createPmsBookingAfterPayment(
       },
       addons: [],
       specialRequests: booking.specialRequests ?? undefined,
+      requestedResourceId,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -139,7 +200,7 @@ export async function createPmsBookingAfterPayment(
     return { ok: false, error: msg, retryable: true };
   }
 
-  // 6. Update Booking with PMS confirmation and create OrderEvent
+  // 7. Update Booking with PMS confirmation and create OrderEvent
   await prisma.$transaction(async (tx) => {
     await tx.booking.update({
       where: { id: booking.id },

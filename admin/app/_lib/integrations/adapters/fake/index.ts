@@ -550,6 +550,22 @@ export class FakeAdapter implements PmsAdapter {
     };
   }
 
+  async getUnitAvailability(
+    _tenantId: string,
+    externalIds: string[],
+    checkIn: Date,
+    checkOut: Date,
+  ): Promise<Map<string, boolean>> {
+    await this.delay();
+    if (this.config.scenario === "error") throw new Error("Fake PMS: Connection refused");
+
+    const result = new Map<string, boolean>();
+    for (const id of externalIds) {
+      result.set(id, isAvailableForDates(id, checkIn, checkOut));
+    }
+    return result;
+  }
+
   async createBooking(
     _tenantId: string,
     params: CreateBookingParams,

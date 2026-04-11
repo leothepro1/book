@@ -1781,6 +1781,7 @@ model AccommodationUnit {
   updatedAt DateTime @updatedAt
 
   accommodation Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+  spotMarkers   SpotMarker[]
 
   @@unique([tenantId, accommodationId, name])
   @@index([tenantId])
@@ -3368,25 +3369,29 @@ model SpotMapAccommodation {
 
 /// A bookable spot on a SpotMap — pinned to an Accommodation unit.
 model SpotMarker {
-  id              String   @id @default(cuid())
-  tenantId        String
-  spotMapId       String
-  accommodationId String   // FK → Accommodation — this is the bookable unit
-  label           String   // "32a", "Sjöutsikt" etc
-  x               Float    // 0.0–100.0, percentage of image width
-  y               Float    // 0.0–100.0, percentage of image height
-  priceOverride   Int?     // null = inherit SpotMap.addonPrice; set = override in öre
-  color           String?  // null = default accent; set = custom hex e.g. "#e53935"
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  tenantId            String
+  spotMapId           String
+  accommodationId     String   // FK → Accommodation (room category)
+  accommodationUnitId String?  // FK → AccommodationUnit (physical unit, e.g. Mews Resource)
+  label               String   // "32a", "Sjöutsikt" etc
+  x                   Float    // 0.0–100.0, percentage of image width
+  y                   Float    // 0.0–100.0, percentage of image height
+  priceOverride       Int?     // null = inherit SpotMap.addonPrice; set = override in öre
+  color               String?  // null = default accent; set = custom hex e.g. "#e53935"
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  spotMap       SpotMap       @relation(fields: [spotMapId], references: [id], onDelete: Cascade)
-  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  spotMap       SpotMap             @relation(fields: [spotMapId], references: [id], onDelete: Cascade)
+  accommodation Accommodation      @relation(fields: [accommodationId], references: [id])
+  unit          AccommodationUnit?  @relation(fields: [accommodationUnitId], references: [id], onDelete: SetNull)
 
-  @@unique([spotMapId, accommodationId]) // one marker per accommodation per map
+  // Partial unique index on (spotMapId, accommodationUnitId) WHERE accommodationUnitId IS NOT NULL
+  // — enforced in DB via migration SQL, not expressible as @@unique in Prisma
   @@index([tenantId])
   @@index([spotMapId])
+  @@index([accommodationUnitId])
 }
 
 // ============================================================================

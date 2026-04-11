@@ -32,6 +32,21 @@
   scrollbar-color: color-mix(in srgb, var(--text, #202020) 15%, transparent) transparent;
 }
 
+/* ── Account variant ── */
+
+.sl--account {
+  gap: 0;
+  max-width: 1100px;
+}
+
+.sl--account .sl__sidebar {
+  top: 0;
+  height: 100vh;
+  max-height: none;
+  padding-right: 40px;
+  border-right: 1px solid #dadada;
+}
+
 /* ── Main content ── */
 
 .sl__main {

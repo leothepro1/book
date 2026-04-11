@@ -40,6 +40,8 @@ type MarkerData = {
   accommodationId: string;
   accommodationName: string;
   accommodationSlug: string;
+  accommodationUnitId: string | null;
+  unitName: string | null;
   priceOverride: number | null;
   color: string | null;
 };
@@ -53,6 +55,15 @@ type AccommodationOption = {
   linked: boolean;
   assignedToThisMap: boolean;
   assignedToOtherMap: boolean;
+};
+
+type UnitOption = {
+  id: string;
+  name: string;
+  externalId: string | null;
+  accommodationId: string;
+  accommodationName: string;
+  assigned: boolean;
 };
 
 type SpotMapData = {
@@ -72,6 +83,7 @@ export type EditorInitialData = {
   spotMap: SpotMapData;
   markers: MarkerData[];
   accommodations: AccommodationOption[];
+  units: UnitOption[];
 };
 
 type Props = {
@@ -115,6 +127,8 @@ function normalizeForCompare(config: MapDraftConfig): MapDraftConfig {
         y: m.y,
         accommodationId: m.accommodationId,
         accommodationName: m.accommodationName,
+        accommodationUnitId: m.accommodationUnitId ?? null,
+        unitName: m.unitName ?? null,
         priceOverride: m.priceOverride ?? null,
         color: m.color ?? null,
       })),
@@ -136,6 +150,8 @@ function buildConfigFromInitial(data: EditorInitialData): MapDraftConfig {
       y: m.y,
       accommodationId: m.accommodationId,
       accommodationName: m.accommodationName,
+      accommodationUnitId: m.accommodationUnitId ?? null,
+      unitName: m.unitName ?? null,
       priceOverride: m.priceOverride ?? null,
       color: m.color ?? null,
     })),
@@ -169,6 +185,8 @@ export function SpotBookingEditor({ initialData }: Props) {
         subtitle: draft.subtitle ?? spotMap.subtitle,
         markers: (draft.markers ?? []).map((m) => ({
           ...m,
+          accommodationUnitId: m.accommodationUnitId ?? null,
+          unitName: m.unitName ?? null,
           priceOverride: m.priceOverride ?? null,
           color: m.color ?? null,
         })),
@@ -468,6 +486,8 @@ export function SpotBookingEditor({ initialData }: Props) {
         y,
         accommodationId: firstAcc?.id ?? "",
         accommodationName: firstAcc?.name ?? "",
+        accommodationUnitId: null,
+        unitName: null,
         priceOverride: null,
         color: null,
       };
@@ -538,6 +558,18 @@ export function SpotBookingEditor({ initialData }: Props) {
   const availableAccommodations = accommodations.filter(
     (a) => !linkedAccIds.has(a.id),
   );
+  const [units, setUnits] = useState<UnitOption[]>(initialData.units);
+
+  const refreshUnits = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/apps/spot-booking/${spotMap.id}/units`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setUnits(data.units);
+    } catch {
+      // Silent fail — units will be stale until next page load
+    }
+  }, [spotMap.id]);
   let canvasClass = "sbe__canvas";
   if (placingMode) canvasClass += " sbe__canvas--placing";
   else if (isDragging) canvasClass += " sbe__canvas--dragging";
@@ -659,8 +691,9 @@ export function SpotBookingEditor({ initialData }: Props) {
                       mapId={spotMap.id}
                       accommodations={initialData.accommodations}
                       assigned={spotMap.accommodationItems}
-                      onUpdated={(items) => {
+                      onUpdated={async (items) => {
                         spotMap.accommodationItems = items;
+                        await refreshUnits();
                       }}
                     />
                   </div>
@@ -772,7 +805,7 @@ export function SpotBookingEditor({ initialData }: Props) {
                               {m.label.slice(0, 2)}
                             </div>
                             <div className="sbe__marker-row-info">
-                              <span className="sbe__marker-row-acc">{m.accommodationName}</span>
+                              <span className="sbe__marker-row-acc">{m.unitName ?? m.accommodationName}</span>
                             </div>
                             <EditorIcon name="chevron_right" size={18} className="sbe__marker-row-chevron" />
                           </div>
@@ -798,6 +831,7 @@ export function SpotBookingEditor({ initialData }: Props) {
                       index={detailIndex}
                       defaultPrice={currentConfig.addonPrice}
                       accommodations={accommodations}
+                      units={units}
                       allMarkers={markers}
                       onBack={() => { setDetailIndex(null); setSelectedId(null); }}
                       onUpdate={(index, patch) => {
@@ -913,6 +947,7 @@ function MarkerDetailPanel({
   index,
   defaultPrice,
   accommodations,
+  units,
   allMarkers,
   onBack,
   onUpdate,
@@ -922,6 +957,7 @@ function MarkerDetailPanel({
   index: number;
   defaultPrice: number;
   accommodations: AccommodationOption[];
+  units: UnitOption[];
   allMarkers: DraftMarker[];
   onBack: () => void;
   onUpdate: (index: number, patch: Partial<DraftMarker>) => void;
@@ -1000,19 +1036,28 @@ function MarkerDetailPanel({
           />
         </div>
 
-        {/* ── Accommodation (resource picker) ── */}
+        {/* ── Unit (physical resource picker) ── */}
         <div className="sbe__dp-section">
-          <label className="sbe__dp-label">Boende</label>
-          <AccommodationPicker
-            accommodations={accommodations}
-            selectedId={marker.accommodationId}
+          <label className="sbe__dp-label">Enhet</label>
+          <UnitPicker
+            units={units}
+            selectedId={marker.accommodationUnitId ?? null}
             linkedByOthers={linkedByOthers}
-            onSelect={(id) => {
-              const acc = accommodations.find((a) => a.id === id);
-              if (acc) {
+            allMarkers={allMarkers}
+            currentIndex={index}
+            onSelect={(unit) => {
+              if (unit) {
+                const parentAcc = accommodations.find((a) => a.id === unit.accommodationId);
                 onUpdate(index, {
-                  accommodationId: id,
-                  accommodationName: acc.name,
+                  accommodationUnitId: unit.id,
+                  unitName: unit.name,
+                  accommodationId: unit.accommodationId,
+                  accommodationName: parentAcc?.name ?? unit.accommodationName,
+                });
+              } else {
+                onUpdate(index, {
+                  accommodationUnitId: null,
+                  unitName: null,
                 });
               }
             }}
@@ -1067,7 +1112,7 @@ function MapAccommodationPicker({
   mapId: string;
   accommodations: AccommodationOption[];
   assigned: { id: string; name: string }[];
-  onUpdated: (items: { id: string; name: string }[]) => void;
+  onUpdated: (items: { id: string; name: string }[]) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -1139,7 +1184,7 @@ function MapAccommodationPicker({
           const acc = accommodations.find((a) => a.id === id);
           return { id, name: acc?.name ?? "" };
         });
-        onUpdated(newItems);
+        await onUpdated(newItems);
       }
     }
 
@@ -1224,18 +1269,22 @@ function MapAccommodationPicker({
   );
 }
 
-// ── Accommodation picker (sp-resource-picker pattern) ─────────────
+// ── Unit picker (sp-resource-picker pattern) ─────────────────────
 
-function AccommodationPicker({
-  accommodations,
+function UnitPicker({
+  units,
   selectedId,
   linkedByOthers,
+  allMarkers,
+  currentIndex,
   onSelect,
 }: {
-  accommodations: AccommodationOption[];
-  selectedId: string;
+  units: UnitOption[];
+  selectedId: string | null;
   linkedByOthers: Set<string>;
-  onSelect: (id: string) => void;
+  allMarkers: DraftMarker[];
+  currentIndex: number;
+  onSelect: (unit: UnitOption | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -1243,13 +1292,32 @@ function AccommodationPicker({
   const popupRef = useRef<HTMLDivElement>(null);
   const [popupTop, setPopupTop] = useState(0);
 
-  const selected = accommodations.find((a) => a.id === selectedId);
+  const selected = units.find((u) => u.id === selectedId) ?? null;
+
+  // Units already assigned to OTHER markers in this draft
+  const assignedByOthers = new Set(
+    allMarkers
+      .filter((_, i) => i !== currentIndex)
+      .map((m) => m.accommodationUnitId)
+      .filter(Boolean) as string[],
+  );
 
   const query = search.trim().toLowerCase();
   const filtered = (query
-    ? accommodations.filter((a) => a.name.toLowerCase().includes(query))
-    : accommodations
-  ).filter((a) => a.id === selectedId || !linkedByOthers.has(a.id));
+    ? units.filter((u) => u.name.toLowerCase().includes(query) || u.accommodationName.toLowerCase().includes(query))
+    : units
+  ).filter((u) => u.id === selectedId || !assignedByOthers.has(u.id));
+
+  // Group units by accommodation name
+  const groups = useMemo(() => {
+    const map = new Map<string, UnitOption[]>();
+    for (const u of filtered) {
+      const group = map.get(u.accommodationName) ?? [];
+      group.push(u);
+      map.set(u.accommodationName, group);
+    }
+    return map;
+  }, [filtered]);
 
   useEffect(() => {
     if (!open) return;
@@ -1293,7 +1361,7 @@ function AccommodationPicker({
         <input
           type="text"
           className="pk-popup__search-input"
-          placeholder="Sök boende..."
+          placeholder="Sök enhet..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           autoComplete="off"
@@ -1306,28 +1374,38 @@ function AccommodationPicker({
         )}
       </div>
       <div className="sp-resource-popup__list">
-        {filtered.length === 0 ? (
-          <div className="sp-resource-popup__empty">Inga tillgängliga boenden</div>
+        {units.length === 0 ? (
+          <div className="sp-resource-popup__empty">Inga enheter synkade ännu. Kör en PMS-synk för att hämta platser.</div>
+        ) : filtered.length === 0 ? (
+          <div className="sp-resource-popup__empty">Inga tillgängliga enheter</div>
         ) : (
-          filtered.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              className={`sp-resource-popup__item${a.id === selectedId ? " sp-resource-popup__item--active" : ""}`}
-              onClick={() => { onSelect(a.id); setOpen(false); setSearch(""); }}
-            >
-              {a.imageUrl ? (
-                <img src={a.imageUrl} alt="" className="sp-resource-popup__item-img" />
-              ) : (
-                <div className="sp-resource-popup__item-img sp-resource-popup__item-img--empty">
-                  <EditorIcon name="hotel" size={12} />
-                </div>
+          [...groups.entries()].map(([groupName, groupUnits]) => (
+            <div key={groupName}>
+              {groups.size > 1 && (
+                <div className="sp-resource-popup__group-label">{groupName}</div>
               )}
-              <span className="sp-resource-popup__item-title">{a.name}</span>
-              {a.id === selectedId && (
-                <EditorIcon name="check" size={16} style={{ color: "var(--admin-accent)", flexShrink: 0 }} />
-              )}
-            </button>
+              {groupUnits.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  className={`sp-resource-popup__item${u.id === selectedId ? " sp-resource-popup__item--active" : ""}`}
+                  onClick={() => { onSelect(u); setOpen(false); setSearch(""); }}
+                >
+                  <div className="sp-resource-popup__item-img sp-resource-popup__item-img--empty">
+                    <EditorIcon name="location_on" size={12} />
+                  </div>
+                  <div className="sp-resource-popup__item-info">
+                    <span className="sp-resource-popup__item-title">{u.name}</span>
+                    {groups.size <= 1 && (
+                      <span className="sp-resource-popup__item-sub">{u.accommodationName}</span>
+                    )}
+                  </div>
+                  {u.id === selectedId && (
+                    <EditorIcon name="check" size={16} style={{ color: "var(--admin-accent)", flexShrink: 0 }} />
+                  )}
+                </button>
+              ))}
+            </div>
           ))
         )}
       </div>
@@ -1343,16 +1421,12 @@ function AccommodationPicker({
         className="sp-resource-picker__trigger"
         onClick={() => open ? setOpen(false) : openPopup()}
       >
-        {selected?.imageUrl ? (
-          <img src={selected.imageUrl} alt="" className="sp-resource-picker__thumb" />
-        ) : (
-          <div className="sp-resource-picker__thumb sp-resource-popup__item-img--empty">
-            <EditorIcon name="hotel" size={14} />
-          </div>
-        )}
+        <div className="sp-resource-picker__thumb sp-resource-popup__item-img--empty">
+          <EditorIcon name="location_on" size={14} />
+        </div>
         <span className="sp-resource-picker__trigger-text">
           <span className="sp-resource-picker__value">
-            {selected?.name ?? "Välj boende..."}
+            {selected?.name ?? "Välj enhet..."}
           </span>
         </span>
         <EditorIcon name="unfold_more" size={16} className="sp-resource-picker__icon" />

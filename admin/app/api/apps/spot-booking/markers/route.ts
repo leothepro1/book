@@ -17,6 +17,7 @@ import { log } from "@/app/_lib/logger";
 const bodySchema = z.object({
   spotMapId: z.string().min(1),
   accommodationId: z.string().min(1),
+  accommodationUnitId: z.string().optional(),
   label: z.string().min(1).max(20),
   x: z.number().min(0).max(100),
   y: z.number().min(0).max(100),
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { spotMapId, accommodationId, label, x, y } = parsed.data;
+  const { spotMapId, accommodationId, accommodationUnitId, label, x, y } = parsed.data;
 
   // Verify SpotMap belongs to tenant
   const spotMap = await prisma.spotMap.findFirst({
@@ -93,6 +94,7 @@ export async function POST(req: Request) {
           tenantId,
           spotMapId,
           accommodationId,
+          accommodationUnitId: accommodationUnitId ?? null,
           label,
           x,
           y,

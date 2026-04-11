@@ -119,7 +119,7 @@ function QtyControl({
         disabled={value <= min}
         onClick={() => onChange(value - 1)}
       >
-        <span className="material-symbols-rounded" style={{ fontSize: 18 }}>remove</span>
+        <span className="material-symbols-rounded" style={{ fontSize: 21, fontWeight: 500 }}>remove</span>
       </button>
       <span className="ao__qty-value">{value}</span>
       <button
@@ -128,7 +128,7 @@ function QtyControl({
         disabled={value >= max}
         onClick={() => onChange(value + 1)}
       >
-        <span className="material-symbols-rounded" style={{ fontSize: 18 }}>add</span>
+        <span className="material-symbols-rounded" style={{ fontSize: 21, fontWeight: 500 }}>add</span>
       </button>
     </div>
   );
@@ -592,10 +592,7 @@ export function AddonsClient({ token, addons, spotAddon, snapshot, backUrl }: Pr
       {/* ── Fixed bottom bar ──────────────────────────── */}
       <div className="ao__bar">
         <div className="ao__bar-inner">
-          <Link href={backUrl} className="ao__bar-back">
-            <span className="material-symbols-rounded" style={{ fontSize: 18 }}>arrow_back</span>
-            Gå tillbaka
-          </Link>
+          <div />
           <button
             type="button"
             className="ao__bar-continue sb"

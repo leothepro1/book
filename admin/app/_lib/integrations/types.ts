@@ -256,6 +256,8 @@ export const CreateBookingParamsSchema = z.object({
     quantity: z.number().int().min(1),
   })).default([]),
   specialRequests: z.string().optional(),
+  /** PMS resource ID for unit-level assignment (e.g. Mews Resource.Id) */
+  requestedResourceId: z.string().optional(),
 });
 
 export type CreateBookingParams = z.infer<typeof CreateBookingParamsSchema>;

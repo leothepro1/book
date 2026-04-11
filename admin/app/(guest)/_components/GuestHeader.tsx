@@ -186,7 +186,7 @@ function MenuPanel({
 
 // ─── Component ───────────────────────────────────────────────
 
-export default function GuestHeader({ config, guestLoggedIn = false }: { config: TenantConfig; guestLoggedIn?: boolean }) {
+export default function GuestHeader({ config, guestLoggedIn = false, guestInitials }: { config: TenantConfig; guestLoggedIn?: boolean; guestInitials?: string }) {
   const pathname = usePathname();
 
   const currentLocale = config._currentLocale ?? "sv";
@@ -354,24 +354,30 @@ export default function GuestHeader({ config, guestLoggedIn = false }: { config:
   const accountHref = guestLoggedIn ? "/account" : "/login";
   rightButtons.push(
     <Fragment key="account">
-      <a href={accountHref} className="inline-flex items-center justify-center" style={{ width: "max-content", height: "max-content" }} aria-label="Konto">
-        <span
-          className="material-symbols-rounded"
-          style={{
-            fontSize: 28,
-            width: 28,
-            height: 28,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "var(--text)",
-            fontVariationSettings: "'wght' 300, 'opsz' 28",
-          }}
-          aria-hidden="true"
-        >
-          person
-        </span>
-      </a>
+      {guestLoggedIn ? (
+        <a href={accountHref} className="gh-account gh-account--active" aria-label="Konto">
+          <span className="gh-account__initials">{guestInitials || "?"}</span>
+        </a>
+      ) : (
+        <a href={accountHref} className="gh-account" aria-label="Logga in">
+          <span
+            className="material-symbols-rounded"
+            style={{
+              fontSize: 28,
+              width: 28,
+              height: 28,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--text)",
+              fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 28",
+            }}
+            aria-hidden="true"
+          >
+            person
+          </span>
+        </a>
+      )}
     </Fragment>,
   );
 

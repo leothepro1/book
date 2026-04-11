@@ -108,7 +108,20 @@ export interface PmsAdapter {
     bookingExternalId: string,
   ): Promise<PaymentStatus | null>;
 
-  // ── 9. Create Booking ──────────────────────────────────────
+  // ── 9. Unit-Level Availability ──────────────────────────────
+  /**
+   * Check availability for specific units/resources by their PMS external IDs.
+   * Returns a Map from externalId → available (boolean).
+   * Used by spot booking to check per-marker availability.
+   */
+  getUnitAvailability(
+    tenantId: string,
+    externalIds: string[],
+    checkIn: Date,
+    checkOut: Date,
+  ): Promise<Map<string, boolean>>;
+
+  // ── 10. Create Booking ──────────────────────────────────────
   /**
    * Create a new booking in the PMS.
    * Returns confirmation with PMS reference and status.

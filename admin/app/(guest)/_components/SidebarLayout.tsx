@@ -16,13 +16,17 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { AccountSidebar } from "./AccountSidebar";
 import "./sidebar-layout.css";
 
-/** Routes where the sidebar is hidden. */
-const SIDEBAR_EXCLUDED_PREFIXES = ["/checkout", "/shop/products"];
+/** Routes where the sidebar is fully hidden (no sidebar at all). */
+const SIDEBAR_EXCLUDED_PREFIXES = ["/checkout", "/shop/products", "/login", "/register", "/order-status", "/auth"];
 
 /** Routes where the sidebar is hidden (suffix match). */
 const SIDEBAR_EXCLUDED_SUFFIXES = ["/addons"];
+
+/** Routes that show the account sidebar instead of the search sidebar. */
+const ACCOUNT_PREFIXES = ["/account"];
 
 export function SidebarLayout({
   sidebar,
@@ -34,13 +38,25 @@ export function SidebarLayout({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Route-based exclusion — sidebar never renders on checkout
+  // Route-based exclusion — sidebar never renders on checkout etc.
   const isExcluded =
     SIDEBAR_EXCLUDED_PREFIXES.some((prefix) => pathname.startsWith(prefix)) ||
     SIDEBAR_EXCLUDED_SUFFIXES.some((suffix) => pathname.endsWith(suffix));
 
-  if (isExcluded || !sidebar) {
+  // Account pages get their own navigation sidebar
+  const isAccount = ACCOUNT_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+
+  if (isExcluded || (!sidebar && !isAccount)) {
     return <>{children}</>;
+  }
+
+  if (isAccount) {
+    return (
+      <div className="sl sl--account">
+        <aside className="sl__sidebar"><AccountSidebar /></aside>
+        <div className="sl__main"><div className="g-content">{children}</div></div>
+      </div>
+    );
   }
 
   return (

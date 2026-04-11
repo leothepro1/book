@@ -40,8 +40,12 @@ import {
   MewsCustomerAddResponseSchema,
   MewsGetAgeCategoriesResponseSchema,
   MewsReservationAddResponseSchema,
+  MewsReservationUpdateResponseSchema,
+  MewsGetResourceBlocksResponseSchema,
+  MewsGetResourcesResponseSchema,
 } from "./mews-types";
 import type {
+  MewsResource,
   MewsResourceCategory,
   MewsGetServicesResponse,
   MewsGetResourceCategoriesResponse,
@@ -52,7 +56,15 @@ import type {
   MewsCustomerAddResponse,
   MewsGetAgeCategoriesResponse,
   MewsReservationAddResponse,
+  MewsReservationUpdateResponse,
+  MewsGetResourceBlocksResponse,
+  MewsGetResourcesResponse,
 } from "./mews-types";
+
+// ── Derived types ───────────────────────────────────────────
+
+/** MewsResource with CategoryId resolved from ResourceCategoryAssignments. */
+export type MewsResourceWithCategory = MewsResource & { CategoryId: string | null };
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -392,6 +404,92 @@ export class MewsAdapter implements PmsAdapter {
     });
   }
 
+  // ── Resources (physical units) ──────────────────────────────
+
+  async getResources(_tenantId: string): Promise<MewsResourceWithCategory[]> {
+    const serviceId = await this.getStayServiceId();
+
+    const raw = await this.client.post<Record<string, unknown>, MewsGetResourcesResponse>(
+      "resources/getAll",
+      {
+        ServiceIds: [serviceId],
+        Extent: { Resources: true, ResourceCategoryAssignments: true },
+      },
+    );
+    const parsed = MewsGetResourcesResponseSchema.parse(raw);
+
+    // Build ResourceId → CategoryId map from assignments
+    const resourceToCategory = new Map<string, string>();
+    for (const assignment of parsed.ResourceCategoryAssignments ?? []) {
+      if (assignment.IsActive !== false) {
+        resourceToCategory.set(assignment.ResourceId, assignment.CategoryId);
+      }
+    }
+
+    // Join CategoryId onto each Resource
+    return parsed.Resources.map((r) => ({
+      ...r,
+      CategoryId: resourceToCategory.get(r.Id) ?? null,
+    }));
+  }
+
+  // ── Unit-Level Availability ─────────────────────────────────
+
+  async getUnitAvailability(
+    _tenantId: string,
+    externalIds: string[],
+    checkIn: Date,
+    checkOut: Date,
+  ): Promise<Map<string, boolean>> {
+    if (externalIds.length === 0) {
+      return new Map();
+    }
+
+    try {
+      const serviceId = await this.getStayServiceId();
+
+      // Fetch resource blocks (out-of-order periods) for the date range
+      const blocksRaw = await this.client.post<Record<string, unknown>, MewsGetResourceBlocksResponse>(
+        "resourceBlocks/getAll",
+        {
+          ServiceIds: [serviceId],
+          TimeFilter: "Colliding",
+          StartUtc: checkIn.toISOString(),
+          EndUtc: checkOut.toISOString(),
+          ActivityStates: ["Active"],
+        },
+      );
+      const blocks = MewsGetResourceBlocksResponseSchema.parse(blocksRaw);
+
+      // Build set of resource IDs that have an active block overlapping the range
+      const blockedResourceIds = new Set<string>();
+      const searchStart = checkIn.getTime();
+      const searchEnd = checkOut.getTime();
+
+      for (const block of blocks.ResourceBlocks) {
+        const blockStart = new Date(block.StartUtc).getTime();
+        const blockEnd = new Date(block.EndUtc).getTime();
+        if (searchStart < blockEnd && searchEnd > blockStart) {
+          blockedResourceIds.add(block.ResourceId);
+        }
+      }
+
+      // Map requested externalIds to availability
+      const result = new Map<string, boolean>();
+      for (const id of externalIds) {
+        result.set(id, !blockedResourceIds.has(id));
+      }
+      return result;
+    } catch {
+      // Fail open — if Mews call fails, assume all units available
+      const result = new Map<string, boolean>();
+      for (const id of externalIds) {
+        result.set(id, true);
+      }
+      return result;
+    }
+  }
+
   // ── 3. Restrictions ─────────────────────────────────────────
 
   async getRestrictions(
@@ -463,7 +561,7 @@ export class MewsAdapter implements PmsAdapter {
       (checkOutDate.getTime() - checkInDate.getTime()) / 86400000,
     );
 
-    // Create reservation
+    // Step 1: Create reservation (category-level — Mews auto-assigns a resource)
     const reservationRaw = await this.client.post<Record<string, unknown>, MewsReservationAddResponse>(
       "reservations/add",
       {
@@ -488,11 +586,44 @@ export class MewsAdapter implements PmsAdapter {
       throw new Error("Mews returned no reservations from reservations/add");
     }
 
-    // Response wraps each reservation in { Identifier, Reservation }
     const reservation = reservationResult.Reservations[0].Reservation;
 
+    // Step 2: Pin to specific physical unit via reservations/update (if requested)
+    // Mews requires three sequential calls — AssignedResourceId and
+    // AssignedResourceLocked cannot be sent in the same request.
+    //   Call 1: Unlock the auto-assigned resource
+    //   Call 2: Assign the requested resource (unlocked)
+    //   Call 3: Lock the assignment
+    // Each call is non-fatal — if any fails, the booking keeps whatever
+    // Mews auto-assigned and we proceed normally.
+    if (params.requestedResourceId) {
+      const resId = reservation.Id;
+      const targetResourceId = params.requestedResourceId;
+
+      try {
+        // Call 1: Unlock
+        await this.client.post<Record<string, unknown>, MewsReservationUpdateResponse>(
+          "reservations/update",
+          { ReservationUpdates: [{ ReservationId: resId, AssignedResourceLocked: { Value: false } }] },
+        );
+
+        // Call 2: Assign
+        await this.client.post<Record<string, unknown>, MewsReservationUpdateResponse>(
+          "reservations/update",
+          { ReservationUpdates: [{ ReservationId: resId, AssignedResourceId: { Value: targetResourceId } }] },
+        );
+
+        // Call 3: Lock
+        await this.client.post<Record<string, unknown>, MewsReservationUpdateResponse>(
+          "reservations/update",
+          { ReservationUpdates: [{ ReservationId: resId, AssignedResourceLocked: { Value: true } }] },
+        );
+      } catch {
+        // Non-fatal: booking exists in Mews, only the unit pin failed.
+      }
+    }
+
     // Derive total amount from rate inline pricing
-    // Fetch rate to get the per-night price
     const ratesRaw = await this.client.post<Record<string, unknown>, MewsGetRatesResponse>(
       "rates/getAll",
       { ServiceIds: [serviceId] },
@@ -551,4 +682,11 @@ export class MewsAdapter implements PmsAdapter {
     const token = headers["x-forwarded-token"] ?? "";
     return token === credentials.webhookToken;
   }
+}
+
+// ── Type guard ──────────────────────────────────────────────
+
+/** Check if an adapter is a MewsAdapter (has getResources method for unit sync). */
+export function isMewsAdapter(adapter: PmsAdapter): adapter is MewsAdapter {
+  return "getResources" in adapter && typeof (adapter as Record<string, unknown>).getResources === "function";
 }

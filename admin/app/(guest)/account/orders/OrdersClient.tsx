@@ -126,10 +126,6 @@ export default function OrdersClient({ orders, pageStyles }: OrdersClientProps) 
     <div ref={rootRef} className="acc">
       <div className="acc__container">
         <div className="acc__header">
-          <Link href="/account" className="ord__back">
-            <span className="material-symbols-rounded ord__back-icon" aria-hidden="true">arrow_back</span>
-            Mitt konto
-          </Link>
           <div className="ord__top">
             <h1 className="acc__title">Bokningar</h1>
             <div className="ord__search">

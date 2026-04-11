@@ -67,6 +67,20 @@ export default async function GuestPageShell({
   const guestSession = await getGuestSession();
   const guestLoggedIn = guestSession !== null && guestSession.tenantId === config.tenantId;
 
+  // Resolve initials for logged-in avatar
+  let guestInitials: string | undefined;
+  if (guestLoggedIn && guestSession?.guestAccountId) {
+    const ga = await (await import("@/app/_lib/db/prisma")).prisma.guestAccount.findUnique({
+      where: { id: guestSession.guestAccountId },
+      select: { firstName: true, lastName: true, email: true },
+    });
+    if (ga) {
+      const f = ga.firstName?.trim()?.[0] ?? "";
+      const l = ga.lastName?.trim()?.[0] ?? "";
+      guestInitials = (f + l).toUpperCase() || ga.email[0].toUpperCase();
+    }
+  }
+
   return (
     <div style={shellVars} className="g-body">
       {fontsUrl && (
@@ -75,7 +89,7 @@ export default async function GuestPageShell({
       )}
       <div style={bgStyle} className="min-h-dvh flex flex-col">
         <EmbedProvider>
-          <GuestHeader config={config} guestLoggedIn={guestLoggedIn} />
+          <GuestHeader config={config} guestLoggedIn={guestLoggedIn} guestInitials={guestInitials} />
           <main className="g-main flex-1">
             {sidebarContent ? (
               <SidebarLayout sidebar={sidebarContent}>
