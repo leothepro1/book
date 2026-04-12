@@ -721,6 +721,80 @@ function SpotSelectionModal({
   const [selectedId, setSelectedId] = useState<string | null>(
     currentSpot?.spotMarkerId ?? null,
   );
+  const [unavailableMsg, setUnavailableMsg] = useState<string | null>(null);
+
+  // Availability map — tracks live availability per marker
+  const [availabilityMap, setAvailabilityMap] = useState<Map<string, boolean>>(new Map());
+  // Optimistically disabled marker (clicked, awaiting confirmation)
+  const [optimisticDisabledId, setOptimisticDisabledId] = useState<string | null>(null);
+
+  // Revalidation fetch params (stable across closures)
+  const revalParamsRef = useRef({
+    accommodationId: snapshot.accommodationId,
+    checkIn: snapshot.checkIn,
+    checkOut: snapshot.checkOut,
+    adults: String(snapshot.adults),
+  });
+
+  // Ref to current selectedId for use inside revalidation callback
+  const selectedIdRef = useRef(selectedId);
+  selectedIdRef.current = selectedId;
+
+  // Revalidation fetch function
+  const revalidateAvailability = useCallback(async () => {
+    try {
+      const p = revalParamsRef.current;
+      const params = new URLSearchParams(p);
+      const res = await fetch(`/api/portal/spot-booking/map?${params}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const fetched = data.spotMap?.markers as SpotMarkerData[] | undefined;
+      if (!fetched) return;
+
+      setAvailabilityMap((prev) => {
+        const next = new Map(prev);
+        for (const m of fetched) {
+          next.set(m.id, m.available);
+        }
+        return next;
+      });
+
+      // If the currently selected spot became unavailable, clear it
+      const currentSelectedId = selectedIdRef.current;
+      if (currentSelectedId) {
+        const selectedMarker = fetched.find((m) => m.id === currentSelectedId);
+        if (selectedMarker && !selectedMarker.available) {
+          setSelectedId(null);
+          setUnavailableMsg("Din valda plats är inte längre tillgänglig");
+        }
+      }
+    } catch {
+      // Silent failure — next interval/interaction will retry
+    }
+  }, []);
+
+  // Debounced interaction revalidation
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerInteractionReval = useCallback(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      revalidateAvailability();
+      debounceTimerRef.current = null;
+    }, 500);
+  }, [revalidateAvailability]);
+
+  // Periodic revalidation — every 30s
+  useEffect(() => {
+    const intervalId = setInterval(revalidateAvailability, 30_000);
+    return () => clearInterval(intervalId);
+  }, [revalidateAvailability]);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, []);
 
   // Scroll lock
   useEffect(() => {
@@ -759,6 +833,8 @@ function SpotSelectionModal({
         if (data.spotMap?.markers) {
           const fetched = data.spotMap.markers as SpotMarkerData[];
           setMarkers(fetched);
+          // Populate initial availability map
+          setAvailabilityMap(new Map(fetched.map((m) => [m.id, m.available])));
           if (data.spotMap.title) setMapTitle(data.spotMap.title);
           if (data.spotMap.subtitle) setMapSubtitle(data.spotMap.subtitle);
 
@@ -899,8 +975,9 @@ function SpotSelectionModal({
       if (snapAnimRef.current) { cancelAnimationFrame(snapAnimRef.current); snapAnimRef.current = null; }
       setIsDragging(true);
       dragStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+      triggerInteractionReval();
     },
-    [pan, zoom],
+    [pan, zoom, triggerInteractionReval],
   );
 
   useEffect(() => {
@@ -934,10 +1011,11 @@ function SpotSelectionModal({
         if (next <= 1) setPan({ x: 0, y: 0 });
         return next;
       });
+      triggerInteractionReval();
     };
     el.addEventListener("wheel", handleWheel, { passive: false });
     return () => el.removeEventListener("wheel", handleWheel);
-  }, [loading]);
+  }, [loading, triggerInteractionReval]);
 
   // Touch handlers for pan + pinch-to-zoom
   useEffect(() => {
@@ -945,6 +1023,7 @@ function SpotSelectionModal({
     if (!el) return;
 
     const handleTouchStart = (e: TouchEvent) => {
+      triggerInteractionReval();
       if (e.touches.length === 1 && zoom > 1) {
         const t = e.touches[0];
         dragStart.current = { x: t.clientX, y: t.clientY, panX: pan.x, panY: pan.y };
@@ -994,7 +1073,14 @@ function SpotSelectionModal({
     };
   }, [isDragging, zoom, pan]);
 
-  const availableCount = markers.filter((m) => m.available).length;
+  // Derive effective availability: availabilityMap overrides marker.available,
+  // optimisticDisabledId forces a marker to appear unavailable
+  const getEffectiveAvailable = useCallback((m: SpotMarkerData) => {
+    if (m.id === optimisticDisabledId) return false;
+    return availabilityMap.get(m.id) ?? m.available;
+  }, [availabilityMap, optimisticDisabledId]);
+
+  const availableCount = markers.filter((m) => getEffectiveAvailable(m)).length;
   const activeMarker = markers.find((m) => m.id === selectedId);
 
   return (
@@ -1013,6 +1099,12 @@ function SpotSelectionModal({
             )}
           </div>
 
+          {unavailableMsg && (
+            <div className="sbm__unavailable-msg">
+              <span className="material-symbols-rounded" style={{ fontSize: 16 }}>info</span>
+              {unavailableMsg}
+            </div>
+          )}
           {error && <div className="sbm__error">{error}</div>}
 
           {loading ? (
@@ -1045,8 +1137,9 @@ function SpotSelectionModal({
               {/* Markers rendered outside scale transform — always crisp */}
               {imgLoaded && imageRef.current && markers.map((m) => {
                 const isActive = selectedId === m.id;
+                const effectiveAvailable = getEffectiveAvailable(m);
                 let cls = "sbm__marker";
-                if (!m.available) cls += " sbm__marker--unavailable";
+                if (!effectiveAvailable) cls += " sbm__marker--unavailable";
                 if (isActive) cls += " sbm__marker--selected";
 
                 // Convert % position to pixel position relative to sbm__map
@@ -1062,9 +1155,13 @@ function SpotSelectionModal({
                     style={{ left: pxX, top: pxY, transform: "translate(-50%, -50%)" }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (!m.available) return;
+                      if (!effectiveAvailable) return;
+                      triggerInteractionReval();
+                      setUnavailableMsg(null);
                       if (isActive) {
                         setSelectedId(null);
+                        // Restore optimistic disable if deselecting
+                        if (optimisticDisabledId === m.id) setOptimisticDisabledId(null);
                       } else {
                         setSelectedId(m.id);
                         // Wait one frame for tooltip to be positioned, then snap
@@ -1092,6 +1189,7 @@ function SpotSelectionModal({
                             className="sbm__tooltip-select sbm__tooltip-select--deselect"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setOptimisticDisabledId(null);
                               onDeselect();
                             }}
                           >
@@ -1103,6 +1201,7 @@ function SpotSelectionModal({
                             className="sbm__tooltip-select"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setOptimisticDisabledId(m.id);
                               onSelect({
                                 spotMarkerId: m.id,
                                 accommodationId: m.accommodationId,
