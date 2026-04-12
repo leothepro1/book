@@ -237,6 +237,17 @@ export const PaymentStatusSchema = z.object({
 
 export type PaymentStatus = z.infer<typeof PaymentStatusSchema>;
 
+// ── Addon Line Item (platform → PMS adapter) ──────────────
+
+export const AddonLineItemSchema = z.object({
+  title: z.string(),
+  quantity: z.number().int().min(1),
+  totalAmount: z.number().int(), // öre/cents
+  currency: z.string(),
+});
+
+export type AddonLineItem = z.infer<typeof AddonLineItemSchema>;
+
 // ── Booking Creation ────────────────────────────────────────
 
 export const CreateBookingParamsSchema = z.object({
@@ -255,6 +266,8 @@ export const CreateBookingParamsSchema = z.object({
     addonId: z.string(),
     quantity: z.number().int().min(1),
   })).default([]),
+  /** Add-on line items with title + amount (no PMS product mapping needed) */
+  addonLineItems: z.array(AddonLineItemSchema).default([]),
   specialRequests: z.string().optional(),
   /** PMS resource ID for unit-level assignment (e.g. Mews Resource.Id) */
   requestedResourceId: z.string().optional(),

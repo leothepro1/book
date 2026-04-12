@@ -580,6 +580,12 @@ export class FakeAdapter implements PmsAdapter {
     const category = FAKE_CATEGORIES.find((c) => c.externalId === params.categoryId);
     const pricePerNight = category?.basePricePerNight ?? 149900;
 
+    if (params.addonLineItems && params.addonLineItems.length > 0) {
+      console.log(
+        `FakeAdapter: would attach ${params.addonLineItems.length} add-ons to reservation: [${params.addonLineItems.map((a) => a.title).join(", ")}]`,
+      );
+    }
+
     const year = new Date().getFullYear();
     const ref = Math.floor(1000 + Math.random() * 9000);
 

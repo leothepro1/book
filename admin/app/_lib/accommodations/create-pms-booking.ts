@@ -61,6 +61,10 @@ export async function createPmsBookingAfterPayment(
         select: {
           productId: true,
           variantId: true,
+          title: true,
+          quantity: true,
+          totalAmount: true,
+          currency: true,
         },
       },
     },
@@ -204,9 +208,35 @@ export async function createPmsBookingAfterPayment(
   }
 
   // 6. Call PMS adapter
+  //
+  // Add-on flow: every Order line item must be reflected in the PMS.
+  // The first line item is the accommodation (already on the reservation).
+  // Spot-map items (productId starts with "spot-map:") drive unit assignment,
+  // not PMS order items. Everything else is an add-on that gets attached
+  // as an arbitrary order item on the reservation (Mews orders/add).
+  //
+  // Example — booking #1419:
+  //   Line 1: Stuga Havsutsikt (700 SEK) → reservation (700 SEK in Mews)
+  //   Line 2: Platsbokning     (400 SEK) → order item on reservation (400 SEK)
+  //   Mews total: 1100 SEK ✓  — matches what the guest paid.
 
   const [firstName, ...lastParts] = (order.guestName || "Guest").split(" ");
   const lastName = lastParts.join(" ") || "-";
+
+  // Filter add-on line items:
+  // - Skip the accommodation line item (first, productId === accommodationId)
+  // - Skip spot-map line items (drive unit assignment, not PMS charges)
+  const addonLineItems = order.lineItems
+    .filter((li) =>
+      li.productId !== booking.accommodationId &&
+      !li.productId.startsWith("spot-map:"),
+    )
+    .map((li) => ({
+      title: li.title,
+      quantity: li.quantity,
+      totalAmount: li.totalAmount,
+      currency: li.currency,
+    }));
 
   let confirmation;
   try {
@@ -223,6 +253,7 @@ export async function createPmsBookingAfterPayment(
         phone: order.guestPhone ?? null,
       },
       addons: [],
+      addonLineItems,
       specialRequests: booking.specialRequests ?? undefined,
       requestedResourceId,
     });

@@ -744,7 +744,44 @@ export class MewsAdapter implements PmsAdapter {
       }
     }
 
-    // Step 3: Derive total amount from what Mews actually charged.
+    // Step 3: Attach add-on line items as arbitrary order items via orders/add.
+    // Uses the Mews "Items" array (custom name + amount, no ProductId needed).
+    // Non-blocking: failure here must never roll back the reservation.
+    if (params.addonLineItems && params.addonLineItems.length > 0) {
+      try {
+        await this.client.post<Record<string, unknown>, { OrderId: string }>(
+          "orders/add",
+          {
+            ServiceId: serviceId,
+            AccountId: customerId,
+            LinkedReservationId: reservation.Id,
+            Items: params.addonLineItems.map((addon) => ({
+              Name: addon.title,
+              UnitCount: addon.quantity,
+              UnitAmount: {
+                Currency: addon.currency,
+                GrossValue: addon.totalAmount / 100, // öre → decimal
+              },
+            })),
+          },
+        );
+
+        log("info", "mews.addons_attached", {
+          reservationId: reservation.Id,
+          addonCount: params.addonLineItems.length,
+          titles: params.addonLineItems.map((a) => a.title).join(", "),
+        });
+      } catch (err) {
+        log("error", "mews.addons_attach_failed", {
+          reservationId: reservation.Id,
+          addonCount: params.addonLineItems.length,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        // Non-fatal: reservation is created, add-ons will be reconciled later
+      }
+    }
+
+    // Step 4: Derive total amount from what Mews actually charged.
     // Primary: orderItems/getAll returns revenue items posted to the reservation.
     // Fallback: rates/getPricing for date-accurate per-night pricing.
     let totalAmountOren = 0;
