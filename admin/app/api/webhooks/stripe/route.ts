@@ -210,12 +210,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       data: { status: "RESOLVED", resolvedAt: new Date() },
     });
 
-    // Complete checkout session now that payment is confirmed
-    await tx.checkoutSession.updateMany({
-      where: { orderId: order.id, status: { not: "COMPLETED" } },
-      data: { status: "COMPLETED", dedupKey: null },
-    });
-
     // ORDER_PAID guest event — atomic with payment update, idempotent
     if (order.guestAccountId) {
       const { createGuestAccountEventInTx } = await import("@/app/_lib/guests/events");
