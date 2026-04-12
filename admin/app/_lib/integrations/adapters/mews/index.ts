@@ -67,7 +67,6 @@ import type {
   MewsGetOrderItemsResponse,
   MewsGetReservationsResponse,
 } from "./mews-types";
-import { log } from "@/app/_lib/logger";
 
 // ── Derived types ───────────────────────────────────────────
 
