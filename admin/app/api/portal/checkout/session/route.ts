@@ -205,6 +205,14 @@ export async function POST(req: Request) {
   // ── Check for addon products ────────────────────────────────
   const categoryIds = accommodation.categoryItems.map((ci) => ci.categoryId);
 
+  if (categoryIds.length === 0) {
+    log("warn", "checkout.accommodation_missing_category_items", {
+      tenantId: tenant.id,
+      accommodationId: accommodation.id,
+      accommodationName: accommodation.name,
+    });
+  }
+
   let addonCount = 0;
   if (categoryIds.length > 0) {
     const addonLinks = await prisma.accommodationCategoryAddon.findMany({
@@ -311,6 +319,7 @@ export async function POST(req: Request) {
         accommodationName: displayName,
         accommodationSlug: accommodation.slug,
         ratePlanName: ratePlan.name,
+        ratePlanDescription: ratePlan.description ?? "",
         ratePlanCancellationPolicy: ratePlan.cancellationPolicy,
         pricePerNight: ratePlan.pricePerNight,
         totalNights: dateCheck.nights,

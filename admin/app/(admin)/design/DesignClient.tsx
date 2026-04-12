@@ -322,7 +322,7 @@ function HeaderView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s: Pa
   const [isRemoving, setIsRemoving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const { upload, isUploading } = useUpload("hospitality/logos");
+  const { upload, isUploading } = useUpload("logos");
 
   const currentLogoUrl = previewUrl || theme?.header?.logoUrl || "";
   const currentLogoWidth = theme?.header?.logoWidth ?? 120;
@@ -869,7 +869,7 @@ function WallpaperView({ onBack, pushUndo }: { onBack: () => void; pushUndo: (s:
               value={bg.imageUrl}
               onChange={handleImageChange}
               onRemove={handleImageRemove}
-              folder="hospitality/wallpaper"
+              folder="wallpaper"
               placeholder="Välj bakgrundsbild..."
             />
           </div>

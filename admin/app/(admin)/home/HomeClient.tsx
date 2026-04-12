@@ -777,7 +777,7 @@ function DocUploadModal({ fileUrl, fileName, onUpload, onClear, onClose }: {
   onClose: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const { upload, isUploading, error } = useUpload("hospitality/documents");
+  const { upload, isUploading, error } = useUpload("documents");
   const [previewUrl, setPreviewUrl] = useState<string | null>(
     fileUrl ? fileUrl.replace("/upload/", "/upload/pg_1,w_600,f_jpg/") : null
   );

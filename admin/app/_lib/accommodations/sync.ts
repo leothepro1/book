@@ -472,6 +472,24 @@ async function seedAccommodationCategories(
       update: {},
     });
   }
+
+  // Verify: warn about any accommodations still missing categoryItems
+  const missingLinks = await prisma.accommodation.findMany({
+    where: {
+      tenantId,
+      archivedAt: null,
+      categoryItems: { none: {} },
+    },
+    select: { id: true, name: true, externalId: true },
+  });
+
+  if (missingLinks.length > 0) {
+    log("warn", "sync.accommodations_missing_category_items", {
+      tenantId,
+      count: missingLinks.length,
+      names: missingLinks.map((a) => a.name).join(", "),
+    });
+  }
 }
 
 async function resolveUniqueCategorySlug(

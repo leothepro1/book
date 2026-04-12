@@ -248,8 +248,8 @@ export const config = {
     '/preview-test(.*)',
     '/sign-in(.*)',
     '/sign-up(.*)',
-    // API routes (except webhooks — those handle their own auth)
-    '/(api(?!/webhooks))(.*)',
+    // API routes (except webhooks and media — those handle their own auth)
+    '/(api(?!/webhooks|/media))(.*)',
     // Guest portal paths — needed for locale detection
     '/p/(.*)',
     '/checkout(.*)',

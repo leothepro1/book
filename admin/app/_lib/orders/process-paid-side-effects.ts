@@ -108,6 +108,29 @@ export async function processOrderPaidSideEffects(
     }
   }
 
+  // ── Clean up spot reservation lock (best effort) ───────────
+  // Spot reservation locks are TTL-based — this is eager cleanup to free the
+  // spot immediately after payment rather than waiting for cron.
+  const spotLineItem = order.lineItems.find((li) =>
+    li.productId.startsWith("spot-map:"),
+  );
+  if (spotLineItem?.variantId) {
+    try {
+      const spotMarker = await prisma.spotMarker.findUnique({
+        where: { id: spotLineItem.variantId },
+        select: { accommodationUnitId: true },
+      });
+      if (spotMarker?.accommodationUnitId) {
+        await prisma.pendingSpotReservation.deleteMany({
+          where: {
+            tenantId: order.tenantId,
+            accommodationUnitId: spotMarker.accommodationUnitId,
+          },
+        });
+      }
+    } catch { /* best effort — cron handles stragglers */ }
+  }
+
   // ── Guest account (shared) ─────────────────────────────────
   if (effectiveEmail) {
     try {

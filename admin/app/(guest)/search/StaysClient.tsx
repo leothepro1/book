@@ -6,6 +6,7 @@ import Link from "next/link";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { formatDateRange } from "@/app/_lib/search/dates";
 import { track } from "@/app/_lib/analytics/client";
+import { fetchAvailability } from "@/app/_lib/search/fetchAvailability";
 import type { SearchResult, AvailabilityResponse } from "@/app/_lib/search/types";
 import "./stays.css";
 
@@ -189,19 +190,23 @@ export function StaysClient({
     if (initialData && initialData.searchParams.checkIn === checkIn && initialData.searchParams.checkOut === checkOut && initialData.searchParams.guests === guests) return;
 
     let cancelled = false;
-    const params = new URLSearchParams();
-    params.set("tenantId", tenantId);
-    params.set("checkIn", checkIn!);
-    params.set("checkOut", checkOut!);
-    params.set("guests", String(guests));
-    if (categories) params.set("categories", categories);
 
-    fetch(`/api/availability?${params.toString()}`, { cache: "no-store" })
-      .then(async (res) => {
-        if (cancelled) return;
-        if (!res.ok) throw new Error("Fetch failed");
-        const json = await res.json();
-        setData(json);
+    fetchAvailability(tenantId, {
+      checkIn: checkIn!,
+      checkOut: checkOut!,
+      adults: guests!,
+      children: 0,
+      categoryIds: categories ? categories.split(",").filter(Boolean) : [],
+    }).then((result) => {
+      if (cancelled) return;
+      if (result.error && result.results.length === 0) {
+        setError(
+          result.error.code === "TIMEOUT" ? "Sökningen tog för lång tid. Försök igen."
+          : result.error.code === "PMS_ERROR" ? "Kunde inte hämta tillgänglighet just nu."
+          : "Kunde inte hämta tillgänglighet. Försök igen."
+        );
+      } else {
+        setData(result.response);
         setError(null);
         track({
           tenantId,
@@ -210,12 +215,13 @@ export function StaysClient({
             checkIn,
             checkOut,
             guests,
-            resultCount: json.results?.length ?? 0,
+            resultCount: result.results.length,
           },
         });
-      })
-      .catch(() => { if (!cancelled) setError("Kunde inte hämta tillgänglighet. Försök igen."); })
-      .finally(() => { if (!cancelled) setLoaded(true); });
+      }
+      setLoaded(true);
+    });
+
     return () => { cancelled = true; };
   }, [checkIn, checkOut, guests, categories, tenantId, hasSearch, initialData]);
 

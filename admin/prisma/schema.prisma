@@ -542,6 +542,7 @@ model Tenant {
   accommodationCategories AccommodationCategory[]
   spotMaps            SpotMap[]
   spotMarkers         SpotMarker[]
+  pendingSpotReservations PendingSpotReservation[]
   emailAppInstallation  EmailAppInstallation?
   emailAppTemplates     EmailAppTemplate[]
   emailCampaigns        EmailCampaign[]
@@ -2006,6 +2007,7 @@ model CheckoutSession {
   accommodationName               String?
   accommodationSlug               String?
   ratePlanName                     String?
+  ratePlanDescription              String   @default("")
   ratePlanCancellationPolicy       String?  // "FLEXIBLE" | "MODERATE" | "NON_REFUNDABLE"
   pricePerNight                    Int?     // öre
   totalNights                      Int?
@@ -3392,6 +3394,26 @@ model SpotMarker {
   @@index([tenantId])
   @@index([spotMapId])
   @@index([accommodationUnitId])
+}
+
+// ── Pending Spot Reservation (soft lock during checkout) ────────────────────
+// Prevents two guests from selecting the same physical unit for overlapping dates.
+// TTL-based — expired records are ignored by the findFirst query and cleaned by cron.
+
+model PendingSpotReservation {
+  id                  String   @id @default(cuid())
+  tenantId            String
+  accommodationUnitId String
+  checkIn             DateTime
+  checkOut            DateTime
+  checkoutSessionId   String   @unique  // one reservation per session
+  expiresAt           DateTime          // TTL: now + 15 minutes
+  createdAt           DateTime @default(now())
+
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, accommodationUnitId, checkIn, checkOut])
+  @@index([expiresAt])
 }
 
 // ============================================================================

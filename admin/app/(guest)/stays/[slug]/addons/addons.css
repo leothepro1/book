@@ -483,6 +483,12 @@
   font-size: 0.875rem;
   color: color-mix(in srgb, var(--text, #000) 65%, transparent);
 }
+.ao__rate-plan-description {
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--text) 70%, transparent);
+  line-height: 1.4;
+  margin-top: 2px;
+}
 
 .ao__summary-modal-divider {
   height: 1px;

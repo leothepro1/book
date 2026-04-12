@@ -347,6 +347,9 @@ export function RoomDetailClient({
                 >
                   <div className="rd__rate-plan-info">
                     <div className="rd__rate-plan-name">{rp.name}</div>
+                    {rp.description && (
+                      <div className="rd__rate-plan-description">{rp.description}</div>
+                    )}
                     <div className="rd__rate-plan-cancel">{rp.cancellationDescription}</div>
                     {rp.includedAddons.length > 0 && (
                       <div className="rd__rate-plan-includes">

@@ -218,6 +218,7 @@ export async function PATCH(
           id: true,
           label: true,
           accommodationId: true,
+          accommodationUnitId: true,
           priceOverride: true,
           unit: { select: { externalId: true } },
           spotMap: {
@@ -280,6 +281,28 @@ export async function PATCH(
       );
     }
 
+    // Check pending spot reservation lock — another session may hold this unit
+    if (marker.accommodationUnitId && session.checkIn && session.checkOut) {
+      const existingLock = await prisma.pendingSpotReservation.findFirst({
+        where: {
+          tenantId,
+          accommodationUnitId: marker.accommodationUnitId,
+          checkIn: session.checkIn,
+          checkOut: session.checkOut,
+          expiresAt: { gt: new Date() },
+          checkoutSessionId: { not: session.id },
+        },
+        select: { id: true },
+      });
+
+      if (existingLock) {
+        return NextResponse.json(
+          { error: "SPOT_UNAVAILABLE", code: "SPOT_UNAVAILABLE", label: marker.label },
+          { status: 409 },
+        );
+      }
+    }
+
     // Re-validate availability using per-unit PMS adapter check.
     // unit.externalId is a Mews Resource.Id (physical unit), not a ResourceCategory.Id.
     // If no unit is assigned or unit has no externalId, skip availability check (fail open).
@@ -307,6 +330,38 @@ export async function PATCH(
       totalAmount: spotPrice, // PER_STAY — fixed fee
       pricingMode: "PER_STAY",
       currency: marker.spotMap.currency,
+    });
+  }
+
+  // ── Upsert pending spot reservation lock ─────────────────────
+  // If a spot was selected, create/update the soft lock.
+  // If no spots selected (guest deselected), remove any existing lock.
+  const spotWithUnit = spotSelections.length > 0
+    ? spotMarkers.find((m) => m?.accommodationUnitId)
+    : null;
+
+  if (spotWithUnit?.accommodationUnitId && session.checkIn && session.checkOut) {
+    await prisma.pendingSpotReservation.upsert({
+      where: { checkoutSessionId: session.id },
+      create: {
+        tenantId,
+        accommodationUnitId: spotWithUnit.accommodationUnitId,
+        checkIn: session.checkIn,
+        checkOut: session.checkOut,
+        checkoutSessionId: session.id,
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+      update: {
+        accommodationUnitId: spotWithUnit.accommodationUnitId,
+        checkIn: session.checkIn,
+        checkOut: session.checkOut,
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+  } else {
+    // No spot selected — release any existing lock for this session
+    await prisma.pendingSpotReservation.deleteMany({
+      where: { checkoutSessionId: session.id },
     });
   }
 

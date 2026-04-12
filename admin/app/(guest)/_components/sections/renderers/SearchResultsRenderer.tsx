@@ -9,12 +9,13 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { SectionRendererProps } from "@/app/_lib/sections/types";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { formatDateRange } from "@/app/_lib/search/dates";
-import type { SearchResult, SearchResultRatePlan, AvailabilityResponse } from "@/app/_lib/search/types";
+import type { SearchResult, SearchResultRatePlan } from "@/app/_lib/search/types";
+import { useSearchEngine } from "@/app/_lib/search/useSearchEngine";
 import { CommerceEngineProvider } from "@/app/_lib/commerce/CommerceEngineContext";
 import { FONT_CATALOG } from "@/app/_lib/fonts/catalog";
 import { useCommerceEngineContext } from "@/app/_lib/commerce/CommerceEngineContext";
@@ -387,10 +388,8 @@ function EmptyState({
 
 export function SearchResultsDefaultRenderer(props: SectionRendererProps) {
   const { settings } = props;
-  const searchParams = useSearchParams();
-  const [data, setData] = useState<AvailabilityResponse | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const tenantId = props.config?.tenantId ?? "";
+  const { params, status, results, error, search } = useSearchEngine({ tenantId });
 
   const emptyHeading = (settings.emptyHeading as string) || "Sök lediga boenden";
   const emptyDescription = (settings.emptyDescription as string) || "Välj datum och antal gäster för att se tillgänglighet.";
@@ -399,32 +398,25 @@ export function SearchResultsDefaultRenderer(props: SectionRendererProps) {
   const noResultsDescription = (settings.noResultsDescription as string) || "Prova andra datum eller färre gäster.";
   const noResultsIcon = (settings.noResultsIcon as string) || "hotel";
 
-  const checkIn = searchParams.get("checkIn") ?? "";
-  const checkOut = searchParams.get("checkOut") ?? "";
-  const guests = parseInt(searchParams.get("guests") ?? "2", 10);
-  const categories = searchParams.get("categories") ?? "";
-  const tenantId = props.config?.tenantId ?? "";
-  const hasSearch = !!(checkIn && checkOut && guests > 0 && tenantId);
+  const guests = params.adults + params.children;
+  const hasSearch = !!(params.checkIn && params.checkOut && guests > 0 && tenantId);
+  const loaded = status === "success" || status === "error";
+  const nights = params.checkIn && params.checkOut
+    ? Math.round((new Date(params.checkOut).getTime() - new Date(params.checkIn).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
 
+  // Auto-trigger search when URL params are complete
   useEffect(() => {
-    if (!hasSearch) { setLoaded(true); return; }
-    const params = new URLSearchParams();
-    params.set("tenantId", tenantId);
-    params.set("checkIn", checkIn);
-    params.set("checkOut", checkOut);
-    params.set("guests", String(guests));
-    if (categories) params.set("categories", categories);
+    if (hasSearch) search();
+  }, [hasSearch, search]);
 
-    fetch(`/api/availability?${params.toString()}`, { cache: "no-store" })
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Fetch failed");
-        setData(await res.json());
-        setLoaded(true);
-      })
-      .catch(() => { setError("Kunde inte hämta tillgänglighet."); setLoaded(true); });
-  }, [checkIn, checkOut, guests, categories, tenantId, hasSearch]);
+  const errorMessage = error
+    ? error.code === "TIMEOUT" ? "Sökningen tog för lång tid. Försök igen."
+    : error.code === "PMS_ERROR" ? "Kunde inte hämta tillgänglighet just nu."
+    : "Kunde inte hämta tillgänglighet."
+    : null;
 
-  const searchParamsStr = hasSearch ? `checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}` : "";
+  const searchParamsStr = hasSearch ? `checkIn=${params.checkIn}&checkOut=${params.checkOut}&guests=${guests}` : "";
   const sectionStyle = buildSectionStyle(settings);
 
   return (
@@ -463,20 +455,20 @@ export function SearchResultsDefaultRenderer(props: SectionRendererProps) {
               ))}
             </div>
           </>
-        ) : error ? (
+        ) : errorMessage && results.length === 0 ? (
           <div className="sr__empty">
-            <p className="sr__empty-text" style={{ color: "var(--error, #dc2626)" }}>{error}</p>
+            <p className="sr__empty-text" style={{ color: "var(--error, #dc2626)" }}>{errorMessage}</p>
           </div>
-        ) : data && data.results.length > 0 ? (
+        ) : results.length > 0 ? (
           <>
             <h1 className="sr__heading" dangerouslySetInnerHTML={{ __html: emptyHeading }} />
             <div className="sr__results-header">
-              {formatDateRange(new Date(data.searchParams.checkIn), new Date(data.searchParams.checkOut))} ·{" "}
-              {data.searchParams.nights} nätter · {data.searchParams.guests} gäster
+              {formatDateRange(new Date(params.checkIn!), new Date(params.checkOut!))} ·{" "}
+              {nights} nätter · {guests} gäster
             </div>
             <div className="sr__grid">
-              {data.results.map((entry) => (
-                <RoomCard key={entry.category.externalId} entry={entry} searchParams={searchParamsStr} nights={data.searchParams.nights} guests={data.searchParams.guests} checkIn={checkIn} checkOut={checkOut} />
+              {results.map((entry) => (
+                <RoomCard key={entry.category.externalId} entry={entry} searchParams={searchParamsStr} nights={nights} guests={guests} checkIn={params.checkIn!} checkOut={params.checkOut!} />
               ))}
             </div>
           </>

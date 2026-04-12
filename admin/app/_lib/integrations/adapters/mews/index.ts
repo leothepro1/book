@@ -30,6 +30,7 @@ import type {
 } from "../../types";
 import type { MewsCredentials } from "./credentials";
 import { MewsClient } from "./client";
+import { log } from "@/app/_lib/logger";
 import {
   MewsGetServicesResponseSchema,
   MewsGetResourceCategoriesResponseSchema,
@@ -45,6 +46,7 @@ import {
   MewsGetResourceBlocksResponseSchema,
   MewsGetResourcesResponseSchema,
   MewsGetOrderItemsResponseSchema,
+  MewsGetReservationsResponseSchema,
 } from "./mews-types";
 import type {
   MewsResource,
@@ -63,6 +65,7 @@ import type {
   MewsGetResourceBlocksResponse,
   MewsGetResourcesResponse,
   MewsGetOrderItemsResponse,
+  MewsGetReservationsResponse,
 } from "./mews-types";
 import { log } from "@/app/_lib/logger";
 
@@ -516,7 +519,7 @@ export class MewsAdapter implements PmsAdapter {
   // ── Unit-Level Availability ─────────────────────────────────
 
   async getUnitAvailability(
-    _tenantId: string,
+    tenantId: string,
     externalIds: string[],
     checkIn: Date,
     checkOut: Date,
@@ -528,30 +531,64 @@ export class MewsAdapter implements PmsAdapter {
     try {
       const serviceId = await this.getStayServiceId();
 
-      // Fetch resource blocks (out-of-order periods) for the date range
-      const blocksRaw = await this.client.post<Record<string, unknown>, MewsGetResourceBlocksResponse>(
-        "resourceBlocks/getAll",
-        {
-          ServiceIds: [serviceId],
-          TimeFilter: "Colliding",
-          StartUtc: checkIn.toISOString(),
-          EndUtc: checkOut.toISOString(),
-          ActivityStates: ["Active"],
-        },
-      );
-      const blocks = MewsGetResourceBlocksResponseSchema.parse(blocksRaw);
+      // Fetch resource blocks AND reservations in parallel
+      const [blocksSettled, reservationsSettled] = await Promise.allSettled([
+        this.client.post<Record<string, unknown>, MewsGetResourceBlocksResponse>(
+          "resourceBlocks/getAll",
+          {
+            ServiceIds: [serviceId],
+            TimeFilter: "Colliding",
+            StartUtc: checkIn.toISOString(),
+            EndUtc: checkOut.toISOString(),
+            ActivityStates: ["Active"],
+          },
+        ),
+        this.client.post<Record<string, unknown>, MewsGetReservationsResponse>(
+          "reservations/getAll/2023-06-06",
+          {
+            ServiceIds: [serviceId],
+            CollidingUtc: {
+              StartUtc: checkIn.toISOString(),
+              EndUtc: checkOut.toISOString(),
+            },
+            States: ["Confirmed", "Started", "Optional", "Requested"],
+            Limitation: { Count: 1000 },
+          },
+        ),
+      ]);
 
-      // Build set of resource IDs that have an active block overlapping the range
       const blockedResourceIds = new Set<string>();
       const searchStart = checkIn.getTime();
       const searchEnd = checkOut.getTime();
 
-      for (const block of blocks.ResourceBlocks) {
-        const blockStart = new Date(block.StartUtc).getTime();
-        const blockEnd = new Date(block.EndUtc).getTime();
-        if (searchStart < blockEnd && searchEnd > blockStart) {
-          blockedResourceIds.add(block.ResourceId);
+      // Process resource blocks (out-of-order periods)
+      if (blocksSettled.status === "fulfilled") {
+        const blocks = MewsGetResourceBlocksResponseSchema.parse(blocksSettled.value);
+        for (const block of blocks.ResourceBlocks) {
+          const blockStart = new Date(block.StartUtc).getTime();
+          const blockEnd = new Date(block.EndUtc).getTime();
+          if (searchStart < blockEnd && searchEnd > blockStart) {
+            blockedResourceIds.add(block.ResourceId);
+          }
         }
+      } else {
+        log("warn", "mews.unit_availability.blocks_failed", {
+          error: blocksSettled.reason instanceof Error ? blocksSettled.reason.message : String(blocksSettled.reason),
+        });
+      }
+
+      // Process reservations (existing bookings assigned to a resource)
+      if (reservationsSettled.status === "fulfilled") {
+        const reservations = MewsGetReservationsResponseSchema.parse(reservationsSettled.value);
+        for (const reservation of reservations.Reservations) {
+          if (reservation.AssignedResourceId) {
+            blockedResourceIds.add(reservation.AssignedResourceId);
+          }
+        }
+      } else {
+        log("warn", "mews.unit_availability.reservations_failed", {
+          error: reservationsSettled.reason instanceof Error ? reservationsSettled.reason.message : String(reservationsSettled.reason),
+        });
       }
 
       // Map requested externalIds to availability
@@ -560,11 +597,16 @@ export class MewsAdapter implements PmsAdapter {
         result.set(id, !blockedResourceIds.has(id));
       }
       return result;
-    } catch {
-      // Fail open — if Mews call fails, assume all units available
+    } catch (err) {
+      // Fail closed — never show unavailable unit as available
+      log("warn", "mews.get_unit_availability_total_failure", {
+        tenantId,
+        externalIdCount: externalIds.length,
+        error: err instanceof Error ? err.message : String(err),
+      });
       const result = new Map<string, boolean>();
       for (const id of externalIds) {
-        result.set(id, true);
+        result.set(id, false);
       }
       return result;
     }

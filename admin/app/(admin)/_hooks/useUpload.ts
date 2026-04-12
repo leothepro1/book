@@ -2,9 +2,6 @@
 import { useState, useCallback } from "react";
 import { extractPublicId } from "@/app/_lib/cloudinary/client";
 
-const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME!;
-const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!;
-
 export type UploadResult = {
   url: string;
   publicId: string;
@@ -12,62 +9,28 @@ export type UploadResult = {
   height: number;
 };
 
-async function makeThumbBlob(file: File, maxW = 400): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, maxW / img.width);
-      const w = Math.max(1, Math.round(img.width * scale));
-      const h = Math.max(1, Math.round(img.height * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = w; canvas.height = h;
-      canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
-      URL.revokeObjectURL(objectUrl);
-      canvas.toBlob(
-        (blob) => blob ? resolve(blob) : reject(new Error("thumb_failed")),
-        "image/webp", 0.85
-      );
-    };
-    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("img_load")); };
-    img.src = objectUrl;
-  });
-}
-
-function uploadDirect(
+/**
+ * Upload a file via the server-side /api/media endpoint.
+ * The server handles Cloudinary upload with signed credentials.
+ */
+async function uploadViaServer(
   file: File | Blob,
   folder: string,
-  onProgress?: (pct: number) => void
 ): Promise<UploadResult> {
-  return new Promise((resolve, reject) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("upload_preset", UPLOAD_PRESET);
-    formData.append("folder", folder);
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("folder", folder);
 
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, true);
-
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) onProgress((e.loaded / e.total) * 100);
-    };
-
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        try {
-          const data = JSON.parse(xhr.responseText);
-          resolve({ url: data.secure_url, publicId: data.public_id, width: data.width, height: data.height });
-        } catch (err) { reject(err); }
-      } else {
-        reject(new Error("Upload failed: " + xhr.status));
-      }
-    };
-    xhr.onerror = () => reject(new Error("Network error"));
-    xhr.send(formData);
-  });
+  const res = await fetch("/api/media", { method: "POST", body: formData });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Upload failed: ${res.status}`);
+  }
+  const data = await res.json();
+  return { url: data.url, publicId: data.publicId, width: data.width, height: data.height };
 }
 
-export function useUpload(folder = "hospitality/cards") {
+export function useUpload(folder = "general") {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,29 +44,16 @@ export function useUpload(folder = "hospitality/cards") {
     setError(null);
 
     try {
-      if (!file.type.startsWith("image/")) {
-        // Non-image files (e.g. PDF): upload directly, no thumbnail
-        // Cloudinary renders PDF first page — construct preview URL
-        const result = await uploadDirect(file, folder);
-        const previewUrl = result.url.replace("/upload/", "/upload/pg_1,w_600,f_jpg/");
-        onPreview(previewUrl);
-        onComplete(result);
-        setIsUploading(false);
-      } else {
-        const thumbBlob = await makeThumbBlob(file, 400);
-        const localUrl = URL.createObjectURL(thumbBlob);
-        onPreview(localUrl);
+      // Show local preview immediately while uploading
+      const localUrl = URL.createObjectURL(file);
+      onPreview(localUrl);
 
-        const thumbResult = await uploadDirect(thumbBlob, folder + "/thumbs");
-        URL.revokeObjectURL(localUrl);
-        onPreview(thumbResult.url);
-        onComplete(thumbResult);
-        setIsUploading(false);
+      const result = await uploadViaServer(file, folder);
 
-        uploadDirect(file, folder).then((result) => {
-          onComplete(result);
-        }).catch(() => {});
-      }
+      URL.revokeObjectURL(localUrl);
+      onPreview(result.url);
+      onComplete(result);
+      setIsUploading(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Upload failed";
       setError(msg);

@@ -6,7 +6,6 @@ import Link from "next/link";
 import { format, parseISO } from "date-fns";
 import { sv } from "date-fns/locale";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
-import { resolveContrastPalette } from "@/app/_lib/color/contrast";
 import { CheckoutModal } from "@/app/(guest)/checkout/CheckoutModal";
 import { SummaryCol } from "@/app/(guest)/_components/SummaryCol";
 import type { SummaryRow } from "@/app/(guest)/_components/SummaryCol";
@@ -45,6 +44,7 @@ interface Snapshot {
   accommodationImage: string | null;
   accommodationSlug: string;
   ratePlanName: string;
+  ratePlanDescription: string;
   ratePlanCancellationPolicy: string;
   pricePerNight: number;
   totalNights: number;
@@ -617,6 +617,9 @@ export function AddonsClient({ token, addons, spotAddon, snapshot, backUrl }: Pr
             {snapshot.checkIn} – {snapshot.checkOut} · {snapshot.totalNights} natter · {snapshot.adults} {snapshot.adults === 1 ? "gast" : "gaster"}
           </div>
           <div className="ao__summary-modal-rate">{snapshot.ratePlanName}</div>
+          {snapshot.ratePlanDescription && (
+            <div className="ao__rate-plan-description">{snapshot.ratePlanDescription}</div>
+          )}
 
           <div className="ao__summary-modal-divider" />
 
@@ -1079,7 +1082,7 @@ function SpotSelectionModal({
                         >
                           <span className="material-symbols-rounded" style={{ fontSize: 20, color: "#6c6c6c" }}>close</span>
                         </button>
-                        <span className="sbm__tooltip-name">{m.accommodationName}</span>
+                        <span className="sbm__tooltip-name">Plats {m.label}</span>
                         <span className="sbm__tooltip-price">
                           {formatPriceDisplay(m.effectivePrice, spotAddon.currency)} {spotAddon.currency}
                         </span>
@@ -1116,8 +1119,8 @@ function SpotSelectionModal({
                     )}
                     <div
                       className="sbm__marker-dot"
-                      style={m.color ? { background: m.color, color: resolveContrastPalette(m.color).text } : undefined}
-                    >{m.label.slice(0, 3)}</div>
+                      style={m.color ? { background: m.color } : undefined}
+                    />
                   </div>
                 );
               })}

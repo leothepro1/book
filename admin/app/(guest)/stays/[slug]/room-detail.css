@@ -173,6 +173,7 @@
 }
 
 .rd__rate-plan-name { font-size: 0.875rem; font-weight: 600; color: var(--text, #1a1a1a); }
+.rd__rate-plan-description { font-size: 0.8125rem; color: color-mix(in srgb, var(--text) 70%, transparent); line-height: 1.4; margin-top: 2px; }
 .rd__rate-plan-cancel { font-size: 0.75rem; color: color-mix(in srgb, var(--text, #000) 50%, transparent); margin-top: 0.125rem; }
 .rd__rate-plan-includes { font-size: 0.75rem; color: #16a34a; margin-top: 0.25rem; }
 .rd__rate-plan-price { text-align: right; flex-shrink: 0; }

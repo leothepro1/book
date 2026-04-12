@@ -166,8 +166,44 @@ export async function createPmsBookingAfterPayment(
     }
   }
 
-  // 5. Call PMS adapter
+  // 5. Re-validate spot availability immediately before PMS booking
+  //    If unavailable: clear requestedResourceId so Mews auto-assigns from the category.
+  //    Never cancel — guest has already paid.
   const adapter = await resolveAdapter(tenantId);
+
+  if (requestedResourceId && booking.checkIn && booking.checkOut) {
+    try {
+      const unitAvailability = await adapter.getUnitAvailability(
+        tenantId,
+        [requestedResourceId],
+        booking.checkIn,
+        booking.checkOut,
+      );
+
+      const isAvailable = unitAvailability.get(requestedResourceId) ?? false;
+
+      if (!isAvailable) {
+        log("warn", "spot_booking.unit_unavailable_at_pms_sync", {
+          orderId,
+          markerId: spotLineItem?.variantId ?? null,
+          requestedResourceId,
+          checkIn: booking.checkIn.toISOString(),
+          checkOut: booking.checkOut.toISOString(),
+        });
+        requestedResourceId = undefined;
+      }
+    } catch (err) {
+      log("warn", "spot_booking.availability_recheck_failed", {
+        orderId,
+        requestedResourceId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      // Proceed without specific unit — let Mews auto-assign
+      requestedResourceId = undefined;
+    }
+  }
+
+  // 6. Call PMS adapter
 
   const [firstName, ...lastParts] = (order.guestName || "Guest").split(" ");
   const lastName = lastParts.join(" ") || "-";

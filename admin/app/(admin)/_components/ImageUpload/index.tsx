@@ -19,7 +19,7 @@ export function ImageUpload({
   value,
   onChange,
   onRemove,
-  folder = "hospitality/cards",
+  folder = "cards",
   shape = "square",
   placeholder = "Välj fil...",
   variant = "default",

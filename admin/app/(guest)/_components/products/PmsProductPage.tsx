@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { formatDateRange } from "@/app/_lib/search/dates";
+import { fetchAvailability } from "@/app/_lib/search/fetchAvailability";
 import "./pms-product-page.css";
 
 interface PmsProductProps {
@@ -76,38 +77,48 @@ export function AccommodationDetailPage({ product, tenantId, searchParams }: Pms
     if (!hasSearch || !product.pmsSourceId) return;
     let cancelled = false;
 
-    const params = new URLSearchParams();
-    params.set("tenantId", tenantId);
-    params.set("checkIn", searchParams.checkIn!);
-    params.set("checkOut", searchParams.checkOut!);
-    params.set("guests", String(searchParams.guests));
-
-    fetch(`/api/availability?${params.toString()}`, { cache: "no-store" })
-      .then(async (res) => {
-        if (cancelled || !res.ok) return;
-        const data = await res.json();
-        const entry = data.results?.find(
-          (r: { category: { externalId: string } }) =>
-            r.category.externalId === product.pmsSourceId,
+    fetchAvailability(tenantId, {
+      checkIn: searchParams.checkIn!,
+      checkOut: searchParams.checkOut!,
+      adults: searchParams.guests!,
+      children: 0,
+      categoryIds: [],
+    }).then((result) => {
+      if (cancelled) return;
+      if (result.error && result.results.length === 0) {
+        setFetchError(
+          result.error.code === "TIMEOUT" ? "Sökningen tog för lång tid. Försök igen."
+          : result.error.code === "PMS_ERROR" ? "Kunde inte hämta tillgänglighet just nu."
+          : "Kunde inte hämta tillgänglighet. Försök igen om en stund."
         );
-        if (!cancelled) {
-          setAvailability({
-            available: entry?.available ?? false,
-            ratePlans: entry?.ratePlans ?? [],
-            nights: data.searchParams?.nights ?? 0,
-          });
-          if (entry?.ratePlans?.[0]) {
-            setSelectedRatePlan(entry.ratePlans[0].externalId);
-          }
-          setFetched(true);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFetchError("Kunde inte hämta tillgänglighet. Försök igen om en stund.");
-          setFetched(true);
-        }
+        setFetched(true);
+        return;
+      }
+      const entry = result.results.find(
+        (r) => r.category.externalId === product.pmsSourceId,
+      );
+      const nights = searchParams.checkIn && searchParams.checkOut
+        ? Math.round((new Date(searchParams.checkOut).getTime() - new Date(searchParams.checkIn).getTime()) / (1000 * 60 * 60 * 24))
+        : 0;
+      setAvailability({
+        available: entry?.available ?? false,
+        ratePlans: (entry?.ratePlans ?? []).map((rp) => ({
+          externalId: rp.externalId,
+          name: rp.name,
+          description: rp.description ?? "",
+          cancellationPolicy: rp.cancellationPolicy ?? "",
+          cancellationDescription: rp.cancellationDescription ?? "",
+          pricePerNight: rp.nightlyAmount,
+          totalPrice: rp.totalAmount,
+          currency: rp.currency,
+        })),
+        nights,
       });
+      if (entry?.ratePlans?.[0]) {
+        setSelectedRatePlan(entry.ratePlans[0].externalId);
+      }
+      setFetched(true);
+    });
 
     return () => { cancelled = true; };
   }, [hasSearch, product.pmsSourceId, searchParams.checkIn, searchParams.checkOut, searchParams.guests, tenantId]);

@@ -29,15 +29,21 @@ export async function GET(req: Request) {
     where: { expiresAt: { lt: new Date() } },
   });
 
+  // Clean up expired spot reservation locks
+  const spotLocks = await prisma.pendingSpotReservation.deleteMany({
+    where: { expiresAt: { lt: new Date() } },
+  });
+
   // Clean up old webhook dedup records (>30 days)
   const webhookEvents = await prisma.stripeWebhookEvent.deleteMany({
     where: { processedAt: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
   });
 
-  if (result.released > 0 || locks.count > 0 || webhookEvents.count > 0) {
+  if (result.released > 0 || locks.count > 0 || spotLocks.count > 0 || webhookEvents.count > 0) {
     log("info", "cron.expire_reservations", {
       releasedReservations: result.released,
       expiredLocks: locks.count,
+      expiredSpotLocks: spotLocks.count,
       expiredWebhookEvents: webhookEvents.count,
     });
   }
@@ -46,6 +52,7 @@ export async function GET(req: Request) {
     ok: true,
     released: result.released,
     expiredLocks: locks.count,
+    expiredSpotLocks: spotLocks.count,
     expiredWebhookEvents: webhookEvents.count,
   });
 }

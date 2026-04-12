@@ -347,7 +347,7 @@ function DocumentForm({
   payload: DocumentPayload;
   onChange: (p: Partial<DocumentPayload>) => void;
 }) {
-  const { isUploading, error, upload } = useUpload("hospitality/documents");
+  const { isUploading, error, upload } = useUpload("documents");
   const [preview, setPreview] = useState<string>(
     payload.fileUrl
       ? payload.fileUrl.replace("/upload/", "/upload/pg_1,w_600,f_jpg/")

@@ -7,29 +7,22 @@ import { useMediaLibrary, SORT_OPTIONS } from "@/app/(admin)/_hooks/useMediaLibr
 import { useVideoThumb } from "@/app/_lib/cloudinary/useVideoThumb";
 import "./media-library.css";
 
-// ─── Inline upload (same as useUpload's uploadDirect) ───────
+// ─── Server-side upload via /api/media ──────────────────────
 
-const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME!;
-const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!;
 const ALLOWED_UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif", "image/svg+xml", "application/pdf", "video/mp4", "video/webm", "video/quicktime"];
 
-function uploadDirect(file: File | Blob, folder: string, resourceType: "image" | "video" | "raw" = "image"): Promise<{ url: string; publicId: string; width: number; height: number; bytes: number; format: string; resourceType: string }> {
-  return new Promise((resolve, reject) => {
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("upload_preset", UPLOAD_PRESET);
-    fd.append("folder", folder);
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`, true);
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        const d = JSON.parse(xhr.responseText);
-        resolve({ url: d.secure_url, publicId: d.public_id, width: d.width, height: d.height, bytes: d.bytes, format: d.format, resourceType: d.resource_type || resourceType });
-      } else reject(new Error("Upload failed: " + xhr.status));
-    };
-    xhr.onerror = () => reject(new Error("Network error"));
-    xhr.send(fd);
-  });
+async function uploadViaServer(file: File, folder: string): Promise<{ url: string; publicId: string; width: number; height: number; bytes: number; format: string; resourceType: string }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("folder", folder);
+
+  const res = await fetch("/api/media", { method: "POST", body: fd });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Upload failed: ${res.status}`);
+  }
+  const d = await res.json();
+  return { url: d.url, publicId: d.publicId, width: d.width ?? 0, height: d.height ?? 0, bytes: d.bytes ?? 0, format: d.format ?? "", resourceType: d.resourceType ?? "image" };
 }
 
 // ─── Pending upload type ────────────────────────────────────
@@ -171,7 +164,6 @@ export function MediaLibraryModal({
   const [viewOpen, setViewOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
-  const [tenantSlug, setTenantSlug] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [headerStuck, setHeaderStuck] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -198,15 +190,6 @@ export function MediaLibraryModal({
   const sortRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-
-  // ── Fetch tenant slug (needed for correct Cloudinary folder path) ──
-  useEffect(() => {
-    if (!open || tenantSlug) return;
-    fetch("/api/media/stats")
-      .then((r) => r.json())
-      .then((d) => { if (d.tenantSlug) setTenantSlug(d.tenantSlug); })
-      .catch(() => {});
-  }, [open, tenantSlug]);
 
   // ── Animate in/out ──
   useEffect(() => {
@@ -304,7 +287,6 @@ export function MediaLibraryModal({
   // ── Handle files (multi-file, from button or drag-drop) ──
   const handleFiles = useCallback(
     (files: FileList | File[]) => {
-      const folder = tenantSlug ? `hospitality/${tenantSlug}/${uploadFolder}` : `hospitality/${uploadFolder}`;
       const fileArray = Array.from(files).filter((f) => ALLOWED_UPLOAD_TYPES.includes(f.type));
       if (fileArray.length === 0) return;
 
@@ -331,23 +313,13 @@ export function MediaLibraryModal({
 
         setPendingUploads((prev) => [pending, ...prev]);
 
-        // Upload: video → video endpoint, PDF → raw endpoint, else → image
-        const uploadType = isVideo ? "video" : isPdf ? "raw" : "image";
-        uploadDirect(file, folder, uploadType)
+        // Upload via server — handles Cloudinary upload + DB indexing in one call
+        uploadViaServer(file, uploadFolder)
           .then((result) => {
             setPendingUploads((prev) =>
               prev.map((p) => (p.id === id ? { ...p, status: "done" as const, result } : p))
             );
-
-            // Index in DB, then refresh — pending item stays until real item appears in list
-            const hintResourceType = isVideo ? "video" : isPdf ? "raw" : undefined;
-            fetch("/api/media/index", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ url: result.url, publicId: result.publicId, folder: uploadFolder, ...(hintResourceType && { resourceType: hintResourceType }) }),
-            })
-              .catch((err) => console.warn("[MediaLibrary] Index failed:", err))
-              .finally(() => actions.refresh());
+            actions.refresh();
           })
           .catch(() => {
             setPendingUploads((prev) =>
@@ -356,7 +328,7 @@ export function MediaLibraryModal({
           });
       }
     },
-    [tenantSlug, uploadFolder, actions]
+    [uploadFolder, actions]
   );
 
   const handleDrop = useCallback(
