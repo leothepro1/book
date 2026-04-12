@@ -525,7 +525,7 @@ async function handleSessionPaymentIntent(
   // ── Compute totals from frozen snapshot ──────────────────────
   const addons = (session.selectedAddons ?? []) as Array<{
     productId: string; variantId: string | null; title: string; variantTitle: string | null;
-    quantity: number; unitAmount: number; totalAmount: number; pricingMode: string; currency: string;
+    imageUrl?: string | null; quantity: number; unitAmount: number; totalAmount: number; pricingMode: string; currency: string;
   }>;
   const addonTotal = addons.reduce((sum, a) => sum + a.totalAmount, 0);
   const totalPrice = session.accommodationTotal! + addonTotal;
