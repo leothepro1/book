@@ -4,6 +4,65 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## THE BAR — read this first, every time
+
+This platform is built to **Shopify engineering-team standards**. Not "inspired
+by Shopify". Not "similar to Shopify". Every architectural decision, every
+database schema, every API surface, every infrastructure choice must be
+defensible to a senior Shopify engineer in a design review.
+
+The operative test:
+
+> **"Would the Shopify Platform team merge this PR?"**
+
+If the answer is anything other than a confident yes, it is not done.
+
+### The scale target is non-negotiable
+
+The architecture must handle:
+
+- **10,000 active tenants** on the platform simultaneously
+- **10,000 concurrent guests per tenant per hour** at peak
+- **~27,000 requests/second sustained** across the fleet
+- **Zero cross-tenant data leakage** under any failure mode
+- **Zero downtime** for schema migrations, deploys, and adapter swaps
+- **Sub-200ms p95** for storefront reads, sub-500ms p95 for checkout
+
+Every change is evaluated against this target. "Works for one tenant today"
+is not a passing grade. "Works under load, across regions, with one service
+degraded" is.
+
+### Non-negotiable architectural qualities
+
+1. **Stability** — failure in one tenant never affects another; one service
+   degradation never brings down the platform
+2. **Robustness** — every external call has timeouts, retries, circuit
+   breakers, and fallbacks; every mutation is idempotent
+3. **Scalability** — horizontal by design; no in-memory state, no
+   single-instance bottlenecks, no N+1 queries
+4. **Observability** — every request is traceable end-to-end; every error
+   lands in Sentry with tenant + request context; every SLO is measurable
+5. **Security** — tenant isolation by design, defense in depth, least
+   privilege, secrets never in code or logs
+6. **Reversibility** — every migration has a rollback; every feature has a
+   flag; every deploy can be reverted in <60 seconds
+
+### What this means in practice
+
+- No solution is "good enough for now" if it cannot scale 100×
+- No schema change lands without a migration plan reviewed for zero-downtime
+- No new external service integrates without timeouts, retries, and fallback
+- No tenant-specific code path exists anywhere — architecture scales by design
+- No dependency is added without a cost/risk assessment at 10k tenants
+- No feature ships without tenant-isolation tests, load-tested critical paths,
+  and structured logging on every state transition
+- No shortcut, no technical debt, no "temporary" solution
+
+If a Claude Code change violates any of the above, **flag it to the user
+explicitly** rather than merging.
+
+---
+
 ## What this project is
 
 **Shopify for bookings.** A hospitality commerce platform where hotels,
