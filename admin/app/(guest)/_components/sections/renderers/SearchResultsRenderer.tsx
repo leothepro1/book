@@ -202,6 +202,11 @@ function RoomCard({ entry, searchParams, nights, guests, checkIn, checkOut }: Ro
 
   return (
     <div className={`sr__card${expanded ? " sr__card--expanded" : ""}`}>
+      <Link
+        className="sr__card-link"
+        href={`/stays/${category.externalId}?${searchParams}`}
+        aria-label={category.name}
+      />
       <CardImageCarousel images={images} alt={category.name} />
       <div className="sr__card-info">
         <h3 className="sr__card-title">{category.name}</h3>
