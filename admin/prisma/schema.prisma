@@ -3655,3 +3655,9 @@ model EmailAutomationAnalytics {
   unsubscribed Int             @default(0)
   updatedAt    DateTime        @updatedAt
 }
+
+// test: verify schema drift PR gate fails — to be reverted
+model HealthCheckTest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+}
