@@ -87,10 +87,20 @@ export async function POST(req: Request) {
 
   if (mappedStatus) {
     try {
-      await prisma.emailSendLog.updateMany({
+      // resendId is globally unique (Resend's message-id). Look up the
+      // specific log row and update it by primary key rather than using
+      // updateMany-by-external-id, which bypasses tenant scope on a
+      // webhook code path by design.
+      const existing = await prisma.emailSendLog.findFirst({
         where: { resendId },
-        data: { status: mappedStatus as "SENT" | "DELIVERED" | "BOUNCED" | "COMPLAINED" },
+        select: { id: true },
       });
+      if (existing) {
+        await prisma.emailSendLog.update({
+          where: { id: existing.id },
+          data: { status: mappedStatus as "SENT" | "DELIVERED" | "BOUNCED" | "COMPLAINED" },
+        });
+      }
     } catch (err) {
       log("error", "resend_webhook.send_log_update_failed", {
         resendId,
