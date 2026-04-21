@@ -332,7 +332,7 @@ export async function updateProduct(
     const product = await prisma.$transaction(async (tx) => {
       // 1. Update product + increment version
       const product = await tx.product.update({
-        where: { id: productId },
+        where: { id: productId, tenantId },
         data: {
           ...(data.title !== undefined && { title: data.title, slug }),
           ...(data.description !== undefined && { description: data.description }),
@@ -513,7 +513,7 @@ export async function archiveProduct(productId: string): Promise<ActionResult> {
   if (!existing) return { ok: false, error: "Produkten hittades inte" };
 
   await prisma.product.update({
-    where: { id: productId },
+    where: { id: productId, tenantId: tenantData.tenant.id },
     data: { status: "ARCHIVED", archivedAt: new Date(), version: { increment: 1 } },
   });
 
@@ -538,7 +538,7 @@ export async function restoreProduct(productId: string): Promise<ActionResult> {
   if (!existing) return { ok: false, error: "Produkten hittades inte eller är inte arkiverad" };
 
   await prisma.product.update({
-    where: { id: productId },
+    where: { id: productId, tenantId: tenantData.tenant.id },
     data: { status: "DRAFT", archivedAt: null, version: { increment: 1 } },
   });
 
