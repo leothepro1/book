@@ -99,14 +99,31 @@ jobs:
         run: |
           KEY="${{ inputs.backup_key }}"
           if [ -z "$KEY" ]; then
-            KEY=$(aws s3api list-objects-v2 \
+            # Diagnostic: show raw list output. Helps next time we debug
+            # why key resolution failed. The `|| true` keeps us going if
+            # list-objects-v2 errors (R2 has historically returned quirky
+            # responses when Contents is empty).
+            echo "── Diagnostic: raw list of nightly/ prefix ──"
+            aws s3api list-objects-v2 \
               --bucket "$R2_BUCKET" \
               --prefix "nightly/" \
               --endpoint-url "$R2_ENDPOINT" \
-              --query 'sort_by(Contents, &LastModified)[-1].Key' \
-              --output text)
+              --max-items 10 || echo "(list-objects-v2 errored — see above)"
+            echo "────"
+
+            # Resolve latest key via `aws s3 ls --recursive` + shell tools.
+            # More portable than --query 'sort_by(...)': avoids JMESPath
+            # on R2's response which has historically returned NoSuchKey
+            # instead of empty Contents on prefix miss.
+            # Output format: "YYYY-MM-DD HH:MM:SS  SIZE  KEY"
+            KEY=$(aws s3 ls "s3://${R2_BUCKET}/nightly/" \
+              --endpoint-url "$R2_ENDPOINT" \
+              --recursive \
+              | sort -k1,2 \
+              | tail -1 \
+              | awk '{print $4}')
           fi
-          if [ -z "$KEY" ] || [ "$KEY" = "None" ]; then
+          if [ -z "$KEY" ]; then
             echo "::error::No backups found under nightly/ prefix"
             exit 1
           fi
