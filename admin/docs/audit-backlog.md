@@ -169,6 +169,75 @@ close the remaining gaps.
 
 ---
 
+## 🟠 Area 5 Tenant-isolation follow-ups (from 2026-04-21 audit)
+
+Deferred from the 10-commit security batch shipped 2026-04-21.
+
+### M9 — `Booking.portalToken` compound unique `[tenantId, portalToken]`
+- **Why:** Defense-in-depth. Token is already 24 random bytes (not
+  enumerable), but compound-unique would prevent any cross-tenant
+  lookup if a token ever leaked between emails.
+- **Action:**
+  1. `schema.prisma`: add `@@unique([tenantId, portalToken])` on Booking
+  2. Run `prisma migrate dev --name add_booking_portaltoken_tenant_unique`
+  3. Update `app/(guest)/_lib/portal/resolveBooking.ts` to look up
+     via compound unique (requires tenantId from host resolution)
+  4. Schema-drift-pr CI workflow will validate
+- **Risk:** Migration adds unique constraint; fine for existing data
+  (no duplicate tokens by design). Code path change is mechanical.
+- **Blocker:** none. ~2h including tests.
+
+### Raw-SQL discount updates — defense-in-depth tenantId scoping
+- **Why:** 5 raw `$executeRaw` / `$queryRaw` call-sites in
+  `app/_lib/discounts/apply.ts` (lines 120, 211, 220) and
+  `release.ts` (lines 39, 47) update Discount/DiscountCode by
+  `WHERE id = ${...}` only. Safe because caller pre-validates
+  ownership; fragile because raw SQL doesn't inherit type-system
+  guarantees from Prisma.
+- **Action:** Add `AND "tenantId" = ${tenantId}` to each raw WHERE.
+  All callers have tenantId in scope.
+- **Blocker:** none. ~30 min.
+
+### L2-L5 — Verify upstream tenant check on ambiguous lookups
+- **Why:** ~6 `findUnique`/`findFirst` call-sites on MediaAsset
+  (publicId), GiftCard (id), TenantIntegration webhook (provider)
+  look up by globally-unique fields without explicit tenant filter.
+  Agent-flagged; runtime-safe via upstream context but not verified
+  per-call.
+- **Action:** Spot-check each caller; add tenantId filter or compound-
+  unique where possible.
+- **Blocker:** none. ~2h systematic review.
+
+### L6 — Design-intent comments on cross-tenant crons
+- **Why:** `reconcile-stripe`, `reconcile-payments`, `aggregate-
+  analytics`, `rum-aggregate`, `email-marketing-sync`, `app-health-
+  checks`, `integrations/cleanup`, `rate-limit.ts:97` — all run
+  cross-tenant queries by design. Future maintainers need to know
+  this is intentional.
+- **Action:** Add 3-5 line comment at top of each cron handler
+  explaining the pattern + the per-tenant-scope guarantee in the
+  inner loop.
+- **Blocker:** none. ~30 min for all of them.
+
+### Automated tenant-isolation tests
+- **Why:** The audit is a point-in-time snapshot. Regressions will
+  slip in without automation. Shopify-grade policy: "Zero cross-
+  tenant data leakage under any failure mode."
+- **Action:** Write a vitest fixture with 2 seed tenants, hit every
+  public API endpoint as tenant-A user, assert responses contain
+  ONLY tenant-A data. Add as CI gate.
+- **Blocker:** fixture design. 1-2 days including iteration.
+
+### Quarterly repeat of this audit
+- **Why:** The grep patterns used today can be re-run. Drift from
+  92% SAFE is hard to detect without running the full audit again.
+- **Action:** Schedule a recurring calendar entry (Q3 2026) to re-
+  run the 7 domain agents and diff against `admin/docs/audits/
+  tenant-isolation-2026-04-21.md`. Flag any new AMBIGUOUS/UNSAFE.
+- **Blocker:** none. ~2h every quarter.
+
+---
+
 ## 📅 Completed
 
 (Items move here with commit SHA when shipped.)
@@ -183,3 +252,9 @@ close the remaining gaps.
   — PR gate (migrations ↔ schema) + nightly cron (schema ↔ prod)
 - ✅ Render → Neon migration (d2a74fc, 8341597)
   — baseline squash, orphan cleanup, rollback runbook
+- ✅ Område 5 Tenant-isolation audit (2026-04-21)
+  — 7 domains audited (~1,176 Prisma call-sites), 10 fix-commits
+  shipped (H1, H2, M1-M8) covering Fake Booking Creator removal,
+  discount/product/webhook tenant-scope hardening. M9 + raw-SQL
+  defense-in-depth + cron comments deferred to this backlog.
+  See `admin/docs/audits/tenant-isolation-2026-04-21.md`.
