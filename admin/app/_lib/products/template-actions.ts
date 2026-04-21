@@ -156,7 +156,7 @@ export async function deleteProductTemplate(
   }
 
   // Delete template (Product.templateId → null via onDelete: SetNull)
-  await prisma.productTemplate.delete({ where: { id } });
+  await prisma.productTemplate.delete({ where: { id, tenantId } });
 
   // Clean up TenantConfig entry — direct write (not deepmerge).
   // deepmerge would re-add the key from baseConfig, so we read the full

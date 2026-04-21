@@ -571,7 +571,9 @@ export async function deleteProduct(productId: string): Promise<ActionResult> {
     return { ok: false, error: "Produkten kan inte raderas — den har kopplingar till ordrar. Arkivera istället." };
   }
 
-  await prisma.product.delete({ where: { id: productId } });
+  await prisma.product.delete({
+    where: { id: productId, tenantId: tenantData.tenant.id },
+  });
 
   revalidatePath("/(admin)/products", "page");
   revalidatePath("/(guest)", "layout");
@@ -855,7 +857,9 @@ export async function deleteCollection(collectionId: string): Promise<ActionResu
   });
   if (!existing) return { ok: false, error: "Kategorin hittades inte" };
 
-  await prisma.productCollection.delete({ where: { id: collectionId } });
+  await prisma.productCollection.delete({
+    where: { id: collectionId, tenantId: tenantData.tenant.id },
+  });
   revalidatePath("/(guest)", "layout");
   return { ok: true, data: undefined };
 }
