@@ -30,10 +30,21 @@ jobs:
     steps:
       - name: Verify required secrets are present
         run: |
+          # Format: ENV_VAR_NAME:SECRET_NAME — some secrets are exposed under
+          # different env var names (aws-cli requires AWS_ACCESS_KEY_ID, etc.),
+          # so we check the env var but report the secret name in errors.
           MISSING=0
-          for var in NEON_DIRECT_URL R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT R2_BUCKET; do
-            if [ -z "${!var}" ]; then
-              echo "::error::${var} secret is empty or not set"
+          for pair in \
+            NEON_DIRECT_URL:NEON_DIRECT_URL \
+            AWS_ACCESS_KEY_ID:R2_ACCESS_KEY_ID \
+            AWS_SECRET_ACCESS_KEY:R2_SECRET_ACCESS_KEY \
+            R2_ENDPOINT:R2_ENDPOINT \
+            R2_BUCKET:R2_BUCKET_NAME
+          do
+            env_name="${pair%%:*}"
+            secret_name="${pair##*:}"
+            if [ -z "${!env_name}" ]; then
+              echo "::error::Secret ${secret_name} (env var ${env_name}) is empty or not set"
               echo "Check https://github.com/leothepro1/book/settings/secrets/actions"
               MISSING=1
             fi
