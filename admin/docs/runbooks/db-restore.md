@@ -136,7 +136,7 @@ it before deciding.
   export AWS_SECRET_ACCESS_KEY=...
   export AWS_DEFAULT_REGION=auto
   export AWS_EC2_METADATA_DISABLED=true
-  export R2_ENDPOINT="https://09ab42c3610c3ec377e09db1c2e27c1f.eu.r2.cloudflarestorage.com"
+  export R2_ENDPOINT="https://09ab42c3610c3ec377e09db1c2e27c1f.r2.cloudflarestorage.com"
   export R2_BUCKET=booking
   ```
 

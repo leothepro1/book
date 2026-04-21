@@ -7,6 +7,14 @@ For rolling back the _app_ from Neon back to Render, see
 `db-rollback-to-render.md`. For restoring _data_ from a backup into
 Neon (or a fresh Postgres), see `db-restore.md`.
 
+> **Verified working end-to-end 2026-04-21.** Both workflows passed
+> their first manual trigger after the fix-chain
+> `504bcac → ceee827 → 6483ae2 → a7f2eda → dfdf2ec`: backup writes
+> the nightly dump to R2 under the correct `nightly/YYYY-MM-DD/`
+> prefix, and the restore-drill fetches it, restores into a
+> throwaway Neon branch, passes all sanity checks, and deletes the
+> branch cleanly. Quarterly DR-drill cadence starts from this date.
+
 ## What runs when
 
 Two GitHub Actions workflows live in `.github/workflows/`:
@@ -21,8 +29,9 @@ fails (sent to the repo owner — `leo@lrstudio.se`).
 
 ## Backup storage layout
 
-Bucket: `booking` (Cloudflare R2, EU jurisdiction,
-`https://09ab42c3610c3ec377e09db1c2e27c1f.eu.r2.cloudflarestorage.com`)
+Bucket: `booking` (Cloudflare R2, default jurisdiction with
+EEUR location hint (Eastern Europe),
+`https://09ab42c3610c3ec377e09db1c2e27c1f.r2.cloudflarestorage.com`)
 
 Object key pattern:
 ```
@@ -90,7 +99,7 @@ To just confirm a dump is readable without actually restoring:
 # Download locally
 aws s3 cp s3://booking/nightly/2026-04-22/backup-2026-04-22T03-00-15Z.dump \
   /tmp/backup.dump \
-  --endpoint-url https://09ab42c3610c3ec377e09db1c2e27c1f.eu.r2.cloudflarestorage.com
+  --endpoint-url https://09ab42c3610c3ec377e09db1c2e27c1f.r2.cloudflarestorage.com
 
 # List TOC
 pg_restore --list /tmp/backup.dump | head -20
