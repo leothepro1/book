@@ -589,6 +589,63 @@ Public API: getPublicPolicy(tenantSlug, policyId) — no auth required.
 
 ---
 
+## Migrations workflow — non-negotiable rules
+
+Ratified 2026-04-21 after migration history squash. These rules exist
+because migration drift is how production systems silently become
+un-deployable. See `prisma/migrations-archive-2026-04-21/README.md` for
+the incident that triggered these rules.
+
+1. NEVER run `prisma db push` against any DB shared with another
+   environment or developer. `db push` bypasses the migration system
+   and causes drift.
+
+2. ALL schema changes MUST go through
+   `prisma migrate dev --name descriptive_name` locally. This creates
+   a migration file that is committed to git.
+
+3. NEVER delete files from `prisma/migrations/`. If a migration needs
+   reversal, create a new migration that reverses it.
+
+4. NEVER manually edit applied `migration.sql` files. If wrong, create
+   a corrective new migration.
+
+5. When cloning a fresh dev environment, `prisma migrate deploy`
+   against a blank DB MUST build the entire schema. If it doesn't,
+   the history is broken — escalate, do not paper over it.
+
+6. Before any PR touching schema.prisma, verify
+   `prisma migrate status` reports "up to date" against your local
+   dev DB.
+
+7. Baseline squashes (merging history into a single file) are
+   ALLOWED but RARE — only done deliberately with documented
+   procedure and full backup. See
+   `prisma/migrations-archive-*` for historical baselines.
+
+8. When adding a new table or model: schema.prisma FIRST, then
+   `prisma migrate dev`, then code that uses it. Never the other
+   way around.
+
+### Partial/filtered indexes
+
+Prisma DSL cannot express partial unique indexes (e.g. `WHERE column
+IS NOT NULL`). When such an invariant is needed at the DB level, the
+convention is:
+
+1. Add a comment block in schema.prisma on the model documenting the
+   intended constraint and why Prisma can't express it (see
+   `SpotMarker` for a reference).
+2. Add the raw SQL at the end of the migration file under a
+   clearly-marked section:
+   `-- Partial unique indexes (not expressible in Prisma DSL)`
+3. The app code that relies on the constraint must catch the specific
+   unique-constraint error and translate it into a meaningful
+   user-facing error (see `app/api/apps/spot-booking/markers/route.ts`
+   for the reference pattern).
+
+---
+
 ## Security invariants
 
 - Env validation via Zod at boot — throws if required vars missing (env.ts)

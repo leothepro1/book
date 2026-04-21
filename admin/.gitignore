@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local database backups (never committed — created during migrations/operations)
+backups/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

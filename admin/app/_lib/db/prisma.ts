@@ -3,6 +3,10 @@ import { log } from "@/app/_lib/logger";
 
 // ── Connection URL ───────────────────────────────────────────
 
+function isPooledUrl(url: string): boolean {
+  return url.includes("-pooler.");
+}
+
 function getDatabaseUrl(): string {
   const url = process.env.DATABASE_URL;
   if (!url) {
@@ -15,9 +19,16 @@ function getDatabaseUrl(): string {
   const separator = url.includes("?") ? "&" : "?";
   const params: string[] = [];
 
-  if (!url.includes("connection_limit")) params.push("connection_limit=10");
-  if (!url.includes("pool_timeout")) params.push("pool_timeout=20");
-  if (!url.includes("statement_timeout")) params.push("statement_timeout=30000");
+  if (isPooledUrl(url)) {
+    // Neon pooled URL — pooler manages connection_limit and pool_timeout
+    if (!url.includes("pgbouncer")) params.push("pgbouncer=true");
+    if (!url.includes("statement_timeout")) params.push("statement_timeout=30000");
+  } else {
+    // Direct connection (Render direct or Neon direct)
+    if (!url.includes("connection_limit")) params.push("connection_limit=10");
+    if (!url.includes("pool_timeout")) params.push("pool_timeout=20");
+    if (!url.includes("statement_timeout")) params.push("statement_timeout=30000");
+  }
 
   return params.length > 0 ? `${url}${separator}${params.join("&")}` : url;
 }
