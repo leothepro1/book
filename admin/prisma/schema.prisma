@@ -1,3 +1,4 @@
+// test: schema-drift PR-gate verification — to be reverted
 generator client {
   provider = "prisma-client-js"
 }
