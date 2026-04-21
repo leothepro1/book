@@ -28,12 +28,31 @@ jobs:
       NEON_DIRECT_URL: ${{ secrets.NEON_DIRECT_URL }}
 
     steps:
+      - name: Verify required secrets are present
+        run: |
+          MISSING=0
+          for var in NEON_DIRECT_URL R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT R2_BUCKET; do
+            if [ -z "${!var}" ]; then
+              echo "::error::${var} secret is empty or not set"
+              echo "Check https://github.com/leothepro1/book/settings/secrets/actions"
+              MISSING=1
+            fi
+          done
+          if [ "$MISSING" = "1" ]; then
+            exit 1
+          fi
+          echo "All required secrets present"
+
       # Using PG 18 client against Neon PG 17.8 server.
       # pg_dump is forward-compatible within a version, and
       # PGDG ubuntu noble 24.04 packages ship -18 reliably.
       # If you need exact version match, install postgresql-client-17
       # from pgdg-snapshot or similar.
-      - name: Install PostgreSQL 18 client (matches Neon server version)
+      #
+      # Ubuntu 24.04 runners ship postgresql-client-16 by default. We must
+      # explicitly prepend /usr/lib/postgresql/18/bin to PATH so pg_dump
+      # and pg_restore resolve to PG 18, not Ubuntu's default 16.
+      - name: Install PostgreSQL 18 client + prepend to PATH
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -fsS https://www.postgresql.org/media/keys/ACCC4CF8.asc \
@@ -42,7 +61,18 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-18
+          # $GITHUB_PATH takes effect in the NEXT step — verify via absolute path here.
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+          /usr/lib/postgresql/18/bin/pg_dump --version
+
+      - name: Verify pg_dump resolves to PG 18 (not Ubuntu default 16)
+        run: |
           pg_dump --version
+          if ! pg_dump --version | grep -q "PostgreSQL 18"; then
+            echo "::error::pg_dump did not resolve to PG 18 in PATH"
+            which pg_dump
+            exit 1
+          fi
 
       - name: Compute dump metadata
         id: meta
