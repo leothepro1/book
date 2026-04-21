@@ -19,6 +19,10 @@ const isPublicRoute = createRouteMatcher([
   '/api/webhooks/(.*)',
   '/api/admin/(.*)',
   '/api/email-sender/verify/confirm(.*)',
+  // Platform health + readiness probes — intentionally unauthenticated so
+  // Vercel deployment checks, uptime monitors, and on-call curl work
+  // without Clerk sessions. Response bodies are minimal by design.
+  '/api/health(.*)',
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/auth/(.*)',
