@@ -83,8 +83,13 @@ jobs:
       - name: Verify pg_restore resolves to PG 18 (not Ubuntu default 16)
         run: |
           pg_restore --version
-          if ! pg_restore --version | grep -q "PostgreSQL 18"; then
-            echo "::error::pg_restore did not resolve to PG 18 in PATH"
+          # Extract the first integer from --version output — that's the
+          # major version. Robust against minor-release bumps (18.3 → 18.4)
+          # and formatting quirks like "(PostgreSQL) 18.x" that broke a
+          # naive substring match.
+          MAJOR=$(pg_restore --version | grep -oE "[0-9]+" | head -1)
+          if [ "$MAJOR" != "18" ]; then
+            echo "::error::Expected pg_restore major version 18, got ${MAJOR}"
             which pg_restore
             exit 1
           fi

@@ -79,8 +79,13 @@ jobs:
       - name: Verify pg_dump resolves to PG 18 (not Ubuntu default 16)
         run: |
           pg_dump --version
-          if ! pg_dump --version | grep -q "PostgreSQL 18"; then
-            echo "::error::pg_dump did not resolve to PG 18 in PATH"
+          # Extract the first integer from --version output — that's the
+          # major version. Robust against minor-release bumps (18.3 → 18.4)
+          # and formatting quirks like "(PostgreSQL) 18.x" that broke a
+          # naive substring match.
+          MAJOR=$(pg_dump --version | grep -oE "[0-9]+" | head -1)
+          if [ "$MAJOR" != "18" ]; then
+            echo "::error::Expected pg_dump major version 18, got ${MAJOR}"
             which pg_dump
             exit 1
           fi
