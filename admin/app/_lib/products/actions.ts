@@ -1134,7 +1134,7 @@ export async function assignProductTemplate(
   }
 
   await prisma.product.update({
-    where: { id: productId },
+    where: { id: productId, tenantId },
     data: { templateId },
   });
 
