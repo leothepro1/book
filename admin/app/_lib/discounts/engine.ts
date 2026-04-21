@@ -86,11 +86,12 @@ function checkDiscountValidity(
  * Returns true if the customer has already used this discount.
  */
 async function hasCustomerUsedDiscount(
+  tenantId: string,
   discountId: string,
   guestEmail: string,
 ): Promise<boolean> {
   const usage = await prisma.discountUsage.findFirst({
-    where: { discountId, guestEmail },
+    where: { tenantId, discountId, guestEmail },
     select: { id: true },
   });
   return usage !== null;
@@ -200,7 +201,7 @@ export async function evaluateAutomaticDiscount(
     );
     if (oncePerCustomer) {
       if (!ctx.guestEmail) continue;
-      const used = await hasCustomerUsedDiscount(discount.id, ctx.guestEmail);
+      const used = await hasCustomerUsedDiscount(discount.tenantId, discount.id, ctx.guestEmail);
       if (used) continue;
     }
 
@@ -290,7 +291,7 @@ export async function evaluateDiscountCode(
     if (!input.guestEmail) {
       return { valid: false, error: "CONDITION_NOT_MET" };
     }
-    const used = await hasCustomerUsedDiscount(discount.id, input.guestEmail);
+    const used = await hasCustomerUsedDiscount(discount.tenantId, discount.id, input.guestEmail);
     if (used) {
       return { valid: false, error: "ONCE_PER_CUSTOMER_VIOLATED" };
     }
