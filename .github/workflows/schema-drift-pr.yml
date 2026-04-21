@@ -1,0 +1,158 @@
+name: schema-drift-pr
+
+# PR-gate: ensures admin/prisma/migrations/ exactly produces the schema
+# described by admin/prisma/schema.prisma. Catches the common failure mode
+# of editing schema.prisma without running `prisma migrate dev` (which is
+# what caused the migrations-history drift resolved in commit d2a74fc).
+#
+# Requires NO secrets — the shadow DB is a local GHA Postgres service.
+# Works from forks (though repo is private today).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  # One check per branch. A push after a PR update cancels the in-flight PR run.
+  group: schema-drift-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift-check:
+    name: migrations/ ↔ schema.prisma
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: shadow
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Dummy DB URLs for prisma-schema-parse — required because
+      # schema.prisma references env("DATABASE_URL") and env("DIRECT_URL").
+      # The real shadow DB is passed explicitly via --shadow-database-url.
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/shadow"
+      DIRECT_URL: "postgresql://postgres:postgres@localhost:5432/shadow"
+      SHADOW_DB_URL: "postgresql://postgres:postgres@localhost:5432/shadow"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Install admin dependencies
+        working-directory: admin
+        run: npm ci --no-audit --no-fund --prefer-offline
+
+      - name: Validate schema.prisma (syntax + semantics)
+        working-directory: admin
+        run: npx prisma validate
+
+      - name: Run prisma migrate diff — migrations/ vs schema.prisma
+        id: diff
+        working-directory: admin
+        run: |
+          set +e
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$SHADOW_DB_URL" \
+            --exit-code \
+            > /tmp/drift-output.txt 2>&1
+          CODE=$?
+          set -e
+          echo "diff_exit_code=${CODE}" >> "$GITHUB_OUTPUT"
+          echo ""
+          echo "── prisma migrate diff output (exit ${CODE}) ──"
+          cat /tmp/drift-output.txt
+
+      - name: Write step summary (no drift)
+        if: steps.diff.outputs.diff_exit_code == '0'
+        run: |
+          {
+            echo "## Schema drift check"
+            echo ""
+            echo "✅ **No drift detected** between \`admin/prisma/migrations/\` and \`admin/prisma/schema.prisma\`."
+            echo ""
+            echo "Applying all migrations to a fresh database produces exactly the schema described in schema.prisma."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Write step summary (drift detected)
+        if: steps.diff.outputs.diff_exit_code == '2'
+        run: |
+          {
+            echo "## Schema drift check"
+            echo ""
+            echo "❌ **Drift detected** — \`admin/prisma/migrations/\` does NOT produce the schema in \`admin/prisma/schema.prisma\`."
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Source (from) | \`admin/prisma/migrations/\` |"
+            echo "| Target (to)   | \`admin/prisma/schema.prisma\` |"
+            echo "| Exit code     | 2 (differences) |"
+            echo ""
+            echo "### What this means"
+            echo ""
+            echo "Running \`prisma migrate deploy\` against an empty database using the committed migrations does not match the state declared in \`schema.prisma\`. Usually this means someone edited \`schema.prisma\` without generating a corresponding migration."
+            echo ""
+            echo "### How to fix"
+            echo ""
+            echo "\`\`\`bash"
+            echo "cd admin"
+            echo "# Start local postgres if not already running:"
+            echo "npm run db:up"
+            echo "# Generate the missing migration:"
+            echo "npx prisma migrate dev --name <descriptive_name>"
+            echo "# Commit the new admin/prisma/migrations/<timestamp>_<name>/ folder"
+            echo "\`\`\`"
+            echo ""
+            echo "See \`admin/CLAUDE.md\` → Migrations workflow for the full policy."
+            echo ""
+            echo "### Full diff"
+            echo ""
+            echo "<details><summary>Click to expand</summary>"
+            echo ""
+            echo "\`\`\`"
+            cat /tmp/drift-output.txt
+            echo "\`\`\`"
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Schema drift detected between migrations/ and schema.prisma — see step summary."
+          exit 1
+
+      - name: Fail loudly on unexpected exit code
+        if: steps.diff.outputs.diff_exit_code != '0' && steps.diff.outputs.diff_exit_code != '2'
+        run: |
+          {
+            echo "## Schema drift check"
+            echo ""
+            echo "⚠️ **\`prisma migrate diff\` errored with unexpected exit code \`${{ steps.diff.outputs.diff_exit_code }}\`.**"
+            echo ""
+            echo "Expected: 0 (identical) or 2 (drift). Got something else — likely a shadow-DB connection issue or a malformed migration file."
+            echo ""
+            echo "\`\`\`"
+            cat /tmp/drift-output.txt
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::prisma migrate diff failed — see step summary."
+          exit 1

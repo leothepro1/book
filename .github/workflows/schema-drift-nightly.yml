@@ -1,0 +1,165 @@
+name: schema-drift-nightly
+
+# Nightly drift detection: compares admin/prisma/schema.prisma against the
+# live production database. Catches drift that happened outside the
+# migration system — manual SQL edits, accidental `prisma db push` runs,
+# or long-lived "fix in prod" hacks.
+#
+# Runs at 04:00 UTC (one hour after db-backup so any drift is caught on a
+# fresh backup). Also exposes workflow_dispatch for on-demand checks.
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  # One drift check at a time; a second trigger waits rather than cancelling
+  # (same pattern as db-backup — we want both runs to complete).
+  group: schema-drift-nightly
+  cancel-in-progress: false
+
+jobs:
+  drift-check:
+    name: schema.prisma ↔ Neon production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # DATABASE_URL is required for schema.prisma parsing (env("DATABASE_URL")).
+      # It's never connected to — the diff runs against NEON_DIRECT_URL only.
+      DATABASE_URL: ${{ secrets.NEON_DIRECT_URL }}
+      DIRECT_URL: ${{ secrets.NEON_DIRECT_URL }}
+
+    steps:
+      - name: Verify required secrets are present
+        run: |
+          MISSING=0
+          for pair in \
+            DATABASE_URL:NEON_DIRECT_URL \
+            DIRECT_URL:NEON_DIRECT_URL
+          do
+            env_name="${pair%%:*}"
+            secret_name="${pair##*:}"
+            if [ -z "${!env_name}" ]; then
+              echo "::error::Secret ${secret_name} (env var ${env_name}) is empty or not set"
+              echo "Check https://github.com/leothepro1/book/settings/secrets/actions"
+              MISSING=1
+            fi
+          done
+          if [ "$MISSING" = "1" ]; then
+            exit 1
+          fi
+          echo "All required secrets present"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Install admin dependencies
+        working-directory: admin
+        run: npm ci --no-audit --no-fund --prefer-offline
+
+      - name: Run prisma migrate diff — schema.prisma vs live Neon
+        id: diff
+        working-directory: admin
+        run: |
+          set +e
+          # --from-schema-datamodel: what our committed schema says the DB should look like.
+          # --to-url: what Neon actually has right now.
+          # Diff semantics: a non-empty result means the live DB has drifted from schema.
+          npx prisma migrate diff \
+            --from-schema-datamodel prisma/schema.prisma \
+            --to-url "$DIRECT_URL" \
+            --exit-code \
+            > /tmp/drift-output.txt 2>&1
+          CODE=$?
+          set -e
+          echo "diff_exit_code=${CODE}" >> "$GITHUB_OUTPUT"
+          echo ""
+          echo "── prisma migrate diff output (exit ${CODE}) ──"
+          cat /tmp/drift-output.txt
+
+      - name: Write step summary (no drift)
+        if: steps.diff.outputs.diff_exit_code == '0'
+        run: |
+          {
+            echo "## Nightly schema drift check"
+            echo ""
+            echo "✅ **No schema drift detected** between \`admin/prisma/schema.prisma\` and Neon production."
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Checked at | \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\` |"
+            echo "| Source (from) | \`admin/prisma/schema.prisma\` |"
+            echo "| Target (to)   | Neon \`\$NEON_DIRECT_URL\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Write step summary (drift detected)
+        if: steps.diff.outputs.diff_exit_code == '2'
+        run: |
+          {
+            echo "## Nightly schema drift check"
+            echo ""
+            echo "❌ **Schema drift detected** between \`admin/prisma/schema.prisma\` and Neon production."
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Detected at | \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\` |"
+            echo "| Source (from) | \`admin/prisma/schema.prisma\` |"
+            echo "| Target (to)   | Neon production (via \`NEON_DIRECT_URL\`) |"
+            echo "| Exit code     | 2 (differences) |"
+            echo ""
+            echo "### What this means"
+            echo ""
+            echo "The live Neon database no longer matches the schema described in \`schema.prisma\`. This can happen if:"
+            echo ""
+            echo "- Someone ran \`prisma db push\` directly against prod (bypasses migration system)"
+            echo "- Someone executed raw SQL to modify the schema"
+            echo "- A migration file was deleted from \`admin/prisma/migrations/\` after being applied"
+            echo "- Neon added/modified something at the DB level (unlikely but possible)"
+            echo ""
+            echo "### How to fix"
+            echo ""
+            echo "1. Identify who made the change (check Neon audit log, commit history, and Slack)."
+            echo "2. Decide: should the change stay or be reverted?"
+            echo "3. If stay: \`npx prisma db pull\` to capture it in \`schema.prisma\`, then \`prisma migrate dev\` to create a formal migration."
+            echo "4. If revert: write a corrective migration that brings the DB back to match \`schema.prisma\`."
+            echo ""
+            echo "See \`admin/docs/runbooks/db-restore.md\` for restore scenarios if drift has caused data corruption."
+            echo ""
+            echo "### Full diff"
+            echo ""
+            echo "<details><summary>Click to expand</summary>"
+            echo ""
+            echo "\`\`\`"
+            cat /tmp/drift-output.txt
+            echo "\`\`\`"
+            echo ""
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Schema drift detected between schema.prisma and Neon prod — see step summary."
+          exit 1
+
+      - name: Fail loudly on unexpected exit code
+        if: steps.diff.outputs.diff_exit_code != '0' && steps.diff.outputs.diff_exit_code != '2'
+        run: |
+          {
+            echo "## Nightly schema drift check"
+            echo ""
+            echo "⚠️ **\`prisma migrate diff\` errored with unexpected exit code \`${{ steps.diff.outputs.diff_exit_code }}\`.**"
+            echo ""
+            echo "Expected: 0 (identical) or 2 (drift). Got something else — likely a Neon connection issue or credentials problem."
+            echo ""
+            echo "\`\`\`"
+            cat /tmp/drift-output.txt
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::prisma migrate diff failed — see step summary."
+          exit 1
