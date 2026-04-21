@@ -120,8 +120,10 @@ jobs:
           echo "Dump size: $(numfmt --to=iec --suffix=B "$SIZE")  (${SIZE} bytes)"
           echo "DUMP_SIZE=${SIZE}" >> "$GITHUB_ENV"
           # Abort on suspiciously small dumps (empty/truncated).
-          if [ "$SIZE" -lt 512000 ]; then
-            echo "::error::Dump suspiciously small (<500KB). Aborting."
+          # 100 KB catches empty/truncated dumps while accepting our current
+          # seed-only DB (~344 KB). Revisit when we have >10 tenants.
+          if [ "$SIZE" -lt 102400 ]; then
+            echo "::error::Dump suspiciously small (<100KB). Aborting."
             exit 2
           fi
 
