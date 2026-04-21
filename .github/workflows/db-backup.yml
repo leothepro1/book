@@ -1,0 +1,132 @@
+name: db-backup
+
+on:
+  # Daily 03:00 UTC — after most Neon maintenance windows, before EU business hours.
+  schedule:
+    - cron: "0 3 * * *"
+  # Allow manual trigger for ad-hoc backups and testing.
+  workflow_dispatch:
+
+concurrency:
+  # Prevent two backup runs overlapping.
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  dump-and-upload:
+    name: pg_dump → R2
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # R2 S3-compatible credentials (aws-cli reads these automatically)
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_EC2_METADATA_DISABLED: "true"
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET_NAME }}
+      NEON_DIRECT_URL: ${{ secrets.NEON_DIRECT_URL }}
+
+    steps:
+      # Using PG 18 client against Neon PG 17.8 server.
+      # pg_dump is forward-compatible within a version, and
+      # PGDG ubuntu noble 24.04 packages ship -18 reliably.
+      # If you need exact version match, install postgresql-client-17
+      # from pgdg-snapshot or similar.
+      - name: Install PostgreSQL 18 client (matches Neon server version)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsS https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-18
+          pg_dump --version
+
+      - name: Compute dump metadata
+        id: meta
+        run: |
+          TS=$(date -u +"%Y-%m-%dT%H-%M-%SZ")
+          DATE=$(date -u +"%Y-%m-%d")
+          FILE="backup-${TS}.dump"
+          KEY="nightly/${DATE}/${FILE}"
+          echo "ts=${TS}" >> "$GITHUB_OUTPUT"
+          echo "file=${FILE}" >> "$GITHUB_OUTPUT"
+          echo "key=${KEY}" >> "$GITHUB_OUTPUT"
+          echo "Dump target: s3://${R2_BUCKET}/${KEY}"
+
+      - name: Run pg_dump (custom format)
+        run: |
+          set -o pipefail
+          pg_dump "$NEON_DIRECT_URL" \
+            --format=custom \
+            --no-owner \
+            --no-acl \
+            --file="${{ steps.meta.outputs.file }}" \
+            2> pg_dump.stderr.log \
+          || {
+              echo "::error::pg_dump failed"
+              cat pg_dump.stderr.log
+              exit 1
+          }
+          SIZE=$(stat -c%s "${{ steps.meta.outputs.file }}")
+          echo "Dump size: $(numfmt --to=iec --suffix=B "$SIZE")  (${SIZE} bytes)"
+          echo "DUMP_SIZE=${SIZE}" >> "$GITHUB_ENV"
+          # Abort on suspiciously small dumps (empty/truncated).
+          if [ "$SIZE" -lt 512000 ]; then
+            echo "::error::Dump suspiciously small (<500KB). Aborting."
+            exit 2
+          fi
+
+      - name: Verify dump integrity (pg_restore --list)
+        run: |
+          pg_restore --list "${{ steps.meta.outputs.file }}" > toc.txt
+          TOC_LINES=$(wc -l < toc.txt)
+          echo "TOC entries: ${TOC_LINES}"
+          # Our schema has 110 tables + indexes + FKs → expect well above 100 entries.
+          if [ "$TOC_LINES" -lt 100 ]; then
+            echo "::error::TOC has ${TOC_LINES} entries, expected >100. Dump looks incomplete."
+            head -20 toc.txt
+            exit 3
+          fi
+          if ! grep -q "TABLE DATA" toc.txt; then
+            echo "::error::No TABLE DATA entries in TOC — dump has no data."
+            exit 4
+          fi
+          echo "Dump integrity check passed."
+
+      - name: Upload dump to R2
+        run: |
+          aws s3 cp "${{ steps.meta.outputs.file }}" \
+            "s3://${R2_BUCKET}/${{ steps.meta.outputs.key }}" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --no-progress
+          echo "Uploaded: s3://${R2_BUCKET}/${{ steps.meta.outputs.key }}"
+
+      - name: Verify upload (HEAD request, size match)
+        run: |
+          REMOTE_SIZE=$(aws s3api head-object \
+            --bucket "$R2_BUCKET" \
+            --key "${{ steps.meta.outputs.key }}" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --query 'ContentLength' \
+            --output text)
+          if [ "$REMOTE_SIZE" != "$DUMP_SIZE" ]; then
+            echo "::error::Remote size (${REMOTE_SIZE}) ≠ local size (${DUMP_SIZE})"
+            exit 5
+          fi
+          echo "Remote size matches: ${REMOTE_SIZE} bytes."
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Backup result"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Timestamp | \`${{ steps.meta.outputs.ts }}\` |"
+            echo "| R2 key    | \`${{ steps.meta.outputs.key }}\` |"
+            echo "| Size      | \`$(numfmt --to=iec --suffix=B "${DUMP_SIZE:-0}")\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

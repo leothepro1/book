@@ -1,0 +1,244 @@
+name: db-restore-drill
+
+# Manual-only: a quarterly DR drill that proves a backup can be fully restored.
+# Creates a throwaway Neon branch, restores the latest (or a specified) backup
+# into it, runs sanity queries, compares against main, then deletes the branch.
+#
+# Prereqs: secrets NEON_API_KEY and NEON_PROJECT_ID must be set in repo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_key:
+        description: "R2 object key to restore (blank = latest under nightly/)"
+        required: false
+        type: string
+
+concurrency:
+  # Only one drill in flight — avoids colliding Neon branch names / quotas.
+  group: db-restore-drill
+  cancel-in-progress: false
+
+jobs:
+  drill:
+    name: Restore + verify + cleanup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_EC2_METADATA_DISABLED: "true"
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET_NAME }}
+      NEON_DIRECT_URL: ${{ secrets.NEON_DIRECT_URL }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+
+    steps:
+      - name: Install PostgreSQL 18 client + jq
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsS https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-18 jq
+          pg_restore --version
+
+      - name: Resolve backup key (latest if not specified)
+        id: resolve
+        run: |
+          KEY="${{ inputs.backup_key }}"
+          if [ -z "$KEY" ]; then
+            KEY=$(aws s3api list-objects-v2 \
+              --bucket "$R2_BUCKET" \
+              --prefix "nightly/" \
+              --endpoint-url "$R2_ENDPOINT" \
+              --query 'sort_by(Contents, &LastModified)[-1].Key' \
+              --output text)
+          fi
+          if [ -z "$KEY" ] || [ "$KEY" = "None" ]; then
+            echo "::error::No backups found under nightly/ prefix"
+            exit 1
+          fi
+          echo "Resolved key: $KEY"
+          echo "key=${KEY}" >> "$GITHUB_OUTPUT"
+
+      - name: Download backup from R2
+        run: |
+          aws s3 cp "s3://${R2_BUCKET}/${{ steps.resolve.outputs.key }}" \
+            ./backup.dump \
+            --endpoint-url "$R2_ENDPOINT" \
+            --no-progress
+          ls -lh ./backup.dump
+
+      - name: Verify dump integrity before touching Neon
+        run: |
+          pg_restore --list ./backup.dump | head -5
+          ENTRIES=$(pg_restore --list ./backup.dump | wc -l)
+          echo "TOC entries: ${ENTRIES}"
+          if [ "$ENTRIES" -lt 100 ]; then
+            echo "::error::Dump TOC suspiciously small — refusing to run drill"
+            exit 2
+          fi
+
+      - name: Create temp Neon branch
+        id: branch
+        run: |
+          BRANCH_NAME="drill-$(date -u +%Y%m%d-%H%M%S)-${GITHUB_RUN_ID}"
+          echo "Creating branch: ${BRANCH_NAME}"
+
+          RESPONSE=$(curl -sS -X POST \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches" \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"branch\": { \"name\": \"${BRANCH_NAME}\" },
+              \"endpoints\": [{ \"type\": \"read_write\" }]
+            }")
+
+          BRANCH_ID=$(echo "$RESPONSE" | jq -r '.branch.id // empty')
+          HOST=$(echo "$RESPONSE" | jq -r '.endpoints[0].host // empty')
+          if [ -z "$BRANCH_ID" ] || [ -z "$HOST" ]; then
+            echo "::error::Failed to create branch"
+            echo "$RESPONSE" | jq . || echo "$RESPONSE"
+            exit 3
+          fi
+
+          # Reuse userinfo + dbname from NEON_DIRECT_URL, swap host to branch host.
+          USERINFO=$(echo "$NEON_DIRECT_URL" | sed -E 's|^postgresql://([^@]+)@.*|\1|')
+          DBNAME=$(echo "$NEON_DIRECT_URL" | sed -E 's|.*/([^?]+).*$|\1|')
+          BRANCH_URL="postgresql://${USERINFO}@${HOST}/${DBNAME}?sslmode=require&channel_binding=require"
+
+          echo "branch_id=${BRANCH_ID}" >> "$GITHUB_OUTPUT"
+          echo "branch_name=${BRANCH_NAME}" >> "$GITHUB_OUTPUT"
+          # Export BRANCH_URL as env var (secret masking applies since it contains the same password as NEON_DIRECT_URL).
+          echo "BRANCH_URL=${BRANCH_URL}" >> "$GITHUB_ENV"
+
+          echo "Branch created: ${BRANCH_NAME} (${BRANCH_ID})"
+
+      - name: Wait for branch endpoint ready
+        run: |
+          for i in $(seq 1 30); do
+            if psql "$BRANCH_URL" -c "SELECT 1" >/dev/null 2>&1; then
+              echo "Branch endpoint ready after ~$((i*2))s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Branch endpoint not ready after 60s"
+          exit 4
+
+      - name: Restore backup into branch (--clean --if-exists)
+        run: |
+          # --clean --if-exists makes pg_restore drop objects before recreating them,
+          # so the inherited copy of main is replaced with the backup's state.
+          pg_restore \
+            --clean --if-exists \
+            --no-owner --no-acl \
+            --dbname="$BRANCH_URL" \
+            ./backup.dump \
+            2> pg_restore.stderr.log \
+          || true
+          # pg_restore returns non-zero for non-fatal warnings. Treat real errors specially.
+          if grep -iE "^pg_restore: error" pg_restore.stderr.log; then
+            echo "::error::pg_restore reported fatal errors"
+            cat pg_restore.stderr.log
+            exit 5
+          fi
+          WARNINGS=$(grep -c "warning" pg_restore.stderr.log || true)
+          echo "Restore complete. Warnings: ${WARNINGS} (non-fatal)."
+
+      - name: Sanity queries on restored branch
+        id: sanity
+        run: |
+          TABLES=$(psql "$BRANCH_URL" -tAc "SELECT COUNT(*) FROM pg_tables WHERE schemaname='public'")
+          TENANTS=$(psql "$BRANCH_URL" -tAc 'SELECT COUNT(*) FROM "Tenant"')
+          BOOKINGS=$(psql "$BRANCH_URL" -tAc 'SELECT COUNT(*) FROM "Booking"')
+          ORDERS=$(psql "$BRANCH_URL" -tAc 'SELECT COUNT(*) FROM "Order"')
+          MIGRATIONS=$(psql "$BRANCH_URL" -tAc 'SELECT COUNT(*) FROM _prisma_migrations')
+
+          echo "tables=${TABLES}" >> "$GITHUB_OUTPUT"
+          echo "tenants=${TENANTS}" >> "$GITHUB_OUTPUT"
+          echo "bookings=${BOOKINGS}" >> "$GITHUB_OUTPUT"
+          echo "orders=${ORDERS}" >> "$GITHUB_OUTPUT"
+          echo "migrations=${MIGRATIONS}" >> "$GITHUB_OUTPUT"
+
+          echo "── Restored branch ──"
+          echo "  public tables:       ${TABLES}"
+          echo "  Tenant rows:         ${TENANTS}"
+          echo "  Booking rows:        ${BOOKINGS}"
+          echo "  Order rows:          ${ORDERS}"
+          echo "  _prisma_migrations:  ${MIGRATIONS}"
+
+      - name: Parity check against current main
+        id: parity
+        run: |
+          M_TABLES=$(psql "$NEON_DIRECT_URL" -tAc "SELECT COUNT(*) FROM pg_tables WHERE schemaname='public'")
+          M_TENANTS=$(psql "$NEON_DIRECT_URL" -tAc 'SELECT COUNT(*) FROM "Tenant"')
+          M_BOOKINGS=$(psql "$NEON_DIRECT_URL" -tAc 'SELECT COUNT(*) FROM "Booking"')
+          M_ORDERS=$(psql "$NEON_DIRECT_URL" -tAc 'SELECT COUNT(*) FROM "Order"')
+          M_MIGRATIONS=$(psql "$NEON_DIRECT_URL" -tAc 'SELECT COUNT(*) FROM _prisma_migrations')
+
+          echo "── Main vs Restored ──"
+          printf "  %-22s %-10s %-10s\n" "Metric" "main" "restored"
+          printf "  %-22s %-10s %-10s\n" "public tables" "${M_TABLES}" "${{ steps.sanity.outputs.tables }}"
+          printf "  %-22s %-10s %-10s\n" "Tenant rows" "${M_TENANTS}" "${{ steps.sanity.outputs.tenants }}"
+          printf "  %-22s %-10s %-10s\n" "Booking rows" "${M_BOOKINGS}" "${{ steps.sanity.outputs.bookings }}"
+          printf "  %-22s %-10s %-10s\n" "Order rows" "${M_ORDERS}" "${{ steps.sanity.outputs.orders }}"
+          printf "  %-22s %-10s %-10s\n" "_prisma_migrations" "${M_MIGRATIONS}" "${{ steps.sanity.outputs.migrations }}"
+
+          FAIL=0
+          # Hard gates: structural failures.
+          if [ "${{ steps.sanity.outputs.tables }}" -lt 100 ]; then
+            echo "::error::Restored branch has <100 tables — restore failed"
+            FAIL=1
+          fi
+          if [ "${{ steps.sanity.outputs.migrations }}" != "1" ]; then
+            echo "::error::_prisma_migrations != 1 row — migration history broken"
+            FAIL=1
+          fi
+          if [ "${{ steps.sanity.outputs.tables }}" != "$M_TABLES" ]; then
+            echo "::error::Table count mismatch (structural drift since backup)"
+            FAIL=1
+          fi
+          # Soft: row counts may legitimately differ (main is written-to after backup time).
+          # We only warn, not fail.
+          if [ "${{ steps.sanity.outputs.tenants }}" != "$M_TENANTS" ]; then
+            echo "::warning::Tenant row drift — expected if main was written-to after backup"
+          fi
+
+          if [ "$FAIL" = "1" ]; then exit 6; fi
+          echo "Parity check passed (structural match, row drift is expected)."
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Restore drill"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Backup key            | \`${{ steps.resolve.outputs.key }}\` |"
+            echo "| Branch                | \`${{ steps.branch.outputs.branch_name }}\` (\`${{ steps.branch.outputs.branch_id }}\`) |"
+            echo "| Tables (restored)     | ${{ steps.sanity.outputs.tables }} |"
+            echo "| Tenants (restored)    | ${{ steps.sanity.outputs.tenants }} |"
+            echo "| Bookings (restored)   | ${{ steps.sanity.outputs.bookings }} |"
+            echo "| Orders (restored)     | ${{ steps.sanity.outputs.orders }} |"
+            echo "| Migrations (restored) | ${{ steps.sanity.outputs.migrations }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cleanup — delete temp branch
+        if: always() && steps.branch.outputs.branch_id != ''
+        run: |
+          HTTP=$(curl -sS -o /tmp/del.json -w "%{http_code}" -X DELETE \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${{ steps.branch.outputs.branch_id }}" \
+            -H "Authorization: Bearer ${NEON_API_KEY}")
+          if [ "$HTTP" -ge 200 ] && [ "$HTTP" -lt 300 ]; then
+            echo "Deleted branch ${{ steps.branch.outputs.branch_name }}"
+          else
+            echo "::warning::Branch delete returned HTTP ${HTTP}. Verify manually in Neon UI."
+            cat /tmp/del.json || true
+          fi
