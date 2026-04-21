@@ -3,6 +3,7 @@
   "buildCommand": "prisma generate && next build",
   "installCommand": "npm install",
   "outputDirectory": ".next",
+  "regions": ["fra1"],
   "crons": [
     { "path": "/api/cron/expire-reservations", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/reconcile-payments", "schedule": "*/15 * * * *" },
