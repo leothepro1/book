@@ -1,0 +1,141 @@
+name: smoke
+
+# Post-deploy smoke tests. Three triggers:
+#
+#   1. deployment_status — fires automatically after Vercel reports a
+#      successful deploy. Probes the exact URL that was just deployed.
+#   2. workflow_dispatch — manual run against any URL.
+#   3. schedule — every 30 min canary against the production alias, so we
+#      notice outages even when no one is deploying.
+#
+# The job intentionally runs with minimal permissions (contents:read).
+# No secrets are read unless a check actually needs them; CRON_SECRET is
+# only used to verify cron auth end-to-end and is never echoed or logged
+# by the script (smoke.ts redacts Authorization headers in repro output).
+
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL to probe (e.g. https://rutgr.com)"
+        required: true
+        type: string
+      tenant_host:
+        description: "Optional tenant subdomain (e.g. apelviken-dev-x4k9mq.rutgr.com)"
+        required: false
+        type: string
+  schedule:
+    # Canary against production — runs even when no one deploys.
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  # One smoke per target, but don't cancel an in-flight run — each deploy
+  # earns its own verification and canary runs never cancel deploy runs.
+  group: smoke-${{ github.event_name }}-${{ github.event.deployment_status.target_url || inputs.base_url || 'schedule' }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    # Only probe on deployment SUCCESS. Skip failures/pending/errors so
+    # we don't smoke-test a half-broken deploy and generate noise.
+    if: >-
+      github.event_name != 'deployment_status' ||
+      github.event.deployment_status.state == 'success'
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Install admin dependencies
+        working-directory: admin
+        # --ignore-scripts skips prisma generate (no DB available, not needed).
+        run: npm ci --no-audit --no-fund --prefer-offline --ignore-scripts
+
+      - name: Resolve target URL
+        id: target
+        env:
+          EVENT: ${{ github.event_name }}
+          DEPLOY_URL: ${{ github.event.deployment_status.target_url }}
+          DEPLOY_ENV: ${{ github.event.deployment_status.environment }}
+          DEPLOY_STATE: ${{ github.event.deployment_status.state }}
+          INPUT_URL: ${{ inputs.base_url }}
+          PROD_URL: ${{ vars.SMOKE_PROD_URL }}
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            deployment_status)
+              URL="$DEPLOY_URL"
+              LABEL="deploy ($DEPLOY_ENV, $DEPLOY_STATE)"
+              ;;
+            workflow_dispatch)
+              URL="$INPUT_URL"
+              LABEL="manual"
+              ;;
+            schedule)
+              URL="${PROD_URL:-https://rutgr.com}"
+              LABEL="canary"
+              ;;
+            *)
+              echo "::error::unsupported event: $EVENT"
+              exit 1
+              ;;
+          esac
+          # Validate: must be https://... and non-empty.
+          if [[ -z "$URL" ]]; then
+            echo "::error::empty target URL for event $EVENT"
+            exit 1
+          fi
+          if [[ ! "$URL" =~ ^https:// ]]; then
+            echo "::error::target URL must be https (got: $URL)"
+            exit 1
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "label=$LABEL" >> "$GITHUB_OUTPUT"
+          echo "Target: $URL ($LABEL)"
+
+      - name: Run smoke tests
+        id: smoke
+        working-directory: admin
+        env:
+          SMOKE_BASE_URL: ${{ steps.target.outputs.url }}
+          SMOKE_TENANT_HOST: ${{ inputs.tenant_host || vars.SMOKE_TENANT_HOST }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SMOKE_FORMAT: pretty
+        run: npm run smoke
+
+      - name: Write step summary
+        if: always()
+        env:
+          TARGET: ${{ steps.target.outputs.url }}
+          LABEL: ${{ steps.target.outputs.label }}
+          RESULT: ${{ steps.smoke.outcome }}
+        run: |
+          {
+            echo "## Smoke tests — $LABEL"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Target | \`$TARGET\` |"
+            echo "| Result | \`$RESULT\` |"
+            echo "| Trigger | \`${{ github.event_name }}\` |"
+            echo ""
+            if [[ "$RESULT" == "success" ]]; then
+              echo "✅ All critical checks passed."
+            else
+              echo "❌ One or more critical checks failed. See the \"Run smoke tests\" step for details and curl repro commands."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

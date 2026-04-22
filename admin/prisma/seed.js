@@ -144,6 +144,45 @@ async function main() {
   } else {
     console.log("ℹ️  Test booking already exists");
   }
+
+  // 5. System-default PaymentTerms (tenantId = NULL).
+  // Idempotent: keyed on (name) among rows where tenantId IS NULL.
+  // Prisma upsert requires a compound unique constraint; we cannot use @@unique with a
+  // nullable tenantId (Postgres treats NULLs as distinct), so the DB-level uniqueness is
+  // enforced by a partial unique index (see migration). Seed mirrors that with findFirst +
+  // update/create.
+  const systemPaymentTerms = [
+    { name: "Förfaller vid mottagning",   type: "DUE_ON_RECEIPT",     netDays: null },
+    { name: "Förfaller vid incheckning",  type: "DUE_ON_FULFILLMENT", netDays: null },
+    { name: "Netto 7 dagar",              type: "NET",                netDays: 7   },
+    { name: "Netto 15 dagar",             type: "NET",                netDays: 15  },
+    { name: "Netto 30 dagar",             type: "NET",                netDays: 30  },
+    { name: "Netto 45 dagar",             type: "NET",                netDays: 45  },
+    { name: "Netto 60 dagar",             type: "NET",                netDays: 60  },
+    { name: "Netto 90 dagar",             type: "NET",                netDays: 90  },
+  ];
+
+  for (const terms of systemPaymentTerms) {
+    const existingTerms = await prisma.paymentTerms.findFirst({
+      where: { tenantId: null, name: terms.name },
+    });
+    if (existingTerms) {
+      await prisma.paymentTerms.update({
+        where: { id: existingTerms.id },
+        data: { type: terms.type, netDays: terms.netDays },
+      });
+    } else {
+      await prisma.paymentTerms.create({
+        data: {
+          tenantId: null,
+          name: terms.name,
+          type: terms.type,
+          netDays: terms.netDays,
+        },
+      });
+    }
+  }
+  console.log(`✅ ${systemPaymentTerms.length} system-default PaymentTerms upserted`);
 }
 
 main()

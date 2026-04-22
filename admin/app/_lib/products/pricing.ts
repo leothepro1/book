@@ -48,6 +48,12 @@ export function hasVariantPriceOverride(
  * Format a price in smallest currency unit to display string.
  * 12900 → "129" (SEK, no decimals for whole amounts)
  * 12950 → "129,50"
+ *
+ * @deprecated Use `formatSek` from `@/app/_lib/money/format` for new code.
+ * `formatPriceDisplay` omits the currency suffix (callers append " kr"
+ * manually), while `formatSek` returns the fully-formatted string. Kept
+ * here to preserve legacy call-site contracts; migration is a follow-up
+ * cleanup tracked as UX-debt.
  */
 export function formatPriceDisplay(
   amount: number,

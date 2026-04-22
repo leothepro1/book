@@ -410,10 +410,6 @@ enum CheckoutMode {
   DRAFT_FOR_REVIEW
 }
 
-enum ContactRole {
-  ORDERING_ONLY
-  LOCATION_ADMIN
-}
 
 enum PaymentTermsType {
   DUE_ON_RECEIPT
@@ -534,6 +530,12 @@ model Tenant {
   earlyCheckinEnabled Boolean @default(false)
   earlyCheckinDays    Int     @default(0)
 
+  // Customer-accounts display toggle — controls whether the storefront
+  // header and checkout show login/account links. Immediate effect (no
+  // draft/publish), same pattern as checkinEnabled. Default true so
+  // Shopify-parity guest UX is on out of the box.
+  showLoginLinks Boolean @default(true)
+
   // Theme screenshot — generated asynchronously after publish
   screenshotDesktopUrl String? // Cloudinary URL, desktop (1440×900)
   screenshotMobileUrl  String? // Cloudinary URL, mobile (390×844)
@@ -560,6 +562,9 @@ model Tenant {
   integration             TenantIntegration?
   syncJobs                SyncJob[]
   syncEvents              SyncEvent[]
+  pmsWebhookInbox         PmsWebhookInbox[]
+  pmsOutboundJobs         PmsOutboundJob[]
+  pmsIdempotencyKeys      PmsIdempotencyKey[]
   businessEntities        BusinessEntity[]
   policies                TenantPolicy[]
   locales                 TenantLocale[]
@@ -604,11 +609,17 @@ model Tenant {
   emailSuppressions       EmailSuppression[]
 
   // B2B ("Företag")
-  companies Company[]
+  companies      Company[]
+  companyEvents  CompanyEvent[]
 
   // SEO engine
   pageTypeSeoDefaults PageTypeSeoDefault[]
   seoRedirects        SeoRedirect[]
+
+  // Cancellation engine
+  cancellationRequests          CancellationRequest[]
+  cancellationPolicies          CancellationPolicy[]
+  cancellationReasonDefinitions CancellationReasonDefinition[]
 
   // Feature toggle — tenant can disable all discount functionality
   discountsEnabled Boolean @default(true)
@@ -668,10 +679,55 @@ model Booking {
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
   // PMS integration — links local booking to external PMS counterpart
-  // null for ManualAdapter tenants (existing rows unaffected)
-  externalId     String?   @unique
+  // null for ManualAdapter tenants (existing rows unaffected).
+  // Uniqueness is per-tenant via @@unique([tenantId, externalId]) at
+  // the bottom of this model: different tenants (and different PMS
+  // providers) may legitimately reuse the same ID string in their own
+  // address space. A global @unique would cause accidental cross-tenant
+  // collisions as the platform scales. The reliability engine's ingest
+  // chokepoint already scopes SELECT FOR UPDATE by tenantId, so the
+  // tenant-scoped constraint is the correct race guard for inserts too.
+  externalId     String?
   externalSource String?
   lastSyncedAt   DateTime?
+
+  // Version-vector for reliable PMS ingestion.
+  // PMS-reported last-modified timestamp. The ingest chokepoint uses this
+  // to reject stale events: an incoming write is a no-op if its
+  // providerUpdatedAt is <= the stored one. This prevents webhook/cron
+  // races from overwriting newer state with older.
+  providerUpdatedAt DateTime?
+
+  // ── Availability hold (checkout-phase reservation) ─────────
+  // When the guest enters checkout, we place a soft reservation at
+  // the PMS (Mews Optional state, 15-min TTL) so the unit is held
+  // during payment. On success → confirmHold transitions it to
+  // Confirmed. On timeout → the release-expired-holds cron calls
+  // releaseHold + cancels the Order.
+  //
+  // holdExternalId is the PMS ID of the Optional reservation and
+  // may equal or differ from externalId depending on provider
+  // (Mews reuses the same ID; other PMSes might mint a new one on
+  // confirmation). holdExpiresAt is the UTC moment the PMS will
+  // auto-release if we don't confirm.
+  holdExternalId String?
+  holdExpiresAt  DateTime?
+
+  // ── Integrity verification (read-your-write) ──────────────
+  // Set by the reliability engine when the PMS's stored state
+  // doesn't match what we sent. Non-blocking: the booking is
+  // created and the guest proceeds normally; this flag surfaces
+  // the anomaly for operator review via the health endpoint and
+  // the shadow-audit cron.
+  //
+  // Values:
+  //   null              — verified OK, or not yet checked
+  //   "MISMATCH"        — fields differ (dates/guests/email/status)
+  //   "PMS_NOT_FOUND"   — lookupBooking returned null post-create
+  //   "STATE_MISMATCH"  — PMS State is not one we consider confirmed
+  integrityFlag           String?
+  integrityMismatchFields Json?
+  integrityDetectedAt     DateTime?
 
   // Guest identity
   firstName  String
@@ -726,19 +782,35 @@ model Booking {
   accommodation Accommodation? @relation(fields: [accommodationId], references: [id])
   order         Order?         @relation(fields: [orderId], references: [id])
 
+  // ── Cancellation engine ──────────────────────────────────────
+  /// Set when status transitions to CANCELLED. Denormalized for queries.
+  cancelledAt DateTime?
+
+  /// Frozen snapshot of the cancellation policy that applied at booking time.
+  /// Shape validated via Zod CancellationPolicySnapshotSchema.
+  /// Rule: policy changes apply only to future bookings — this booking
+  /// always uses what was in effect when it was created. Never recompute.
+  cancellationPolicySnapshot Json?
+
+  cancellationRequests CancellationRequest[]
+
   magicLinks MagicLink[]
   createdAt  DateTime    @default(now())
 
+  @@unique([tenantId, externalId])
   @@index([tenantId])
   @@index([guestEmail])
   @@index([status])
   @@index([arrival])
-  @@index([tenantId, externalId])
   @@index([tenantId, guestEmail])
   @@index([tenantId, guestAccountId])
   @@index([accommodationId])
   @@index([orderId])
   @@index([tenantId, accommodationId])
+  @@index([tenantId, providerUpdatedAt])
+  @@index([tenantId, cancelledAt])
+  @@index([holdExpiresAt])
+  @@index([tenantId, integrityFlag])
 }
 
 model MagicLink {
@@ -775,12 +847,25 @@ model TenantIntegration {
   consecutiveFailures  Int       @default(0)
   externalTenantId     String?
   isDemoEnvironment    Boolean   @default(false)
+  // Kill-switch for the PMS reliability engine. When false, the
+  // reconciliation cron skips this tenant entirely. Defaults to true.
+  // Toggle off only during incident response (e.g. adapter regression,
+  // runaway cost). Does not affect webhook ingestion.
+  reconciliationEnabled Boolean  @default(true)
+  // Independent kill-switch for the webhook intake path. When false,
+  // the route returns 200 immediately without persisting or
+  // processing. Use when a tenant's PMS is misconfigured and flooding
+  // us with invalid events — stops ingestion without deleting the
+  // integration record. Reconciliation still works (it pulls from
+  // the PMS rather than receiving pushes).
+  webhookEnabled        Boolean  @default(true)
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([provider, externalTenantId])
+  @@index([reconciliationEnabled, status])
 }
 
 // ============================================================================
@@ -870,6 +955,231 @@ model BookingSyncError {
 
   @@unique([tenantId, externalId])
   @@index([tenantId, resolvedAt])
+}
+
+// ============================================================================
+// PMS WEBHOOK INBOX (PMS reliability engine — durable event queue)
+// ============================================================================
+
+/// Every PMS webhook we receive lands as a row here BEFORE we try to
+/// process it. This is the transactional inbox pattern: the webhook
+/// handler's atomic unit is "event persisted" rather than "event
+/// fully processed". If processing later fails or times out, the row
+/// remains with status=PENDING and the retry cron eventually drains
+/// it. A duplicate delivery (same externalEventId) is deflected at
+/// the unique constraint — the PMS can retry as aggressively as it
+/// wants without causing us to do duplicate work.
+///
+/// Status transitions:
+///   PENDING  — received, not yet processed
+///   PROCESSING — in flight (locked by a specific worker)
+///   PROCESSED — applied successfully, terminal
+///   FAILED   — last attempt threw a retryable error; will be retried
+///   DEAD     — exceeded max attempts, human attention needed
+///
+/// The retry cron polls status IN (PENDING, FAILED) AND nextRetryAt
+/// <= now(), processing oldest first. It never touches PROCESSING
+/// rows (another worker has them) or PROCESSED/DEAD rows (terminal).
+///
+/// rawPayload is the original webhook body, stored verbatim. This
+/// preserves audit integrity and lets us replay events exactly as
+/// the PMS sent them if a bug in our parser is later found.
+model PmsWebhookInbox {
+  id                String    @id @default(cuid())
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider          String
+
+  /// Provider-assigned unique event ID. Combined with `provider`,
+  /// this is the dedup key: a second delivery of the same event
+  /// collides with the unique constraint and is rejected at the DB.
+  externalEventId   String
+
+  /// The booking this event refers to (optional — some events don't
+  /// carry a booking reference). Populated when the provider's
+  /// parseWebhookEvents() extracts it.
+  externalBookingId String?
+
+  /// Provider-specific event type string (e.g. "Reservation.Updated").
+  /// Opaque to our code — we always re-fetch state from the PMS.
+  eventType         String
+
+  /// Raw webhook payload, preserved verbatim for audit/replay.
+  rawPayload        Json
+
+  status            String    @default("PENDING")
+  attempts          Int       @default(0)
+  lastError         String?
+  lastAttemptAt     DateTime?
+  nextRetryAt       DateTime?
+  receivedAt        DateTime  @default(now())
+  processedAt       DateTime?
+  deadAt            DateTime?
+
+  @@unique([provider, externalEventId])
+  @@index([tenantId, status])
+  @@index([status, nextRetryAt])
+  @@index([receivedAt])
+}
+
+// ============================================================================
+// PMS IDEMPOTENCY KEY (PMS reliability engine — call-level dedup)
+// ============================================================================
+
+/// Every PMS operation that must be exactly-once (createBooking,
+/// holdAvailability, cancelBooking, ...) derives a deterministic key
+/// from its inputs and records its outcome here. A retry with the
+/// same key returns the cached result without re-hitting the PMS.
+///
+/// This is the layer that prevents the classic failure mode: "we
+/// called Mews createBooking, the network timed out, Mews actually
+/// created the reservation, our retry created a second one". With
+/// idempotency: our retry finds the IN_FLIGHT or COMPLETED row and
+/// returns the first call's result.
+///
+/// Status machine:
+///   IN_FLIGHT  — first call is executing; concurrent same-key
+///                callers block-wait on this row
+///   COMPLETED  — first call succeeded; cached result in resultJson
+///   FAILED     — first call failed; error message in resultJson;
+///                caller decides whether to invalidate for retry
+///
+/// TTL: 48 hours. Covers the full retry ladder (5m → 15m → 1h → 4h
+/// → 24h = ~30h worst case) plus buffer. The cleanup cron deletes
+/// rows older than that.
+model PmsIdempotencyKey {
+  id        String @id @default(cuid())
+  tenantId  String
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 hex of (tenantId, provider, operation, canonicalizedInputs).
+  /// Globally unique — two different tenants will have different keys
+  /// because tenantId is part of the hash input.
+  key String @unique
+
+  provider  String
+  operation String // "createBooking" | "holdAvailability" | "confirmHold" | ...
+  status    String @default("IN_FLIGHT")
+
+  /// JSON-serialized return value of the wrapped function. null on
+  /// IN_FLIGHT; populated on COMPLETED; error payload on FAILED.
+  resultJson Json?
+
+  firstSeenAt DateTime  @default(now())
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId, firstSeenAt])
+  @@index([status, firstSeenAt])
+}
+
+// ============================================================================
+// PMS OUTBOUND JOB (PMS reliability engine — outbound booking pipeline)
+// ============================================================================
+
+/// Transactional-outbox row for every paid order whose accommodation
+/// reservation must be written to the PMS. Counterpart to
+/// PmsWebhookInbox on the outgoing side: when a guest has paid but
+/// the PMS createBooking call hasn't confirmed, THIS row represents
+/// "we owe this booking to the PMS".
+///
+/// Why a separate table rather than flags on Order: the retry state
+/// (attempts, nextRetryAt, lastError, compensation state) is
+/// orthogonal to Order's business lifecycle. Mixing them couples
+/// operational concerns to the financial state model and makes
+/// reasoning harder.
+///
+/// Status machine:
+///   PENDING              — queued; hasn't been attempted yet
+///   PROCESSING           — a worker is mid-attempt (CAS claim)
+///   COMPLETED            — PMS booking created + Order FULFILLED
+///   FAILED               — attempt failed; will retry per ladder
+///   DEAD                 — retry ladder exhausted; compensation due
+///   COMPENSATING         — refund worker is mid-attempt (CAS)
+///   COMPENSATED          — refund issued, Order CANCELLED + REFUNDED
+///   COMPENSATION_FAILED  — both primary AND refund ladders exhausted
+///                          (rare, requires operator attention)
+///
+/// Retry semantics:
+///   Primary phase (createBooking) and compensation phase (Stripe
+///   refund) both use exponential backoff with the same ladder as
+///   webhook inbox: 5m → 15m → 1h → 4h → 24h, then terminal.
+///
+/// Idempotency:
+///   @@unique on orderId guarantees exactly one job per order. The
+///   processor also checks Booking.pmsBookingRef before calling the
+///   adapter — if the PMS booking already exists (e.g. the previous
+///   attempt's response was lost), we skip the call and move to
+///   COMPLETED. Refunds are guarded by Order.financialStatus transitions.
+model PmsOutboundJob {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  status String @default("PENDING")
+
+  // ── Primary phase (PMS createBooking) ──
+  attempts      Int       @default(0)
+  lastError     String?
+  lastAttemptAt DateTime?
+  nextRetryAt   DateTime?
+
+  // ── Compensation phase (Stripe refund + Order cancel) ──
+  compensationAttempts    Int       @default(0)
+  compensationLastError   String?
+  compensationLastAt      DateTime?
+  compensationNextRetryAt DateTime?
+
+  completedAt DateTime?
+  deadAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, nextRetryAt])
+  @@index([status, compensationNextRetryAt])
+  @@index([tenantId, status])
+  @@index([status, lastAttemptAt])
+  @@index([status, compensationLastAt])
+}
+
+// ============================================================================
+// RECONCILIATION CURSOR (PMS reliability engine — windowed sweep state)
+// ============================================================================
+
+/// Tracks the reconciliation engine's position in the sync window per tenant,
+/// provider, and tier. The engine operates in three tiers (hot/warm/cold),
+/// each with independent cursors so they never starve each other.
+///
+/// On each run, the orchestrator reads the cursor for (tenantId, provider,
+/// tier), fetches the next page from the PMS, feeds each booking through the
+/// ingest chokepoint, and advances the cursor. If the run is interrupted,
+/// the next run resumes from the stored cursor — no duplicate work, no gaps.
+///
+/// windowStart/windowEnd are the inclusive/exclusive bounds of the lookback
+/// window the run is sweeping. cursor is adapter-opaque (may be a page
+/// token, offset, or serialized filter). completedAt is set only when the
+/// full window has been swept; a fresh window is then started.
+model ReconciliationCursor {
+  id          String    @id @default(cuid())
+  tenantId    String
+  provider    String
+  tier        String // "hot" | "warm" | "cold"
+  windowStart DateTime
+  windowEnd   DateTime
+  cursor      String? // adapter-opaque resume token; null = fresh window
+  completedAt DateTime? // set when windowEnd reached; next run starts new window
+  lastRunAt   DateTime  @default(now())
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([tenantId, provider, tier])
+  @@index([lastRunAt])
+  @@index([tier, lastRunAt])
 }
 
 // ============================================================================
@@ -1262,7 +1572,7 @@ model GuestAccount {
   discountTargets         DiscountCustomer[]
   campaignRecipients      CampaignRecipient[]
   automationEnrollments   AutomationEnrollment[]
-  companyLocationContacts CompanyLocationContact[]
+  companyContacts         CompanyContact[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -2365,13 +2675,15 @@ model Order {
   updatedAt   DateTime  @updatedAt
 
   // Relations
-  lineItems           OrderLineItem[]
-  events              OrderEvent[]
-  giftCard            GiftCard?
-  paymentSession      PaymentSession?
-  discountAllocations DiscountAllocation[]
-  discountUsage       DiscountUsage?
-  bookings            Booking[]
+  lineItems            OrderLineItem[]
+  events               OrderEvent[]
+  giftCard             GiftCard?
+  paymentSession       PaymentSession?
+  discountAllocations  DiscountAllocation[]
+  discountUsage        DiscountUsage?
+  bookings             Booking[]
+  cancellationRequests CancellationRequest[]
+  pmsOutboundJob       PmsOutboundJob?
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId, status])
@@ -3768,14 +4080,17 @@ model Company {
   status           CompanyStatus @default(ACTIVE)
   orderingApproved Boolean       @default(true)
 
-  /// Loose reference to the main point-of-contact (GuestAccount.id via a CompanyLocationContact).
-  /// No @relation — lookup goes through contacts. Null until a contact is flagged as main.
+  /// Loose reference to the current main CompanyContact.id.
+  /// No @relation — lookup goes through the `contacts` back-relation. Null until
+  /// a contact is flagged as main via setMainContact in the service layer.
   mainContactId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   locations CompanyLocation[]
+  contacts  CompanyContact[]
+  events    CompanyEvent[]
 
   @@unique([tenantId, externalId])
   @@index([tenantId, status])
@@ -3816,29 +4131,80 @@ model CompanyLocation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  contacts CompanyLocationContact[]
+  locationAccesses CompanyLocationAccess[]
 
   @@unique([tenantId, companyId, externalId])
   @@index([tenantId, companyId])
 }
 
-/// Join table between CompanyLocation and GuestAccount.
-/// A GuestAccount can be a contact at many locations with different roles.
-model CompanyLocationContact {
+/// Three-layer B2B membership model — mirrors Shopify:
+///   Company ← CompanyContact ← CompanyLocationAccess → CompanyLocation
+///
+/// A GuestAccount that's a contact at a Company has ONE CompanyContact row
+/// (globally unique — the service layer enforces one-company-per-guest across
+/// all tenants). The CompanyContact then gets zero or more
+/// CompanyLocationAccess rows — one per location they can act on.
+///
+/// Invariants enforced in service layer (documented as DB-level comments):
+///   1. A GuestAccount exists in at most one CompanyContact globally.
+///      Service: assert in createContact / grantAccess.
+///   2. CompanyLocationAccess (contactId, locationId) must satisfy
+///      contact.companyId = location.companyId. Postgres CHECK cannot express
+///      cross-table joins — service asserts in grantAccess.
+///   3. Exactly one row per companyId may have isMainContact = TRUE. Enforced
+///      at the DB level by a PARTIAL UNIQUE INDEX added in the migration:
+///        CREATE UNIQUE INDEX "CompanyContact_companyId_mainContact_partial_key"
+///          ON "CompanyContact" ("companyId") WHERE "isMainContact" = TRUE;
+///   4. Main contact must retain access to at least one location. Service
+///      refuses revokeAccess that would strip last location from a main.
+///   5. Refuse to delete a CompanyContact while isMainContact = TRUE.
+///
+/// Role-expansion path (v2): a future `roleId String?` column on
+/// CompanyLocationAccess will add per-access role scoping without breaking
+/// v1 clients. Column is additive and nullable.
+model CompanyContact {
+  id             String       @id @default(cuid())
+  tenantId       String
+  companyId      String
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  guestAccountId String
+  guestAccount   GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
+
+  isMainContact Boolean @default(false)
+  /// Optional role/title at the company — "VD", "Inköpschef" etc.
+  /// Free-form display text; NOT a permission role.
+  title         String?
+  /// Preferred locale for notifications ("sv", "en"). Falls back to guest locale.
+  locale        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  locationAccess CompanyLocationAccess[]
+
+  @@unique([companyId, guestAccountId], name: "one_membership_per_guest_per_company")
+  @@index([tenantId, companyId])
+  @@index([guestAccountId])
+}
+
+/// Explicit location-level access grants for a CompanyContact.
+/// A row means: this contact can act on behalf of the company at this location
+/// (place orders, view orders, update the location's billing address, etc.).
+///
+/// See CompanyContact docblock for invariants. Main invariant enforced here
+/// (cross-table join) is checked in grantAccess at the service layer.
+model CompanyLocationAccess {
   id                String          @id @default(cuid())
   tenantId          String
+  companyContactId  String
+  companyContact    CompanyContact  @relation(fields: [companyContactId], references: [id], onDelete: Cascade)
   companyLocationId String
   companyLocation   CompanyLocation @relation(fields: [companyLocationId], references: [id], onDelete: Cascade)
-  guestAccountId    String
-  guestAccount      GuestAccount    @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
-
-  role          ContactRole @default(ORDERING_ONLY)
-  isMainContact Boolean     @default(false)
 
   createdAt DateTime @default(now())
 
-  @@unique([companyLocationId, guestAccountId])
-  @@index([guestAccountId])
+  @@unique([companyContactId, companyLocationId], name: "one_access_per_contact_per_location")
+  @@index([companyLocationId])
   @@index([tenantId])
 }
 
@@ -3895,6 +4261,17 @@ model Catalog {
 
 /// Fixed price override for a single Accommodation or ProductVariant within a Catalog.
 /// Loose FKs (no @relation) on accommodation/variant — resolved at query time.
+///
+/// Uniqueness is enforced by PARTIAL unique indexes — not @@unique — because
+/// Prisma's @@unique generates NULLS-DISTINCT indexes, which allow degenerate
+/// all-null-ref rows to race through and leave the polymorphic XOR unenforced
+/// at the DB level. Same pattern as the PaymentTerms system-default index:
+/// DSL cannot express `WHERE col IS NOT NULL`, so the constraints are added
+/// via raw SQL in the b2b_polymorphic_partial_unique migration.
+///   CatalogFixedPrice_catalogId_accommodationId_partial_key
+///     — UNIQUE (catalogId, accommodationId) WHERE accommodationId IS NOT NULL
+///   CatalogFixedPrice_catalogId_productVariantId_partial_key
+///     — UNIQUE (catalogId, productVariantId) WHERE productVariantId IS NOT NULL
 model CatalogFixedPrice {
   id        String  @id @default(cuid())
   catalogId String
@@ -3904,13 +4281,17 @@ model CatalogFixedPrice {
   productVariantId String?
 
   fixedPriceCents BigInt
-
-  @@unique([catalogId, accommodationId])
-  @@unique([catalogId, productVariantId])
 }
 
 /// Scopes a Catalog to a subset of inventory when includeAllProducts = false.
 /// Loose FKs on accommodation/variant/collection — resolved at query time.
+///
+/// Uniqueness enforced by PARTIAL unique indexes (see CatalogFixedPrice for
+/// rationale). Three indexes — one per polymorphic column — added in the
+/// b2b_polymorphic_partial_unique migration:
+///   CatalogInclusion_catalogId_accommodationId_partial_key
+///   CatalogInclusion_catalogId_productVariantId_partial_key
+///   CatalogInclusion_catalogId_collectionId_partial_key
 model CatalogInclusion {
   id        String  @id @default(cuid())
   catalogId String
@@ -3919,13 +4300,17 @@ model CatalogInclusion {
   accommodationId  String?
   productVariantId String?
   collectionId     String?
-
-  @@unique([catalogId, accommodationId])
-  @@unique([catalogId, productVariantId])
-  @@unique([catalogId, collectionId])
 }
 
 /// Per-line quantity constraints and volume pricing inside a Catalog.
+///
+/// Uniqueness enforced by PARTIAL unique indexes (see CatalogFixedPrice for
+/// rationale). Without these, two quantity-rule rows for the same
+/// (catalogId, productVariantId) could co-exist — the service's findFirst
+/// would pick one arbitrarily and leak a ghost rule. Added in the
+/// b2b_polymorphic_partial_unique migration:
+///   CatalogQuantityRule_catalogId_accommodationId_partial_key
+///   CatalogQuantityRule_catalogId_productVariantId_partial_key
 model CatalogQuantityRule {
   id        String  @id @default(cuid())
   catalogId String
@@ -4067,4 +4452,284 @@ model SeoRedirect {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, fromPath])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Cancellation engine — Shopify-parity self-service cancellations
+//  See admin/docs/cancellation-engine.md for architectural spec.
+// ═══════════════════════════════════════════════════════════════════
+
+/// State machine terminology matches Shopify ReturnStatus 1:1 (REQUESTED,
+/// OPEN, DECLINED, CANCELED, CLOSED) with one addition: EXPIRED, fired by
+/// the auto-expire cron when a REQUESTED request passes its expiresAt.
+enum CancellationStatus {
+  REQUESTED
+  OPEN
+  DECLINED
+  CANCELED
+  CLOSED
+  EXPIRED
+}
+
+/// Who triggered the cancellation. GUEST = portal self-service.
+/// STAFF = admin UI. PMS = external cancel via Mews webhook. SYSTEM =
+/// automatic (auto-expire, no-show, scheduled).
+enum CancellationInitiator {
+  GUEST
+  STAFF
+  PMS
+  SYSTEM
+}
+
+/// Reasons a staff member may cite when declining a REQUESTED cancellation.
+/// Hotel-specific taxonomy — maps from Shopify's ReturnDeclineReason.
+enum CancellationDeclineReason {
+  OUTSIDE_WINDOW
+  NON_REFUNDABLE_RATE
+  NO_SHOW
+  FORCE_MAJEURE_DECLINED
+  OTHER
+}
+
+/// Refund side of the saga. NOT_APPLICABLE = zero-refund (100% fee or
+/// unpaid booking). FAILED = Stripe refund failed permanently; requires
+/// admin intervention; PMS cancel is NOT reversed.
+enum CancellationRefundStatus {
+  NOT_APPLICABLE
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+/// Append-only event stream — one row per lifecycle event.
+/// Engine guarantees at-least-one event per status transition and per
+/// saga side-effect (PMS call, refund call, email send).
+enum CancellationEventType {
+  REQUESTED
+  APPROVED
+  DECLINED
+  WITHDRAWN
+  EXPIRED
+  PMS_CANCEL_ATTEMPTED
+  PMS_CANCEL_SUCCEEDED
+  PMS_CANCEL_FAILED
+  REFUND_INITIATED
+  REFUND_SUCCEEDED
+  REFUND_FAILED
+  EMAIL_SENT
+  EMAIL_FAILED
+  CLOSED
+  NOTE_ADDED
+}
+
+/// One cancellation lifecycle. Shopify-parity with Return entity.
+///
+/// At most ONE non-terminal request per booking (enforced by a partial
+/// unique index, added via raw SQL in the migration — not expressible in
+/// Prisma DSL). DECLINED and EXPIRED are restartable (a new request may
+/// be created); CLOSED and CANCELED are absolute terminal.
+model CancellationRequest {
+  id        String  @id @default(cuid())
+  tenantId  String
+  bookingId String
+  orderId   String?
+
+  status CancellationStatus @default(REQUESTED)
+
+  initiator       CancellationInitiator
+  /// Clerk userId when initiator=STAFF. Null for GUEST/PMS/SYSTEM.
+  initiatorUserId String?
+  /// Handle into CancellationReasonDefinition — loose FK; reason defs can be soft-deleted.
+  reasonHandle    String?
+  /// Guest-provided free text. Max 300 chars (Shopify customerNote parity).
+  guestNote       String? @db.VarChar(300)
+
+  declineReason CancellationDeclineReason?
+  /// Staff-provided free text shown to guest on decline. Max 500 chars (Shopify declineNote parity).
+  declineNote   String?                    @db.VarChar(500)
+
+  // Financial snapshot — frozen at request creation. All amounts in ören/cents.
+  originalAmount        Int
+  cancellationFeeAmount Int
+  refundAmount          Int
+  currency              String
+
+  /// Shape validated via Zod CancellationPolicySnapshotSchema.
+  /// { policyId, policyName, tiers[], appliedTier, hoursBeforeCheckInAtRequest, requireApproval, autoExpireHours }
+  policySnapshot Json
+
+  // PMS sync outcome
+  pmsProvider          String?
+  pmsCanceledAt        DateTime?
+  pmsExternalFeeItemId String?
+
+  // Stripe refund outcome
+  refundStatus   CancellationRefundStatus @default(NOT_APPLICABLE)
+  stripeRefundId String?
+  refundedAt     DateTime?
+
+  // Lifecycle timestamps
+  requestedAt DateTime  @default(now())
+  approvedAt  DateTime?
+  declinedAt  DateTime?
+  closedAt    DateTime?
+  canceledAt  DateTime?
+  /// Auto-expire cutoff when status=REQUESTED. Null once transitioned out.
+  expiresAt   DateTime?
+
+  // Saga retry state
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime?
+  nextAttemptAt DateTime?
+
+  /// Optimistic locking — every update WHERE version=X, SET version=version+1.
+  /// Concurrent writers see zero row-count and must re-read.
+  version Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  order   Order?  @relation(fields: [orderId], references: [id])
+
+  events CancellationEvent[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, bookingId])
+  /// Partial unique index on (tenantId, bookingId) WHERE status IN (REQUESTED, OPEN)
+  /// is added via raw SQL in the migration — see migration.sql footer.
+  @@index([status, expiresAt]) // auto-expire cron
+  @@index([status, nextAttemptAt]) // saga-retry cron
+  @@index([tenantId, requestedAt]) // admin queue sort
+}
+
+/// Append-only audit log. Rows are never UPDATEd — new state = new row.
+model CancellationEvent {
+  id                    String                @id @default(cuid())
+  cancellationRequestId String
+  tenantId              String
+  type                  CancellationEventType
+  actor                 CancellationInitiator
+  actorUserId           String?
+  message               String?
+  metadata              Json?
+  createdAt             DateTime              @default(now())
+
+  cancellationRequest CancellationRequest @relation(fields: [cancellationRequestId], references: [id], onDelete: Cascade)
+
+  @@index([cancellationRequestId, createdAt])
+  @@index([tenantId, type, createdAt])
+}
+
+/// Merchant-configured policy attached to accommodations or rate plans.
+/// Resolved and snapshotted onto Booking.cancellationPolicySnapshot at
+/// checkout time. Never queried at cancel time — the snapshot is the
+/// source of truth for any given booking.
+model CancellationPolicy {
+  id       String @id @default(cuid())
+  tenantId String
+  name     String
+
+  /// Tiered fee schedule. JSON shape validated via Zod CancellationPolicyTiersSchema.
+  /// Example:
+  ///   [
+  ///     { "hoursBeforeCheckIn": 720, "feePercent": 0   },
+  ///     { "hoursBeforeCheckIn": 168, "feePercent": 50  },
+  ///     { "hoursBeforeCheckIn": 0,   "feePercent": 100 }
+  ///   ]
+  tiers Json
+
+  /// true = every cancel request awaits admin approval (even inside free window).
+  /// false = auto-approve, saga triggers immediately on submission.
+  requireApproval Boolean @default(false)
+
+  /// How long a REQUESTED request sits before auto-expire fires. Default 48h.
+  autoExpireHours Int     @default(48)
+
+  active      Boolean  @default(true)
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, active])
+}
+
+/// Merchant-defined cancellation reason taxonomy. Matches Shopify's
+/// ReturnReasonDefinition 1:1. Handles stay stable across renames.
+/// Soft-deleted defs remain referenced by historical requests.
+model CancellationReasonDefinition {
+  id        String  @id @default(cuid())
+  tenantId  String
+  handle    String
+  name      String
+  sortOrder Int     @default(0)
+  deleted   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, handle])
+  @@index([tenantId, deleted, sortOrder])
+}
+
+// ── Company Events (B2B tidslinje, speglar GuestAccountEvent) ──
+
+enum CompanyEventType {
+  COMPANY_CREATED
+  COMPANY_UPDATED
+  COMPANY_ARCHIVED
+  COMPANY_UNARCHIVED
+  COMMENT_ADDED
+  MAIN_CONTACT_SET
+  LOCATION_CREATED
+  LOCATION_UPDATED
+  LOCATION_DELETED
+  CONTACT_ADDED
+  CONTACT_REMOVED
+  CONTACT_ROLE_CHANGED
+  CATALOG_ASSIGNED
+  CATALOG_UNASSIGNED
+  STORE_CREDIT_ISSUED
+}
+
+/// Append-only audit trail för företagets livscykel. Matchar
+/// GuestAccountEvent-mönstret: events visas i tidslinjen på
+/// /admin/customers/companies/[companyId].
+model CompanyEvent {
+  id          String           @id @default(cuid())
+  tenantId    String
+  companyId   String
+  type        CompanyEventType
+  message     String?
+  metadata    Json?
+  actorUserId String? // null = system
+  createdAt   DateTime         @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, companyId])
+  @@index([tenantId, type])
+  @@index([companyId, createdAt])
+}
+
+/// Idempotency lock for cancellation sagas. Prevents concurrent saga runs
+/// on the same booking. TTL 120s; expired rows cleaned by the existing
+/// cleanup-idempotency-keys cron. Parallel to PendingBookingLock.
+model PendingCancellationLock {
+  id        String   @id @default(cuid())
+  tenantId  String
+  bookingId String
+  /// SHA-256(tenantId + bookingId) — stable per booking per tenant.
+  dedupKey  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, dedupKey])
+  @@index([expiresAt])
 }

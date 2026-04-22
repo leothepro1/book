@@ -24,6 +24,16 @@
     { "path": "/api/cron/aggregate-analytics", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/expire-checkout-sessions", "schedule": "*/15 * * * *" },
     { "path": "/api/cron/automation-enrollments", "schedule": "*/2 * * * *" },
-    { "path": "/api/cron/send-campaigns", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/send-campaigns", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/reconcile-pms?tier=hot", "schedule": "*/2 * * * *" },
+    { "path": "/api/cron/reconcile-pms?tier=warm", "schedule": "7 * * * *" },
+    { "path": "/api/cron/reconcile-pms?tier=cold", "schedule": "23 3 * * *" },
+    { "path": "/api/cron/retry-pms-webhooks", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/retry-pms-outbound", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/release-expired-holds", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/shadow-audit-pms", "schedule": "30 2 * * *" },
+    { "path": "/api/cron/cleanup-pms-reliability", "schedule": "17 4 * * *" },
+    { "path": "/api/cron/expire-cancellations", "schedule": "*/10 * * * *" },
+    { "path": "/api/cron/retry-cancellation-saga", "schedule": "*/5 * * * *" }
   ]
 }
