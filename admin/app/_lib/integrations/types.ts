@@ -176,6 +176,15 @@ export const BookingLookupSchema = z.object({
   ratePlanName: z.string().nullable(),
   /** Creation timestamp */
   createdAt: z.coerce.date(),
+  /**
+   * PMS-reported last-modified timestamp. Used as the version vector
+   * by the reliability engine: an ingest whose providerUpdatedAt is
+   * ≤ the stored one is a no-op (stale-event rejection). Adapters
+   * that cannot surface this timestamp from the PMS must omit the
+   * booking (return null from lookupBooking) rather than fabricate
+   * a value, which would break the stale-detection guarantee.
+   */
+  providerUpdatedAt: z.coerce.date(),
 });
 
 export type BookingLookup = z.infer<typeof BookingLookupSchema>;
@@ -285,6 +294,203 @@ export const BookingConfirmationSchema = z.object({
 });
 
 export type BookingConfirmation = z.infer<typeof BookingConfirmationSchema>;
+
+// ── Availability Hold (checkout-phase soft reservation) ───────
+//
+// Placed at the PMS before the guest completes payment so the unit
+// isn't claimed by a parallel booking mid-checkout. TTL is enforced
+// by the PMS; if we don't confirm before the expiry the reservation
+// auto-releases on their side. We also run a local expire-cron as a
+// second safety net (in case our confirmation is lost).
+//
+// Providers that don't expose a hold/optional concept (Manual and
+// some legacy PMSes) return null from holdAvailability, which the
+// caller treats as "not supported — proceed without hold". The
+// outbound engine then falls back to post-payment createBooking.
+
+export const HoldParamsSchema = z.object({
+  /** PMS category ID (room type). */
+  categoryId: z.string(),
+  /** PMS rate plan ID. */
+  ratePlanId: z.string(),
+  /** Stay dates — YYYY-MM-DD in the property timezone. */
+  checkIn: z.string(),
+  checkOut: z.string(),
+  /** Total guests (for PersonCounts). */
+  guests: z.number().int().min(1),
+  /** Provisional guest — can be minimal; full data written on confirm. */
+  guestInfo: z.object({
+    firstName: z.string().min(1),
+    lastName: z.string(),
+    email: z.string().email(),
+    phone: z.string().nullable().optional(),
+  }),
+  /** PMS resource (unit) id — for per-unit holds; optional for category-level. */
+  requestedResourceId: z.string().optional(),
+  /** How long to hold the unit. Platform default is 15 min. */
+  holdDurationMs: z.number().int().positive(),
+});
+
+export type HoldParams = z.infer<typeof HoldParamsSchema>;
+
+export const HoldResultSchema = z.object({
+  /** PMS-side ID for the held reservation. Used for confirm/release. */
+  externalId: z.string(),
+  /** When the PMS will auto-release if we don't confirm. */
+  expiresAt: z.coerce.date(),
+});
+
+export type HoldResult = z.infer<typeof HoldResultSchema>;
+
+// ── List Bookings (reliability engine — reconciliation only) ──
+//
+// Used exclusively by the PMS reliability engine to sweep for missed
+// webhook events. NOT a general-purpose booking query. The window
+// is bounded so adapters can implement it even when the underlying
+// PMS has no native "modified since" filter (Mews, for example).
+//
+// Contract:
+//   • Adapter returns all bookings whose PMS-reported state falls
+//     within [from, to). Implementations may include bookings created
+//     OR modified in that window — whatever the PMS allows.
+//   • Results are paginated via an opaque `cursor`. Pass null on the
+//     first call; pass the returned `nextCursor` on each subsequent
+//     call until it is null (end of page stream).
+//   • Every `BookingLookup` returned MUST carry a non-null
+//     `providerUpdatedAt` — the reliability engine needs it as the
+//     version vector for stale-event rejection. Adapters that cannot
+//     produce this timestamp from the PMS must omit the booking
+//     rather than invent one.
+
+export const ListBookingsParamsSchema = z.object({
+  /** Inclusive lower bound of the sweep window. */
+  from: z.coerce.date(),
+  /** Exclusive upper bound of the sweep window. */
+  to: z.coerce.date(),
+  /** Opaque resume token. Null = start from the beginning of the window. */
+  cursor: z.string().nullable().optional(),
+  /** Maximum rows per page. Adapters may clamp to a lower provider limit. */
+  limit: z.number().int().positive().optional(),
+});
+
+export type ListBookingsParams = z.infer<typeof ListBookingsParamsSchema>;
+
+// ListBookingsBooking is the exact same shape as BookingLookup — both
+// require providerUpdatedAt. Kept as a named alias so call sites read
+// intent clearly at the reconciliation-vs-lookup boundary.
+export const ListBookingsBookingSchema = BookingLookupSchema;
+export type ListBookingsBooking = BookingLookup;
+
+export const ListBookingsPageSchema = z.object({
+  bookings: z.array(ListBookingsBookingSchema),
+  /** Null = no more pages in this window. */
+  nextCursor: z.string().nullable(),
+});
+
+export type ListBookingsPage = z.infer<typeof ListBookingsPageSchema>;
+
+// ── PMS Webhook Events (reliability engine — webhook path) ───
+//
+// Adapters parse raw webhook payloads into this normalized shape.
+// Exactly enough information for the reliability engine to act:
+//
+//   • externalEventId — the PMS's unique ID for this event, used
+//     for dedup at the inbox. MUST be stable across retry deliveries
+//     of the same event.
+//   • externalBookingId — which booking changed. Optional because
+//     some event types (e.g. account-level notifications) don't
+//     reference one; they are stored in the inbox but not processed.
+//   • eventType — opaque provider string preserved for audit. The
+//     reliability engine never switches on this — it always re-fetches
+//     the booking state from the PMS to get the current truth.
+//
+// Adapters that don't support webhooks (Manual) return null.
+// Malformed payloads surface as null so the route returns 400 safely.
+
+export const PmsWebhookEventSchema = z.object({
+  externalEventId: z.string().min(1),
+  externalBookingId: z.string().min(1).nullable(),
+  eventType: z.string().min(1),
+});
+
+export type PmsWebhookEvent = z.infer<typeof PmsWebhookEventSchema>;
+
+// ── Cancellation (PMS write path) ────────────────────────────
+//
+// The adapter's cancelBooking() consumes CancelBookingParams and returns
+// CancelBookingResult. The engine owns idempotency, reason taxonomy, and
+// fee calculation — the adapter's only job is to flip the PMS-side
+// reservation into its Canceled state and report back what happened.
+//
+// See admin/docs/cancellation-engine.md §5.
+
+export const CancelBookingParamsSchema = z.object({
+  bookingExternalId: z.string().min(1),
+
+  /**
+   * Free-text note sent to the PMS's notes/comments field. Typically
+   * the engine builds this from "reason=<handle> note=<guestNote>" so
+   * operators can see context in the PMS UI. Max 500 chars — matches
+   * CancellationRequest.declineNote cap.
+   */
+  note: z.string().max(500).optional(),
+
+  /**
+   * Our idempotency key. Format: `cancellation:{cancellationRequestId}:attempt:{n}`.
+   * Most PMS providers (Mews included) don't honour idempotency keys —
+   * adapters are responsible for recognising "already cancelled" as
+   * success so retries don't fail.
+   */
+  idempotencyKey: z.string().min(1),
+
+  /**
+   * Whether the PMS should post its own cancellation fee on the folio.
+   * Default FALSE — we compute and charge fees ourselves via Stripe
+   * for audit consistency.
+   */
+  chargeFee: z.boolean().default(false),
+
+  /**
+   * Whether the PMS should send its own guest email. Default FALSE —
+   * we send via sendEmailEvent() so the email goes through our
+   * templating, rate-limiting, and unsubscribe pipeline.
+   */
+  sendGuestEmail: z.boolean().default(false),
+});
+
+export type CancelBookingParams = z.infer<typeof CancelBookingParamsSchema>;
+
+export const CancelBookingResultSchema = z.object({
+  /** When the PMS confirmed the cancel (its server clock, or our now() if unknown). */
+  canceledAtPms: z.coerce.date(),
+
+  /**
+   * True when the PMS reported the reservation was already cancelled
+   * before this call. Adapters recognise this from provider-specific
+   * signals (for Mews: 403 response + a follow-up state check). Engine
+   * treats it identically to a fresh cancel — the idempotent success
+   * path.
+   */
+  alreadyCanceled: z.boolean(),
+
+  /**
+   * When `chargeFee=true` and the PMS posted a fee item, this is the
+   * PMS-side order-item ID. Useful for reconciling against our Stripe
+   * refund amount. Null when we handled the fee purely on Stripe.
+   */
+  pmsFeeItemId: z.string().optional(),
+  pmsFeeAmountOre: z.number().int().optional(),
+  pmsFeeCurrency: z.string().optional(),
+
+  /**
+   * Truncated PMS response payload for SyncEvent audit. Adapters MUST
+   * NOT include credentials or any secret in this field. Size cap
+   * enforced at log-write time (~2KB).
+   */
+  rawAuditPayload: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type CancelBookingResult = z.infer<typeof CancelBookingResultSchema>;
 
 // ── Sync Event Types (kept for webhook/cron infra) ──────────
 

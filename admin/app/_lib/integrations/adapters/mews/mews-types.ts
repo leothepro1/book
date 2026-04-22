@@ -358,3 +358,15 @@ export const MewsWebhookPayloadSchema = z.object({
 });
 
 export type MewsWebhookPayload = z.infer<typeof MewsWebhookPayloadSchema>;
+
+// ── Cancel Reservations response ────────────────────────────
+// POST /api/connector/v1/reservations/cancel
+// Body shape: { ReservationIds: uuid[], PostCancellationFee?, SendEmail?, Notes? }
+// Response: plain list of IDs that were cancelled. No additional metadata.
+export const MewsCancelReservationsResponseSchema = z.object({
+  ReservationIds: z.array(z.string()),
+});
+
+export type MewsCancelReservationsResponse = z.infer<
+  typeof MewsCancelReservationsResponseSchema
+>;

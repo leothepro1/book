@@ -21,6 +21,13 @@ import type {
   PaymentStatus,
   CreateBookingParams,
   BookingConfirmation,
+  ListBookingsParams,
+  ListBookingsPage,
+  PmsWebhookEvent,
+  CancelBookingParams,
+  CancelBookingResult,
+  HoldParams,
+  HoldResult,
 } from "../types";
 
 export class ManualAdapter implements PmsAdapter {
@@ -105,6 +112,42 @@ export class ManualAdapter implements PmsAdapter {
     throw new Error("ManualAdapter does not support booking creation. Connect a PMS to enable online bookings.");
   }
 
+  async listBookings(
+    _tenantId: string,
+    _params: ListBookingsParams,
+  ): Promise<ListBookingsPage> {
+    // Manual tenants have no upstream PMS to sweep — bookings are
+    // managed in our own admin UI, which writes directly through the
+    // normal Booking path (not through upsertBookingFromPms). The
+    // reconciliation engine therefore has nothing to reconcile here.
+    return { bookings: [], nextCursor: null };
+  }
+
+  async holdAvailability(
+    _tenantId: string,
+    _params: HoldParams,
+  ): Promise<HoldResult | null> {
+    // No upstream PMS → no hold mechanism to use. Returning null
+    // signals the caller to skip the hold step. Since manual tenants
+    // manage their own inventory outside our platform, double-booking
+    // races aren't our concern for them.
+    return null;
+  }
+
+  async confirmHold(_tenantId: string, _holdExternalId: string): Promise<string> {
+    // Should never be called since holdAvailability always returns
+    // null for manual tenants. Throw loudly if misused.
+    throw new Error(
+      "ManualAdapter.confirmHold called — no hold should exist on a manual tenant",
+    );
+  }
+
+  async releaseHold(_tenantId: string, _holdExternalId: string): Promise<void> {
+    // Same reasoning as confirmHold — but for releaseHold we no-op
+    // rather than throw: the expire cron should be tolerant if it
+    // encounters a stale manual-era row.
+  }
+
   async testConnection(
     _credentials: Record<string, string>,
   ): Promise<{ ok: boolean; error?: string }> {
@@ -121,5 +164,27 @@ export class ManualAdapter implements PmsAdapter {
     _credentials: Record<string, string>,
   ): Promise<boolean> {
     return false;
+  }
+
+  parseWebhookEvents(
+    _rawBody: Buffer,
+    _parsedPayload: unknown,
+  ): PmsWebhookEvent[] | null {
+    // No upstream PMS → no webhooks. Return null so the route
+    // responds with 400 if someone targets it anyway.
+    return null;
+  }
+
+  async cancelBooking(
+    _tenantId: string,
+    _params: CancelBookingParams,
+  ): Promise<CancelBookingResult> {
+    // Manual tenants have no external PMS to cancel in — the cancel is
+    // purely local (Order + Booking + Stripe refund in our own systems).
+    // Return deterministic success so the saga proceeds.
+    return {
+      canceledAtPms: new Date(),
+      alreadyCanceled: false,
+    };
   }
 }

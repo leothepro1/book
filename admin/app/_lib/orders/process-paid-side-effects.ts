@@ -57,26 +57,55 @@ export async function processOrderPaidSideEffects(
   const orderType = (orderMeta.orderType as string) ?? "ACCOMMODATION";
   const effectiveEmail = order.guestEmail || "";
 
-  // ── ACCOMMODATION: create PMS booking ──────────────────────
-  // createPmsBookingAfterPayment is internally idempotent (checks pmsBookingRef)
-  // but we also guard on ORDER_CONFIRMED event to avoid unnecessary DB queries
+  // ── ACCOMMODATION: create PMS booking (outbound reliability) ──
+  //
+  // Every paid accommodation order passes through the outbound
+  // reliability engine:
+  //
+  //   1. enqueueOutboundJob creates the durable outbox row
+  //      (idempotent — double-calls collide on orderId unique).
+  //   2. We try processOutboundJob synchronously for the happy path
+  //      latency (guest sees the confirmation the moment payment
+  //      clears). If PMS is healthy: COMPLETED in <1s.
+  //   3. On any failure, the outbox row stays PENDING/FAILED/DEAD
+  //      with retry/compensation scheduled. The retry cron drains
+  //      it automatically — no manual ON_HOLD intervention needed.
+  //
+  // We skip if the ORDER_CONFIRMED event already fired (idempotency
+  // replay from the reconcile cron or a webhook re-delivery).
   if (orderType === "ACCOMMODATION" && !completedEvents.has("ORDER_CONFIRMED")) {
     try {
-      const { createPmsBookingAfterPayment } = await import(
-        "@/app/_lib/accommodations/create-pms-booking"
+      const { enqueueOutboundJob, processOutboundJob } = await import(
+        "@/app/_lib/integrations/reliability/outbound"
       );
-      const pmsResult = await createPmsBookingAfterPayment({
+      const { jobId, created } = await enqueueOutboundJob({
         orderId: order.id,
         tenantId: order.tenantId,
       });
-
-      if (!pmsResult.ok) {
-        log("error", "process_paid.pms_booking_failed", {
+      if (created) {
+        log("info", "process_paid.outbound_enqueued", {
           orderId: order.id,
           tenantId: order.tenantId,
-          error: pmsResult.error,
+          jobId,
         });
-        if (pmsResult.retryable && canTransitionFulfillment("UNFULFILLED", "ON_HOLD")) {
+      }
+
+      // Fast-path attempt: if this succeeds the guest is confirmed
+      // immediately. If not, the job row carries the retry state
+      // forward without blocking anything here.
+      const outcome = await processOutboundJob(jobId);
+
+      if (outcome === "FAILED" || outcome === "DEAD") {
+        log("warn", "process_paid.outbound_deferred", {
+          orderId: order.id,
+          tenantId: order.tenantId,
+          jobId,
+          outcome,
+        });
+        // Surface in the order timeline so operators/admins can see
+        // the booking is in the reliability pipeline rather than
+        // silently "pending".
+        if (canTransitionFulfillment("UNFULFILLED", "ON_HOLD")) {
           await prisma.order.update({
             where: { id: order.id },
             data: { fulfillmentStatus: "ON_HOLD" },
@@ -86,13 +115,20 @@ export async function processOrderPaidSideEffects(
               orderId: order.id,
               tenantId: order.tenantId,
               type: "ORDER_UPDATED",
-              message: `PMS-bokning misslyckades — manuell hantering krävs: ${pmsResult.error}`,
+              message:
+                outcome === "DEAD"
+                  ? "PMS-bokningen misslyckades — automatisk återbetalning planeras"
+                  : "PMS-bokningen är i retry-kö — bekräftelse kommer så snart den lyckas",
             },
           });
         }
       }
     } catch (err) {
-      log("error", "process_paid.pms_booking_unexpected_error", {
+      // Infrastructure error (DB down) — the enqueue/process itself
+      // failed before touching the PMS. The reconcile/retry crons
+      // won't have a job row to pick up, so we fall back to the old
+      // ON_HOLD signal for operator visibility.
+      log("error", "process_paid.outbound_infra_error", {
         orderId: order.id,
         tenantId: order.tenantId,
         error: err instanceof Error ? err.message : String(err),

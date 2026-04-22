@@ -12,6 +12,7 @@
  */
 
 import { prisma } from "@/app/_lib/db/prisma";
+import { Prisma } from "@prisma/client";
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { createOrderEventInTx } from "@/app/_lib/orders/events";
 import { log } from "@/app/_lib/logger";
@@ -54,6 +55,8 @@ export async function createPmsBookingAfterPayment(
           ratePlanId: true,
           specialRequests: true,
           externalId: true,
+          holdExternalId: true,
+          holdExpiresAt: true,
         },
         take: 1,
       },
@@ -92,6 +95,186 @@ export async function createPmsBookingAfterPayment(
       pmsBookingRef: booking.pmsBookingRef,
     });
     return { ok: true, pmsBookingRef: booking.pmsBookingRef, bookingId: booking.id };
+  }
+
+  // 2b. Hold confirmation path — if the checkout flow placed an
+  //     availability hold at the PMS, promote it to Confirmed rather
+  //     than creating a fresh reservation (which would either create
+  //     a duplicate or race with the expiring hold). This is the
+  //     happy path for tenants on PMSes that support holds (Mews).
+  if (booking.holdExternalId) {
+    const { resolveAdapter } = await import("@/app/_lib/integrations/resolve");
+    const adapter = await resolveAdapter(tenantId);
+
+    // 2b-i. Hold-expired recovery path — if our local clock says
+    //       the hold's TTL has passed, CONSULT the PMS before
+    //       giving up. In practice the hold might have been
+    //       confirmed before expiration (microsecond-near-edge race,
+    //       or Mews actually holding open longer than ReleasedUtc).
+    //       If PMS reports a valid confirmed reservation → recover
+    //       and complete normally instead of triggering a refund
+    //       for a booking that's in fact alive at the hotel.
+    if (booking.holdExpiresAt && booking.holdExpiresAt.getTime() < Date.now()) {
+      try {
+        const pmsState = await adapter.lookupBooking(
+          tenantId,
+          booking.holdExternalId,
+        );
+        if (
+          pmsState &&
+          (pmsState.status === "confirmed" ||
+            pmsState.status === "checked_in" ||
+            pmsState.status === "checked_out")
+        ) {
+          // Recovery — PMS has it confirmed despite our clock. Save
+          // the ref, skip compensation. Without this, a refund would
+          // go out and the hotel would have an unpaid reservation.
+          await prisma.booking.update({
+            where: { id: booking.id },
+            data: {
+              pmsBookingRef: booking.holdExternalId,
+              externalId: booking.holdExternalId,
+              externalSource: adapter.provider,
+              lastSyncedAt: new Date(),
+            },
+          });
+          log("warn", "create_pms_booking.hold_expired_but_confirmed_at_pms", {
+            orderId,
+            bookingId: booking.id,
+            holdExternalId: booking.holdExternalId,
+            holdExpiresAt: booking.holdExpiresAt.toISOString(),
+            pmsStatus: pmsState.status,
+          });
+          return {
+            ok: true,
+            pmsBookingRef: booking.holdExternalId,
+            bookingId: booking.id,
+          };
+        }
+      } catch (err) {
+        // Adapter failure during the recovery check — we can't tell
+        // whether PMS confirmed or not. Safer to treat as retryable
+        // so the outbound cron tries once more before proceeding to
+        // compensation.
+        const msg = err instanceof Error ? err.message : String(err);
+        log("warn", "create_pms_booking.hold_expired_recovery_adapter_error", {
+          orderId,
+          bookingId: booking.id,
+          holdExternalId: booking.holdExternalId,
+          error: msg,
+        });
+        return { ok: false, error: msg, retryable: true };
+      }
+
+      // PMS confirms the hold is truly gone. Now safe to proceed
+      // with compensation via the outbound engine's retryable=false
+      // path.
+      log("warn", "create_pms_booking.hold_already_expired", {
+        orderId,
+        bookingId: booking.id,
+        holdExternalId: booking.holdExternalId,
+        holdExpiresAt: booking.holdExpiresAt.toISOString(),
+      });
+      return {
+        ok: false,
+        error: `Hold ${booking.holdExternalId} expired before confirmation`,
+        retryable: false,
+      };
+    }
+
+    try {
+      const confirmedId = await adapter.confirmHold(
+        tenantId,
+        booking.holdExternalId,
+      );
+
+      // Persist the PMS ref and clear hold fields (confirmation is
+      // terminal — no more "this booking is provisional" semantics).
+      await prisma.booking.update({
+        where: { id: booking.id },
+        data: {
+          pmsBookingRef: confirmedId,
+          externalId: confirmedId,
+          externalSource: adapter.provider,
+          lastSyncedAt: new Date(),
+        },
+      });
+
+      // Read-your-write verification — fetch the reservation back
+      // from the PMS and compare fields. Non-blocking: the booking
+      // is already created; mismatches surface via Booking.integrityFlag
+      // for operator review in the health endpoint. Without this,
+      // timezone-drift, field-truncation and eventual-consistency
+      // bugs silently produce divergent state between us and PMS.
+      if (booking.checkIn && booking.checkOut) {
+        const { verifyPmsState } = await import(
+          "@/app/_lib/integrations/reliability/verify-pms-state"
+        );
+        const verify = await verifyPmsState({
+          adapter,
+          tenantId,
+          externalId: confirmedId,
+          expected: {
+            checkIn: booking.checkIn.toISOString().slice(0, 10),
+            checkOut: booking.checkOut.toISOString().slice(0, 10),
+            guests: booking.guestCount ?? 1,
+            email: order.guestEmail,
+          },
+        });
+        if (!verify.matches) {
+          await prisma.booking.update({
+            where: { id: booking.id },
+            data: {
+              integrityFlag:
+                verify.reason === "pms_not_found"
+                  ? "PMS_NOT_FOUND"
+                  : verify.reason === "state_mismatch"
+                    ? "STATE_MISMATCH"
+                    : verify.reason === "adapter_unreachable"
+                      ? null // unverifiable, don't flag
+                      : "MISMATCH",
+              integrityMismatchFields:
+                verify.reason !== "adapter_unreachable"
+                  ? ((verify.mismatches ?? []) as unknown as Prisma.InputJsonValue)
+                  : Prisma.JsonNull,
+              integrityDetectedAt:
+                verify.reason !== "adapter_unreachable"
+                  ? new Date()
+                  : null,
+            },
+          });
+          if (verify.reason !== "adapter_unreachable") {
+            log("error", "pms.integrity.mismatch_detected", {
+              orderId,
+              bookingId: booking.id,
+              pmsBookingRef: confirmedId,
+              reason: verify.reason,
+              mismatches: JSON.stringify(verify.mismatches ?? []),
+              source: "hold_confirm",
+            });
+          }
+        }
+      }
+
+      log("info", "create_pms_booking.hold_confirmed", {
+        orderId,
+        bookingId: booking.id,
+        pmsBookingRef: confirmedId,
+      });
+      return { ok: true, pmsBookingRef: confirmedId, bookingId: booking.id };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log("error", "create_pms_booking.hold_confirm_failed", {
+        orderId,
+        bookingId: booking.id,
+        holdExternalId: booking.holdExternalId,
+        error: msg,
+      });
+      // Treat as retryable — transient network errors or PMS 5xx
+      // are worth another attempt. The outbound engine's retry
+      // ladder applies.
+      return { ok: false, error: msg, retryable: true };
+    }
   }
 
   // 3. Load Accommodation for externalId
@@ -238,25 +421,60 @@ export async function createPmsBookingAfterPayment(
       currency: li.currency,
     }));
 
+  const createParams = {
+    categoryId: accommodation.externalId,
+    ratePlanId: booking.ratePlanId ?? accommodation.externalId,
+    checkIn: booking.checkIn?.toISOString().split("T")[0] ?? "",
+    checkOut: booking.checkOut?.toISOString().split("T")[0] ?? "",
+    guests: booking.guestCount ?? 1,
+    guestInfo: {
+      firstName: firstName ?? "Guest",
+      lastName,
+      email: order.guestEmail,
+      phone: order.guestPhone ?? null,
+    },
+    addons: [] as Array<{ addonId: string; quantity: number }>,
+    addonLineItems,
+    specialRequests: booking.specialRequests ?? undefined,
+    requestedResourceId,
+  };
+
+  // Idempotency guard — if this outbound-job retry already hit the
+  // PMS on a previous attempt whose response we lost (network
+  // timeout, Vercel lambda kill), the key's cached result is
+  // returned here instead of creating a duplicate reservation. The
+  // key is derived from the orderId + essential params so the same
+  // logical operation always resolves to the same key across all
+  // retries.
+  const { computeIdempotencyKey, withIdempotency } = await import(
+    "@/app/_lib/integrations/reliability/idempotency"
+  );
+  const idempotencyKey = computeIdempotencyKey({
+    tenantId,
+    provider: adapter.provider,
+    operation: "createBooking",
+    inputs: {
+      orderId: order.id,
+      categoryId: createParams.categoryId,
+      ratePlanId: createParams.ratePlanId,
+      checkIn: createParams.checkIn,
+      checkOut: createParams.checkOut,
+      guests: createParams.guests,
+      requestedResourceId: createParams.requestedResourceId ?? null,
+    },
+  });
+
   let confirmation;
   try {
-    confirmation = await adapter.createBooking(tenantId, {
-      categoryId: accommodation.externalId,
-      ratePlanId: booking.ratePlanId ?? accommodation.externalId,
-      checkIn: booking.checkIn?.toISOString().split("T")[0] ?? "",
-      checkOut: booking.checkOut?.toISOString().split("T")[0] ?? "",
-      guests: booking.guestCount ?? 1,
-      guestInfo: {
-        firstName: firstName ?? "Guest",
-        lastName,
-        email: order.guestEmail,
-        phone: order.guestPhone ?? null,
+    confirmation = (await withIdempotency(
+      idempotencyKey,
+      {
+        tenantId,
+        provider: adapter.provider,
+        operation: "createBooking",
       },
-      addons: [],
-      addonLineItems,
-      specialRequests: booking.specialRequests ?? undefined,
-      requestedResourceId,
-    });
+      () => adapter.createBooking(tenantId, createParams),
+    )) as Awaited<ReturnType<typeof adapter.createBooking>>;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log("error", "create_pms_booking.adapter_failed", {
@@ -290,6 +508,60 @@ export async function createPmsBookingAfterPayment(
       },
     });
   });
+
+  // Read-your-write verification — fetch the just-created booking
+  // back from the PMS and compare against what we sent. Non-blocking:
+  // mismatches set Booking.integrityFlag for operator review via
+  // the health endpoint. Catches timezone/truncation/eventual-
+  // consistency silently-wrong-data bugs that otherwise only
+  // surface when the guest shows up at the hotel.
+  try {
+    const { verifyPmsState } = await import(
+      "@/app/_lib/integrations/reliability/verify-pms-state"
+    );
+    const verify = await verifyPmsState({
+      adapter,
+      tenantId,
+      externalId: confirmation.externalId,
+      expected: {
+        checkIn: createParams.checkIn,
+        checkOut: createParams.checkOut,
+        guests: createParams.guests,
+        email: order.guestEmail,
+      },
+    });
+    if (!verify.matches && verify.reason !== "adapter_unreachable") {
+      await prisma.booking.update({
+        where: { id: booking.id },
+        data: {
+          integrityFlag:
+            verify.reason === "pms_not_found"
+              ? "PMS_NOT_FOUND"
+              : verify.reason === "state_mismatch"
+                ? "STATE_MISMATCH"
+                : "MISMATCH",
+          integrityMismatchFields: verify.mismatches ?? [],
+          integrityDetectedAt: new Date(),
+        },
+      });
+      log("error", "pms.integrity.mismatch_detected", {
+        orderId,
+        bookingId: booking.id,
+        pmsBookingRef: confirmation.confirmationNumber,
+        reason: verify.reason,
+        mismatches: JSON.stringify(verify.mismatches ?? []),
+        source: "create_booking",
+      });
+    }
+  } catch (err) {
+    // Verification itself blew up — just log, don't block the
+    // booking (it was created successfully at PMS).
+    log("warn", "pms.integrity.verify_threw", {
+      orderId,
+      bookingId: booking.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 
   log("info", "create_pms_booking.success", {
     orderId,

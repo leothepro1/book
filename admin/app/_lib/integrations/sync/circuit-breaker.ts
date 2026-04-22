@@ -1,23 +1,56 @@
 /**
- * Circuit Breaker — Per-tenant consecutive failure counter
+ * Circuit Breaker — Per-tenant with half-open probing + time reset
  *
- * Uses TenantIntegration.consecutiveFailures instead of time-windowed
- * SyncEvent queries. This correctly trips even with exponential backoff
- * where failures are spread far apart.
+ * State machine (derived from TenantIntegration columns — no extra
+ * schema required):
+ *
+ *   CLOSED      — consecutiveFailures < threshold. Adapter calls
+ *                 pass through normally.
+ *
+ *   OPEN        — consecutiveFailures >= threshold AND lastErrorAt
+ *                 was recent (within OPEN_DURATION_MS). isCircuitOpen
+ *                 returns true; reconcile cron skips the tenant.
+ *
+ *   HALF_OPEN   — consecutiveFailures >= threshold AND lastErrorAt
+ *                 older than OPEN_DURATION_MS. isCircuitOpen returns
+ *                 false so ONE probe call can go through. On success
+ *                 → transitions to CLOSED (counter reset). On
+ *                 failure → increments counter and lastErrorAt,
+ *                 moving back to OPEN for another full OPEN_DURATION_MS.
+ *
+ * This is the canonical three-state circuit breaker. It adds self-
+ * healing to the previous binary "5 fails → open forever until
+ * something resets you" design: a Mews outage that recovers on its
+ * own doesn't require any manual intervention to restore service —
+ * after OPEN_DURATION_MS (60 s) the next reconcile sweep or webhook
+ * probes and, if successful, the circuit auto-closes.
  *
  * 5 consecutive failures → circuit opens → TenantIntegration.status = "error"
- * Any successful sync → consecutiveFailures resets to 0
+ * 60 s after last failure → circuit probes (half-open)
+ * Any successful probe   → consecutiveFailures resets to 0 (closed)
+ * Any failing probe      → counter increments; next probe in 60 s
  */
 
 import { prisma } from "@/app/_lib/db/prisma";
 import type { PmsProvider } from "../types";
 import { logSyncEvent } from "./log";
+import { log } from "@/app/_lib/logger";
 
-const FAILURE_THRESHOLD = 5;
+export const FAILURE_THRESHOLD = 5;
+export const OPEN_DURATION_MS = 60_000;
 
 /**
- * Check if the circuit breaker is open for a tenant.
- * Reads consecutiveFailures from TenantIntegration.
+ * Returns true iff the circuit is fully OPEN (neither CLOSED nor
+ * HALF_OPEN). Callers use this to skip calls they consider
+ * unnecessary; HALF_OPEN intentionally looks like CLOSED so a probe
+ * can go through.
+ *
+ * The half-open transition is implicit — we don't persist an
+ * explicit status; we read consecutiveFailures + lastErrorAt and
+ * derive the state at call time. That means two parallel probes
+ * could both go through (both see half-open), which is acceptable:
+ * a burst of concurrent successes still closes the circuit, and a
+ * burst of concurrent failures is bounded at 2× threshold.
  */
 export async function isCircuitOpen(
   tenantId: string,
@@ -25,16 +58,34 @@ export async function isCircuitOpen(
 ): Promise<boolean> {
   const integration = await prisma.tenantIntegration.findUnique({
     where: { tenantId },
-    select: { consecutiveFailures: true },
+    select: { consecutiveFailures: true, lastErrorAt: true },
   });
 
   if (!integration) return false;
-  return integration.consecutiveFailures >= FAILURE_THRESHOLD;
+  if (integration.consecutiveFailures < FAILURE_THRESHOLD) return false;
+
+  // Over threshold — look at time since last failure.
+  const lastErrorAt = integration.lastErrorAt;
+  if (!lastErrorAt) {
+    // Over threshold but no timestamp — treat as closed-for-probe.
+    // This is the safer failure mode: let work through rather than
+    // locking out indefinitely on inconsistent state.
+    return false;
+  }
+
+  const sinceLastFailureMs = Date.now() - lastErrorAt.getTime();
+  if (sinceLastFailureMs >= OPEN_DURATION_MS) {
+    // HALF_OPEN: allow probe through.
+    return false;
+  }
+
+  // OPEN: still within cooldown window.
+  return true;
 }
 
 /**
- * Record a sync failure — increments consecutiveFailures.
- * Updates TenantIntegration error state.
+ * Record a sync failure — increments consecutiveFailures and stamps
+ * lastErrorAt (used by the half-open timer).
  */
 export async function recordFailure(
   tenantId: string,
@@ -52,13 +103,25 @@ export async function recordFailure(
 }
 
 /**
- * Record a successful sync — resets consecutiveFailures to 0.
- * Updates lastSyncAt and clears error state.
+ * Record a successful sync — resets consecutiveFailures to 0 and
+ * clears error state. Also fires a "circuit_closed" audit event
+ * when we transition out of OPEN/HALF_OPEN so operators can see
+ * the auto-recovery in the timeline.
  */
 export async function recordSuccess(
   tenantId: string,
-  _provider: PmsProvider,
+  provider: PmsProvider,
 ): Promise<void> {
+  // Check if we're transitioning out of an open state so we can
+  // emit the audit event. Cheap single-row read, well-worth it for
+  // operator visibility.
+  const prev = await prisma.tenantIntegration.findUnique({
+    where: { tenantId },
+    select: { consecutiveFailures: true },
+  });
+  const wasOverThreshold =
+    (prev?.consecutiveFailures ?? 0) >= FAILURE_THRESHOLD;
+
   await prisma.tenantIntegration.update({
     where: { tenantId },
     data: {
@@ -68,6 +131,18 @@ export async function recordSuccess(
       lastErrorAt: null,
     },
   });
+
+  if (wasOverThreshold) {
+    log("info", "pms.circuit.auto_closed", {
+      tenantId,
+      provider,
+      previousFailures: prev?.consecutiveFailures,
+    });
+    await logSyncEvent(tenantId, provider, "sync.completed", {
+      circuitTransition: "closed",
+      previousFailures: prev?.consecutiveFailures,
+    });
+  }
 }
 
 /**

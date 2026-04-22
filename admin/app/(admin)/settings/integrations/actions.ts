@@ -3,6 +3,7 @@
 import { prisma } from "@/app/_lib/db/prisma";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { getAdapter } from "@/app/_lib/integrations/registry";
+import { invalidateAdapterCache } from "@/app/_lib/integrations/resolve";
 import { encryptCredentials, decryptCredentials } from "@/app/_lib/integrations/crypto";
 import { PmsProviderSchema } from "@/app/_lib/integrations/types";
 import type { PmsProvider } from "@/app/_lib/integrations/types";
@@ -196,6 +197,13 @@ export async function connectIntegration(
     },
   });
 
+  // Invalidate the adapter cache so the very next webhook or
+  // reconcile call uses the new credentials. Without this, up to
+  // 60 s after a credential rotation would still run through the
+  // old (possibly revoked) adapter instance — causing cascading
+  // adapter failures and a spuriously tripped circuit breaker.
+  invalidateAdapterCache(tenant.tenant.id);
+
   // Fire-and-forget: auto-sync PMS products on connect
   // Creates accommodation products + collections automatically
   import("@/app/_lib/products/pms-sync")
@@ -230,6 +238,11 @@ export async function disconnectIntegration(): Promise<ActionResponse> {
     where: { tenantId: tenant.tenant.id },
     data: { status: "disconnected" },
   });
+
+  // Drop the cached adapter so subsequent resolveAdapter() calls
+  // see status="disconnected" and fall back to ManualAdapter rather
+  // than keep hitting the disconnected provider for up to 60 s.
+  invalidateAdapterCache(tenant.tenant.id);
 
   // Cancel any pending/running sync jobs for this tenant
   await prisma.syncJob.updateMany({
@@ -279,6 +292,11 @@ export async function testExistingConnection(): Promise<ActionResponse> {
         consecutiveFailures: result.ok ? 0 : integration.consecutiveFailures,
       },
     });
+
+    // Status flipped — invalidate any cached adapter so resolveAdapter
+    // picks up the new status (active ↔ error) on the very next call
+    // rather than waiting for the 60 s TTL to expire.
+    invalidateAdapterCache(tenant.tenant.id);
 
     return result.ok
       ? { ok: true }

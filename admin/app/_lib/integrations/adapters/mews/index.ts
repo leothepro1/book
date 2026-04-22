@@ -13,6 +13,7 @@
  */
 
 import type { PmsAdapter } from "../../adapter";
+import { createHash } from "node:crypto";
 import type {
   PmsProvider,
   AvailabilityParams,
@@ -27,9 +28,18 @@ import type {
   PaymentStatus,
   CreateBookingParams,
   BookingConfirmation,
+  ListBookingsParams,
+  ListBookingsPage,
+  ListBookingsBooking,
+  PmsWebhookEvent,
+  CancelBookingParams,
+  CancelBookingResult,
+  HoldParams,
+  HoldResult,
 } from "../../types";
 import type { MewsCredentials } from "./credentials";
 import { MewsClient } from "./client";
+import { cancelBookingViaMews } from "./cancel";
 import { log } from "@/app/_lib/logger";
 import {
   MewsGetServicesResponseSchema,
@@ -47,6 +57,7 @@ import {
   MewsGetResourcesResponseSchema,
   MewsGetOrderItemsResponseSchema,
   MewsGetReservationsResponseSchema,
+  MewsWebhookPayloadSchema,
 } from "./mews-types";
 import type {
   MewsResource,
@@ -96,6 +107,32 @@ function mapClassification(classification: string | null | undefined): string {
 function toOren(value: number | null | undefined): number {
   if (value == null) return 0;
   return Math.round(value * 100);
+}
+
+/**
+ * Map Mews reservation state → BookingLookup status. Used by
+ * listBookings() to feed the reliability-engine ingest chokepoint.
+ * The mapping is deliberately conservative: unknown/intermediate
+ * states (Inquired, Optional, Requested) land as "confirmed" so the
+ * platform-side ingest path applies them; if the PMS later transitions
+ * them to Canceled, the version vector will surface the change.
+ */
+function mapMewsStateToIngestStatus(
+  state: "Inquired" | "Confirmed" | "Started" | "Processed" | "Canceled" | "Optional" | "Requested",
+): "confirmed" | "checked_in" | "checked_out" | "cancelled" | "no_show" {
+  switch (state) {
+    case "Started":
+      return "checked_in";
+    case "Processed":
+      return "checked_out";
+    case "Canceled":
+      return "cancelled";
+    case "Confirmed":
+    case "Inquired":
+    case "Optional":
+    case "Requested":
+      return "confirmed";
+  }
 }
 
 // Module-level caches keyed by accessToken — survives across adapter instances.
@@ -624,13 +661,114 @@ export class MewsAdapter implements PmsAdapter {
   }
 
   // ── 4. Booking Lookup ───────────────────────────────────────
+  //
+  // Single-reservation fetch used by the reliability engine's webhook
+  // path. Given an externalId (Mews Reservation.Id), return the
+  // normalized BookingLookup — including providerUpdatedAt, which is
+  // the version vector for stale-event rejection.
+  //
+  // Implementation: `reservations/getAll/2023-06-06` with ReservationIds
+  // filter (fetches exactly one), followed by a batched customers/getAll
+  // call for the linked customer. Both calls go through MewsClient so
+  // they respect the rate limiter and Sentry context. Missing booking
+  // (deleted, wrong enterprise, etc.) returns null.
 
   async lookupBooking(
-    _tenantId: string,
-    _reference: string,
+    tenantId: string,
+    reference: string,
   ): Promise<BookingLookup | null> {
-    // TODO: Call Mews reservations/getAll with ConfirmationNumber filter
-    return null;
+    const serviceId = await this.getStayServiceId();
+
+    let reservationsRaw: MewsGetReservationsResponse;
+    try {
+      reservationsRaw = await this.client.post<
+        Record<string, unknown>,
+        MewsGetReservationsResponse
+      >("reservations/getAll/2023-06-06", {
+        ServiceIds: [serviceId],
+        ReservationIds: [reference],
+        Limitation: { Count: 1 },
+      });
+    } catch (err) {
+      log("warn", "mews.lookup_booking.reservations_failed", {
+        tenantId,
+        reservationId: reference,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err; // caller decides: webhook route logs & retries, cron records BookingSyncError
+    }
+
+    const parsed = MewsGetReservationsResponseSchema.parse(reservationsRaw);
+    const reservation = parsed.Reservations[0];
+    if (!reservation) return null;
+
+    // Guest info — Mews reservation only carries AccountId.
+    // customers/getAll is batchable, and Mews returns a customer
+    // object with name/email/phone.
+    let customer: { firstName: string; lastName: string; email: string; phone: string | null } | null = null;
+    if (reservation.AccountType === "Customer" && reservation.AccountId) {
+      try {
+        const customersRaw = await this.client.post<
+          Record<string, unknown>,
+          MewsGetCustomersResponse
+        >("customers/getAll", {
+          CustomerIds: [reservation.AccountId],
+          Limitation: { Count: 1 },
+        });
+        const c = MewsGetCustomersResponseSchema.parse(customersRaw).Customers[0];
+        if (c) {
+          customer = {
+            firstName: c.FirstName ?? "",
+            lastName: c.LastName ?? "",
+            email: c.Email ?? "",
+            phone: c.Phone ?? null,
+          };
+        }
+      } catch (err) {
+        // Non-fatal: fall through with empty guest fields. The
+        // ingest chokepoint's Zod validation will reject if email
+        // is empty, and the caller records a BookingSyncError row
+        // that retries next cycle — data loss impossible.
+        log("warn", "mews.lookup_booking.customer_failed", {
+          tenantId,
+          reservationId: reference,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    const startUtc = reservation.ScheduledStartUtc ?? reservation.StartUtc;
+    const endUtc = reservation.ScheduledEndUtc ?? reservation.EndUtc;
+    if (!startUtc || !endUtc) {
+      // Reservation without stay dates is unusable. Treat as "not
+      // found" — reconciliation will pick up a better snapshot later
+      // if Mews eventually populates these fields.
+      log("warn", "mews.lookup_booking.missing_dates", {
+        tenantId,
+        reservationId: reference,
+      });
+      return null;
+    }
+
+    return {
+      externalId: reservation.Id,
+      guestName: customer
+        ? `${customer.firstName} ${customer.lastName}`.trim()
+        : "",
+      guestEmail: customer?.email ?? "",
+      guestPhone: customer?.phone ?? null,
+      categoryName: "", // category metadata comes from getRoomTypes cache if needed
+      checkIn: new Date(startUtc),
+      checkOut: new Date(endUtc),
+      guests:
+        reservation.PersonCounts?.reduce((sum, pc) => sum + pc.Count, 0) ?? 1,
+      status: mapMewsStateToIngestStatus(reservation.State),
+      totalAmount: 0, // enrichment deferred; not needed by reliability engine
+      currency: "SEK",
+      ratePlanName: null,
+      createdAt: new Date(reservation.CreatedUtc),
+      providerUpdatedAt: new Date(reservation.UpdatedUtc),
+    };
   }
 
   // ── 5. Guest Data ───────────────────────────────────────────
@@ -641,6 +779,111 @@ export class MewsAdapter implements PmsAdapter {
   ): Promise<GuestData | null> {
     // TODO: Call Mews customers/getAll with reservation CustomerId
     return null;
+  }
+
+  // ── 12. Availability Hold ──────────────────────────────────
+  //
+  // Mews supports "Optional" reservations — soft holds that auto-
+  // release after `ReleasedUtc`. We create one here, let Mews enforce
+  // the TTL, and promote it to "Confirmed" on payment success via
+  // reservations/update.
+
+  async holdAvailability(
+    tenantId: string,
+    params: HoldParams,
+  ): Promise<HoldResult | null> {
+    const [serviceId, adultAgeCategoryId, customerId] = await Promise.all([
+      this.getStayServiceId(),
+      this.getAdultAgeCategoryId(),
+      this.findOrCreateCustomer(params.guestInfo),
+    ]);
+
+    const expiresAt = new Date(Date.now() + params.holdDurationMs);
+
+    const raw = await this.client.post<
+      Record<string, unknown>,
+      MewsReservationAddResponse
+    >("reservations/add", {
+      ServiceId: serviceId,
+      Reservations: [
+        {
+          State: "Optional",
+          // Mews auto-releases an Optional reservation at ReleasedUtc
+          // — this is the PMS-side TTL. We also run a local cron as
+          // a safety net in case this field is ignored or interpreted
+          // differently by a future Mews API version.
+          ReleasedUtc: expiresAt.toISOString(),
+          RateId: params.ratePlanId,
+          RequestedCategoryId: params.categoryId,
+          StartUtc: `${params.checkIn}T15:00:00Z`,
+          EndUtc: `${params.checkOut}T11:00:00Z`,
+          PersonCounts: [
+            { AgeCategoryId: adultAgeCategoryId, Count: params.guests },
+          ],
+          CustomerId: customerId,
+        },
+      ],
+    });
+    const parsed = MewsReservationAddResponseSchema.parse(raw);
+    if (parsed.Reservations.length === 0) {
+      throw new Error(
+        "Mews returned no reservations from reservations/add (hold)",
+      );
+    }
+    const reservation = parsed.Reservations[0].Reservation;
+    log("info", "mews.hold.created", {
+      tenantId,
+      externalId: reservation.Id,
+      expiresAt: expiresAt.toISOString(),
+    });
+    return { externalId: reservation.Id, expiresAt };
+  }
+
+  async confirmHold(
+    tenantId: string,
+    holdExternalId: string,
+  ): Promise<string> {
+    // Idempotency: Mews reservations/update to State=Confirmed is
+    // a no-op if already Confirmed. A separate ReleasedUtc=null
+    // clears the TTL so it doesn't auto-release post-confirmation.
+    await this.client.post<Record<string, unknown>, MewsReservationUpdateResponse>(
+      "reservations/update",
+      {
+        ReservationUpdates: [
+          {
+            ReservationId: holdExternalId,
+            State: { Value: "Confirmed" },
+            ReleasedUtc: { Value: null },
+          },
+        ],
+      },
+    );
+    log("info", "mews.hold.confirmed", { tenantId, externalId: holdExternalId });
+    return holdExternalId;
+  }
+
+  async releaseHold(
+    tenantId: string,
+    holdExternalId: string,
+  ): Promise<void> {
+    // Transition Optional → Canceled. Mews treats a cancel of an
+    // already-canceled reservation as a no-op, so this is idempotent
+    // for our purposes. An already-Confirmed reservation would also
+    // be canceled here — which is correct for the release-expired
+    // use case (confirmHold runs first on payment; if we reach the
+    // release path, the order is being rolled back anyway).
+    await this.client.post<Record<string, unknown>, MewsReservationUpdateResponse>(
+      "reservations/update",
+      {
+        ReservationUpdates: [
+          {
+            ReservationId: holdExternalId,
+            State: { Value: "Canceled" },
+          },
+        ],
+      },
+    );
+    log("info", "mews.hold.released", { tenantId, externalId: holdExternalId });
   }
 
   // ── 6. Add-ons ──────────────────────────────────────────────
@@ -880,6 +1123,149 @@ export class MewsAdapter implements PmsAdapter {
     };
   }
 
+  // ── 11. List Bookings (reliability engine) ──────────────────
+  //
+  // Calls Mews reservations/getAll with UpdatedUtc filter — the only
+  // reliable way to catch webhook misses. The sweep returns every
+  // reservation the PMS updated within [from, to), across all
+  // lifecycle states (Confirmed, Started, Processed, Canceled,
+  // Optional, Requested). Guest data is enriched via a single batched
+  // customers/getAll call per page, avoiding N+1.
+  //
+  // Pagination: Mews returns a Cursor string; we pass it back
+  // verbatim on the next call. A null/absent Cursor ends the stream.
+
+  async listBookings(
+    tenantId: string,
+    params: ListBookingsParams,
+  ): Promise<ListBookingsPage> {
+    const serviceId = await this.getStayServiceId();
+    const pageLimit = Math.min(params.limit ?? 500, 1000); // Mews caps at 1000
+
+    // Step 1: fetch the reservations page
+    const reservationsRaw = await this.client.post<
+      Record<string, unknown>,
+      MewsGetReservationsResponse
+    >("reservations/getAll/2023-06-06", {
+      ServiceIds: [serviceId],
+      UpdatedUtc: {
+        StartUtc: params.from.toISOString(),
+        EndUtc: params.to.toISOString(),
+      },
+      States: [
+        "Confirmed",
+        "Started",
+        "Processed",
+        "Canceled",
+        "Optional",
+        "Requested",
+      ],
+      Limitation: {
+        Count: pageLimit,
+        ...(params.cursor ? { Cursor: params.cursor } : {}),
+      },
+    });
+
+    const reservationsResp = MewsGetReservationsResponseSchema.parse(reservationsRaw);
+    const reservations = reservationsResp.Reservations;
+
+    if (reservations.length === 0) {
+      return { bookings: [], nextCursor: null };
+    }
+
+    // Step 2: batch-fetch the customers referenced by this page.
+    // Without this, mapping reservation.AccountId → guest email would
+    // require one call per reservation (200+ requests per page).
+    const customerIds = Array.from(
+      new Set(
+        reservations
+          .filter((r) => r.AccountType === "Customer" && r.AccountId)
+          .map((r) => r.AccountId as string),
+      ),
+    );
+
+    const customersById = new Map<string, {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone: string | null;
+    }>();
+
+    if (customerIds.length > 0) {
+      try {
+        const customersRaw = await this.client.post<
+          Record<string, unknown>,
+          MewsGetCustomersResponse
+        >("customers/getAll", {
+          CustomerIds: customerIds,
+          Limitation: { Count: customerIds.length },
+        });
+        const parsed = MewsGetCustomersResponseSchema.parse(customersRaw);
+        for (const c of parsed.Customers) {
+          customersById.set(c.Id, {
+            firstName: c.FirstName ?? "",
+            lastName: c.LastName ?? "",
+            email: c.Email ?? "",
+            phone: c.Phone ?? null,
+          });
+        }
+      } catch (err) {
+        // Partial failure: we still return reservations with empty
+        // guest data. The ingest chokepoint's Zod validation will
+        // reject those (invalid email) and they surface as
+        // BookingSyncError rows — NOT silent data loss.
+        log("warn", "mews.list_bookings.customers_batch_failed", {
+          tenantId,
+          customerCount: customerIds.length,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // Step 3: map Mews reservations → ListBookingsBooking
+    const bookings: ListBookingsBooking[] = [];
+    for (const r of reservations) {
+      const customer = r.AccountId ? customersById.get(r.AccountId) : undefined;
+      const startUtc = r.ScheduledStartUtc ?? r.StartUtc;
+      const endUtc = r.ScheduledEndUtc ?? r.EndUtc;
+
+      // A reservation without stay dates is malformed — skip and log.
+      // Missing UpdatedUtc would also be fatal, but Mews guarantees it.
+      if (!startUtc || !endUtc) {
+        log("warn", "mews.list_bookings.reservation_missing_dates", {
+          tenantId,
+          reservationId: r.Id,
+        });
+        continue;
+      }
+
+      bookings.push({
+        externalId: r.Id,
+        guestName: customer
+          ? `${customer.firstName} ${customer.lastName}`.trim()
+          : "",
+        guestEmail: customer?.email ?? "",
+        guestPhone: customer?.phone ?? null,
+        categoryName: "", // resolved downstream from category cache if needed
+        checkIn: new Date(startUtc),
+        checkOut: new Date(endUtc),
+        guests:
+          r.PersonCounts?.reduce((sum, pc) => sum + pc.Count, 0) ?? 1,
+        status: mapMewsStateToIngestStatus(r.State),
+        totalAmount: 0, // Not needed for reconciliation; enrich if required
+        currency: "SEK",
+        ratePlanName: null,
+        createdAt: new Date(r.CreatedUtc),
+        providerUpdatedAt: new Date(r.UpdatedUtc),
+      });
+    }
+
+    return {
+      bookings,
+      nextCursor: reservationsResp.Cursor ?? null,
+    };
+  }
+
   // ── 8. Connection & Webhooks ────────────────────────────────
 
   async testConnection(
@@ -918,6 +1304,48 @@ export class MewsAdapter implements PmsAdapter {
     // Mews uses a simple token-in-URL approach
     const token = headers["x-forwarded-token"] ?? "";
     return token === credentials.webhookToken;
+  }
+
+  // ── 12. Cancellation ────────────────────────────────────────
+
+  async cancelBooking(
+    tenantId: string,
+    params: CancelBookingParams,
+  ): Promise<CancelBookingResult> {
+    return cancelBookingViaMews({
+      client: this.client,
+      tenantId,
+      cancellation: params,
+    });
+  }
+
+  parseWebhookEvents(
+    rawBody: Buffer,
+    parsedPayload: unknown,
+  ): PmsWebhookEvent[] | null {
+    // Validate structure. Zod rejects anything that isn't the
+    // documented Mews webhook shape — we return null and the route
+    // responds 400. Invalid payloads never reach the inbox.
+    const parsed = MewsWebhookPayloadSchema.safeParse(parsedPayload);
+    if (!parsed.success) return null;
+
+    const { EnterpriseId, Events } = parsed.data;
+
+    // Mews webhooks carry no native event ID — the payload only has
+    // a list of (Discriminator, Value.Id). To make the inbox dedup
+    // key stable across retry deliveries of the SAME event, we hash
+    // the full raw body. A re-delivery of the same event has
+    // byte-identical body → same hash → same dedup key → deflected.
+    // A *different* state change to the same reservation produces a
+    // distinct body → distinct hash → processed normally.
+    const bodyHash = createHash("sha256").update(rawBody).digest("hex");
+
+    return Events.map((event, index) => ({
+      externalEventId: `${EnterpriseId}:${bodyHash.slice(0, 16)}:${index}`,
+      externalBookingId:
+        event.Discriminator === "Reservation" ? event.Value.Id : null,
+      eventType: event.Discriminator,
+    }));
   }
 }
 

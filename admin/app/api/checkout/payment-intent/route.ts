@@ -358,6 +358,52 @@ export async function POST(req: Request) {
     },
   });
 
+  // ── Availability hold (before charging the guest) ─────────
+  //
+  // Lock the unit at the PMS for the duration of the checkout
+  // window. This prevents the classic "two guests at the last unit"
+  // race — both see 1 available, both start checkout, and without a
+  // hold both would successfully pay and one of the post-payment
+  // PMS creations would fail with "unit taken" (sending us into
+  // outbound-compensation → refund one of them).
+  //
+  // If the adapter doesn't support holds (Manual), we skip and fall
+  // back to post-payment createBooking. If the hold FAILS (PMS down,
+  // category mismatch), we cancel the Order and return 503 — better
+  // to tell the guest "try again in a moment" than to take payment
+  // for an unheld unit.
+  if (body.accommodationId) {
+    const { placeHoldForOrder } = await import(
+      "@/app/_lib/integrations/reliability/place-hold-for-order"
+    );
+    const holdResult = await placeHoldForOrder({
+      orderId: order.id,
+      tenantId: tenant.id,
+    });
+    if (!holdResult.ok) {
+      // Roll back the Order so it doesn't pollute listings. We
+      // don't use the outbound compensation flow here because no
+      // payment has been made — the Order is simply voided.
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          status: "CANCELLED",
+          financialStatus: "VOIDED",
+          cancelledAt: new Date(),
+        },
+      });
+      log("warn", "checkout.payment_intent.hold_failed_order_cancelled", {
+        tenantId: tenant.id,
+        orderId: order.id,
+        error: holdResult.error,
+      });
+      return NextResponse.json(
+        { error: "Rummet är inte tillgängligt just nu — försök igen" },
+        { status: 503 },
+      );
+    }
+  }
+
   // ── Calculate platform fee ────────────────────────────────────
   const feeBps = tenantStripe
     ? getPlatformFeeBps(tenantStripe.subscriptionPlan, tenantStripe.platformFeeBps)

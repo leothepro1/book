@@ -22,14 +22,51 @@ import type {
   PaymentStatus,
   CreateBookingParams,
   BookingConfirmation,
+  ListBookingsParams,
+  ListBookingsPage,
+  ListBookingsBooking,
+  PmsWebhookEvent,
+  CancelBookingParams,
+  CancelBookingResult,
+  HoldParams,
+  HoldResult,
 } from "../../types";
+import {
+  TransientPmsError,
+  PermanentPmsError,
+} from "@/app/_lib/cancellations/errors";
 
 export const FakeScenarioSchema = z.enum(["happy", "empty", "error", "slow", "cancelled"]);
 export type FakeScenario = z.infer<typeof FakeScenarioSchema>;
 
+/**
+ * Cancellation-path scenario. Independent from the broader `scenario`
+ * field so cancel tests can simulate PMS failures without having to
+ * also break availability, createBooking, etc.
+ *
+ *   - succeed            : 200-ish success, alreadyCanceled=false
+ *   - already-canceled   : success, alreadyCanceled=true (idempotency path)
+ *   - transient-error    : throws TransientPmsError (saga retries)
+ *   - permanent-error    : throws PermanentPmsError (saga DECLINES)
+ *   - rate-limited       : transient with retryAfterMs set
+ *
+ * Default is derived from `scenario`: "error" → permanent-error;
+ * "cancelled" → already-canceled; everything else → succeed.
+ */
+export const FakeCancelScenarioSchema = z.enum([
+  "succeed",
+  "already-canceled",
+  "transient-error",
+  "permanent-error",
+  "rate-limited",
+]);
+export type FakeCancelScenario = z.infer<typeof FakeCancelScenarioSchema>;
+
 export const FakeCredentialsSchema = z.object({
   scenario: FakeScenarioSchema,
   delayMs: z.coerce.number().default(800),
+  /** Optional override for cancelBooking() behaviour. See FakeCancelScenarioSchema. */
+  cancelScenario: FakeCancelScenarioSchema.optional(),
 });
 export type FakeCredentials = z.infer<typeof FakeCredentialsSchema>;
 
@@ -237,6 +274,16 @@ function buildRatePlans(
 }
 
 // ── Room categories — Swedish camping/hotel property ────────
+
+// ── In-memory hold store (FakeAdapter) ────────────────────────
+// Shared across all FakeAdapter instances in the same process —
+// lets checkout flow + expire-cron + tests see the same holds.
+// Reset on module reload (i.e. dev-server restart).
+type FakeHold = {
+  status: "HELD" | "CONFIRMED" | "RELEASED";
+  expiresAt: Date;
+};
+const fakeHolds: Map<string, FakeHold> = new Map();
 
 const FAKE_CATEGORIES: RoomCategory[] = [
   {
@@ -505,6 +552,7 @@ export class FakeAdapter implements PmsAdapter {
       currency: "SEK",
       ratePlanName: "Flex Hotell",
       createdAt: new Date(Date.now() - 7 * 86400000),
+      providerUpdatedAt: new Date(),
     };
   }
 
@@ -599,6 +647,64 @@ export class FakeAdapter implements PmsAdapter {
     };
   }
 
+  async listBookings(
+    _tenantId: string,
+    params: ListBookingsParams,
+  ): Promise<ListBookingsPage> {
+    // Deterministic dataset so tests can assert exact output. Seed is
+    // derived from the window bounds so every run on the same window
+    // produces the same booking set — the cron can resume mid-window
+    // and get consistent results.
+    const windowStartMs = params.from.getTime();
+    const windowEndMs = params.to.getTime();
+    const windowSeed = fnv1a(`${windowStartMs}:${windowEndMs}`);
+    const pageLimit = Math.min(params.limit ?? 100, 500);
+
+    // Generate a deterministic synthetic set: one booking every ~4
+    // hours across the window, capped so tests stay fast.
+    const intervalMs = 4 * 60 * 60 * 1000;
+    const totalBookings = Math.min(
+      Math.max(1, Math.floor((windowEndMs - windowStartMs) / intervalMs)),
+      200,
+    );
+
+    const offset = params.cursor ? parseInt(params.cursor, 10) : 0;
+    if (!Number.isFinite(offset) || offset < 0) {
+      throw new Error(`fake.listBookings: invalid cursor "${params.cursor}"`);
+    }
+    const end = Math.min(offset + pageLimit, totalBookings);
+
+    const bookings: ListBookingsBooking[] = [];
+    for (let i = offset; i < end; i++) {
+      const seed = fnv1a(`${windowSeed}:${i}`);
+      const updatedMs = windowStartMs + ((seed % (windowEndMs - windowStartMs)) | 0);
+      const checkInMs =
+        updatedMs + (1 + (seed % 30)) * 24 * 60 * 60 * 1000;
+      const nights = 1 + (seed % 7);
+      const guestIdx = seed % 100;
+
+      bookings.push({
+        externalId: `fake-booking-${i}`,
+        guestName: `Fake Guest ${guestIdx}`,
+        guestEmail: `fake.guest${guestIdx}@example.com`,
+        guestPhone: `+4670${String(1000000 + guestIdx).slice(0, 7)}`,
+        categoryName: FAKE_CATEGORIES[i % FAKE_CATEGORIES.length].name,
+        checkIn: new Date(checkInMs),
+        checkOut: new Date(checkInMs + nights * 24 * 60 * 60 * 1000),
+        guests: 1 + (seed % 4),
+        status: "confirmed",
+        totalAmount: 100000 + (seed % 900000),
+        currency: "SEK",
+        ratePlanName: "Flexibel",
+        createdAt: new Date(updatedMs),
+        providerUpdatedAt: new Date(updatedMs),
+      });
+    }
+
+    const nextCursor = end >= totalBookings ? null : String(end);
+    return { bookings, nextCursor };
+  }
+
   async testConnection(
     credentials: Record<string, string>,
   ): Promise<{ ok: boolean; error?: string }> {
@@ -619,5 +725,152 @@ export class FakeAdapter implements PmsAdapter {
     _credentials: Record<string, string>,
   ): Promise<boolean> {
     return true;
+  }
+
+  // ── Hold simulation (in-memory) ───────────────────────────
+  //
+  // Fake adapter maintains a module-level Map<externalId, {status,
+  // expiresAt}> so end-to-end tests can exercise the hold → confirm
+  // / release flow without any network. Reset on module reload.
+
+  async holdAvailability(
+    _tenantId: string,
+    params: HoldParams,
+  ): Promise<HoldResult | null> {
+    await this.delay();
+    if (this.config.scenario === "error") {
+      throw new Error("Fake PMS: hold declined");
+    }
+    const externalId = `fake-hold-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const expiresAt = new Date(Date.now() + params.holdDurationMs);
+    fakeHolds.set(externalId, { status: "HELD", expiresAt });
+    return { externalId, expiresAt };
+  }
+
+  async confirmHold(_tenantId: string, holdExternalId: string): Promise<string> {
+    await this.delay();
+    const h = fakeHolds.get(holdExternalId);
+    if (!h) {
+      throw new Error(`Fake PMS: hold ${holdExternalId} not found`);
+    }
+    if (h.status === "CONFIRMED") return holdExternalId; // idempotent
+    if (h.status === "RELEASED") {
+      throw new Error(`Fake PMS: hold ${holdExternalId} already released`);
+    }
+    if (h.expiresAt.getTime() < Date.now()) {
+      throw new Error(`Fake PMS: hold ${holdExternalId} expired`);
+    }
+    fakeHolds.set(holdExternalId, { ...h, status: "CONFIRMED" });
+    return holdExternalId;
+  }
+
+  async releaseHold(_tenantId: string, holdExternalId: string): Promise<void> {
+    await this.delay();
+    const h = fakeHolds.get(holdExternalId);
+    if (!h) return; // idempotent
+    fakeHolds.set(holdExternalId, { ...h, status: "RELEASED" });
+  }
+
+  parseWebhookEvents(
+    _rawBody: Buffer,
+    parsedPayload: unknown,
+  ): PmsWebhookEvent[] | null {
+    // Accept either a single event object or an Events[] array —
+    // matches both simplified test payloads and the wrapper shape
+    // real PMS providers use.
+    if (!parsedPayload || typeof parsedPayload !== "object") return null;
+
+    const p = parsedPayload as Record<string, unknown>;
+    const rawEvents = Array.isArray(p.Events) ? p.Events : [p];
+
+    const out: PmsWebhookEvent[] = [];
+    for (const raw of rawEvents) {
+      if (!raw || typeof raw !== "object") continue;
+      const r = raw as Record<string, unknown>;
+      const eventId =
+        typeof r.eventId === "string" ? r.eventId :
+        typeof r.Id === "string" ? r.Id :
+        null;
+      const bookingId =
+        typeof r.bookingId === "string" ? r.bookingId :
+        typeof r.ReservationId === "string" ? r.ReservationId :
+        null;
+      const eventType =
+        typeof r.eventType === "string" ? r.eventType :
+        typeof r.Type === "string" ? r.Type :
+        "fake.event";
+
+      if (!eventId) return null; // malformed
+      out.push({
+        externalEventId: eventId,
+        externalBookingId: bookingId,
+        eventType,
+      });
+    }
+    return out;
+  }
+
+  // ── 12. Cancellation ────────────────────────────────────────
+
+  async cancelBooking(
+    _tenantId: string,
+    params: CancelBookingParams,
+  ): Promise<CancelBookingResult> {
+    await this.delay();
+
+    const scenario = this.config.cancelScenario ?? defaultCancelScenarioFor(this.config.scenario);
+
+    switch (scenario) {
+      case "succeed":
+        return {
+          canceledAtPms: new Date(),
+          alreadyCanceled: false,
+          rawAuditPayload: {
+            scenario,
+            bookingExternalId: params.bookingExternalId,
+          },
+        };
+
+      case "already-canceled":
+        return {
+          canceledAtPms: new Date(),
+          alreadyCanceled: true,
+          rawAuditPayload: { scenario, reason: "already-canceled" },
+        };
+
+      case "transient-error":
+        throw new TransientPmsError(
+          `fake: transient PMS error (scenario=${scenario})`,
+        );
+
+      case "rate-limited":
+        throw new TransientPmsError(
+          `fake: rate-limited (scenario=${scenario})`,
+          /* retryAfterMs */ 30_000,
+        );
+
+      case "permanent-error":
+        throw new PermanentPmsError(
+          `fake: permanent PMS error (scenario=${scenario})`,
+        );
+    }
+  }
+}
+
+/**
+ * Map the broader FakeScenario to a sensible cancel-path default so
+ * tests that don't explicitly set cancelScenario still get predictable
+ * behaviour.
+ */
+function defaultCancelScenarioFor(scenario: FakeScenario): FakeCancelScenario {
+  switch (scenario) {
+    case "error":
+      return "permanent-error";
+    case "cancelled":
+      return "already-canceled";
+    case "happy":
+    case "empty":
+    case "slow":
+      return "succeed";
   }
 }
