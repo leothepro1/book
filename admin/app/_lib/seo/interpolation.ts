@@ -27,7 +27,7 @@
  * literal `{` in output. If real demand emerges we add `\{`; YAGNI for now.
  */
 
-import { log } from "@/app/_lib/logger";
+import { log } from "../logger";
 
 const PLACEHOLDER_RE =
   /\{([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\}/g;

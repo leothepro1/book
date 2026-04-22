@@ -9,13 +9,17 @@
  * The resolver knows nothing about concrete entities — it only consumes
  * the `Seoable` contract produced by `toSeoable()`. Adding a new
  * entity type is purely additive: write an adapter, register it, done.
+ *
+ * Adapter methods take `SeoTenantContext` (not Prisma `Tenant`) so the
+ * engine stays decoupled from the dozens of unrelated fields on the
+ * Tenant row. Callers convert once via `tenantToSeoContext()`.
  */
 
-import type { Tenant } from "@prisma/client";
 import type {
   ResolvedImage,
   Seoable,
   SeoResourceType,
+  SeoTenantContext,
   StructuredDataObject,
 } from "../types";
 
@@ -40,15 +44,18 @@ export interface SitemapEntry {
 /**
  * The contract every entity-type adapter must implement.
  *
- * Generic parameter `TEntity` is the concrete domain type (e.g. Prisma
- * `Accommodation`). The adapter owns the cast; callers treat adapters
- * as `SeoAdapter<unknown>` via the registry.
+ * Generic parameter `TEntity` is the concrete domain type (e.g. the
+ * Prisma `Accommodation` model, plus any relations the adapter needs
+ * included — see `adapters/accommodation.ts` for the exact shape).
+ * The adapter owns the cast; callers treat adapters as
+ * `SeoAdapter<unknown>` via the registry.
  *
- * Adapter methods MUST be pure aside from the ones explicitly allowed
- * to perform IO. `toSeoable`, `toStructuredData`, `isIndexable`, and
- * `getSitemapEntries` are pure. `getAdapterOgImage` is pure (it returns
- * an already-resolved image or `null`; actual asset loading is the
- * ImageService's job).
+ * All methods are pure aside from the implicit narrow rules:
+ *   - `toSeoable`, `toStructuredData`, `isIndexable`,
+ *     `getSitemapEntries`, `getAdapterOgImage` are sync and pure.
+ *   - The resolver awaits the async dependencies (`ImageService`,
+ *     `PageTypeSeoDefaultRepository`) on its own — adapters never
+ *     perform IO.
  */
 export interface SeoAdapter<TEntity = unknown> {
   /** Discriminator — matched against `SeoResolutionContext.resourceType`. */
@@ -58,7 +65,7 @@ export interface SeoAdapter<TEntity = unknown> {
    * Lift a concrete domain entity into the generic Seoable contract.
    * Pure — no side effects, no async.
    */
-  toSeoable(entity: TEntity, tenant: Tenant): Seoable;
+  toSeoable(entity: TEntity, tenant: SeoTenantContext): Seoable;
 
   /**
    * Produce adapter-specific JSON-LD objects (e.g. `Accommodation`,
@@ -67,14 +74,14 @@ export interface SeoAdapter<TEntity = unknown> {
    */
   toStructuredData(
     entity: TEntity,
-    tenant: Tenant,
+    tenant: SeoTenantContext,
     locale: string,
   ): StructuredDataObject[];
 
   /**
    * Whether this entity should appear in sitemaps and be indexed by
-   * search engines. Default implementation idea: `publishedAt !== null`
-   * and not `noindex` in overrides.
+   * search engines. Typically: published + not soft-deleted +
+   * `seoOverrides.noindex` not set.
    */
   isIndexable(entity: TEntity): boolean;
 
@@ -84,7 +91,7 @@ export interface SeoAdapter<TEntity = unknown> {
    */
   getSitemapEntries(
     entity: TEntity,
-    tenant: Tenant,
+    tenant: SeoTenantContext,
     locales: readonly string[],
   ): SitemapEntry[];
 
@@ -93,7 +100,10 @@ export interface SeoAdapter<TEntity = unknown> {
    * Returning `null` falls through to the standard chain (entity
    * featuredImage → tenant default → dynamic generation).
    */
-  getAdapterOgImage?(entity: TEntity, tenant: Tenant): ResolvedImage | null;
+  getAdapterOgImage?(
+    entity: TEntity,
+    tenant: SeoTenantContext,
+  ): ResolvedImage | null;
 }
 
 // ── Registry ───────────────────────────────────────────────────

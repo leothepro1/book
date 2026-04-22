@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@/app/_lib/logger", () => ({
+vi.mock("../logger", () => ({
   log: vi.fn(),
 }));
 
@@ -10,7 +10,7 @@ import {
   safeParseSeoDefaults,
   safeParseSeoMetadata,
 } from "./types";
-import { log } from "@/app/_lib/logger";
+import { log } from "../logger";
 
 describe("SeoMetadataSchema", () => {
   it("parses an empty object and applies noindex/nofollow defaults", () => {

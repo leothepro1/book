@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@/app/_lib/logger", () => ({
+vi.mock("../logger", () => ({
   log: vi.fn(),
 }));
 
 import { interpolate } from "./interpolation";
-import { log } from "@/app/_lib/logger";
+import { log } from "../logger";
 
 describe("interpolate — happy path", () => {
   beforeEach(() => {

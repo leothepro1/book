@@ -6,36 +6,32 @@
  * SERP preview, sitemap, JSON-LD renderer) calls to turn a tenant + entity
  * into a `ResolvedSeo` object.
  *
- * ──────────────────────────────────────────────────────────────────────
- * Milestone 2 status
- * ──────────────────────────────────────────────────────────────────────
- * FULLY IMPLEMENTED:
- *   - resolveTitle()       — pure function of Seoable + typeDefaults + ctx
- *   - resolveDescription() — pure function of Seoable + typeDefaults + ctx
- *   - ogTypeFor()          — pure map
- *   - toOgLocale()         — pure map
- *
- * STUBBED (throw "Not implemented in M2"):
- *   - resolve()            — full orchestration arrives in M3
- *   - resolveOgImage()     — needs real ImageService (M10)
- *   - resolveCanonical()   — full implementation in M3
- *   - resolveNoindex()     — needs an adapter (M3)
- *   - mergeStructuredData()— needs an adapter (M3)
- *   - buildPath()          — private helper, lives here waiting for M3
+ * Orchestration (see `resolve()`):
+ *   1. Look up the adapter for `ctx.resourceType`.
+ *   2. Adapter lifts the raw entity to a `Seoable`.
+ *   3. Fetch per-tenant per-page-type pattern defaults (may be null).
+ *   4. Compute each output field via pure helpers, awaiting IO where needed.
+ *   5. Assemble the canonical `ResolvedSeo` shape.
  *
  * Fallback chain (immutable architectural invariant):
  *   Entity override → PageType pattern → Tenant template / default
- * ──────────────────────────────────────────────────────────────────────
+ *
+ * Canonical path is computed BEFORE hreflang so both agree on the
+ * overridden / non-overridden semantics.
  */
 
 import type { PageTypeSeoDefault } from "@prisma/client";
 
-import type { SeoAdapter } from "./adapters/base";
+import { log } from "../logger";
+
+import { getSeoAdapter, type SeoAdapter } from "./adapters/base";
 import type {
   ImageService,
   PageTypeSeoDefaultRepository,
 } from "./dependencies";
+import { resolveHreflang } from "./hreflang";
 import { interpolate } from "./interpolation";
+import { buildLocalePath } from "./paths";
 import type {
   ResolvedImage,
   ResolvedSeo,
@@ -45,14 +41,12 @@ import type {
   StructuredDataObject,
 } from "./types";
 
-const NOT_IMPLEMENTED = "Not implemented in M2";
-
 /**
  * Resolves SEO metadata for any seoable entity.
  *
- * Dependencies are injected via the constructor so real implementations
- * (Prisma repo, Cloudinary image service) can be swapped for test stubs
- * without touching resolver logic.
+ * Dependencies are injected via the constructor so the real production
+ * wiring (Prisma repo, Cloudinary image service) can be swapped for
+ * test fakes without touching resolver logic.
  */
 export class SeoResolver {
   constructor(
@@ -63,11 +57,59 @@ export class SeoResolver {
   /**
    * Produce a fully-resolved SEO object for a request.
    *
-   * @throws Always in M2. Implementation arrives in M3 once the first
-   *         adapter is registered and OG image resolution is available.
+   * Orchestrates adapter lookup → Seoable lift → IO-bearing sub-steps →
+   * canonical output assembly. Never mutates `ctx`; never throws on
+   * missing dependencies (OG image fallback chain reaches `null`;
+   * adapter lookup is the only throw path, and only when no adapter
+   * has been registered for `ctx.resourceType` — a bootstrap bug).
    */
-  async resolve(_ctx: SeoResolutionContext): Promise<ResolvedSeo> {
-    throw new Error(`${NOT_IMPLEMENTED}: SeoResolver.resolve`);
+  async resolve(ctx: SeoResolutionContext): Promise<ResolvedSeo> {
+    const adapter = getSeoAdapter(ctx.resourceType);
+    const seoable = adapter.toSeoable(ctx.entity, ctx.tenant);
+    const typeDefaults = await this.pageTypeDefaults.get(
+      ctx.tenant.id,
+      ctx.resourceType,
+    );
+
+    const title = this.resolveTitle(seoable, typeDefaults, ctx);
+    const description = this.resolveDescription(seoable, typeDefaults, ctx);
+    const canonical = this.resolveCanonical(seoable, ctx);
+    const ogImage = await this.resolveOgImage(seoable, adapter, ctx);
+    const noindex = this.resolveNoindex(seoable, adapter, ctx);
+    const hreflang = resolveHreflang(seoable, ctx, canonical.relative);
+    const structuredData = this.mergeStructuredData(
+      seoable,
+      adapter,
+      typeDefaults,
+      ctx,
+    );
+
+    return {
+      title,
+      description,
+      canonicalUrl: canonical.absolute,
+      canonicalPath: canonical.relative,
+      noindex,
+      nofollow: seoable.seoOverrides?.nofollow ?? false,
+      openGraph: {
+        type: this.ogTypeFor(ctx.resourceType),
+        url: canonical.absolute,
+        title,
+        description,
+        siteName: ctx.tenant.siteName,
+        locale: this.toOgLocale(ctx.locale),
+        image: ogImage,
+      },
+      twitterCard: {
+        card: seoable.seoOverrides?.twitterCardType ?? "summary_large_image",
+        site: ctx.tenant.seoDefaults.twitterSite ?? null,
+        title,
+        description,
+        image: ogImage,
+      },
+      hreflang,
+      structuredData,
+    };
   }
 
   /**
@@ -78,7 +120,7 @@ export class SeoResolver {
    *   2. typeDefaults.titlePattern            (interpolated)
    *   3. tenant.seoDefaults.titleTemplate     (interpolated with entityTitle + siteName)
    *
-   * Post-processing, applied to whichever rung produced the title:
+   * Post-processing applied to whichever rung produced the title:
    *   - If `ctx.searchQuery` is set, replace the title with a
    *     "Search results for ..." string. Search pages never follow the
    *     pagination / tags branches.
@@ -92,8 +134,6 @@ export class SeoResolver {
     typeDefaults: PageTypeSeoDefault | null,
     ctx: SeoResolutionContext,
   ): string {
-    // Search-results pages don't use the entity fallback chain at all —
-    // the title is fully defined by the query.
     if (ctx.searchQuery) {
       return `Search results for "${ctx.searchQuery}" | ${ctx.tenant.siteName}`;
     }
@@ -173,63 +213,179 @@ export class SeoResolver {
   }
 
   /**
-   * @throws Always in M2. Full chain (override → adapter hook → featured
-   *         → tenant default → dynamic) arrives once ImageService ships.
+   * Resolve the OG image, walking the full fallback chain.
+   *
+   * Chain (first match wins, all others are short-circuited):
+   *   1. seoable.seoOverrides.ogImageId → ImageService lookup
+   *   2. adapter.getAdapterOgImage?() → synchronous adapter hook
+   *   3. seoable.featuredImageId → ImageService lookup
+   *   4. tenant.seoDefaults.ogImageId → ImageService lookup (tenant default)
+   *   5. ImageService.generateDynamicOgImage → dynamic rendering (M10)
+   *
+   * Every step returns `null` on miss (never throws), so the chain
+   * always terminates. Final `null` is a valid output.
+   *
+   * @internal Public for testability. Production callers must go through resolve().
    */
-  async resolveOgImage(
-    _seoable: Seoable,
-    _adapter: SeoAdapter,
-    _ctx: SeoResolutionContext,
+  public async resolveOgImage(
+    seoable: Seoable,
+    adapter: SeoAdapter,
+    ctx: SeoResolutionContext,
   ): Promise<ResolvedImage | null> {
-    throw new Error(`${NOT_IMPLEMENTED}: SeoResolver.resolveOgImage`);
+    const overrideId = seoable.seoOverrides?.ogImageId;
+    if (overrideId) {
+      const img = await this.imageService.getOgImage(
+        overrideId,
+        seoable.tenantId,
+        { alt: seoable.seoOverrides?.ogImageAlt ?? null },
+      );
+      if (img) return img;
+      // Merchant referenced a missing image — fall through rather than
+      // rendering a broken OG. Logging happens in the ImageService only
+      // on infra error, not on legitimate miss.
+    }
+
+    const adapterImage = adapter.getAdapterOgImage?.(ctx.entity, ctx.tenant);
+    if (adapterImage) return adapterImage;
+
+    if (seoable.featuredImageId) {
+      const img = await this.imageService.getOgImage(
+        seoable.featuredImageId,
+        seoable.tenantId,
+      );
+      if (img) return img;
+    }
+
+    const tenantDefaultId = ctx.tenant.seoDefaults.ogImageId;
+    if (tenantDefaultId) {
+      const img = await this.imageService.getOgImage(
+        tenantDefaultId,
+        ctx.tenant.id,
+      );
+      if (img) return img;
+    }
+
+    return this.imageService.generateDynamicOgImage({
+      title: seoable.title,
+      siteName: ctx.tenant.siteName,
+      tenantId: ctx.tenant.id,
+    });
   }
 
   /**
-   * @throws Always in M2. Depends on `buildPath()` which is itself stubbed
-   *         pending M3 hreflang / locale rules.
+   * Resolve the canonical URL for a request.
+   *
+   * If the merchant has set `seoOverrides.canonicalPath`, that exact
+   * path is used verbatim (no locale prefixing — merchants overriding
+   * canonical are opting out of per-locale canonicals deliberately).
+   *
+   * Otherwise, build the locale-prefixed path: default locale gets
+   * the bare path; non-default locales get `/locale/...`. Each locale
+   * is self-canonical — the `/en/x` page canonicals to `/en/x`, NOT
+   * `/x`. Cross-locale linking is hreflang's job, not canonical's.
+   *
+   * @internal Public for testability. Production callers must go through resolve().
    */
-  resolveCanonical(
-    _seoable: Seoable,
-    _ctx: SeoResolutionContext,
+  public resolveCanonical(
+    seoable: Seoable,
+    ctx: SeoResolutionContext,
   ): { absolute: string; relative: string } {
-    throw new Error(`${NOT_IMPLEMENTED}: SeoResolver.resolveCanonical`);
+    const relative =
+      seoable.seoOverrides?.canonicalPath ?? this.buildPath(seoable, ctx);
+    const absolute = `https://${ctx.tenant.primaryDomain}${relative}`;
+    return { absolute, relative };
   }
 
   /**
-   * @throws Always in M2. Needs an adapter's `isIndexable()` — no adapters
-   *         exist until M3.
+   * Resolve the effective `noindex` flag.
+   *
+   * Precedence:
+   *   1. Entity override (`seoOverrides.noindex === true`) wins.
+   *   2. Otherwise defers to the adapter's `isIndexable(entity)` —
+   *      the adapter knows the entity's publication state
+   *      (status, archivedAt, etc.) that the resolver doesn't.
+   *
+   * @internal Public for testability. Production callers must go through resolve().
    */
-  resolveNoindex(_seoable: Seoable, _adapter: SeoAdapter): boolean {
-    throw new Error(`${NOT_IMPLEMENTED}: SeoResolver.resolveNoindex`);
+  public resolveNoindex(
+    seoable: Seoable,
+    adapter: SeoAdapter,
+    ctx: SeoResolutionContext,
+  ): boolean {
+    if (seoable.seoOverrides?.noindex === true) return true;
+    return !adapter.isIndexable(ctx.entity);
   }
 
   /**
-   * @throws Always in M2. Merging requires an adapter's `toStructuredData()`.
+   * Merge structured data (JSON-LD objects) from three sources:
+   *   1. Tenant-level schemas (Organization / LocalBusiness) — only on
+   *      the homepage. Each is validated for required fields and
+   *      dropped if malformed (better no JSON-LD than partial).
+   *   2. Adapter-produced schemas (unless `structuredDataEnabled` is
+   *      explicitly false on the PageTypeSeoDefault).
+   *   3. Merchant-authored `structuredDataExtensions` — passed through
+   *      with minimal validation (`@context`, `@type` required).
+   *
+   * @internal Public for testability. Production callers must go through resolve().
    */
-  mergeStructuredData(
-    _seoable: Seoable,
-    _adapter: SeoAdapter,
-    _typeDefaults: PageTypeSeoDefault | null,
-    _ctx: SeoResolutionContext,
+  public mergeStructuredData(
+    seoable: Seoable,
+    adapter: SeoAdapter,
+    typeDefaults: PageTypeSeoDefault | null,
+    ctx: SeoResolutionContext,
   ): StructuredDataObject[] {
-    throw new Error(`${NOT_IMPLEMENTED}: SeoResolver.mergeStructuredData`);
+    const result: StructuredDataObject[] = [];
+
+    // 1. Tenant-level schemas, homepage only.
+    if (ctx.resourceType === "homepage") {
+      const orgRaw = ctx.tenant.seoDefaults.organizationSchema;
+      if (orgRaw) {
+        const validated = validateOrganizationSchema(orgRaw, ctx.tenant.id);
+        if (validated) result.push(validated);
+      }
+      const lbRaw = ctx.tenant.seoDefaults.localBusinessSchema;
+      if (lbRaw) {
+        const validated = validateLocalBusinessSchema(lbRaw, ctx.tenant.id);
+        if (validated) result.push(validated);
+      }
+    }
+
+    // 2. Adapter-produced schemas (gated by per-type toggle).
+    if (typeDefaults?.structuredDataEnabled !== false) {
+      result.push(
+        ...adapter.toStructuredData(ctx.entity, ctx.tenant, ctx.locale),
+      );
+    }
+
+    // 3. Merchant-authored extensions (minimal validation).
+    const extensions = seoable.seoOverrides?.structuredDataExtensions;
+    if (extensions) {
+      for (const ext of extensions) {
+        if (hasMinimumJsonLdShape(ext)) {
+          result.push(ext as StructuredDataObject);
+        } else {
+          log("warn", "seo.structured_data.invalid_extension", {
+            tenantId: ctx.tenant.id,
+            resourceId: seoable.id,
+          });
+        }
+      }
+    }
+
+    return result;
   }
 
   // ── Private helpers ───────────────────────────────────────────
 
   /**
    * Build the canonical relative path for a resolution.
-   *
-   * @throws Always in M2. Arrives in M3 alongside resolveCanonical().
+   * Pure — fully implemented in M3.
    */
-  private buildPath(_seoable: Seoable, _ctx: SeoResolutionContext): string {
-    throw new Error(`${NOT_IMPLEMENTED}: SeoResolver.buildPath`);
+  private buildPath(seoable: Seoable, ctx: SeoResolutionContext): string {
+    return buildLocalePath(ctx.tenant, ctx.locale, seoable.path);
   }
 
-  /**
-   * Map a resource type to the Open Graph `og:type` value.
-   * Pure — fully implemented in M2 for use by M3's `resolve()`.
-   */
+  /** Map a resource type to the Open Graph `og:type` value. */
   private ogTypeFor(
     resourceType: SeoResourceType,
   ): "website" | "article" | "product" {
@@ -246,8 +402,6 @@ export class SeoResolver {
 
   /**
    * Translate a BCP-47 locale (e.g. "sv") to an OG locale (e.g. "sv_SE").
-   * Pure — fully implemented in M2 for use by M3's `resolve()`.
-   *
    * Unknown locales pass through unchanged — Facebook's scraper tolerates
    * bare language codes, so this is graceful-degrade behaviour.
    */
@@ -259,4 +413,94 @@ export class SeoResolver {
     };
     return map[locale] ?? locale;
   }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Module-local validation helpers (kept outside the class so the
+// class stays focused on orchestration and the validation logic is
+// unit-testable without constructing a resolver instance).
+// ──────────────────────────────────────────────────────────────
+
+/** Minimum JSON-LD shape: has schema.org context and a string @type. */
+function hasMinimumJsonLdShape(obj: Record<string, unknown>): boolean {
+  return (
+    obj["@context"] === "https://schema.org" &&
+    typeof obj["@type"] === "string"
+  );
+}
+
+/**
+ * Validate tenant-level `Organization` schema. Requires a non-empty
+ * `name`. Missing required fields log a warn and drop the entire
+ * object (partial JSON-LD is worse than no JSON-LD).
+ */
+function validateOrganizationSchema(
+  raw: Record<string, unknown>,
+  tenantId: string,
+): StructuredDataObject | null {
+  if (!hasMinimumJsonLdShape(raw)) {
+    log("warn", "seo.structured_data.missing_required_field", {
+      tenantId,
+      schema: "Organization",
+      field: "@context or @type",
+    });
+    return null;
+  }
+  const name = raw.name;
+  if (typeof name !== "string" || name.length === 0) {
+    log("warn", "seo.structured_data.missing_required_field", {
+      tenantId,
+      schema: "Organization",
+      field: "name",
+    });
+    return null;
+  }
+  return raw as StructuredDataObject;
+}
+
+/**
+ * Validate tenant-level `LocalBusiness` schema. Requires a non-empty
+ * `name` AND a non-empty `address.streetAddress`. Missing either
+ * drops the entire object.
+ */
+function validateLocalBusinessSchema(
+  raw: Record<string, unknown>,
+  tenantId: string,
+): StructuredDataObject | null {
+  if (!hasMinimumJsonLdShape(raw)) {
+    log("warn", "seo.structured_data.missing_required_field", {
+      tenantId,
+      schema: "LocalBusiness",
+      field: "@context or @type",
+    });
+    return null;
+  }
+  const name = raw.name;
+  if (typeof name !== "string" || name.length === 0) {
+    log("warn", "seo.structured_data.missing_required_field", {
+      tenantId,
+      schema: "LocalBusiness",
+      field: "name",
+    });
+    return null;
+  }
+  const address = raw.address;
+  if (address === null || typeof address !== "object") {
+    log("warn", "seo.structured_data.missing_required_field", {
+      tenantId,
+      schema: "LocalBusiness",
+      field: "address",
+    });
+    return null;
+  }
+  const streetAddress = (address as Record<string, unknown>).streetAddress;
+  if (typeof streetAddress !== "string" || streetAddress.length === 0) {
+    log("warn", "seo.structured_data.missing_required_field", {
+      tenantId,
+      schema: "LocalBusiness",
+      field: "address.streetAddress",
+    });
+    return null;
+  }
+  return raw as StructuredDataObject;
 }

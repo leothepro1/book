@@ -6,16 +6,11 @@
  * injection so they are trivially replaceable in tests and can evolve
  * independently (DB-backed, Redis-cached, S3-backed, etc.).
  *
- * In M2 we ship:
- *   - Interfaces (`ImageService`, `PageTypeSeoDefaultRepository`).
- *   - `stubImageService` — throws on every method. Used by the M2 resolver
- *     test suite, which never exercises OG-image resolution.
- *   - `stubPageTypeSeoDefaultRepository` — returns `null` for every lookup.
- *     Safe default: "no per-type defaults", which lets the resolver fall
- *     through to the tenant-level title template.
+ * Real implementations:
+ *   - ImageService  → image-service-impl.ts (Cloudinary + MediaAsset)
+ *   - PageTypeSeoDefaultRepository → page-type-defaults-impl.ts (Prisma)
  *
- * Real implementations arrive in M3 (Prisma-backed repository) and M10
- * (Cloudinary + Satori image service).
+ * Stubs in this file are kept for tests that don't exercise those paths.
  */
 
 import type { PageTypeSeoDefault } from "@prisma/client";
@@ -23,25 +18,38 @@ import type { ResolvedImage, SeoResourceType } from "./types";
 
 /**
  * Resolves OG image URLs for the SEO engine.
- * Every method is async — real implementations may query Cloudinary,
- * generate dynamic images via Satori, or cache in Redis.
+ *
+ * `tenantId` is a REQUIRED positional argument on every lookup — not
+ * inferred, not optional. Multi-tenant resource lookups must be
+ * tenant-scoped at the signature level so a merchant who pastes
+ * another tenant's MediaAsset id into their `seo.ogImageId` JSONB
+ * cannot leak images across tenants.
  */
 export interface ImageService {
   /**
-   * Resolve a stored media asset to an OG image. Returns `null` if the
-   * asset does not exist or cannot be used as an OG image.
+   * Resolve a stored media asset to an OG image, scoped to the tenant
+   * that owns the resource. Returns `null` if the asset does not exist,
+   * has been soft-deleted, or belongs to a different tenant.
    *
-   * @param imageId Opaque media asset identifier (Cloudinary public ID etc.)
-   * @param options `alt` overrides the asset's own alt text if provided.
+   * Never throws — transient infrastructure failures log and return
+   * `null` so the fallback chain continues.
+   *
+   * @param imageId  Opaque media asset identifier (MediaAsset.id).
+   * @param tenantId Tenant that owns the SEO context. Required.
+   * @param options  `alt` overrides the asset's own alt text if provided.
    */
   getOgImage(
     imageId: string,
+    tenantId: string,
     options?: { alt?: string | null },
   ): Promise<ResolvedImage | null>;
 
   /**
    * Produce a dynamically-rendered OG image from title + tenant branding.
    * Used when an entity has no featured image and no tenant default.
+   *
+   * Real rendering (Satori / next/og) arrives in M10. M3's real impl
+   * returns `null` and logs so ops can see adoption.
    */
   generateDynamicOgImage(params: {
     title: string;
@@ -52,7 +60,9 @@ export interface ImageService {
 
 /**
  * Reads per-tenant, per-page-type SEO defaults from persistent storage.
- * The M3 implementation will be Prisma-backed with a short-TTL cache.
+ * The real M3 implementation is Prisma-backed without caching — one row
+ * per resolve() call. Caching is deferred until hot-path latency is
+ * measurable under real load.
  */
 export interface PageTypeSeoDefaultRepository {
   /**
@@ -66,31 +76,27 @@ export interface PageTypeSeoDefaultRepository {
 }
 
 /**
- * M2-only stub: throws on every call. The M2 resolver test suite never
- * reaches OG-image resolution. If something does call it, we want a loud
- * failure so it's caught immediately.
+ * Throws on every call. Useful only for tests that should never hit
+ * OG-image resolution. Production code uses `createCloudinaryImageService()`
+ * from `image-service-impl.ts`.
  *
- * Not exported from `index.ts`: this is internal scaffolding.
+ * Not exported from `index.ts` — internal scaffolding.
  */
 export const stubImageService: ImageService = {
   async getOgImage(): Promise<ResolvedImage | null> {
-    throw new Error(
-      "Not implemented in M2: ImageService.getOgImage — arrives in M10",
-    );
+    throw new Error("stubImageService.getOgImage: must not be reached");
   },
   async generateDynamicOgImage(): Promise<ResolvedImage | null> {
     throw new Error(
-      "Not implemented in M2: ImageService.generateDynamicOgImage — arrives in M10",
+      "stubImageService.generateDynamicOgImage: must not be reached",
     );
   },
 };
 
 /**
- * M2-only stub: returns `null` unconditionally. The resolver treats `null`
- * as "no per-type defaults" and falls through to the tenant title template
- * — exactly the behaviour we want for the M2 title/description tests.
- *
- * Not exported from `index.ts`: this is internal scaffolding.
+ * Returns `null` unconditionally. Used in tests that don't need
+ * per-type SEO defaults (resolver falls through to the tenant
+ * template). Not exported from `index.ts`.
  */
 export const stubPageTypeSeoDefaultRepository: PageTypeSeoDefaultRepository = {
   async get(): Promise<PageTypeSeoDefault | null> {

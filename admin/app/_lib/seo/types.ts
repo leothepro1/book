@@ -19,7 +19,7 @@
  */
 
 import { z } from "zod";
-import { log } from "@/app/_lib/logger";
+import { log } from "../logger";
 
 // ── Resource types ─────────────────────────────────────────────
 

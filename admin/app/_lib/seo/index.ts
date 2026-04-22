@@ -9,17 +9,20 @@
  *   - `dependencies.ts` stub implementations (internal scaffolding).
  *   - `interpolate()` (implementation detail of the resolver).
  *   - `_clearSeoAdaptersForTests()` (test-only; import directly from base.ts).
+ *   - `stripHtml`, `buildLocalePath`, `buildAbsoluteUrl`, `resolveHreflang`
+ *     (internal helpers — call through the resolver).
  */
 
 // ── Resolver ───────────────────────────────────────────────────
 export { SeoResolver } from "./resolver";
 
-// ── Dependency contracts ──────────────────────────────────────
-// (M3 callers wire real implementations; the interfaces live here.)
+// ── Dependency contracts + production factories ───────────────
 export type {
   ImageService,
   PageTypeSeoDefaultRepository,
 } from "./dependencies";
+export { createCloudinaryImageService } from "./image-service-impl";
+export { createPageTypeSeoDefaultRepository } from "./page-type-defaults-impl";
 
 // ── Adapter registry ──────────────────────────────────────────
 export type { SeoAdapter, SitemapEntry } from "./adapters/base";
@@ -28,6 +31,11 @@ export {
   getSeoAdapter,
   getAllSeoAdapters,
 } from "./adapters/base";
+
+// ── Adapters ──────────────────────────────────────────────────
+// Exported so app bootstrap can register them with the registry.
+export type { AccommodationWithMedia } from "./adapters/accommodation";
+export { accommodationSeoAdapter } from "./adapters/accommodation";
 
 // ── Types ─────────────────────────────────────────────────────
 export type {
