@@ -109,6 +109,89 @@ describe("SeoDefaultsSchema", () => {
     const r = SeoDefaultsSchema.safeParse({ sneaky: "field" });
     expect(r.success).toBe(false);
   });
+
+  // ── M5: homepage sub-object (backward-compatible) ──
+  describe("homepage sub-object", () => {
+    it("absence is allowed (backward compat with existing tenants)", () => {
+      const r = SeoDefaultsSchema.safeParse({});
+      expect(r.success).toBe(true);
+      if (r.success) expect(r.data.homepage).toBeUndefined();
+    });
+
+    it("empty homepage object is accepted", () => {
+      const r = SeoDefaultsSchema.safeParse({ homepage: {} });
+      expect(r.success).toBe(true);
+      if (r.success) {
+        // .default(false) on noindex applies even when key absent.
+        expect(r.data.homepage?.noindex).toBe(false);
+      }
+    });
+
+    it("accepts title + description + ogImageId all present", () => {
+      const r = SeoDefaultsSchema.safeParse({
+        homepage: {
+          title: "My Homepage",
+          description: "Welcome to my site",
+          ogImageId: "media_abc",
+          noindex: true,
+        },
+      });
+      expect(r.success).toBe(true);
+    });
+
+    it("rejects whitespace-only title (trim + min(1))", () => {
+      const r = SeoDefaultsSchema.safeParse({
+        homepage: { title: "   " },
+      });
+      expect(r.success).toBe(false);
+    });
+
+    it("rejects empty string title (trim + min(1))", () => {
+      const r = SeoDefaultsSchema.safeParse({
+        homepage: { title: "" },
+      });
+      expect(r.success).toBe(false);
+    });
+
+    it("rejects title longer than SEO_HOMEPAGE_TITLE_MAX", () => {
+      const r = SeoDefaultsSchema.safeParse({
+        homepage: { title: "x".repeat(256) },
+      });
+      expect(r.success).toBe(false);
+    });
+
+    it("accepts title at exactly SEO_HOMEPAGE_TITLE_MAX", () => {
+      const r = SeoDefaultsSchema.safeParse({
+        homepage: { title: "x".repeat(255) },
+      });
+      expect(r.success).toBe(true);
+    });
+
+    it("rejects description longer than SEO_HOMEPAGE_DESCRIPTION_MAX", () => {
+      const r = SeoDefaultsSchema.safeParse({
+        homepage: { description: "x".repeat(501) },
+      });
+      expect(r.success).toBe(false);
+    });
+
+    it("rejects unknown keys inside homepage (.strict())", () => {
+      const r = SeoDefaultsSchema.safeParse({
+        homepage: { sneaky: "field" },
+      });
+      expect(r.success).toBe(false);
+    });
+
+    it("coexists with every other SeoDefaults field (merge-safety fixture)", () => {
+      const r = SeoDefaultsSchema.safeParse({
+        titleTemplate: "{entityTitle} — {siteName}",
+        descriptionDefault: "Default",
+        twitterSite: "@bedfront",
+        organizationSchema: { "@type": "Organization", name: "X" },
+        homepage: { title: "Home" },
+      });
+      expect(r.success).toBe(true);
+    });
+  });
 });
 
 describe("safeParseSeoMetadata", () => {

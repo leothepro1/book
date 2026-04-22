@@ -32,30 +32,32 @@ beforeEach(() => {
 // ── Idempotency ──────────────────────────────────────────────
 
 describe("ensureSeoBootstrapped — idempotency", () => {
-  it("registers the accommodation adapter on first call", () => {
+  it("registers the accommodation + homepage adapters on first call", () => {
     ensureSeoBootstrapped();
     const all = getAllSeoAdapters();
-    expect(all).toHaveLength(1);
-    expect(all[0].resourceType).toBe("accommodation");
+    const resourceTypes = all.map((a) => a.resourceType).sort();
+    expect(resourceTypes).toEqual(["accommodation", "homepage"]);
   });
 
-  it("calling twice registers exactly once", () => {
+  it("calling twice registers each adapter exactly once", () => {
     ensureSeoBootstrapped();
     ensureSeoBootstrapped();
-    expect(registerSeoAdapter).toHaveBeenCalledTimes(1);
+    // One call per adapter on the first bootstrap; zero on subsequent calls.
+    expect(registerSeoAdapter).toHaveBeenCalledTimes(2);
   });
 
-  it("calling 10 times registers exactly once", () => {
+  it("calling 10 times registers each adapter exactly once", () => {
     for (let i = 0; i < 10; i++) ensureSeoBootstrapped();
-    expect(registerSeoAdapter).toHaveBeenCalledTimes(1);
+    expect(registerSeoAdapter).toHaveBeenCalledTimes(2);
   });
 
-  it("after _resetSeoBootstrapForTests, a new call registers again", () => {
+  it("after _resetSeoBootstrapForTests, a new call re-registers both", () => {
     ensureSeoBootstrapped();
     _resetSeoBootstrapForTests();
     _clearSeoAdaptersForTests();
     ensureSeoBootstrapped();
-    expect(registerSeoAdapter).toHaveBeenCalledTimes(2);
+    // First bootstrap: 2 calls. Second bootstrap after reset: 2 more. Total 4.
+    expect(registerSeoAdapter).toHaveBeenCalledTimes(4);
   });
 });
 

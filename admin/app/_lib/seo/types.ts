@@ -83,6 +83,23 @@ export type SeoMetadata = z.infer<typeof SeoMetadataSchema>;
 // ── Per-tenant SEO defaults ────────────────────────────────────
 
 /**
+ * Hard length limits for merchant-facing homepage SEO fields.
+ *
+ * These are the single source of truth for:
+ *   - Zod schema validation on save.
+ *   - Admin character-counter thresholds (warn at 80%, error at 100%).
+ *
+ * Google's SERP truncation behavior is not enforced here — we allow up
+ * to the Zod limit, the admin UI surfaces Google's softer "recommended"
+ * length elsewhere. Exceeding these hard limits is rejected at save.
+ */
+export const SEO_HOMEPAGE_TITLE_MAX = 255;
+export const SEO_HOMEPAGE_DESCRIPTION_MAX = 500;
+
+/** Fraction at which the character counter transitions to warn state. */
+export const SEO_CHAR_COUNTER_WARN_THRESHOLD = 0.8;
+
+/**
  * Shape of Tenant.seoDefaults JSONB.
  *
  * `titleTemplate` has a sensible default so every tenant resolves titles
@@ -90,6 +107,13 @@ export type SeoMetadata = z.infer<typeof SeoMetadataSchema>;
  *
  * `twitterSite` requires the leading `@` — Twitter's own format. Reject
  * anything else so we don't emit `twitter:site="bedfront"` which is invalid.
+ *
+ * `homepage` (M5): merchant-configured overrides for the `/` route.
+ * Whole object is optional for backward compatibility — existing tenants
+ * with `seoDefaults = null` or without a `homepage` key continue to
+ * parse. When present, `homepage.title` must be a non-empty trimmed
+ * string (whitespace-only rejected) — merchants who want to clear the
+ * title should remove the key entirely.
  */
 export const SeoDefaultsSchema = z
   .object({
@@ -103,6 +127,30 @@ export const SeoDefaultsSchema = z
       .optional(),
     organizationSchema: z.record(z.string(), z.unknown()).optional(),
     localBusinessSchema: z.record(z.string(), z.unknown()).optional(),
+    homepage: z
+      .object({
+        title: z
+          .string()
+          .trim()
+          .min(1, "Titel kan inte vara tom")
+          .max(SEO_HOMEPAGE_TITLE_MAX)
+          .optional(),
+        description: z
+          .string()
+          .trim()
+          .max(SEO_HOMEPAGE_DESCRIPTION_MAX)
+          .optional(),
+        /**
+         * MediaAsset.id (cuid) — NOT Cloudinary publicId. The admin
+         * save action resolves publicId → MediaAsset.id before
+         * persisting, so what lives in JSONB is always an id the
+         * ImageService can look up directly.
+         */
+        ogImageId: z.string().optional(),
+        noindex: z.boolean().default(false),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

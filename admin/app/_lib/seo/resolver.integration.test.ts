@@ -27,6 +27,7 @@ import {
   type AccommodationWithMedia,
   accommodationSeoAdapter,
 } from "./adapters/accommodation";
+import { homepageSeoAdapter } from "./adapters/homepage";
 import type {
   ImageService,
   PageTypeSeoDefaultRepository,
@@ -411,5 +412,151 @@ describe("SeoResolver.resolve — Accommodation (integration)", () => {
     await expect(
       resolver.resolve(makeCtx(makeTenant(), makeAccommodation())),
     ).rejects.toThrow(/No SEO adapter registered/);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// Homepage integration (M5)
+// ──────────────────────────────────────────────────────────────
+
+describe("SeoResolver.resolve — Homepage (integration, M5)", () => {
+  beforeEach(() => {
+    _clearSeoAdaptersForTests();
+    registerSeoAdapter(homepageSeoAdapter);
+  });
+
+  it("produces title === tenant.siteName when no merchant homepage config (no duplication)", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "homepage",
+      entity: {},
+      locale: "sv",
+    });
+    // Critically: NOT "Apelviken | Apelviken".
+    expect(r.title).toBe("Apelviken");
+  });
+
+  it("produces merchant-configured homepage.title when set", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const tenant = makeTenant({
+      seoDefaults: {
+        titleTemplate: "{entityTitle} | {siteName}",
+        homepage: { title: "Discover the cabins", noindex: false },
+      },
+    });
+    const r = await resolver.resolve({
+      tenant,
+      resourceType: "homepage",
+      entity: {},
+      locale: "sv",
+    });
+    expect(r.title).toBe("Discover the cabins");
+  });
+
+  it("produces merchant-configured homepage.description when set", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const tenant = makeTenant({
+      seoDefaults: {
+        titleTemplate: "x",
+        homepage: { description: "Cosy cabins by the sea.", noindex: false },
+      },
+    });
+    const r = await resolver.resolve({
+      tenant,
+      resourceType: "homepage",
+      entity: {},
+      locale: "sv",
+    });
+    expect(r.description).toBe("Cosy cabins by the sea.");
+  });
+
+  it("honors homepage.noindex === true", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const tenant = makeTenant({
+      seoDefaults: {
+        titleTemplate: "x",
+        homepage: { noindex: true },
+      },
+    });
+    const r = await resolver.resolve({
+      tenant,
+      resourceType: "homepage",
+      entity: {},
+      locale: "sv",
+    });
+    expect(r.noindex).toBe(true);
+  });
+
+  it("canonical is root (no trailing-slash weirdness) on default locale", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "homepage",
+      entity: {},
+      locale: "sv",
+    });
+    expect(r.canonicalUrl).toBe("https://apelviken-x.rutgr.com/");
+  });
+
+  it("canonical prepends locale on non-default request", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "homepage",
+      entity: {},
+      locale: "en",
+    });
+    expect(r.canonicalUrl).toBe("https://apelviken-x.rutgr.com/en/");
+  });
+
+  it("hreflang covers every active locale + x-default", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "homepage",
+      entity: {},
+      locale: "sv",
+    });
+    expect(r.hreflang.map((h) => h.code)).toEqual([
+      "sv",
+      "en",
+      "de",
+      "x-default",
+    ]);
+  });
+
+  it("structured data contains WebSite (adapter) + tenant-level Organization when configured", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const tenant = makeTenant({
+      seoDefaults: {
+        titleTemplate: "x",
+        organizationSchema: {
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          name: "Apelviken AB",
+        },
+      },
+    });
+    const r = await resolver.resolve({
+      tenant,
+      resourceType: "homepage",
+      entity: {},
+      locale: "sv",
+    });
+    const types = r.structuredData.map((s) => s["@type"]);
+    expect(types).toContain("WebSite");
+    expect(types).toContain("Organization");
+  });
+
+  it("OG type is 'website' for homepage", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "homepage",
+      entity: {},
+      locale: "sv",
+    });
+    expect(r.openGraph.type).toBe("website");
   });
 });

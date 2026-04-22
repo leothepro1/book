@@ -20,6 +20,7 @@
 
 import { accommodationSeoAdapter } from "./adapters/accommodation";
 import { registerSeoAdapter } from "./adapters/base";
+import { homepageSeoAdapter } from "./adapters/homepage";
 
 let bootstrapped = false;
 
@@ -35,6 +36,7 @@ let bootstrapped = false;
 export function ensureSeoBootstrapped(): void {
   if (bootstrapped) return;
   registerSeoAdapter(accommodationSeoAdapter);
+  registerSeoAdapter(homepageSeoAdapter);
   bootstrapped = true;
 }
 

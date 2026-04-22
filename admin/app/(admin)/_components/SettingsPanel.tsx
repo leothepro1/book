@@ -10,9 +10,11 @@ import { PoliciesContent } from '@/app/(admin)/settings/policies/PoliciesContent
 import { LanguagesContent } from '@/app/(admin)/settings/languages/LanguagesContent';
 import { EmailContent } from '@/app/(admin)/settings/email/EmailContent';
 import { PaymentsContent } from '@/app/(admin)/settings/payments/PaymentsContent';
+import { CustomerAccountsContent } from '@/app/(admin)/settings/customer-accounts/CustomerAccountsContent';
 import { BillingContent } from '@/app/(admin)/settings/billing/BillingContent';
 import { AppsContent } from '@/app/(admin)/settings/apps/AppsContent';
 import { GeneralContent } from '@/app/(admin)/settings/general/GeneralContent';
+import { PreferencesContent } from '@/app/(admin)/settings/preferences/PreferencesContent';
 import { useRole } from './RoleContext';
 import { useNavigationGuard } from './NavigationGuard';
 
@@ -43,7 +45,10 @@ const NAV_ITEMS: { items: SettingsNavItem[]; divider?: boolean }[] = [
       { id: 'users', label: 'Användare', icon: 'face', adminOnly: true },
       { id: 'billing', label: 'Fakturering', icon: 'contract', adminOnly: true },
       { id: 'payments', label: 'Betalningar', icon: 'payments', adminOnly: true },
+      { id: 'checkout', label: 'Kassa', icon: 'shopping_cart_checkout', adminOnly: true },
+      { id: 'customer-accounts', label: 'Kundkonton', icon: 'manage_accounts', adminOnly: true },
       { id: 'general', label: 'Allmänt', icon: 'storefront' },
+      { id: 'preferences', label: 'Preferenser', icon: 'tune' },
       { id: 'apps', label: 'Appar', icon: 'home_storage', adminOnly: true },
       { id: 'integrations', label: 'Integrationer', icon: 'linked_services', adminOnly: true },
       { id: 'domains', label: 'Domäner', icon: 'travel_explore', adminOnly: true },
@@ -281,12 +286,16 @@ export function SettingsPanel() {
                 <EmailContent key={resetKey} onSubTitleChange={setSubTitleWithFresh} onHeaderExtraChange={setHeaderExtra} />
               ) : activeItem === 'payments' ? (
                 <PaymentsContent key={resetKey} onSubTitleChange={setSubTitle} />
+              ) : activeItem === 'customer-accounts' ? (
+                <CustomerAccountsContent key={resetKey} onSubTitleChange={setSubTitle} />
               ) : activeItem === 'apps' ? (
                 <AppsContent key={resetKey} onSubTitleChange={setSubTitle} onHeaderExtraChange={setHeaderExtra} />
               ) : activeItem === 'billing' ? (
                 <BillingContent key={resetKey} onSubTitleChange={setSubTitle} />
               ) : activeItem === 'general' ? (
                 <GeneralContent key={resetKey} onSubTitleChange={setSubTitle} />
+              ) : activeItem === 'preferences' ? (
+                <PreferencesContent key={resetKey} onSubTitleChange={setSubTitle} />
               ) : (
                 <div key={resetKey} style={{ padding: 0 }}>
                   <p style={{ color: 'var(--admin-text-secondary)', fontSize: 13 }}>

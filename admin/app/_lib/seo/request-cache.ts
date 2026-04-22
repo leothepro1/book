@@ -119,6 +119,12 @@ const getSeoTenantContextCached = cache(
  * Returns `null` when the referenced resource does not exist. Callers
  * are responsible for emitting a noindex 404 metadata in that case.
  *
+ * **Note on `slug`:** `slug` is a positional primitive so the React
+ * `cache()` key is a string-tuple. Some resource types don't have
+ * a slug — notably `"homepage"`, where the tenant IS the resource.
+ * For those, callers pass `slug: ""` and the dispatched fetcher
+ * ignores it.
+ *
  * @throws Only if `resourceType` isn't wired up here yet. That's a
  *   programmer-error path — never a runtime 500 for a merchant's
  *   content.
@@ -136,6 +142,8 @@ export const resolveSeoForRequest = cache(
     ensureSeoBootstrapped();
 
     switch (resourceType) {
+      case "homepage":
+        return fetchAndResolveHomepage(tenantId, locale);
       case "accommodation":
         return fetchAndResolveAccommodation(tenantId, slug, locale);
       default:
@@ -147,6 +155,26 @@ export const resolveSeoForRequest = cache(
 );
 
 // ── Per-resource-type fetch+resolve helpers ──────────────────
+
+async function fetchAndResolveHomepage(
+  tenantId: string,
+  locale: string,
+): Promise<ResolvedSeo | null> {
+  // Homepage has no per-entity fetch — the tenant IS the entity.
+  // Just resolve tenant context (cached across callsites) and run
+  // the engine with an empty entity placeholder. The homepage
+  // adapter (adapters/homepage.ts) reads everything it needs from
+  // `tenant.seoDefaults.homepage` and `tenant` itself.
+  const tenantContext = await getSeoTenantContextCached(tenantId);
+  if (!tenantContext) return null;
+
+  return resolver.resolve({
+    tenant: tenantContext,
+    resourceType: "homepage",
+    entity: {},
+    locale,
+  });
+}
 
 async function fetchAndResolveAccommodation(
   tenantId: string,

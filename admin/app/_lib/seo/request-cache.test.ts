@@ -134,6 +134,7 @@ function tenantRow(): Tenant {
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-04-01T00:00:00Z"),
     discountsEnabled: true,
+    showLoginLinks: true,
   };
 }
 
@@ -330,5 +331,50 @@ describe("resolveSeoForRequest", () => {
     await expect(
       resolveSeoForRequest("tenant_t", "x", "sv", "product"),
     ).rejects.toThrow(/not wired in request-cache/);
+  });
+
+  // ── M5: homepage resourceType ──────────────────────────────
+
+  it("resolves homepage SEO without a slug", async () => {
+    vi.mocked(prisma.tenant.findUnique as FindUniqueTenant).mockResolvedValue(
+      tenantRow(),
+    );
+    vi.mocked(prisma.tenantLocale.findMany as FindManyLocale).mockResolvedValue(
+      [localeRow("sv", { primary: true })],
+    );
+    vi.mocked(prisma.pageTypeSeoDefault.findUnique as FindUniquePtd)
+      .mockResolvedValue(null);
+
+    const r = await resolveSeoForRequest(
+      "tenant_t",
+      "",
+      "sv",
+      "homepage",
+    );
+
+    expect(r).not.toBeNull();
+    // Title === siteName (no duplication via titleTemplate).
+    expect(r?.title).toBe("Apelviken");
+    expect(r?.canonicalUrl).toBe("https://apelviken-x.rutgr.com/");
+    // Accommodation.findFirst must NOT have been called — homepage
+    // path has no per-entity fetch.
+    expect(prisma.accommodation.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("homepage resolution returns null when tenant doesn't exist", async () => {
+    vi.mocked(prisma.tenant.findUnique as FindUniqueTenant).mockResolvedValue(
+      null,
+    );
+    vi.mocked(prisma.tenantLocale.findMany as FindManyLocale).mockResolvedValue(
+      [],
+    );
+
+    const r = await resolveSeoForRequest(
+      "ghost-tenant",
+      "",
+      "sv",
+      "homepage",
+    );
+    expect(r).toBeNull();
   });
 });

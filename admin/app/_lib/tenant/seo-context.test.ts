@@ -62,6 +62,7 @@ function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-04-01T00:00:00Z"),
     discountsEnabled: true,
+    showLoginLinks: true,
   };
   return { ...base, ...overrides };
 }
