@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { resolveTenantFromHost } from "../../_lib/tenant/resolveTenantFromHost";
 import { getTenantConfig } from "../../_lib/tenant/getTenantConfig";
@@ -5,19 +6,61 @@ import { resolveBookingFromToken } from "../../_lib/portal/resolveBooking";
 import { getBookingStatus } from "../../_lib/booking";
 import { ThemeRenderer } from "../../_lib/themes";
 import GuestPageShell from "../../_components/GuestPageShell";
+import { StructuredData } from "../../_components/seo/StructuredData";
 import { getRequestLocale } from "../../_lib/locale/getRequestLocale";
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { applyTranslations } from "@/app/_lib/translations/apply-db-translations";
-import { prisma } from "@/app/_lib/db/prisma";
-import { ACCOMMODATION_SELECT } from "@/app/_lib/accommodations/types";
 import { resolveAccommodation } from "@/app/_lib/accommodations/resolve";
 import type { AccommodationWithRelations } from "@/app/_lib/accommodations/types";
 import { ProductProvider } from "@/app/(guest)/_lib/product-context/ProductContext";
 import type { ProductRatePlan } from "@/app/(guest)/_lib/product-context/ProductContext";
 import { CommerceEngineProvider } from "@/app/_lib/commerce/CommerceEngineContext";
 import type { ResolvedProductDisplay } from "@/app/_lib/sections/data-sources";
+import { toNextMetadata } from "@/app/_lib/seo/next-metadata";
+import {
+  getAccommodationForSeo,
+  resolveSeoForRequest,
+} from "@/app/_lib/seo/request-cache";
 
 export const dynamic = "force-dynamic";
+
+// ── SEO metadata ──────────────────────────────────────────────
+//
+// Runs before the page body. Result is deduped via React cache()
+// with the same fetchers the body uses, so no extra DB round-trip.
+//
+// Not-found tenants/accommodations return a noindex stub — never
+// throw from generateMetadata. Next would otherwise 500 the whole
+// request instead of rendering the page's own notFound() UX.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const tenant = await resolveTenantFromHost();
+  if (!tenant) {
+    return { title: "Not found", robots: { index: false } };
+  }
+
+  const accommodation = await getAccommodationForSeo(tenant.id, slug);
+  if (!accommodation) {
+    return { title: "Not found", robots: { index: false } };
+  }
+
+  const locale = await getRequestLocale();
+  const resolved = await resolveSeoForRequest(
+    tenant.id,
+    slug,
+    locale,
+    "accommodation",
+  );
+  if (!resolved) {
+    return { title: "Not found", robots: { index: false } };
+  }
+
+  return toNextMetadata(resolved);
+}
 
 /**
  * Accommodation Detail Page
@@ -51,17 +94,10 @@ export default async function RoomDetailPage({
   }
 
   // ── Load accommodation ──────────────────────────────────────
-  let accommodation = await prisma.accommodation.findFirst({
-    where: { tenantId: tenant.id, slug, archivedAt: null, status: "ACTIVE" },
-    select: ACCOMMODATION_SELECT,
-  });
-
-  if (!accommodation) {
-    accommodation = await prisma.accommodation.findFirst({
-      where: { tenantId: tenant.id, externalId: slug, archivedAt: null, status: "ACTIVE" },
-      select: ACCOMMODATION_SELECT,
-    });
-  }
+  // Cache-wrapped fetcher — identical result to the direct Prisma
+  // call the page used to make, but deduped with generateMetadata
+  // via React cache(). Also handles the slug → externalId fallback.
+  const accommodation = await getAccommodationForSeo(tenant.id, slug);
 
   if (!accommodation) return notFound();
 
@@ -168,6 +204,16 @@ export default async function RoomDetailPage({
 
   const bookingStatus = getBookingStatus(booking);
 
+  // SEO resolution — cache() dedupes with generateMetadata.
+  // We only need the structured-data list for inline rendering;
+  // the rest of ResolvedSeo already reached the browser via <head>.
+  const seoResolved = await resolveSeoForRequest(
+    tenant.id,
+    slug,
+    locale,
+    "accommodation",
+  );
+
   const initialSelection = ratePlans[0]
     ? {
         accommodationId: accommodation.id,
@@ -181,6 +227,7 @@ export default async function RoomDetailPage({
 
   return (
     <GuestPageShell config={config}>
+      <StructuredData data={seoResolved?.structuredData ?? []} />
       <ProductProvider product={productData}>
         <CommerceEngineProvider tenantId={tenant.id} initialSelection={initialSelection}>
           <ThemeRenderer

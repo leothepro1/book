@@ -193,6 +193,9 @@ export const ACCOMMODATION_SELECT = {
   shortName: true,
   externalCode: true,
   externalId: true,
+  // Per-entity SEO overrides (Zod SeoMetadataSchema). Consumed by the
+  // SEO engine's accommodation adapter; read-only for everyone else.
+  seo: true,
   pmsProvider: true,
   pmsSyncedAt: true,
   accommodationType: true,

@@ -180,16 +180,16 @@ describe("SeoResolver.resolve — Accommodation (integration)", () => {
     expect(r.title).toBe("Stuga Björk | Apelviken");
     expect(r.description).toBe("A cosy cabin near the sea.");
     expect(r.canonicalUrl).toBe(
-      "https://apelviken-x.rutgr.com/accommodations/stuga-bjork",
+      "https://apelviken-x.rutgr.com/stays/stuga-bjork",
     );
-    expect(r.canonicalPath).toBe("/accommodations/stuga-bjork");
+    expect(r.canonicalPath).toBe("/stays/stuga-bjork");
     expect(r.noindex).toBe(false);
     expect(r.nofollow).toBe(false);
 
     // Open Graph
     expect(r.openGraph).toMatchObject({
-      type: "product",
-      url: "https://apelviken-x.rutgr.com/accommodations/stuga-bjork",
+      type: "website",
+      url: "https://apelviken-x.rutgr.com/stays/stuga-bjork",
       title: "Stuga Björk | Apelviken",
       siteName: "Apelviken",
       locale: "sv_SE",
@@ -284,12 +284,12 @@ describe("SeoResolver.resolve — Accommodation (integration)", () => {
     const r = await resolver.resolve(
       makeCtx(tenant, entity, { locale: "en" }),
     );
-    expect(r.canonicalPath).toBe("/en/accommodations/stuga-bjork");
+    expect(r.canonicalPath).toBe("/en/stays/stuga-bjork");
     expect(r.canonicalUrl).toBe(
-      "https://apelviken-x.rutgr.com/en/accommodations/stuga-bjork",
+      "https://apelviken-x.rutgr.com/en/stays/stuga-bjork",
     );
     expect(r.openGraph.url).toBe(
-      "https://apelviken-x.rutgr.com/en/accommodations/stuga-bjork",
+      "https://apelviken-x.rutgr.com/en/stays/stuga-bjork",
     );
   });
 
@@ -301,19 +301,19 @@ describe("SeoResolver.resolve — Accommodation (integration)", () => {
     expect(r.hreflang).toEqual([
       {
         code: "sv",
-        url: "https://apelviken-x.rutgr.com/accommodations/stuga-bjork",
+        url: "https://apelviken-x.rutgr.com/stays/stuga-bjork",
       },
       {
         code: "en",
-        url: "https://apelviken-x.rutgr.com/en/accommodations/stuga-bjork",
+        url: "https://apelviken-x.rutgr.com/en/stays/stuga-bjork",
       },
       {
         code: "de",
-        url: "https://apelviken-x.rutgr.com/de/accommodations/stuga-bjork",
+        url: "https://apelviken-x.rutgr.com/de/stays/stuga-bjork",
       },
       {
         code: "x-default",
-        url: "https://apelviken-x.rutgr.com/accommodations/stuga-bjork",
+        url: "https://apelviken-x.rutgr.com/stays/stuga-bjork",
       },
     ]);
   });
@@ -397,12 +397,12 @@ describe("SeoResolver.resolve — Accommodation (integration)", () => {
     ).toBeDefined();
   });
 
-  it("OG type = 'product' for accommodation resourceType", async () => {
+  it("OG type = 'website' for accommodation (Next.js OpenGraph union excludes 'product')", async () => {
     const resolver = new SeoResolver(fakeImgService(), fakeRepo());
     const r = await resolver.resolve(
       makeCtx(makeTenant(), makeAccommodation()),
     );
-    expect(r.openGraph.type).toBe("product");
+    expect(r.openGraph.type).toBe("website");
   });
 
   it("throws if no adapter is registered for the resource type", async () => {

@@ -202,7 +202,14 @@ export interface ResolvedSeo {
   readonly noindex: boolean;
   readonly nofollow: boolean;
   readonly openGraph: {
-    readonly type: "website" | "article" | "product";
+    /**
+     * `og:type`. Narrowed to values Next.js's Metadata OpenGraph union
+     * accepts. Facebook's spec also defines `product`, but Next's types
+     * reject it and Shopify-grade sites emit `website` on product pages
+     * anyway; we follow the same convention. Merchants who want
+     * `og:type=product` can emit it via `structuredDataExtensions`.
+     */
+    readonly type: "website" | "article";
     readonly url: string;
     readonly title: string;
     readonly description: string | null;

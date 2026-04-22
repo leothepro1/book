@@ -46,6 +46,20 @@ export type AccommodationWithMedia = Accommodation & {
   media: AccommodationMedia[];
 };
 
+/**
+ * Route prefix for accommodation detail pages: `/stays/<slug>`.
+ *
+ * TODO(routing-config): this string will migrate to a shared routing
+ * configuration module in a later milestone (likely M5 or M6) once a
+ * second adapter ships and we can see what actually varies. Until
+ * then, treating `/stays/` as an accommodation-adapter-local constant
+ * is deliberate — premature abstraction would bake in assumptions
+ * before we have the second adapter to compare against. Do NOT read
+ * this value from any other adapter; each adapter owns its own route
+ * prefix until the shared config arrives.
+ */
+const ACCOMMODATION_ROUTE_PREFIX = "/stays";
+
 // ── Helpers ──────────────────────────────────────────────────
 
 /**
@@ -89,7 +103,7 @@ export const accommodationSeoAdapter: SeoAdapter<AccommodationWithMedia> = {
       resourceType: "accommodation",
       id: entity.id,
       tenantId: entity.tenantId,
-      path: `/accommodations/${entity.slug}`,
+      path: `${ACCOMMODATION_ROUTE_PREFIX}/${entity.slug}`,
       title: resolvedTitle(entity),
       description: description.length > 0 ? description : null,
       // Accommodation images live in `AccommodationMedia`, not MediaAsset,
@@ -199,7 +213,7 @@ export const accommodationSeoAdapter: SeoAdapter<AccommodationWithMedia> = {
   },
 
   getSitemapEntries(entity, tenant, locales) {
-    const basePath = `/accommodations/${entity.slug}`;
+    const basePath = `${ACCOMMODATION_ROUTE_PREFIX}/${entity.slug}`;
     return locales.map((locale): SitemapEntry => ({
       url: buildAbsoluteUrl(tenant, locale, basePath),
       lastmod: entity.updatedAt,

@@ -96,7 +96,7 @@ describe("accommodationSeoAdapter.toSeoable", () => {
       resourceType: "accommodation",
       id: "acc_1",
       tenantId: "tenant_test",
-      path: "/accommodations/stuga-bjork",
+      path: "/stays/stuga-bjork",
       title: "Stuga Björk",
       description: "A cosy cabin by the sea",
       featuredImageId: null,
@@ -373,10 +373,10 @@ describe("accommodationSeoAdapter.getSitemapEntries", () => {
     );
     expect(entries).toHaveLength(2);
     expect(entries[0].url).toBe(
-      "https://apelviken.rutgr.com/accommodations/stuga-bjork",
+      "https://apelviken.rutgr.com/stays/stuga-bjork",
     );
     expect(entries[1].url).toBe(
-      "https://apelviken.rutgr.com/en/accommodations/stuga-bjork",
+      "https://apelviken.rutgr.com/en/stays/stuga-bjork",
     );
     // Every entry's alternates list contains both locales.
     for (const entry of entries) {

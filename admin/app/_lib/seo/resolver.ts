@@ -385,19 +385,19 @@ export class SeoResolver {
     return buildLocalePath(ctx.tenant, ctx.locale, seoable.path);
   }
 
-  /** Map a resource type to the Open Graph `og:type` value. */
+  /**
+   * Map a resource type to the Open Graph `og:type` value.
+   *
+   * Narrowed to what Next.js's Metadata OpenGraph union accepts:
+   * `website` and `article` only. Facebook's spec has `product` but
+   * Next rejects it, and Shopify-grade storefronts emit `website`
+   * on product pages anyway. Merchants wanting `og:type=product`
+   * can add it via `structuredDataExtensions`.
+   */
   private ogTypeFor(
     resourceType: SeoResourceType,
-  ): "website" | "article" | "product" {
-    switch (resourceType) {
-      case "article":
-        return "article";
-      case "product":
-      case "accommodation":
-        return "product";
-      default:
-        return "website";
-    }
+  ): "website" | "article" {
+    return resourceType === "article" ? "article" : "website";
   }
 
   /**
