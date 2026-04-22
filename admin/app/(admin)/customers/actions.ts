@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/app/_lib/db/prisma";
 import { getAuth, requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
 import { getGuestStats } from "@/app/_lib/guests/stats";
@@ -370,6 +371,136 @@ export async function updateCustomerInternalNote(
   });
 
   return { ok: true };
+}
+
+// ── Create customer ───────────────────────────────────────────
+
+export async function createCustomerAction(input: {
+  firstName?: string;
+  lastName?: string;
+  email: string;
+  phone?: string;
+  address1?: string;
+  address2?: string;
+  postalCode?: string;
+  city?: string;
+  country?: string;
+  note?: string;
+  tags?: string[];
+}): Promise<
+  { ok: true; data: { customerId: string } } | { ok: false; error: string }
+> {
+  const admin = await requireAdmin();
+  if (!admin.ok) return admin;
+
+  const { orgId, userId } = await getAuth();
+  if (!orgId) return { ok: false, error: "Ingen organisation vald" };
+
+  const tenant = await prisma.tenant.findUnique({
+    where: { clerkOrgId: orgId },
+    select: { id: true },
+  });
+  if (!tenant) return { ok: false, error: "Organisationen hittades inte" };
+
+  // ── Client-supplied normalisation + hard validation ──
+  const email = input.email.trim().toLowerCase();
+  if (!email) return { ok: false, error: "E-post krävs" };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: "Ogiltig e-postadress" };
+  }
+
+  // ── Duplicate guard — unique(tenantId, email) ──
+  const existing = await prisma.guestAccount.findFirst({
+    where: { tenantId: tenant.id, email },
+    select: { id: true },
+  });
+  if (existing) {
+    return { ok: false, error: "En kund med samma e-post finns redan" };
+  }
+
+  const firstName = input.firstName?.trim() || null;
+  const lastName = input.lastName?.trim() || null;
+  const fullName =
+    [firstName, lastName].filter(Boolean).join(" ").trim() || null;
+
+  // ── Tag normalisation — lowercase, dedup, cap length ──
+  const normalizedTags = Array.from(
+    new Set(
+      (input.tags ?? [])
+        .map((t) => t.trim().toLowerCase())
+        .filter((t) => t.length > 0 && t.length <= 100),
+    ),
+  );
+
+  try {
+    const created = await prisma.$transaction(async (tx) => {
+      const account = await tx.guestAccount.create({
+        data: {
+          tenantId: tenant.id,
+          email,
+          firstName,
+          lastName,
+          name: fullName,
+          phone: input.phone?.trim() || null,
+          address1: input.address1?.trim() || null,
+          address2: input.address2?.trim() || null,
+          postalCode: input.postalCode?.trim() || null,
+          city: input.city?.trim() || null,
+          country: input.country?.trim() || "SE",
+          note: input.note?.trim() || null,
+        },
+      });
+
+      if (normalizedTags.length > 0) {
+        await tx.guestTag.createMany({
+          data: normalizedTags.map((tag) => ({
+            tenantId: tenant.id,
+            guestAccountId: account.id,
+            tag,
+            createdBy: userId ?? null,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return account;
+    });
+
+    // Fire-and-forget ACCOUNT_CREATED event — mirrors upsertGuestAccount.
+    try {
+      const { createGuestAccountEvent } = await import(
+        "@/app/_lib/guests/events"
+      );
+      await createGuestAccountEvent({
+        tenantId: tenant.id,
+        guestAccountId: created.id,
+        type: "ACCOUNT_CREATED",
+        message: "Gästkonto skapat manuellt av admin",
+        actorUserId: userId ?? undefined,
+        metadata: { source: "admin" },
+      });
+    } catch {
+      // Non-blocking — event logging should never fail the create flow.
+    }
+
+    revalidatePath("/customers");
+    revalidatePath(`/customers/${created.id}`);
+
+    return { ok: true, data: { customerId: created.id } };
+  } catch (err) {
+    // Defensive — the pre-check handles the happy path but a race could
+    // still hit the unique index. Surface a clean message.
+    if (
+      err instanceof Error &&
+      err.message.toLowerCase().includes("unique")
+    ) {
+      return { ok: false, error: "En kund med samma e-post finns redan" };
+    }
+    return {
+      ok: false,
+      error: "Kunde inte skapa kunden. Försök igen.",
+    };
+  }
 }
 
 // ── Add customer comment ─────────────────────────────────────

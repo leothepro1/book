@@ -176,6 +176,13 @@ export function CustomersClient() {
         <p className="cst-empty__desc">
           Kunder visas här när de genomför köp eller skapar ett konto.
         </p>
+        <button
+          className="settings-btn--connect"
+          style={{ fontSize: 14, padding: "8px 20px" }}
+          onClick={() => router.push("/customers/new")}
+        >
+          Skapa kund
+        </button>
       </div>
     );
   }
