@@ -20,18 +20,18 @@ enum BookingStatus {
 }
 
 enum OrderStatus {
-  PENDING              // checkout started, payment not yet received
-  PAID                 // payment confirmed via webhook
-  FULFILLED            // tenant marked as fulfilled
-  CANCELLED            // cancelled before or after payment
-  PARTIALLY_REFUNDED   // partial refund issued — can be further refunded
-  REFUNDED             // full refund issued
+  PENDING // checkout started, payment not yet received
+  PAID // payment confirmed via webhook
+  FULFILLED // tenant marked as fulfilled
+  CANCELLED // cancelled before or after payment
+  PARTIALLY_REFUNDED // partial refund issued — can be further refunded
+  REFUNDED // full refund issued
 }
 
 /// What type of purchase this order represents.
 enum OrderType {
-  ACCOMMODATION  // PMS booking (hotel room, cabin, camping)
-  PURCHASE       // Standard product purchase (shop, gift card, etc.)
+  ACCOMMODATION // PMS booking (hotel room, cabin, camping)
+  PURCHASE // Standard product purchase (shop, gift card, etc.)
 }
 
 enum SubscriptionPlan {
@@ -41,54 +41,54 @@ enum SubscriptionPlan {
 }
 
 enum PaymentSessionStatus {
-  INITIATED    // adapter.initiatePayment() called, awaiting customer action
-  PENDING      // provider confirmed receipt, async processing
-  RESOLVED     // payment succeeded
-  REJECTED     // payment failed
-  REFUNDED     // full or partial refund completed
+  INITIATED // adapter.initiatePayment() called, awaiting customer action
+  PENDING // provider confirmed receipt, async processing
+  RESOLVED // payment succeeded
+  REJECTED // payment failed
+  REFUNDED // full or partial refund completed
 }
 
 /// How payment was collected. One value per provider+mode combination.
 /// Add new values here when registering a new PaymentAdapter.
 enum PaymentMethod {
-  STRIPE_CHECKOUT   // @deprecated — use BEDFRONT_PAYMENTS_CHECKOUT
-  STRIPE_ELEMENTS   // @deprecated — use BEDFRONT_PAYMENTS_ELEMENTS
-  BEDFRONT_PAYMENTS_CHECKOUT  // Stripe Checkout Session via Bedfront Payments
-  BEDFRONT_PAYMENTS_ELEMENTS  // Stripe Elements via Bedfront Payments
-  SWEDBANK_PAY      // Swedbank Pay (redirect flow)
-  NETS              // Nets Easy (redirect flow)
-  INVOICE           // Manual invoice
+  STRIPE_CHECKOUT // @deprecated — use BEDFRONT_PAYMENTS_CHECKOUT
+  STRIPE_ELEMENTS // @deprecated — use BEDFRONT_PAYMENTS_ELEMENTS
+  BEDFRONT_PAYMENTS_CHECKOUT // Stripe Checkout Session via Bedfront Payments
+  BEDFRONT_PAYMENTS_ELEMENTS // Stripe Elements via Bedfront Payments
+  SWEDBANK_PAY // Swedbank Pay (redirect flow)
+  NETS // Nets Easy (redirect flow)
+  INVOICE // Manual invoice
 }
 
 /// Lifecycle status of a gift card.
 enum GiftCardStatus {
-  PENDING    // order paid but delivery not yet executed
-  ACTIVE     // ready to send or already sent, not fully redeemed
-  REDEEMED   // fully redeemed (balance = 0)
-  EXPIRED    // past expiration date (phase 2)
-  CANCELLED  // revoked by tenant or refund
+  PENDING // order paid but delivery not yet executed
+  ACTIVE // ready to send or already sent, not fully redeemed
+  REDEEMED // fully redeemed (balance = 0)
+  EXPIRED // past expiration date (phase 2)
+  CANCELLED // revoked by tenant or refund
 }
 
 /// Financial lifecycle — tracks payment state independently of fulfillment.
 /// Parallels Shopify's financial_status on orders.
 enum OrderFinancialStatus {
-  PENDING              // no payment received yet
-  AUTHORIZED           // payment authorized but not captured
-  PAID                 // payment captured / confirmed
-  PARTIALLY_REFUNDED   // partial refund issued
-  REFUNDED             // full refund issued
-  VOIDED               // authorization voided or session expired
+  PENDING // no payment received yet
+  AUTHORIZED // payment authorized but not captured
+  PAID // payment captured / confirmed
+  PARTIALLY_REFUNDED // partial refund issued
+  REFUNDED // full refund issued
+  VOIDED // authorization voided or session expired
 }
 
 /// Fulfillment lifecycle — tracks delivery/service state independently of payment.
 /// Parallels Shopify's fulfillment_status on orders.
 enum OrderFulfillmentStatus {
-  UNFULFILLED   // nothing shipped/delivered yet
-  SCHEDULED     // fulfillment scheduled for future date (e.g. check-in date)
-  IN_PROGRESS   // partially fulfilled or in transit
-  FULFILLED     // fully delivered/completed
-  ON_HOLD       // paused (investigation, guest request, etc.)
-  CANCELLED     // fulfillment cancelled
+  UNFULFILLED // nothing shipped/delivered yet
+  SCHEDULED // fulfillment scheduled for future date (e.g. check-in date)
+  IN_PROGRESS // partially fulfilled or in transit
+  FULFILLED // fully delivered/completed
+  ON_HOLD // paused (investigation, guest request, etc.)
+  CANCELLED // fulfillment cancelled
 }
 
 enum OrderEventType {
@@ -126,10 +126,10 @@ enum OrderEventType {
   GUEST_INFO_UPDATED
 
   // Sales channel
-  CHANNEL_ORDER_RECEIVED    // Order mottagen från extern kanal
-  CHANNEL_ORDER_UPDATED     // Order uppdaterad av extern kanal
-  CHANNEL_ORDER_CANCELLED   // Order avbokad av extern kanal
-  CHANNEL_SYNC_ERROR        // Synkroniseringsfel mot extern kanal
+  CHANNEL_ORDER_RECEIVED // Order mottagen från extern kanal
+  CHANNEL_ORDER_UPDATED // Order uppdaterad av extern kanal
+  CHANNEL_ORDER_CANCELLED // Order avbokad av extern kanal
+  CHANNEL_SYNC_ERROR // Synkroniseringsfel mot extern kanal
 
   // Discount
   DISCOUNT_APPLIED
@@ -140,10 +140,10 @@ enum OrderEventType {
 // ── Guest Account Enums ─────────────────────────────────────────
 
 enum GuestAccountState {
-  ENABLED    // active account
-  DISABLED   // deactivated by staff
-  INVITED    // invitation sent, not yet accepted
-  DECLINED   // declined invitation
+  ENABLED // active account
+  DISABLED // deactivated by staff
+  INVITED // invitation sent, not yet accepted
+  DECLINED // declined invitation
 }
 
 enum GuestMarketingState {
@@ -151,12 +151,12 @@ enum GuestMarketingState {
   UNSUBSCRIBED
   PENDING
   NOT_SUBSCRIBED
-  REDACTED        // GDPR erasure requested
+  REDACTED // GDPR erasure requested
 }
 
 enum GuestOptInLevel {
-  SINGLE_OPT_IN      // checked a box
-  CONFIRMED_OPT_IN   // double opt-in email confirmed
+  SINGLE_OPT_IN // checked a box
+  CONFIRMED_OPT_IN // double opt-in email confirmed
   UNKNOWN
 }
 
@@ -165,20 +165,20 @@ enum GuestEventType {
   ACCOUNT_UPDATED
   MARKETING_SUBSCRIBED
   MARKETING_UNSUBSCRIBED
-  COMMENT_ADDED             // Staff comment in timeline (replaces NOTE_ADDED)
+  COMMENT_ADDED // Staff comment in timeline (replaces NOTE_ADDED)
   TAG_ADDED
   TAG_REMOVED
   ORDER_PLACED
   ORDER_PAID
   ORDER_FULFILLED
-  ORDER_CANCELLED           // TODO: trigger from cancelOrder() when guest is linked
-  ORDER_REFUNDED            // TODO: trigger from refundOrder() when implemented
+  ORDER_CANCELLED // TODO: trigger from cancelOrder() when guest is linked
+  ORDER_REFUNDED // TODO: trigger from refundOrder() when implemented
   LOGIN
-  GUEST_EMAIL_SENT          // Email sent to guest (any type)
-  DATA_EXPORT_REQUESTED     // TODO: GDPR implementation
-  DATA_DELETION_REQUESTED   // TODO: GDPR implementation
-  GUEST_JOINED_SEGMENT      // "Gäst gick med i segment: [namn]"
-  GUEST_LEFT_SEGMENT        // "Gäst lämnade segment: [namn]"
+  GUEST_EMAIL_SENT // Email sent to guest (any type)
+  DATA_EXPORT_REQUESTED // TODO: GDPR implementation
+  DATA_DELETION_REQUESTED // TODO: GDPR implementation
+  GUEST_JOINED_SEGMENT // "Gäst gick med i segment: [namn]"
+  GUEST_LEFT_SEGMENT // "Gäst lämnade segment: [namn]"
 }
 
 // ── Discount Enums ──────────────────────────────────────────────
@@ -189,35 +189,35 @@ enum DiscountMethod {
 }
 
 enum DiscountValueType {
-  PERCENTAGE   // value field stores basis points: 1500 = 15.00%
+  PERCENTAGE // value field stores basis points: 1500 = 15.00%
   FIXED_AMOUNT // value field stores ören: 10000 = 100 SEK
 }
 
 enum DiscountTargetType {
-  ORDER      // discount applies to order subtotal
-  LINE_ITEM  // discount applies to specific products
+  ORDER // discount applies to order subtotal
+  LINE_ITEM // discount applies to specific products
 }
 
 enum DiscountStatus {
   ACTIVE
-  SCHEDULED  // startsAt is in the future
-  EXPIRED    // endsAt has passed
-  DISABLED   // manually deactivated
+  SCHEDULED // startsAt is in the future
+  EXPIRED // endsAt has passed
+  DISABLED // manually deactivated
 }
 
 enum DiscountConditionType {
   // Hospitality-specific
-  MIN_NIGHTS       // intValue: minimum number of nights
-  DAYS_IN_ADVANCE  // intValue: must book at least N days before arrival
-  ARRIVAL_WINDOW   // jsonValue: { startsAt: ISO, endsAt: ISO }
+  MIN_NIGHTS // intValue: minimum number of nights
+  DAYS_IN_ADVANCE // intValue: must book at least N days before arrival
+  ARRIVAL_WINDOW // jsonValue: { startsAt: ISO, endsAt: ISO }
   // Commerce
   MIN_ORDER_AMOUNT // intValue: minimum order total in ören
-  MIN_ITEMS        // intValue: minimum item count
+  MIN_ITEMS // intValue: minimum item count
   SPECIFIC_PRODUCTS // jsonValue: string[] of productIds
   CUSTOMER_SEGMENT // stringValue: segmentId
   ONCE_PER_CUSTOMER // no value needed — presence means the rule is active
   SPECIFIC_COLLECTIONS // use DiscountCollection join table
-  SPECIFIC_CUSTOMERS   // use DiscountCustomer join table
+  SPECIFIC_CUSTOMERS // use DiscountCustomer join table
 }
 
 enum DiscountEventType {
@@ -228,8 +228,8 @@ enum DiscountEventType {
   CODE_ADDED
   CODE_REMOVED
   USAGE_RECORDED
-  USAGE_VOIDED    // discount usage released on order cancel/refund
-  NOTE_ADDED      // staff comment on a discount
+  USAGE_VOIDED // discount usage released on order cancel/refund
+  NOTE_ADDED // staff comment on a discount
 }
 
 // ── Accommodation Enums ─────────────────────────────────────────
@@ -392,13 +392,62 @@ enum RestrictionType {
   NO_CHECK_OUT
 }
 
+// ── B2B ("Företag") Enums ───────────────────────────────────────
+
+enum CompanyStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum TaxSetting {
+  COLLECT
+  EXEMPT
+  COLLECT_UNLESS_EXEMPT
+}
+
+enum CheckoutMode {
+  AUTO_SUBMIT
+  DRAFT_FOR_REVIEW
+}
+
+enum ContactRole {
+  ORDERING_ONLY
+  LOCATION_ADMIN
+}
+
+enum PaymentTermsType {
+  DUE_ON_RECEIPT
+  DUE_ON_FULFILLMENT
+  NET
+  FIXED_DATE
+}
+
+enum CatalogStatus {
+  ACTIVE
+  DRAFT
+}
+
+enum StoreCreditReason {
+  ADMIN_ISSUE
+  REFUND
+  ORDER_PAYMENT
+  EXPIRATION
+  ADJUSTMENT
+}
+
+enum AccountRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 /// Idempotency lock for PMS booking creation.
 /// Prevents duplicate concurrent bookings for the same dates/guest.
 /// Cleaned up by the expire-reservations cron.
 model PendingBookingLock {
-  key        String   @id
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
+  key       String   @id
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
   @@index([expiresAt])
 }
@@ -408,30 +457,34 @@ model PendingBookingLock {
 // ============================================================================
 
 model Tenant {
-  id        String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Clerk Organization mapping (1:1)
-  clerkOrgId String  @unique
-  
+  clerkOrgId String @unique
+
   // Tenant identity
-  name      String
-  slug      String   @unique
+  name String
+  slug String @unique
 
   // Portal subdomain — e.g. "grand-hotel-stockholm-x4k9mq"
   // Generates {name}-{random6}.rutgr.com automatically on creation.
   // Immutable once set. Nullable for backfill of existing tenants.
-  portalSlug   String?  @unique
-  
+  portalSlug String? @unique
+
   // Owner info (convenience - första admin som skapade org)
   ownerClerkUserId String?
-  
+
   // Tenant configuration (TenantConfig serialized as JSON)
-  settings  Json?
+  settings Json?
+
+  // Tenant-wide SEO defaults (shape validated via Zod SeoDefaultsSchema).
+  // Title template, fallback description, default OG image, org/localBusiness JSON-LD.
+  seoDefaults Json?
 
   // Draft settings (uncommitted changes for live preview)
   draftSettings  Json?
   draftUpdatedAt DateTime?
-  draftUpdatedBy String?  // Clerk userId som senast editerade draft
+  draftUpdatedBy String? // Clerk userId som senast editerade draft
 
   /// Optimistic locking — increments on every publish.
   /// Prevents concurrent publish from silently overwriting each other.
@@ -441,24 +494,24 @@ model Tenant {
   previousSettings Json?
 
   // Företagsinformation (Clerk äger namn/slug/logo — dessa är kompletterande)
-  legalName          String?
-  businessType       String?
-  nickname           String?
-  phone              String?
+  legalName    String?
+  businessType String?
+  nickname     String?
+  phone        String?
 
   // Adress
-  addressStreet      String?
-  addressPostalCode  String?
-  addressCity        String?
-  addressCountry     String?
+  addressStreet     String?
+  addressPostalCode String?
+  addressCity       String?
+  addressCountry    String?
 
   // Statliga ID-handlingar
   organizationNumber String?
   vatNumber          String?
 
   // Email sender identity
-  emailFrom             String?   // e.g. "noreply@grandhotel.se"
-  emailFromName         String?   // e.g. "Grand Hotel"
+  emailFrom     String? // e.g. "noreply@grandhotel.se"
+  emailFromName String? // e.g. "Grand Hotel"
 
   // Email sender verification — pending change until confirmed via token
   pendingEmailFrom        String?
@@ -467,91 +520,98 @@ model Tenant {
   emailVerificationSentTo String?
 
   // Email branding — logo and accent color injected into all templates
-  emailLogoUrl          String?   // Cloudinary URL
-  emailLogoWidth        Int?      // Logo width in px (default 120)
-  emailAccentColor      String?   // hex e.g. "#1A56DB"
+  emailLogoUrl     String? // Cloudinary URL
+  emailLogoWidth   Int? // Logo width in px (default 120)
+  emailAccentColor String? // hex e.g. "#1A56DB"
 
   // Feature toggles — account-level, immediate effect (not draft/publish)
   // Order number formatting — Shopify-style prefix/suffix
-  orderNumberPrefix     String  @default("")
-  orderNumberSuffix     String  @default("")
+  orderNumberPrefix String @default("")
+  orderNumberSuffix String @default("")
 
-  checkinEnabled        Boolean @default(false)
-  checkoutEnabled       Boolean @default(false)
-  earlyCheckinEnabled   Boolean @default(false)
-  earlyCheckinDays      Int     @default(0)
+  checkinEnabled      Boolean @default(false)
+  checkoutEnabled     Boolean @default(false)
+  earlyCheckinEnabled Boolean @default(false)
+  earlyCheckinDays    Int     @default(0)
 
   // Theme screenshot — generated asynchronously after publish
-  screenshotDesktopUrl  String?               // Cloudinary URL, desktop (1440×900)
-  screenshotMobileUrl   String?               // Cloudinary URL, mobile (390×844)
-  screenshotHash        String?               // SHA-256 content-hash of settings JSON
-  screenshotUpdatedAt   DateTime?             // When last screenshot was taken
-  screenshotPending     Boolean @default(false) // Job queued for screenshot generation
+  screenshotDesktopUrl String? // Cloudinary URL, desktop (1440×900)
+  screenshotMobileUrl  String? // Cloudinary URL, mobile (390×844)
+  screenshotHash       String? // SHA-256 content-hash of settings JSON
+  screenshotUpdatedAt  DateTime? // When last screenshot was taken
+  screenshotPending    Boolean   @default(false) // Job queued for screenshot generation
 
   // Stripe Connect — each tenant connects their OWN Stripe account
-  stripeAccountId          String?   // acct_xxx — connected Stripe account ID
+  stripeAccountId          String? // acct_xxx — connected Stripe account ID
   stripeOnboardingComplete Boolean   @default(false)
   stripeLivemode           Boolean   @default(false)
   stripeConnectedAt        DateTime?
-  paymentMethodConfig      Json?     // PaymentMethodConfig — which methods tenant has enabled
+  paymentMethodConfig      Json? // PaymentMethodConfig — which methods tenant has enabled
 
   // Subscription & platform fee
-  subscriptionPlan         SubscriptionPlan @default(BASIC)
-  platformFeeBps           Int?             // basis points override per tenant, null = use plan default
+  subscriptionPlan SubscriptionPlan @default(BASIC)
+  platformFeeBps   Int? // basis points override per tenant, null = use plan default
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  bookings           Booking[]
-  mediaAssets        MediaAsset[]
-  integration        TenantIntegration?
-  syncJobs           SyncJob[]
-  syncEvents         SyncEvent[]
-  businessEntities   BusinessEntity[]
-  policies           TenantPolicy[]
-  locales            TenantLocale[]
-  translations       TenantTranslation[]
-  emailTemplates     EmailTemplate[]
-  emailSendLogs      EmailSendLog[]
-  emailUnsubscribes  EmailUnsubscribe[]
-  emailDomains       EmailDomain[]
-  magicLinkTokens    MagicLinkToken[]
-  guestAccounts      GuestAccount[]
-  products           Product[]
-  productTemplates   ProductTemplate[]
-  productCollections ProductCollection[]
-  orders              Order[]
-  giftCardProducts    GiftCardProduct[]
-  giftCards           GiftCard[]
-  paymentSessions     PaymentSession[]
-  paymentConfig       TenantPaymentConfig?
-  apps                TenantApp[]
-  billingSettings     TenantBillingSettings?
-  channelPublications ProductChannelPublication[]
-  guestTags           GuestTag[]
-  guestNotes          GuestNote[]
-  guestEvents         GuestAccountEvent[]
-  guestAddresses      GuestAddress[]
-  guestSegments       GuestSegment[]
-  rumEvents           RumEvent[]
-  rumAggregates       RumDailyAggregate[]
-  rumRateLimit        RumRateLimit?
-  analyticsEvents     AnalyticsEvent[]
-  analyticsMetrics    AnalyticsDailyMetric[]
-  discounts           Discount[]
-  accommodations      Accommodation[]
+  bookings                Booking[]
+  mediaAssets             MediaAsset[]
+  integration             TenantIntegration?
+  syncJobs                SyncJob[]
+  syncEvents              SyncEvent[]
+  businessEntities        BusinessEntity[]
+  policies                TenantPolicy[]
+  locales                 TenantLocale[]
+  translations            TenantTranslation[]
+  emailTemplates          EmailTemplate[]
+  emailSendLogs           EmailSendLog[]
+  emailUnsubscribes       EmailUnsubscribe[]
+  emailDomains            EmailDomain[]
+  magicLinkTokens         MagicLinkToken[]
+  guestAccounts           GuestAccount[]
+  products                Product[]
+  productTemplates        ProductTemplate[]
+  productCollections      ProductCollection[]
+  orders                  Order[]
+  giftCardProducts        GiftCardProduct[]
+  giftCards               GiftCard[]
+  paymentSessions         PaymentSession[]
+  paymentConfig           TenantPaymentConfig?
+  apps                    TenantApp[]
+  billingSettings         TenantBillingSettings?
+  channelPublications     ProductChannelPublication[]
+  guestTags               GuestTag[]
+  guestNotes              GuestNote[]
+  guestEvents             GuestAccountEvent[]
+  guestAddresses          GuestAddress[]
+  guestSegments           GuestSegment[]
+  rumEvents               RumEvent[]
+  rumAggregates           RumDailyAggregate[]
+  rumRateLimit            RumRateLimit?
+  analyticsEvents         AnalyticsEvent[]
+  analyticsMetrics        AnalyticsDailyMetric[]
+  discounts               Discount[]
+  accommodations          Accommodation[]
   accommodationCategories AccommodationCategory[]
-  spotMaps            SpotMap[]
-  spotMarkers         SpotMarker[]
+  spotMaps                SpotMap[]
+  spotMarkers             SpotMarker[]
   pendingSpotReservations PendingSpotReservation[]
-  emailAppInstallation  EmailAppInstallation?
-  emailAppTemplates     EmailAppTemplate[]
-  emailCampaigns        EmailCampaign[]
-  emailAutomations      EmailAutomation[]
-  emailSuppressions     EmailSuppression[]
+  emailAppInstallation    EmailAppInstallation?
+  emailAppTemplates       EmailAppTemplate[]
+  emailCampaigns          EmailCampaign[]
+  emailAutomations        EmailAutomation[]
+  emailSuppressions       EmailSuppression[]
+
+  // B2B ("Företag")
+  companies Company[]
+
+  // SEO engine
+  pageTypeSeoDefaults PageTypeSeoDefault[]
+  seoRedirects        SeoRedirect[]
 
   // Feature toggle — tenant can disable all discount functionality
-  discountsEnabled    Boolean              @default(true)
+  discountsEnabled Boolean @default(true)
 
   @@index([slug])
   @@index([clerkOrgId])
@@ -561,17 +621,17 @@ model Tenant {
 /// Each policy is identified by a stable string ID (e.g. "booking-terms").
 /// Lookup: unique constraint on [tenantId, policyId] for fast retrieval.
 model TenantPolicy {
-  id        String   @id @default(cuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   /// Stable identifier — matches POLICY_ITEMS[].id in the frontend.
   /// Values: "booking-terms", "checkin-terms", "house-rules",
   ///         "privacy-policy", "terms-of-service"
-  policyId  String
+  policyId String
 
   /// The policy content as plain text (authored by the tenant).
-  content   String   @db.Text
+  content String @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -583,21 +643,21 @@ model TenantPolicy {
 /// Juridisk person / företagsenhet kopplad till en organisation.
 /// En tenant kan ha flera företagsenheter (t.ex. hotell + restaurang).
 model BusinessEntity {
-  id                String   @id @default(cuid())
-  tenantId          String
-  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  businessType      String
-  legalName         String
-  nickname          String?
+  businessType String
+  legalName    String
+  nickname     String?
 
   addressStreet     String?
   addressApartment  String?
   addressPostalCode String?
   addressCity       String?
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tenantId])
 }
@@ -609,9 +669,9 @@ model Booking {
 
   // PMS integration — links local booking to external PMS counterpart
   // null for ManualAdapter tenants (existing rows unaffected)
-  externalId      String?    @unique
-  externalSource  String?
-  lastSyncedAt    DateTime?
+  externalId     String?   @unique
+  externalSource String?
+  lastSyncedAt   DateTime?
 
   // Guest identity
   firstName  String
@@ -640,7 +700,7 @@ model Booking {
 
   // Portal access — stable URL-safe token for guest portal links.
   // Generated once on booking creation, never changes.
-  portalToken  String?  @unique
+  portalToken String? @unique
 
   // Email dedup — timestamps prevent duplicate notification emails
   // during repeated sync cycles. Null = email not yet sent.
@@ -654,20 +714,20 @@ model Booking {
 
   // ── Accommodation infrastructure (added for first-class accommodation model) ──
   // Optional during migration — will be made required after data backfill.
-  accommodationId String?  // FK → Accommodation
-  orderId         String?  // FK → Order
-  ratePlanId      String?  // which rate plan was booked
+  accommodationId String? // FK → Accommodation
+  orderId         String? // FK → Order
+  ratePlanId      String? // which rate plan was booked
   checkIn         DateTime? // canonical check-in (replaces arrival after migration)
   checkOut        DateTime? // canonical check-out (replaces departure after migration)
   guestCount      Int?
-  specialRequests String?  @db.Text
-  pmsBookingRef   String?  // PMS confirmation number (kept alongside externalId during migration)
+  specialRequests String?   @db.Text
+  pmsBookingRef   String? // PMS confirmation number (kept alongside externalId during migration)
 
-  accommodation   Accommodation? @relation(fields: [accommodationId], references: [id])
-  order           Order?         @relation(fields: [orderId], references: [id])
+  accommodation Accommodation? @relation(fields: [accommodationId], references: [id])
+  order         Order?         @relation(fields: [orderId], references: [id])
 
-  magicLinks   MagicLink[]
-  createdAt    DateTime    @default(now())
+  magicLinks MagicLink[]
+  createdAt  DateTime    @default(now())
 
   @@index([tenantId])
   @@index([guestEmail])
@@ -682,14 +742,14 @@ model Booking {
 }
 
 model MagicLink {
-  id        String   @id @default(cuid())
-  token     String   @unique
+  id        String  @id @default(cuid())
+  token     String  @unique
   bookingId String
-  booking   Booking  @relation(fields: [bookingId], references: [id])
+  booking   Booking @relation(fields: [bookingId], references: [id])
 
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([token])
   @@index([bookingId])
@@ -731,20 +791,20 @@ model TenantIntegration {
 /// Processed one at a time by the job runner API route.
 /// Failed jobs are retried with exponential backoff up to maxAttempts.
 model SyncJob {
-  id           String    @id @default(cuid())
-  tenantId     String
-  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  provider     String
-  status       String    @default("pending")
-  attempt      Int       @default(0)
-  maxAttempts  Int       @default(5)
-  scheduledAt  DateTime  @default(now())
-  startedAt    DateTime?
-  completedAt  DateTime?
-  failedAt     DateTime?
-  lastError    String?
-  payload      Json?
-  createdAt    DateTime  @default(now())
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider    String
+  status      String    @default("pending")
+  attempt     Int       @default(0)
+  maxAttempts Int       @default(5)
+  scheduledAt DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  failedAt    DateTime?
+  lastError   String?
+  payload     Json?
+  createdAt   DateTime  @default(now())
 
   @@index([tenantId, status])
   @@index([scheduledAt, status])
@@ -837,7 +897,7 @@ model WebhookDedup {
 /// Before processing any event, check if svix-id already exists.
 /// If yes, return 200 immediately (already handled).
 model WebhookEvent {
-  id          String   @id                    // svix-id from webhook header
+  id          String   @id // svix-id from webhook header
   eventType   String
   processedAt DateTime @default(now())
 
@@ -858,32 +918,32 @@ model MediaAsset {
 
   // ── Cloudinary identity ─────────────────────────────────────────
   /// Full Cloudinary public_id (e.g. "hospitality/acme-hotel/cards/abc123")
-  publicId  String @unique
+  publicId     String @unique
   /// Optimized delivery URL (secure_url from upload response)
-  url       String
+  url          String
   /// Cloudinary resource type ("image", "video", "raw")
   resourceType String @default("image")
 
   // ── File metadata ───────────────────────────────────────────────
   /// Original filename from upload (user-facing)
-  filename   String
+  filename String
   /// MIME type (image/jpeg, image/png, etc.)
-  mimeType   String
+  mimeType String
   /// File size in bytes
-  bytes      Int
+  bytes    Int
   /// Image dimensions (null for non-image resources)
-  width      Int?
-  height     Int?
+  width    Int?
+  height   Int?
   /// Cloudinary format (jpg, png, webp, etc.)
-  format     String
+  format   String
 
   // ── Organization ────────────────────────────────────────────────
   /// Logical folder within the tenant (cards, wallpaper, sections, etc.)
-  folder     String @default("general")
+  folder String @default("general")
   /// User-editable alt text for accessibility
-  alt        String @default("")
+  alt    String @default("")
   /// User-editable title/caption
-  title      String @default("")
+  title  String @default("")
 
   // ── Provenance ──────────────────────────────────────────────────
   /// Clerk userId who uploaded this asset
@@ -891,9 +951,9 @@ model MediaAsset {
 
   // ── Soft delete ─────────────────────────────────────────────────
   /// Null = active. Set = soft-deleted (pending Cloudinary cleanup).
-  deletedAt  DateTime?
+  deletedAt DateTime?
   /// Who deleted it
-  deletedBy  String?
+  deletedBy String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -904,7 +964,7 @@ model MediaAsset {
   @@index([tenantId, deletedAt])
   @@index([tenantId, createdAt])
   @@index([tenantId, mimeType])
-  @@index([deletedAt])  // For cleanup job: find soft-deleted assets
+  @@index([deletedAt]) // For cleanup job: find soft-deleted assets
 }
 
 // ============================================================================
@@ -945,13 +1005,13 @@ enum TranslationNamespace {
 }
 
 model TenantLocale {
-  id         String   @id @default(cuid())
-  tenantId   String
-  locale     String   // BCP-47: "en", "de", "fr", "sv" etc.
-  published  Boolean  @default(false)
-  primary    Boolean  @default(false) // only one per tenant
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  tenantId  String
+  locale    String // BCP-47: "en", "de", "fr", "sv" etc.
+  published Boolean  @default(false)
+  primary   Boolean  @default(false) // only one per tenant
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   translations TenantTranslation[]
@@ -961,17 +1021,17 @@ model TenantLocale {
 }
 
 model TenantTranslation {
-  id           String               @id @default(cuid())
-  tenantId     String
-  locale       String
-  resourceId   String               // ResourceId branded string
-  namespace    TranslationNamespace
-  value             String               // published value — what guests see
-  draftValue        String?              // unpublished value — null means no pending draft
-  sourceDigest      String               // digest of source when value was published
-  draftSourceDigest String?              // digest of source when draftValue was saved
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
+  id                String               @id @default(cuid())
+  tenantId          String
+  locale            String
+  resourceId        String // ResourceId branded string
+  namespace         TranslationNamespace
+  value             String // published value — what guests see
+  draftValue        String? // unpublished value — null means no pending draft
+  sourceDigest      String // digest of source when value was published
+  draftSourceDigest String? // digest of source when draftValue was saved
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
 
   tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   tenantLocale TenantLocale @relation(fields: [tenantId, locale], references: [tenantId, locale], onDelete: Cascade)
@@ -989,24 +1049,24 @@ model TenantTranslation {
 /// "use platform default" from the email event registry.
 /// One row per tenant per event type — unique constraint enforced.
 model EmailTemplate {
-  id          String         @id @default(cuid())
-  tenantId    String
-  eventType   EmailEventType
+  id        String         @id @default(cuid())
+  tenantId  String
+  eventType EmailEventType
 
   /// Null = use platform default subject
   subject     String?
   /// Null = use platform default preview text
   previewText String?
   /// Null = use platform default HTML (from react-email components)
-  html        String?        @db.Text
+  html        String? @db.Text
 
   /// Per-tenant toggle — only respected for events with canDisable: true
-  enabled     Boolean        @default(true)
+  enabled Boolean @default(true)
 
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, eventType])
   @@index([tenantId])
@@ -1023,20 +1083,20 @@ model EmailSendLog {
   tenantId      String
   eventType     EmailEventType
   toEmail       String
-  resendId      String?         // Resend's message ID, set after successful send
+  resendId      String? // Resend's message ID, set after successful send
   status        EmailSendStatus @default(QUEUED)
-  error         String?         // error message if status = FAILED
+  error         String? // error message if status = FAILED
   attempts      Int             @default(0)
   lastAttemptAt DateTime?
   nextRetryAt   DateTime?
   failureReason String?
-  variables     Json?           // template variables for retry replay
-  orderId       String?         // link to order for dedup (abandoned checkout, payment failed)
-  bookingId     String?         // link to booking for dedup (pre-arrival, post-stay)
+  variables     Json? // template variables for retry replay
+  orderId       String? // link to order for dedup (abandoned checkout, payment failed)
+  bookingId     String? // link to booking for dedup (pre-arrival, post-stay)
   sentAt        DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
-  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([resendId])
@@ -1058,12 +1118,12 @@ model EmailSendLog {
 /// Stores opt-out per email address per tenant. Once a record exists,
 /// no further emails are sent to that address from that tenant.
 model EmailUnsubscribe {
-  id              String   @id @default(cuid())
-  tenantId        String
-  email           String
-  unsubscribedAt  DateTime @default(now())
+  id             String   @id @default(cuid())
+  tenantId       String
+  email          String
+  unsubscribedAt DateTime @default(now())
 
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -1075,25 +1135,25 @@ model EmailUnsubscribe {
 // ============================================================================
 
 enum EmailDomainStatus {
-  PENDING     // added, DNS not yet configured
-  VERIFIED    // Resend confirmed DNS records are correct
-  FAILED      // verification failed
+  PENDING // added, DNS not yet configured
+  VERIFIED // Resend confirmed DNS records are correct
+  FAILED // verification failed
 }
 
 /// Per-tenant sender domain. Once verified, emails are sent from
 /// noreply@[domain] instead of onboarding@resend.dev.
 model EmailDomain {
-  id              String            @id @default(cuid())
-  tenantId        String
-  domain          String            // e.g. "grandhotel.se"
-  resendDomainId  String?           // Resend's domain ID after creation
-  status          EmailDomainStatus @default(PENDING)
-  dnsRecords      Json?             // DNS records returned by Resend
-  verifiedAt      DateTime?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id             String            @id @default(cuid())
+  tenantId       String
+  domain         String // e.g. "grandhotel.se"
+  resendDomainId String? // Resend's domain ID after creation
+  status         EmailDomainStatus @default(PENDING)
+  dnsRecords     Json? // DNS records returned by Resend
+  verifiedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
-  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, domain])
   @@index([tenantId])
@@ -1116,7 +1176,7 @@ model MagicLinkToken {
   usedAt    DateTime?
   createdAt DateTime  @default(now())
 
-  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([token])
   @@index([tenantId, email])
@@ -1152,56 +1212,57 @@ model EmailRateLimit {
 /// booking sync, or OTP login. Owns marketing consent, tags, notes,
 /// addresses, and a full event audit trail.
 model GuestAccount {
-  id          String   @id @default(cuid())
-  tenantId    String
-  email       String
-  name        String?   // @deprecated — use firstName/lastName. Kept for backwards compat.
-  phone       String?   // Populated from first order/booking
-  firstName   String?
-  lastName    String?
-  address1    String?
-  address2    String?
-  city        String?
-  postalCode  String?
-  country     String?   @default("SE")
+  id         String  @id @default(cuid())
+  tenantId   String
+  email      String
+  name       String? // @deprecated — use firstName/lastName. Kept for backwards compat.
+  phone      String? // Populated from first order/booking
+  firstName  String?
+  lastName   String?
+  address1   String?
+  address2   String?
+  city       String?
+  postalCode String?
+  country    String? @default("SE")
 
   // Identity
-  locale           String?                // "sv" | "en" | "de" — language preference
-  verifiedEmail    Boolean  @default(false)
+  locale        String? // "sv" | "en" | "de" — language preference
+  verifiedEmail Boolean @default(false)
 
   // State (Shopify CustomerState equivalent)
-  state            GuestAccountState @default(ENABLED)
+  state GuestAccountState @default(ENABLED)
 
   // Internal
-  note             String?           // internal staff note, never shown to guest
+  note String? // internal staff note, never shown to guest
 
   // Marketing consent (replaces EmailUnsubscribe for new accounts)
-  emailMarketingState     GuestMarketingState @default(NOT_SUBSCRIBED)
-  emailConsentedAt        DateTime?
-  emailConsentSource      String?   // "checkout" | "portal" | "import" | "manual"
-  emailOptInLevel         GuestOptInLevel @default(SINGLE_OPT_IN)
-  smsMarketingState       GuestMarketingState @default(NOT_SUBSCRIBED)
-  smsConsentedAt          DateTime?
+  emailMarketingState GuestMarketingState @default(NOT_SUBSCRIBED)
+  emailConsentedAt    DateTime?
+  emailConsentSource  String? // "checkout" | "portal" | "import" | "manual"
+  emailOptInLevel     GuestOptInLevel     @default(SINGLE_OPT_IN)
+  smsMarketingState   GuestMarketingState @default(NOT_SUBSCRIBED)
+  smsConsentedAt      DateTime?
 
   // GDPR
-  dataSaleOptOut          Boolean  @default(false)
-  dataSaleOptOutAt        DateTime?
+  dataSaleOptOut   Boolean   @default(false)
+  dataSaleOptOutAt DateTime?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  bookings Booking[]
-  orders   Order[]
-  otpCodes GuestOtpCode[]
-  tags             GuestTag[]
-  notes            GuestNote[]
-  events           GuestAccountEvent[]
-  addresses        GuestAddress[]
-  segmentMemberships   GuestSegmentMembership[]
-  discountTargets      DiscountCustomer[]
-  campaignRecipients   CampaignRecipient[]
-  automationEnrollments AutomationEnrollment[]
+  tenant                  Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bookings                Booking[]
+  orders                  Order[]
+  otpCodes                GuestOtpCode[]
+  tags                    GuestTag[]
+  notes                   GuestNote[]
+  events                  GuestAccountEvent[]
+  addresses               GuestAddress[]
+  segmentMemberships      GuestSegmentMembership[]
+  discountTargets         DiscountCustomer[]
+  campaignRecipients      CampaignRecipient[]
+  automationEnrollments   AutomationEnrollment[]
+  companyLocationContacts CompanyLocationContact[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -1215,13 +1276,13 @@ model GuestAccount {
 /// Codes are stored hashed — never in cleartext.
 /// Single-use: usedAt is set on verification.
 model GuestOtpCode {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   guestAccountId String
   codeHash       String
   expiresAt      DateTime
   usedAt         DateTime?
-  failedAttempts Int      @default(0)
-  createdAt      DateTime @default(now())
+  failedAttempts Int       @default(0)
+  createdAt      DateTime  @default(now())
 
   guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
 
@@ -1231,12 +1292,12 @@ model GuestOtpCode {
 /// Guest tags — tenant-scoped, lowercase, for segmentation and filtering.
 /// Many-to-many via unique constraint per guest+tag.
 model GuestTag {
-  id             String       @id @default(cuid())
+  id             String   @id @default(cuid())
   tenantId       String
   guestAccountId String
-  tag            String       // lowercase, e.g. "vip", "allergi", "företag"
-  createdAt      DateTime     @default(now())
-  createdBy      String?      // actorUserId who added it
+  tag            String // lowercase, e.g. "vip", "allergi", "företag"
+  createdAt      DateTime @default(now())
+  createdBy      String? // actorUserId who added it
 
   tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
@@ -1255,7 +1316,7 @@ model GuestNote {
   content        String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  createdBy      String?  // actorUserId
+  createdBy      String? // actorUserId
   updatedBy      String?
 
   tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1273,10 +1334,10 @@ model GuestAccountEvent {
   type           GuestEventType
   message        String?
   metadata       Json?
-  actorUserId    String?        // null = system
+  actorUserId    String? // null = system
   ipAddress      String?
   userAgent      String?
-  orderId        String?        // Links order-lifecycle events for idempotency
+  orderId        String? // Links order-lifecycle events for idempotency
   createdAt      DateTime       @default(now())
 
   tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1367,8 +1428,8 @@ model Product {
 
   // ── Core fields ────────────────────────────────────────────
   title       String
-  description String   @db.Text   @default("")
-  slug        String               // URL-safe, auto-generated from title
+  description String @default("") @db.Text
+  slug        String // URL-safe, auto-generated from title
 
   status      ProductStatus @default(DRAFT)
   productType ProductType   @default(STANDARD)
@@ -1376,8 +1437,8 @@ model Product {
   // ── Pricing ────────────────────────────────────────────────
   /// Base price in smallest currency unit (ören). Used when no variants exist.
   /// When variants exist, each variant has its own price.
-  price       Int       @default(0)
-  currency    String    @default("SEK")
+  price    Int    @default(0)
+  currency String @default("SEK")
 
   /// Compare-at price for showing discounts (crossed-out price). Null = no discount.
   compareAtPrice Int?
@@ -1385,46 +1446,50 @@ model Product {
   // ── Inventory (product-level) ──────────────────────────────
   /// Whether to track inventory for this product.
   /// When variants exist, inventory is tracked per variant instead.
-  trackInventory              Boolean @default(false)
+  trackInventory                Boolean @default(false)
   /// Available quantity. Only meaningful when trackInventory = true AND no variants.
-  inventoryQuantity           Int     @default(0)
+  inventoryQuantity             Int     @default(0)
   /// Allow purchases even when inventory is 0.
   continueSellingWhenOutOfStock Boolean @default(false)
 
   // ── Tax ─────────────────────────────────────────────────────
   /// Whether to charge VAT/tax on this product.
-  taxable     Boolean   @default(true)
+  taxable Boolean @default(true)
+
+  // ── SEO ────────────────────────────────────────────────────
+  /// SEO overrides (shape validated via Zod SeoMetadataSchema).
+  seo Json?
 
   // ── Optimistic locking ─────────────────────────────────────
   /// Incremented on every update. Prevents concurrent overwrites.
-  version     Int       @default(1)
+  version Int @default(1)
 
   // ── Sort / display ─────────────────────────────────────────
-  sortOrder   Int       @default(0)
+  sortOrder Int @default(0)
 
   // ── Soft delete ────────────────────────────────────────────
   /// Null = active. Set = archived (hidden from storefront, data preserved).
-  archivedAt  DateTime?
+  archivedAt DateTime?
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // ── Relations ──────────────────────────────────────────────
-  media       ProductMedia[]
-  options     ProductOption[]
-  variants    ProductVariant[]
-  collectionItems ProductCollectionItem[]
-  tags            ProductTagItem[]
-  inventoryChanges InventoryChange[]
-  priceChanges PriceChange[]
+  media               ProductMedia[]
+  options             ProductOption[]
+  variants            ProductVariant[]
+  collectionItems     ProductCollectionItem[]
+  tags                ProductTagItem[]
+  inventoryChanges    InventoryChange[]
+  priceChanges        PriceChange[]
   channelPublications ProductChannelPublication[]
   discountTargets     DiscountProduct[]
 
   // ── Template ────────────────────────────────────────────────
   /// Optional reference to a ProductTemplate for section layout.
   /// Null = use tenant's default template. Deleting a template nullifies this.
-  templateId  String?
-  template    ProductTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  templateId String?
+  template   ProductTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -1440,26 +1505,26 @@ model Product {
 /// References Cloudinary URLs directly (same pattern as MediaAsset).
 /// Supports both images and video.
 model ProductMedia {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   /// Cloudinary delivery URL
   url       String
   /// "image" or "video"
-  type      String    @default("image")
+  type      String @default("image")
   /// Alt text for accessibility
-  alt       String    @default("")
+  alt       String @default("")
   /// Display order (0 = featured image)
-  sortOrder Int       @default(0)
+  sortOrder Int    @default(0)
   /// Original filename
-  filename  String    @default("")
+  filename  String @default("")
   /// Width in pixels (images only)
   width     Int?
   /// Height in pixels (images only)
   height    Int?
 
-  createdAt DateTime  @default(now())
+  createdAt DateTime @default(now())
 
   @@index([productId])
   @@index([productId, sortOrder])
@@ -1474,19 +1539,19 @@ model ProductMedia {
 /// Options are ordered by sortOrder. Values are stored as a JSON array
 /// to preserve ordering without a separate table.
 model ProductOption {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   /// Display name (e.g. "Tid", "Storlek", "Färg")
   name      String
   /// Ordered list of option values (e.g. ["07:00", "08:30", "10:00"])
-  values    Json      // String[]
+  values    Json // String[]
   /// Display order among options
-  sortOrder Int       @default(0)
+  sortOrder Int    @default(0)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([productId, name])
   @@index([productId])
@@ -1505,43 +1570,43 @@ model ProductOption {
 /// When variants exist, product-level price/inventory are ignored.
 /// Each variant is the source of truth for its own price and stock.
 model ProductVariant {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   /// Selected value for option at position 0 (e.g. "07:00")
-  option1   String?
+  option1 String?
   /// Selected value for option at position 1 (e.g. "Liten")
-  option2   String?
+  option2 String?
   /// Selected value for option at position 2
-  option3   String?
+  option3 String?
 
   /// Variant-specific image URL (Cloudinary). Shown on product page for this variant.
-  imageUrl  String?
+  imageUrl String?
 
   /// Variant-specific price in smallest currency unit. Overrides product.price.
-  price     Int
+  price          Int
   /// Compare-at price for showing discounts. Null = no discount.
   compareAtPrice Int?
 
   /// SKU — stock keeping unit (optional, tenant-defined)
-  sku       String?
+  sku String?
 
   /// Whether this variant tracks inventory.
-  trackInventory              Boolean @default(false)
+  trackInventory                Boolean @default(false)
   /// Available quantity for this specific variant.
-  inventoryQuantity           Int     @default(0)
+  inventoryQuantity             Int     @default(0)
   /// Allow purchases when this variant's stock is 0.
   continueSellingWhenOutOfStock Boolean @default(false)
 
   /// Optimistic locking — incremented on every mutation.
-  version   Int       @default(1)
+  version Int @default(1)
 
   /// Display order among variants
-  sortOrder Int       @default(0)
+  sortOrder Int @default(0)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   inventoryChanges InventoryChange[]
 
@@ -1564,21 +1629,21 @@ model ProductVariant {
 ///   - Sections live in TenantConfig.pages["shop-product.{suffix}"], NOT here
 ///   - Products reference a template; deleting a template nullifies the reference
 model ProductTemplate {
-  id        String   @id @default(cuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   /// Display name shown in admin (e.g. "Standard", "Highlight", "Minimal")
   name      String
   /// URL/lookup key (e.g. "default", "highlight", "minimal")
   suffix    String
   /// Exactly one per tenant must be true (enforced at application layer)
-  isDefault Boolean  @default(false)
+  isDefault Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  products  Product[]
+  products Product[]
 
   @@unique([tenantId, suffix])
   @@index([tenantId])
@@ -1604,23 +1669,26 @@ model ProductCollection {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   title       String
-  description String   @db.Text   @default("")
-  slug        String               // URL-safe
-  imageUrl    String?              // Collection cover image
+  description String  @default("") @db.Text
+  slug        String // URL-safe
+  imageUrl    String? // Collection cover image
 
   /// ACTIVE = visible on storefront, DRAFT = hidden. Does NOT affect products in the collection.
-  status      ProductStatus @default(DRAFT)
+  status ProductStatus @default(DRAFT)
 
-  sortOrder   Int       @default(0)
+  sortOrder Int @default(0)
+
+  /// SEO overrides (shape validated via Zod SeoMetadataSchema).
+  seo Json?
 
   /// Optimistic locking — incremented on every update
-  version     Int       @default(1)
+  version Int @default(1)
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  items       ProductCollectionItem[]
-  discountTargets DiscountCollection[]
+  items                       ProductCollectionItem[]
+  discountTargets             DiscountCollection[]
   accommodationCategoryAddons AccommodationCategoryAddon[]
 
   @@unique([tenantId, slug])
@@ -1633,16 +1701,16 @@ model ProductCollection {
 /// A product can appear in multiple collections.
 /// Each membership has its own sort position within that collection.
 model ProductCollectionItem {
-  id           String @id @default(cuid())
+  id           String            @id @default(cuid())
   collectionId String
   collection   ProductCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
   productId    String
-  product      Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product      Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   /// Position within this collection
-  sortOrder    Int       @default(0)
+  sortOrder Int @default(0)
 
-  createdAt    DateTime  @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([collectionId, productId])
   @@index([collectionId, sortOrder])
@@ -1664,14 +1732,17 @@ model Accommodation {
   tenantId String
 
   // Identity
-  name            String
-  slug            String
-  shortName       String?
-  externalCode    String?   // BookVisit "Kod" / PMS short code
-  externalId      String?   // PMS room type ID (was pmsSourceId)
-  pmsProvider     String?   // "mews" | "bookvisit" | "manual" | "fake"
-  pmsSyncedAt     DateTime?
-  pmsData         Json?     // Raw PMS snapshot — kept for debugging only, never read in app code
+  name         String
+  slug         String
+  shortName    String?
+  externalCode String? // BookVisit "Kod" / PMS short code
+  externalId   String? // PMS room type ID (was pmsSourceId)
+  pmsProvider  String? // "mews" | "bookvisit" | "manual" | "fake"
+  pmsSyncedAt  DateTime?
+  pmsData      Json? // Raw PMS snapshot — kept for debugging only, never read in app code
+
+  // SEO overrides (shape validated via Zod SeoMetadataSchema).
+  seo Json?
 
   // Type & status
   accommodationType AccommodationType
@@ -1680,7 +1751,7 @@ model Accommodation {
   // Content — override pattern: resolveAccommodation() always reads nameOverride ?? pmsName ?? name
   nameOverride        String?
   descriptionOverride String? @db.Text
-  description         String  @db.Text @default("")
+  description         String  @default("") @db.Text
 
   // Capacity
   maxGuests     Int
@@ -1693,20 +1764,20 @@ model Accommodation {
   extraBeds     Int  @default(0)
 
   // Physical
-  roomSizeSqm  Float?
-  bedrooms     Int?
-  bathrooms    Int?
-  floorNumber  Int?
+  roomSizeSqm Float?
+  bedrooms    Int?
+  bathrooms   Int?
+  floorNumber Int?
 
   // Pricing (local snapshot — fallback display only, never used for checkout validation)
-  basePricePerNight Int     @default(0) // ören
-  currency          String  @default("SEK")
+  basePricePerNight Int    @default(0) // ören
+  currency          String @default("SEK")
 
   // Tax
   taxRate Int @default(0) // basis points e.g. 1200 = 12%
 
   // Availability baseline (total units available when fully open)
-  totalUnits     Int @default(1)
+  totalUnits       Int @default(1)
   baseAvailability Int @default(1) // BookVisit: "Tillgänglighet"
 
   // PMS group / category mapping
@@ -1721,19 +1792,19 @@ model Accommodation {
   updatedAt  DateTime  @updatedAt
 
   // Relations
-  tenant       Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  units        AccommodationUnit[]
-  facilities   AccommodationFacility[]
-  bedConfigs   BedConfiguration[]
-  ratePlans    RatePlan[]
-  restrictions AccommodationRestriction[]
-  media        AccommodationMedia[]
+  tenant           Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  units            AccommodationUnit[]
+  facilities       AccommodationFacility[]
+  bedConfigs       BedConfiguration[]
+  ratePlans        RatePlan[]
+  restrictions     AccommodationRestriction[]
+  media            AccommodationMedia[]
   highlights       AccommodationHighlight[]
   checkoutSessions CheckoutSession[]
   bookings         Booking[]
-  categoryItems AccommodationCategoryItem[]
-  spotMarkers   SpotMarker[]
-  spotMapItem   SpotMapAccommodation?
+  categoryItems    AccommodationCategoryItem[]
+  spotMarkers      SpotMarker[]
+  spotMapItem      SpotMapAccommodation?
 
   @@unique([tenantId, slug])
   @@unique([tenantId, externalId, pmsProvider])
@@ -1752,10 +1823,10 @@ model AccommodationHighlight {
   id              String @id @default(cuid())
   accommodationId String
 
-  icon        String  // Material Symbols Rounded icon name, e.g. "star", "wifi"
-  text        String  // Heading, e.g. "Fem stjärnigt hotell"
-  description String  @default("") // Optional description below the heading
-  sortOrder   Int     @default(0)
+  icon        String // Material Symbols Rounded icon name, e.g. "star", "wifi"
+  text        String // Heading, e.g. "Fem stjärnigt hotell"
+  description String @default("") // Optional description below the heading
+  sortOrder   Int    @default(0)
 
   accommodation Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
 
@@ -1771,8 +1842,8 @@ model AccommodationUnit {
   accommodationId String
 
   // Identity
-  name       String   // e.g. "101", "Stuga 4", "Plats A12"
-  externalId String?  // PMS physical room ID (Mews: Resource.Id)
+  name       String // e.g. "101", "Stuga 4", "Plats A12"
+  externalId String? // PMS physical room ID (Mews: Resource.Id)
   floor      Int?
   notes      String?
 
@@ -1798,9 +1869,9 @@ model AccommodationFacility {
   id              String @id @default(cuid())
   accommodationId String
 
-  facilityType    FacilityType
-  source          FacilitySource @default(MANUAL)
-  overrideHidden  Boolean        @default(false) // tenant can hide a PMS-synced facility
+  facilityType   FacilityType
+  source         FacilitySource @default(MANUAL)
+  overrideHidden Boolean        @default(false) // tenant can hide a PMS-synced facility
 
   accommodation Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
 
@@ -1829,15 +1900,15 @@ model RatePlan {
   tenantId        String
   accommodationId String
 
-  externalId   String? // PMS rate plan ID
-  name         String
-  description  String? @db.Text
+  externalId  String? // PMS rate plan ID
+  name        String
+  description String? @db.Text
 
-  cancellationPolicy     RatePlanCancellationPolicy @default(FLEXIBLE)
-  cancellationDescription String?                   @db.Text
+  cancellationPolicy      RatePlanCancellationPolicy @default(FLEXIBLE)
+  cancellationDescription String?                    @db.Text
 
   // Pricing snapshot — updated on sync, used for display only
-  pricePerNight Int    // ören
+  pricePerNight Int // ören
   currency      String @default("SEK")
 
   status    RatePlanStatus @default(ACTIVE)
@@ -1863,8 +1934,8 @@ model AccommodationRestriction {
   accommodationId String
 
   restrictionType RestrictionType
-  date            DateTime        // The specific date this restriction applies to
-  value           Int?            // For MIN_STAY / MAX_STAY: number of nights. Null for boolean restrictions.
+  date            DateTime // The specific date this restriction applies to
+  value           Int? // For MIN_STAY / MAX_STAY: number of nights. Null for boolean restrictions.
   source          FacilitySource  @default(MANUAL)
 
   // Timestamps
@@ -1886,7 +1957,7 @@ model AccommodationMedia {
 
   url       String
   altText   String?
-  sortOrder Int     @default(0)
+  sortOrder Int            @default(0)
   source    FacilitySource @default(MANUAL)
 
   accommodation Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
@@ -1903,26 +1974,30 @@ model AccommodationMedia {
 /// Parallel to ProductCollection — manual grouping with optional PMS-seed.
 /// Examples: "Hotell", "Stugor", "Premium camping", "Sommarpaket"
 model AccommodationCategory {
-  id          String   @id @default(cuid())
-  tenantId    String
-  title       String
-  description String   @db.Text @default("")
-  slug        String
-  imageUrl    String?
-  status      AccommodationStatus @default(ACTIVE)
+  id              String              @id @default(cuid())
+  tenantId        String
+  title           String
+  description     String              @default("") @db.Text
+  slug            String
+  imageUrl        String?
+  status          AccommodationStatus @default(ACTIVE)
   /// Whether this category appears in the guest search form filter.
   /// When false, accommodations in this category are hidden from search results.
-  visibleInSearch Boolean @default(true)
-  sortOrder   Int      @default(0)
+  visibleInSearch Boolean             @default(true)
+  sortOrder       Int                 @default(0)
   /// PMS type string that seeded this category (e.g. "HOTEL").
   /// Null for manually created categories. Never overwritten by sync.
-  pmsRef      String?
-  version     Int      @default(1)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  pmsRef          String?
+  version         Int                 @default(1)
 
-  tenant Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  items  AccommodationCategoryItem[]
+  /// SEO overrides (shape validated via Zod SeoMetadataSchema).
+  seo Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant           Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items            AccommodationCategoryItem[]
   addonCollections AccommodationCategoryAddon[]
 
   @@unique([tenantId, slug])
@@ -1973,12 +2048,12 @@ model AccommodationCategoryAddon {
 /// to payment. URL params are NOT the source of truth — this is.
 /// Token is the only external identifier. Internal id never exposed.
 enum CheckoutSessionStatus {
-  PENDING           // Created, awaiting addon selection
-  ADDON_SELECTION   // Guest is selecting addons
-  CHECKOUT          // Ready for payment (or skipped addons)
-  COMPLETED         // Payment successful, order created
-  EXPIRED           // Timed out (30min TTL)
-  ABANDONED         // Guest navigated away
+  PENDING // Created, awaiting addon selection
+  ADDON_SELECTION // Guest is selecting addons
+  CHECKOUT // Ready for payment (or skipped addons)
+  COMPLETED // Payment successful, order created
+  EXPIRED // Timed out (30min TTL)
+  ABANDONED // Guest navigated away
 }
 
 enum CheckoutSessionType {
@@ -1988,36 +2063,36 @@ enum CheckoutSessionType {
 
 model CheckoutSession {
   id       String @id @default(cuid())
-  token    String @unique                     // 32 random bytes, base64url — used in all URLs
+  token    String @unique // 32 random bytes, base64url — used in all URLs
   tenantId String
 
   status      CheckoutSessionStatus @default(PENDING)
-  sessionType CheckoutSessionType  @default(ACCOMMODATION)
+  sessionType CheckoutSessionType   @default(ACCOMMODATION)
 
   // ── Accommodation fields (null for CART sessions) ──────────
-  accommodationId   String?
-  accommodation     Accommodation? @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
-  ratePlanId        String?        // PMS external ID — not a FK, rate plans are not persisted
+  accommodationId String?
+  accommodation   Accommodation? @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+  ratePlanId      String? // PMS external ID — not a FK, rate plans are not persisted
 
   // Stay details (null for CART sessions)
-  checkIn   DateTime?
-  checkOut  DateTime?
-  adults    Int?
+  checkIn  DateTime?
+  checkOut DateTime?
+  adults   Int?
 
   // Frozen snapshot — prices from PMS at session creation time, all in öre (Int)
-  accommodationName               String?
-  accommodationSlug               String?
-  ratePlanName                     String?
-  ratePlanDescription              String   @default("")
-  ratePlanCancellationPolicy       String?  // "FLEXIBLE" | "MODERATE" | "NON_REFUNDABLE"
-  pricePerNight                    Int?     // öre
-  totalNights                      Int?
-  accommodationTotal               Int?     // pricePerNight × totalNights, öre
-  currency                         String   @default("SEK")
+  accommodationName          String?
+  accommodationSlug          String?
+  ratePlanName               String?
+  ratePlanDescription        String  @default("")
+  ratePlanCancellationPolicy String? // "FLEXIBLE" | "MODERATE" | "NON_REFUNDABLE"
+  pricePerNight              Int? // öre
+  totalNights                Int?
+  accommodationTotal         Int? // pricePerNight × totalNights, öre
+  currency                   String  @default("SEK")
 
   // ── Cart fields (null for ACCOMMODATION sessions) ──────────
-  cartItems  Json?    // CartItem[] snapshot — frozen at session creation, öre prices
-  cartTotal  Int?     // sum of (unitAmount × quantity), öre
+  cartItems Json? // CartItem[] snapshot — frozen at session creation, öre prices
+  cartTotal Int? // sum of (unitAmount × quantity), öre
 
   // Addons — frozen at selection time
   selectedAddons Json @default("[]")
@@ -2030,7 +2105,7 @@ model CheckoutSession {
   guestPhone     String?
 
   // Dedup: prevents rapid double-clicks from creating duplicate sessions
-  dedupKey   String?  @unique
+  dedupKey String? @unique
 
   // Lifecycle
   expiresAt DateTime
@@ -2053,11 +2128,11 @@ model ProductTag {
   tenantId String
 
   /// Normalized tag name (lowercase, trimmed)
-  name     String
+  name String
 
   createdAt DateTime @default(now())
 
-  items    ProductTagItem[]
+  items ProductTagItem[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -2065,9 +2140,9 @@ model ProductTag {
 
 /// Join table: Product ↔ Tag (many-to-many).
 model ProductTagItem {
-  id        String @id @default(cuid())
+  id        String     @id @default(cuid())
   productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
   tagId     String
   tag       ProductTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
@@ -2092,8 +2167,8 @@ model ProductTagItem {
 /// This is the Shopify model: you can always reconstruct inventory history
 /// and answer "why did the stock change?"
 model InventoryChange {
-  id        String @id @default(cuid())
-  tenantId  String
+  id       String @id @default(cuid())
+  tenantId String
 
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -2111,10 +2186,10 @@ model InventoryChange {
   quantityAfter Int
 
   /// Why this change happened.
-  reason    InventoryChangeReason
+  reason InventoryChangeReason
 
   /// Human-readable note (e.g. "Manuell justering", "Order #1234")
-  note      String?
+  note String?
 
   /// Who triggered this change. Null for system/automated changes (purchases).
   actorUserId String?
@@ -2139,8 +2214,8 @@ model InventoryChange {
 /// Append-only — never updated, never deleted.
 /// Used for analytics, audit, and "was this price correct at order time?"
 model PriceChange {
-  id        String @id @default(cuid())
-  tenantId  String
+  id       String @id @default(cuid())
+  tenantId String
 
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -2156,7 +2231,7 @@ model PriceChange {
   currency      String
 
   /// Who changed the price. Null for system/automated changes.
-  actorUserId   String?
+  actorUserId String?
 
   createdAt DateTime @default(now())
 
@@ -2176,14 +2251,14 @@ model PriceChange {
 /// TTL: 15 minutes (configurable). Expired reservations are cleaned up
 /// by a periodic job and stock is released.
 model InventoryReservation {
-  id        String @id @default(cuid())
-  tenantId  String
+  id       String @id @default(cuid())
+  tenantId String
 
   productId String
   variantId String?
 
   /// Number of units reserved.
-  quantity  Int
+  quantity Int
 
   /// When this reservation expires and stock is released.
   expiresAt DateTime
@@ -2192,7 +2267,7 @@ model InventoryReservation {
   sessionId String
 
   /// Whether this reservation has been consumed (converted to a purchase).
-  consumed  Boolean @default(false)
+  consumed Boolean @default(false)
 
   createdAt DateTime @default(now())
 
@@ -2207,83 +2282,96 @@ model InventoryReservation {
 // ============================================================================
 
 model Order {
-  id                      String      @id @default(cuid())
-  tenantId                String
-  tenant                  Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   /// Sequential per tenant — human-friendly order number (e.g. #1001)
-  orderNumber             Int
+  orderNumber Int
 
-  status                  OrderStatus    @default(PENDING)
-  financialStatus         OrderFinancialStatus  @default(PENDING)
-  fulfillmentStatus       OrderFulfillmentStatus @default(UNFULFILLED)
-  orderType               OrderType      @default(ACCOMMODATION)
-  paymentMethod           PaymentMethod  @default(STRIPE_CHECKOUT)
+  status            OrderStatus            @default(PENDING)
+  financialStatus   OrderFinancialStatus   @default(PENDING)
+  fulfillmentStatus OrderFulfillmentStatus @default(UNFULFILLED)
+  orderType         OrderType              @default(ACCOMMODATION)
+  paymentMethod     PaymentMethod          @default(STRIPE_CHECKOUT)
 
   // Guest info — denormalized for fast display (nullable for Elements flow where collected later)
-  guestEmail              String         @default("")
-  guestName               String         @default("")
-  guestPhone              String?
-  billingAddress          Json?    // { address1, address2?, city, postalCode, country }
+  guestEmail     String  @default("")
+  guestName      String  @default("")
+  guestPhone     String?
+  billingAddress Json? // { address1, address2?, city, postalCode, country }
 
   // Guest account link — auto-created on payment
-  guestAccountId          String?
-  guestAccount            GuestAccount?  @relation(fields: [guestAccountId], references: [id], onDelete: SetNull)
+  guestAccountId String?
+  guestAccount   GuestAccount? @relation(fields: [guestAccountId], references: [id], onDelete: SetNull)
 
   // Money — always integer (ören/cents), never float
-  subtotalAmount          Int           // before tax
-  taxAmount               Int           @default(0)
-  taxRate                 Int           @default(0)  // basis points, e.g. 2500 = 25%
-  totalAmount             Int           // what guest paid
-  currency                String        @default("SEK")
+  subtotalAmount Int // before tax
+  taxAmount      Int    @default(0)
+  taxRate        Int    @default(0) // basis points, e.g. 2500 = 25%
+  totalAmount    Int // what guest paid
+  currency       String @default("SEK")
 
   // Discount — snapshot at checkout time
-  discountAmount          Int           @default(0) // total discount in ören
-  discountCode            String?       // code used (null for automatic discounts)
+  discountAmount Int     @default(0) // total discount in ören
+  discountCode   String? // code used (null for automatic discounts)
 
   // @deprecated — use PaymentSession.externalSessionId for lookups.
   // Kept for backwards compatibility with existing orders.
-  stripeCheckoutSessionId String?       @unique
-  stripePaymentIntentId   String?       @unique
+  stripeCheckoutSessionId String? @unique
+  stripePaymentIntentId   String? @unique
 
   /// Platform fee charged on this order, snapshot at payment time
-  platformFeeBps          Int?
+  platformFeeBps Int?
 
   /// Public token for unauthenticated order status lookup.
   /// Safe to share in emails. Reveals only status and summary.
-  statusToken             String?       @unique @default(cuid())
+  statusToken String? @unique @default(cuid())
 
   /// Comma-separated tags for categorization (Shopify pattern)
-  tags                    String            @default("")
+  tags String @default("")
 
   /// Customer-facing note — set by guest at checkout (special requests, vehicle length, etc.)
-  customerNote            String?
+  customerNote String?
 
   /// Flexible metadata — accommodation dates, PMS refs, etc.
-  metadata                Json?
+  metadata Json?
 
   // Sales channel attribution — which channel originated this order
-  sourceChannel           String?   // "direct" | "booking_com" | "expedia" | app-handle
-  sourceExternalId        String?   // booking ID from OTA (e.g. "BK-12345678")
-  sourceUrl               String?   // link to the order on the OTA platform
+  sourceChannel    String? // "direct" | "booking_com" | "expedia" | app-handle
+  sourceExternalId String? // booking ID from OTA (e.g. "BK-12345678")
+  sourceUrl        String? // link to the order on the OTA platform
+
+  // B2B ("Företag") — mirrors Shopify Company/CompanyLocation association.
+  // All fields nullable — existing retail orders have none of these.
+  // Loose FKs (no @relation) to avoid cascades on legacy orders if a company is later archived.
+  companyId            String?
+  companyLocationId    String?
+  poNumber             String? // purchase order number supplied by buyer
+  paymentTermsSnapshot Json? // frozen copy of PaymentTerms at checkout (name, type, netDays)
+  paymentDueAt         DateTime? // derived from payment terms
+  depositPercent       Int? // 0-100
+  depositAmountCents   BigInt? // snapshot; BigInt for B2B totals that exceed Int range
+  balanceAmountCents   BigInt? // totalAmount - depositAmount, for draft-for-review flows
+  sourceCheckoutMode   CheckoutMode? // AUTO_SUBMIT = PAID, DRAFT_FOR_REVIEW = PENDING for staff approval
 
   // Timestamps
-  paidAt                  DateTime?
-  fulfilledAt             DateTime?
-  cancelledAt             DateTime?
-  refundedAt              DateTime?
-  archivedAt              DateTime?     // Null = active, set = archived (hidden from default list)
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
+  paidAt      DateTime?
+  fulfilledAt DateTime?
+  cancelledAt DateTime?
+  refundedAt  DateTime?
+  archivedAt  DateTime? // Null = active, set = archived (hidden from default list)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   // Relations
-  lineItems               OrderLineItem[]
-  events                  OrderEvent[]
-  giftCard                GiftCard?
-  paymentSession          PaymentSession?
-  discountAllocations     DiscountAllocation[]
-  discountUsage           DiscountUsage?
-  bookings                Booking[]
+  lineItems           OrderLineItem[]
+  events              OrderEvent[]
+  giftCard            GiftCard?
+  paymentSession      PaymentSession?
+  discountAllocations DiscountAllocation[]
+  discountUsage       DiscountUsage?
+  bookings            Booking[]
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId, status])
@@ -2295,6 +2383,8 @@ model Order {
   @@index([tenantId, financialStatus])
   @@index([tenantId, financialStatus, createdAt])
   @@index([tenantId, fulfillmentStatus])
+  @@index([companyLocationId, paymentDueAt])
+  @@index([companyId])
 }
 
 /// Tracks which products are published to which sales channels.
@@ -2318,23 +2408,23 @@ model ProductChannelPublication {
 }
 
 model OrderLineItem {
-  id            String   @id @default(cuid())
-  orderId       String
-  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  productId     String
-  variantId     String?
+  productId String
+  variantId String?
 
   // Snapshot — frozen at purchase time — NEVER join back to Product
-  title         String   // product title at purchase time
-  variantTitle  String?  // variant label at purchase time
-  sku           String?
-  imageUrl      String?
+  title        String // product title at purchase time
+  variantTitle String? // variant label at purchase time
+  sku          String?
+  imageUrl     String?
 
-  quantity      Int
-  unitAmount    Int      // price per unit in ören/cents
-  totalAmount   Int      // quantity * unitAmount
-  currency      String   @default("SEK")
+  quantity    Int
+  unitAmount  Int // price per unit in ören/cents
+  totalAmount Int // quantity * unitAmount
+  currency    String @default("SEK")
 
   // Discount — allocated amount for this line
   discountAmount      Int                  @default(0)
@@ -2345,17 +2435,17 @@ model OrderLineItem {
 }
 
 model OrderEvent {
-  id          String          @id @default(cuid())
-  orderId     String
-  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  tenantId    String
+  id       String @id @default(cuid())
+  orderId  String
+  order    Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenantId String
 
   type        OrderEventType
   message     String
-  metadata    Json            @default("{}")
-  actorUserId String?         // Clerk userId or null for system events
-  actorName   String?         // Display name at time of event (denormalized)
-  createdAt   DateTime        @default(now())
+  metadata    Json           @default("{}")
+  actorUserId String? // Clerk userId or null for system events
+  actorName   String? // Display name at time of event (denormalized)
+  createdAt   DateTime       @default(now())
 
   @@index([orderId, createdAt])
   @@index([tenantId, orderId])
@@ -2369,47 +2459,47 @@ model OrderEvent {
 /// code-based discounts, percentage or fixed amount, order or line-item level.
 /// Monetary values follow platform convention: ören (smallest currency unit).
 model Discount {
-  id          String            @id @default(cuid())
-  tenantId    String
-  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  title       String            // internal admin label
-  description String?           // shown to guest for AUTOMATIC discounts
+  title       String // internal admin label
+  description String? // shown to guest for AUTOMATIC discounts
 
-  method      DiscountMethod
-  valueType   DiscountValueType
-  value       Int               // bps if PERCENTAGE, ören if FIXED_AMOUNT
-  targetType  DiscountTargetType
+  method     DiscountMethod
+  valueType  DiscountValueType
+  value      Int // bps if PERCENTAGE, ören if FIXED_AMOUNT
+  targetType DiscountTargetType
 
   // Targeting scope — explicit flags, not inferred by absence of conditions
-  appliesToAllProducts   Boolean @default(true)
-  appliesToAllCustomers  Boolean @default(true)
+  appliesToAllProducts  Boolean @default(true)
+  appliesToAllCustomers Boolean @default(true)
 
   // Minimum purchase requirement — typed fields, not EAV condition rows
-  minimumAmount          Int?    // in ören — null = no minimum
-  minimumQuantity        Int?    // item count — null = no minimum
+  minimumAmount   Int? // in ören — null = no minimum
+  minimumQuantity Int? // item count — null = no minimum
 
-  status      DiscountStatus    @default(ACTIVE)
+  status DiscountStatus @default(ACTIVE)
 
-  startsAt    DateTime          @default(now())
-  endsAt      DateTime?
+  startsAt DateTime  @default(now())
+  endsAt   DateTime?
 
-  usageLimit  Int?              // null = unlimited
-  usageCount  Int               @default(0) // denormalized — source of truth is COUNT(DiscountUsage)
+  usageLimit Int? // null = unlimited
+  usageCount Int  @default(0) // denormalized — source of truth is COUNT(DiscountUsage)
 
   combinesWithProductDiscounts  Boolean @default(false)
   combinesWithOrderDiscounts    Boolean @default(false)
   combinesWithShippingDiscounts Boolean @default(false)
 
   createdByUserId String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  codes       DiscountCode[]
-  conditions  DiscountCondition[]
-  allocations DiscountAllocation[]
-  usages      DiscountUsage[]
-  events      DiscountEvent[]
+  codes               DiscountCode[]
+  conditions          DiscountCondition[]
+  allocations         DiscountAllocation[]
+  usages              DiscountUsage[]
+  events              DiscountEvent[]
   targetedProducts    DiscountProduct[]
   targetedCollections DiscountCollection[]
   targetedSegments    DiscountSegment[]
@@ -2423,19 +2513,19 @@ model Discount {
 /// Discount codes — one discount can have multiple codes (e.g. "SUMMER2026", "VIP10").
 /// Codes are always stored uppercase and trimmed. Unique per tenant.
 model DiscountCode {
-  id          String    @id @default(cuid())
-  discountId  String
-  discount    Discount  @relation(fields: [discountId], references: [id], onDelete: Cascade)
-  tenantId    String
+  id         String   @id @default(cuid())
+  discountId String
+  discount   Discount @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  tenantId   String
 
-  code        String    // always stored UPPERCASE trimmed
-  usageLimit  Int?      // overrides Discount.usageLimit for this code
-  usageCount  Int       @default(0)
-  isActive    Boolean   @default(true)
+  code       String // always stored UPPERCASE trimmed
+  usageLimit Int? // overrides Discount.usageLimit for this code
+  usageCount Int     @default(0)
+  isActive   Boolean @default(true)
 
-  createdAt   DateTime  @default(now())
+  createdAt DateTime @default(now())
 
-  usages      DiscountUsage[]
+  usages DiscountUsage[]
 
   @@unique([tenantId, code])
   @@index([discountId])
@@ -2445,15 +2535,15 @@ model DiscountCode {
 /// Conditions that must ALL be met for the discount to apply.
 /// AND logic — every condition on the discount must pass.
 model DiscountCondition {
-  id          String                @id @default(cuid())
-  discountId  String
-  discount    Discount              @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  discountId String
+  discount   Discount @relation(fields: [discountId], references: [id], onDelete: Cascade)
 
-  type        DiscountConditionType
+  type DiscountConditionType
 
-  intValue    Int?     // MIN_NIGHTS, DAYS_IN_ADVANCE, MIN_ORDER_AMOUNT, MIN_ITEMS
-  stringValue String?  // CUSTOMER_SEGMENT segmentId
-  jsonValue   Json?    // SPECIFIC_PRODUCTS (string[]), ARRIVAL_WINDOW ({ startsAt, endsAt })
+  intValue    Int? // MIN_NIGHTS, DAYS_IN_ADVANCE, MIN_ORDER_AMOUNT, MIN_ITEMS
+  stringValue String? // CUSTOMER_SEGMENT segmentId
+  jsonValue   Json? // SPECIFIC_PRODUCTS (string[]), ARRIVAL_WINDOW ({ startsAt, endsAt })
 
   @@index([discountId])
   @@index([discountId, type])
@@ -2462,12 +2552,12 @@ model DiscountCondition {
 /// Normalized product targeting — replaces SPECIFIC_PRODUCTS jsonValue.
 /// FK to Product ensures referential integrity + cascade on product deletion.
 model DiscountProduct {
-  id          String   @id @default(cuid())
-  discountId  String
-  discount    Discount @relation(fields: [discountId], references: [id], onDelete: Cascade)
-  productId   String
-  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  tenantId    String
+  id         String   @id @default(cuid())
+  discountId String
+  discount   Discount @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tenantId   String
 
   @@unique([discountId, productId])
   @@index([discountId])
@@ -2526,15 +2616,15 @@ model DiscountAllocation {
   id              String         @id @default(cuid())
   orderId         String
   order           Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderLineItemId String?        // null = order-level discount
+  orderLineItemId String? // null = order-level discount
   orderLineItem   OrderLineItem? @relation(fields: [orderLineItemId], references: [id], onDelete: SetNull)
   discountId      String
   discount        Discount       @relation(fields: [discountId], references: [id])
   tenantId        String
 
-  amount          Int            // allocated discount amount in ören
+  amount Int // allocated discount amount in ören
 
-  createdAt       DateTime       @default(now())
+  createdAt DateTime @default(now())
 
   @@index([orderId])
   @@index([discountId])
@@ -2552,14 +2642,14 @@ model DiscountUsage {
   discountCode   DiscountCode? @relation(fields: [discountCodeId], references: [id], onDelete: SetNull)
   tenantId       String
 
-  orderId        String        @unique // one order can only redeem one discount
-  order          Order         @relation(fields: [orderId], references: [id])
+  orderId        String  @unique // one order can only redeem one discount
+  order          Order   @relation(fields: [orderId], references: [id])
   guestAccountId String?
   guestEmail     String
 
-  discountAmount Int           // actual amount discounted in ören
-  voidedAt       DateTime?     // set when usage is cancelled/refunded — idempotency guard
-  createdAt      DateTime      @default(now())
+  discountAmount Int // actual amount discounted in ören
+  voidedAt       DateTime? // set when usage is cancelled/refunded — idempotency guard
+  createdAt      DateTime  @default(now())
 
   @@index([discountId, createdAt])
   @@index([tenantId, guestEmail])
@@ -2568,18 +2658,18 @@ model DiscountUsage {
 
 /// Append-only audit log for discount lifecycle events.
 model DiscountEvent {
-  id          String             @id @default(cuid())
-  discountId  String
-  discount    Discount           @relation(fields: [discountId], references: [id], onDelete: Cascade)
-  tenantId    String
+  id         String   @id @default(cuid())
+  discountId String
+  discount   Discount @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  tenantId   String
 
   type        DiscountEventType
   message     String
-  metadata    Json               @default("{}")
+  metadata    Json              @default("{}")
   actorUserId String?
-  actorName   String?            // denormalized display name — set at write time
+  actorName   String? // denormalized display name — set at write time
 
-  createdAt   DateTime           @default(now())
+  createdAt DateTime @default(now())
 
   @@index([discountId, createdAt])
   @@index([tenantId])
@@ -2588,11 +2678,11 @@ model DiscountEvent {
 /// Stripe webhook event deduplication — prevents double-processing.
 /// Uses unique constraint on stripeEventId as atomic idempotency gate.
 model StripeWebhookEvent {
-  stripeEventId  String    @id   // evt_xxx — Stripe's unique event ID
-  receivedAt     DateTime  @default(now())
-  processedAt    DateTime?  // null = received but not yet successfully processed
-  tenantId       String
-  eventType      String
+  stripeEventId String    @id // evt_xxx — Stripe's unique event ID
+  receivedAt    DateTime  @default(now())
+  processedAt   DateTime? // null = received but not yet successfully processed
+  tenantId      String
+  eventType     String
 
   @@index([tenantId])
 }
@@ -2600,9 +2690,9 @@ model StripeWebhookEvent {
 /// Atomic counter for sequential order numbers per tenant.
 /// Uses UPDATE ... RETURNING pattern for race-safe increment.
 model OrderNumberSequence {
-  tenantId    String   @id
-  lastNumber  Int      @default(1000)
-  updatedAt   DateTime @updatedAt
+  tenantId   String   @id
+  lastNumber Int      @default(1000)
+  updatedAt  DateTime @updatedAt
 }
 
 // ============================================================================
@@ -2612,20 +2702,20 @@ model OrderNumberSequence {
 /// Per-tenant gift card configuration. One per tenant.
 /// Controls whether gift cards are enabled and amount limits.
 model GiftCardProduct {
-  id         String   @id @default(cuid())
-  tenantId   String
+  id          String   @id @default(cuid())
+  tenantId    String
   title       String   @default("Presentkort")
   description String   @default("")
   slug        String   @default("")
-  status      String   @default("DRAFT")  // ACTIVE or DRAFT
-  enabled    Boolean  @default(false)
-  minAmount  Int      @default(50000)    // 500 kr in ören
-  maxAmount  Int      @default(1000000)  // 10 000 kr in ören
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  status      String   @default("DRAFT") // ACTIVE or DRAFT
+  enabled     Boolean  @default(false)
+  minAmount   Int      @default(50000) // 500 kr in ören
+  maxAmount   Int      @default(1000000) // 10 000 kr in ören
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  designs  GiftCardDesign[]
+  tenant  Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  designs GiftCardDesign[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -2633,72 +2723,72 @@ model GiftCardProduct {
 
 /// Visual design template for gift cards. Tenant picks from these.
 model GiftCardDesign {
-  id         String   @id @default(cuid())
-  tenantId   String
-  productId  String
-  name       String   // display name in admin, max 80 chars
-  imageUrl   String   // Cloudinary URL (background image when bgMode=image)
-  config     Json?    // { logoUrl, bgMode, bgColor, bgGradientColor2, bgGradientDir }
-  renderedImageUrl String?  // Pre-rendered PNG on Cloudinary (for email)
-  sortOrder  Int      @default(0)
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id               String   @id @default(cuid())
+  tenantId         String
+  productId        String
+  name             String // display name in admin, max 80 chars
+  imageUrl         String // Cloudinary URL (background image when bgMode=image)
+  config           Json? // { logoUrl, bgMode, bgColor, bgGradientColor2, bgGradientDir }
+  renderedImageUrl String? // Pre-rendered PNG on Cloudinary (for email)
+  sortOrder        Int      @default(0)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  product    GiftCardProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
-  giftCards  GiftCard[]
+  product   GiftCardProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  giftCards GiftCard[]
 
-  @@index([tenantId])   // admin list: all designs for a tenant
-  @@index([productId])  // product detail: designs for this gift card product
+  @@index([tenantId]) // admin list: all designs for a tenant
+  @@index([productId]) // product detail: designs for this gift card product
 }
 
 /// The actual gift card. Created when Order transitions PENDING → PAID.
 /// Never created before payment is confirmed.
 model GiftCard {
-  id              String         @id @default(cuid())
-  tenantId        String
-  orderId         String         @unique  // one gift card per order
-  code            String         // format: XXXX-XXXX-XXXX-XXXX
-  designId        String?        // nullable — design can be deleted
-  initialAmount   Int            // amount at issuance, in ören, immutable
-  balance         Int            // current balance, in ören
-  status          GiftCardStatus @default(PENDING)
-  recipientEmail  String
-  recipientName   String
-  senderName      String
-  message         String?        // optional personal message, max 500 chars
-  scheduledAt     DateTime       // when email should be sent (now() for immediate)
-  sentAt          DateTime?      // set when email actually sent
-  expiresAt       DateTime?      // nullable, set per tenant policy (phase 2)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id             String         @id @default(cuid())
+  tenantId       String
+  orderId        String         @unique // one gift card per order
+  code           String // format: XXXX-XXXX-XXXX-XXXX
+  designId       String? // nullable — design can be deleted
+  initialAmount  Int // amount at issuance, in ören, immutable
+  balance        Int // current balance, in ören
+  status         GiftCardStatus @default(PENDING)
+  recipientEmail String
+  recipientName  String
+  senderName     String
+  message        String? // optional personal message, max 500 chars
+  scheduledAt    DateTime // when email should be sent (now() for immediate)
+  sentAt         DateTime? // set when email actually sent
+  expiresAt      DateTime? // nullable, set per tenant policy (phase 2)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  order       Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  design      GiftCardDesign?   @relation(fields: [designId], references: [id], onDelete: SetNull)
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order       Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  design      GiftCardDesign?      @relation(fields: [designId], references: [id], onDelete: SetNull)
   redemptions GiftCardRedemption[]
 
-  @@unique([tenantId, code])                    // code lookup for redemption
-  @@index([tenantId])                           // admin list: all gift cards for tenant
-  @@index([orderId])                            // order detail: gift card for this order
-  @@index([tenantId, status, scheduledAt])      // cron: unsent cards ready for delivery
+  @@unique([tenantId, code]) // code lookup for redemption
+  @@index([tenantId]) // admin list: all gift cards for tenant
+  @@index([orderId]) // order detail: gift card for this order
+  @@index([tenantId, status, scheduledAt]) // cron: unsent cards ready for delivery
 }
 
 /// Append-only ledger of gift card redemptions (phase 2).
 /// Created now to avoid future migration that alters GiftCard.
 model GiftCardRedemption {
-  id          String   @id @default(cuid())
-  tenantId    String
-  giftCardId  String
-  orderId     String?  // FK to Order when redeemed at checkout
-  amount      Int      // redeemed amount in ören
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  tenantId   String
+  giftCardId String
+  orderId    String? // FK to Order when redeemed at checkout
+  amount     Int // redeemed amount in ören
+  createdAt  DateTime @default(now())
   // No updatedAt — append-only, never mutated
 
   giftCard GiftCard @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
 
-  @@index([giftCardId])  // gift card detail: all redemptions
-  @@index([tenantId])    // admin: all redemptions for tenant
+  @@index([giftCardId]) // gift card detail: all redemptions
+  @@index([tenantId]) // admin: all redemptions for tenant
 }
 
 // ============================================================================
@@ -2712,18 +2802,18 @@ model PaymentSession {
   id                String               @id @default(cuid())
   orderId           String               @unique
   tenantId          String
-  providerKey       String               // "bedfront_payments" | "swedbank_pay" etc.
-  status            PaymentSessionStatus  @default(INITIATED)
-  externalSessionId String?              // provider's own ID (e.g. Stripe PI id)
+  providerKey       String // "bedfront_payments" | "swedbank_pay" etc.
+  status            PaymentSessionStatus @default(INITIATED)
+  externalSessionId String? // provider's own ID (e.g. Stripe PI id)
   externalRefundId  String?
-  amount            Int                  // smallest currency unit (ören)
+  amount            Int // smallest currency unit (ören)
   currency          String
   initiatedAt       DateTime             @default(now())
   resolvedAt        DateTime?
-  rawInitResponse   Json?                // full provider response for audit
+  rawInitResponse   Json? // full provider response for audit
 
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([providerKey, status])
   @@index([tenantId, status])
@@ -2732,17 +2822,17 @@ model PaymentSession {
 /// Which payment provider a tenant uses. One active provider per tenant.
 /// Defaults to "bedfront_payments" (Stripe) if not configured.
 model TenantPaymentConfig {
-  id              String   @id @default(cuid())
-  tenantId        String   @unique
-  providerKey     String   @default("bedfront_payments")
-  isActive        Boolean  @default(true)
-  configuredAt    DateTime @default(now())
-  configuredBy    String?  // Clerk userId
+  id           String   @id @default(cuid())
+  tenantId     String   @unique
+  providerKey  String   @default("bedfront_payments")
+  isActive     Boolean  @default(true)
+  configuredAt DateTime @default(now())
+  configuredBy String? // Clerk userId
 
   /// AES-256-GCM encrypted credentials. Use credentials.ts to read/write.
-  credentials     String?
+  credentials String?
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 // ============================================================================
@@ -2751,11 +2841,11 @@ model TenantPaymentConfig {
 
 /// Status of an installed app for a tenant.
 enum AppStatus {
-  PENDING_SETUP   // installed but setup wizard not complete
-  ACTIVE          // fully configured and running
-  ERROR           // configuration error, needs attention
-  PAUSED          // manually paused by tenant
-  UNINSTALLED     // soft delete — kept for billing history
+  PENDING_SETUP // installed but setup wizard not complete
+  ACTIVE // fully configured and running
+  ERROR // configuration error, needs attention
+  PAUSED // manually paused by tenant
+  UNINSTALLED // soft delete — kept for billing history
 }
 
 /// Lifecycle event types for app audit trail.
@@ -2776,25 +2866,25 @@ enum AppEventType {
 /// this table stores only installation state and tenant-specific settings.
 /// UNINSTALLED rows are kept for billing history — never hard-deleted.
 model TenantApp {
-  id            String      @id @default(cuid())
-  tenantId      String
-  appId         String      // references AppDefinition.id in registry
-  status        AppStatus
-  installedAt   DateTime    @default(now())
-  activatedAt   DateTime?
-  errorMessage  String?
-  pricingTier   String?     // "free" | "grow" | "pro"
-  settings      Json        @default("{}")  // app-specific config
+  id           String    @id @default(cuid())
+  tenantId     String
+  appId        String // references AppDefinition.id in registry
+  status       AppStatus
+  installedAt  DateTime  @default(now())
+  activatedAt  DateTime?
+  errorMessage String?
+  pricingTier  String? // "free" | "grow" | "pro"
+  settings     Json      @default("{}") // app-specific config
 
-  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  events        TenantAppEvent[]
-  wizard        TenantAppWizard?
-  health        TenantAppHealth?
-  healthHistory TenantAppHealthHistory[]
+  tenant            Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  events            TenantAppEvent[]
+  wizard            TenantAppWizard?
+  health            TenantAppHealth?
+  healthHistory     TenantAppHealthHistory[]
   webhookDeliveries AppWebhookDelivery[]
-  emailSyncs    EmailMarketingSync[]
-  attributions  EmailAttribution[]
-  spotMaps      SpotMap[]
+  emailSyncs        EmailMarketingSync[]
+  attributions      EmailAttribution[]
+  spotMaps          SpotMap[]
 
   @@unique([tenantId, appId])
   @@index([tenantId, status])
@@ -2811,7 +2901,7 @@ model TenantAppEvent {
   metadata  Json         @default("{}")
   createdAt DateTime     @default(now())
 
-  tenantApp TenantApp    @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+  tenantApp TenantApp @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
 
   @@index([tenantId, appId])
   @@index([tenantId, createdAt])
@@ -2821,20 +2911,20 @@ model TenantAppEvent {
 /// manifest-driven setup steps. One wizard per app per tenant.
 /// Survives browser close — user can resume where they left off.
 model TenantAppWizard {
-  id              String      @id @default(cuid())
+  id              String    @id @default(cuid())
   tenantId        String
   appId           String
   currentStepId   String
-  completedSteps  Json        @default("[]")
-  stepData        Json        @default("{}")
-  termsAccepted   Boolean     @default(false)
+  completedSteps  Json      @default("[]")
+  stepData        Json      @default("{}")
+  termsAccepted   Boolean   @default(false)
   termsAcceptedAt DateTime?
   planSelected    String?
-  startedAt       DateTime    @default(now())
+  startedAt       DateTime  @default(now())
   completedAt     DateTime?
   abandonedAt     DateTime?
 
-  tenantApp       TenantApp   @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+  tenantApp TenantApp @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
 
   @@unique([tenantId, appId])
   @@index([tenantId])
@@ -2848,18 +2938,18 @@ model TenantAppWizard {
 /// Updated by checkAppHealth() — the ONLY function that writes here.
 /// consecutiveFailures tracks unhealthy streak. At 3 → TenantApp.status = ERROR.
 model TenantAppHealth {
-  id                   String    @id @default(cuid())
-  tenantId             String
-  appId                String
-  status               String    @default("UNCHECKED")
-  latencyMs            Int?
-  message              String?
-  detail               String?
-  consecutiveFailures  Int       @default(0)
-  lastCheckedAt        DateTime?
-  nextCheckAt          DateTime?
+  id                  String    @id @default(cuid())
+  tenantId            String
+  appId               String
+  status              String    @default("UNCHECKED")
+  latencyMs           Int?
+  message             String?
+  detail              String?
+  consecutiveFailures Int       @default(0)
+  lastCheckedAt       DateTime?
+  nextCheckAt         DateTime?
 
-  tenantApp            TenantApp @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+  tenantApp TenantApp @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
 
   @@unique([tenantId, appId])
   @@index([tenantId])
@@ -2869,15 +2959,15 @@ model TenantAppHealth {
 /// Append-only health check history. One row per check execution.
 /// Never UPDATE, never DELETE. Used for uptime chart (30-day view).
 model TenantAppHealthHistory {
-  id         String   @id @default(cuid())
-  tenantId   String
-  appId      String
-  status     String
-  latencyMs  Int?
-  message    String?
-  checkedAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  tenantId  String
+  appId     String
+  status    String
+  latencyMs Int?
+  message   String?
+  checkedAt DateTime @default(now())
 
-  tenantApp  TenantApp @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+  tenantApp TenantApp @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
 
   @@index([tenantId, appId, checkedAt])
   @@index([checkedAt])
@@ -2890,13 +2980,13 @@ model TenantAppHealthHistory {
 /// Append-only log of every platform event emitted.
 /// Never UPDATE, never DELETE. Source of truth for "what happened".
 model PlatformEventLog {
-  id          String   @id @default(cuid())
-  tenantId    String
-  eventType   String   // "order.paid", "booking.confirmed", etc.
-  payload     Json     // event-specific data
-  emittedAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  tenantId  String
+  eventType String // "order.paid", "booking.confirmed", etc.
+  payload   Json // event-specific data
+  emittedAt DateTime @default(now())
 
-  deliveries  AppWebhookDelivery[]
+  deliveries AppWebhookDelivery[]
 
   @@index([tenantId, emittedAt])
   @@index([tenantId, eventType])
@@ -2907,23 +2997,23 @@ model PlatformEventLog {
 /// Status transitions: PENDING→DELIVERED, PENDING→FAILED, FAILED→DELIVERED,
 ///   FAILED→FAILED (increment attempts), FAILED→EXHAUSTED. No other transitions.
 model AppWebhookDelivery {
-  id              String    @id @default(cuid())
-  tenantId        String
-  appId           String
-  eventId         String
-  eventType       String
-  status          String    @default("PENDING") // PENDING | DELIVERED | FAILED | EXHAUSTED
-  attempts        Int       @default(0)
-  lastAttemptAt   DateTime?
-  nextRetryAt     DateTime?
-  responseStatus  Int?      // HTTP status from handler
-  responseTimeMs  Int?      // handler latency
-  errorMessage    String?
-  exhaustedAt     DateTime?
-  createdAt       DateTime  @default(now())
+  id             String    @id @default(cuid())
+  tenantId       String
+  appId          String
+  eventId        String
+  eventType      String
+  status         String    @default("PENDING") // PENDING | DELIVERED | FAILED | EXHAUSTED
+  attempts       Int       @default(0)
+  lastAttemptAt  DateTime?
+  nextRetryAt    DateTime?
+  responseStatus Int? // HTTP status from handler
+  responseTimeMs Int? // handler latency
+  errorMessage   String?
+  exhaustedAt    DateTime?
+  createdAt      DateTime  @default(now())
 
-  event           PlatformEventLog @relation(fields: [eventId], references: [id])
-  tenantApp       TenantApp        @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+  event     PlatformEventLog @relation(fields: [eventId], references: [id])
+  tenantApp TenantApp        @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
 
   @@unique([eventId, appId])
   @@index([tenantId, appId, createdAt])
@@ -2939,15 +3029,15 @@ model AppWebhookDelivery {
 /// and stores the Stripe customer ID for Bedfront's platform billing
 /// (separate from tenant's own Stripe Connect account).
 model TenantBillingSettings {
-  id                String    @id @default(cuid())
-  tenantId          String    @unique
-  billingEnabled    Boolean   @default(false) // false = no real charges, just tracking
-  stripeCustomerId  String?   // cus_xxx on Bedfront's platform Stripe account
-  billingEmail      String?   // override email for invoices
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id               String   @id @default(cuid())
+  tenantId         String   @unique
+  billingEnabled   Boolean  @default(false) // false = no real charges, just tracking
+  stripeCustomerId String? // cus_xxx on Bedfront's platform Stripe account
+  billingEmail     String? // override email for invoices
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 /// Monthly billing period. One per tenant per month.
@@ -2957,16 +3047,16 @@ model TenantBillingSettings {
 model TenantBillingPeriod {
   id              String    @id @default(cuid())
   tenantId        String
-  periodStart     DateTime  // first day of month 00:00 UTC
-  periodEnd       DateTime  // last day of month 23:59:59 UTC
+  periodStart     DateTime // first day of month 00:00 UTC
+  periodEnd       DateTime // last day of month 23:59:59 UTC
   status          String    @default("OPEN") // OPEN | PENDING | INVOICED | VOID
   totalAmount     Int       @default(0) // sum of line items in ören
   currency        String    @default("SEK")
-  stripeInvoiceId String?   // inv_xxx from Stripe — set by generateInvoice()
+  stripeInvoiceId String? // inv_xxx from Stripe — set by generateInvoice()
   closedAt        DateTime?
   invoicedAt      DateTime?
 
-  lineItems       BillingLineItem[]
+  lineItems BillingLineItem[]
 
   @@unique([tenantId, periodStart])
   @@index([tenantId, status])
@@ -2977,20 +3067,20 @@ model TenantBillingPeriod {
 /// Append-only — never UPDATE, never DELETE. Create new ones for adjustments.
 /// Each line represents a charge or credit for an app in a specific period.
 model BillingLineItem {
-  id          String    @id @default(cuid())
-  periodId    String
-  tenantId    String
-  appId       String     // references AppDefinition.id
-  appName     String     // snapshot at creation time — never joins back
-  description String     // Swedish: "Google Ads — Grow (15/31 dagar)"
-  tier        String     // "free" | "grow" | "pro"
-  amount      Int        // in ören (always >= 0). 0 for free tier.
-  isProrated  Boolean    @default(false)
-  daysInPeriod Int?      // total days in the billing period (for proration display)
-  daysCharged  Int?      // days charged in this line item
-  createdAt   DateTime   @default(now())
+  id           String   @id @default(cuid())
+  periodId     String
+  tenantId     String
+  appId        String // references AppDefinition.id
+  appName      String // snapshot at creation time — never joins back
+  description  String // Swedish: "Google Ads — Grow (15/31 dagar)"
+  tier         String // "free" | "grow" | "pro"
+  amount       Int // in ören (always >= 0). 0 for free tier.
+  isProrated   Boolean  @default(false)
+  daysInPeriod Int? // total days in the billing period (for proration display)
+  daysCharged  Int? // days charged in this line item
+  createdAt    DateTime @default(now())
 
-  period      TenantBillingPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  period TenantBillingPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 
   @@index([periodId])
   @@index([tenantId, appId])
@@ -3011,16 +3101,16 @@ enum EmailSyncStatus {
 /// Tracks sync state per contact per provider app per tenant.
 /// Upserted on every sync — never creates duplicates.
 model EmailMarketingSync {
-  id              String          @id @default(cuid())
-  tenantId        String
-  appId           String
-  email           String
-  status          EmailSyncStatus
-  lastSyncedAt    DateTime        @default(now())
-  errorMessage    String?
-  contactData     Json
+  id           String          @id @default(cuid())
+  tenantId     String
+  appId        String
+  email        String
+  status       EmailSyncStatus
+  lastSyncedAt DateTime        @default(now())
+  errorMessage String?
+  contactData  Json
 
-  tenantApp       TenantApp       @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+  tenantApp TenantApp @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
 
   @@unique([tenantId, appId, email])
   @@index([tenantId, appId])
@@ -3039,7 +3129,7 @@ model EmailAttribution {
   revenue      Int
   attributedAt DateTime @default(now())
 
-  tenantApp    TenantApp @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
+  tenantApp TenantApp @relation(fields: [tenantId, appId], references: [tenantId, appId], onDelete: Cascade)
 
   @@index([tenantId, appId])
   @@index([tenantId, attributedAt])
@@ -3054,17 +3144,17 @@ model EmailAttribution {
 /// Default segments (isDefault=true) are platform-created, not deletable.
 /// Custom segments created by merchants via admin UI.
 model GuestSegment {
-  id          String   @id @default(cuid())
-  tenantId    String
-  name        String
-  query       String   @db.Text
-  isDefault   Boolean  @default(false)
-  createdBy   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  query     String   @db.Text
+  isDefault Boolean  @default(false)
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  memberships GuestSegmentMembership[]
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships     GuestSegmentMembership[]
   discountTargets DiscountSegment[]
   emailCampaigns  EmailCampaign[]
 
@@ -3083,8 +3173,8 @@ model GuestSegmentMembership {
   joinedAt       DateTime  @default(now())
   leftAt         DateTime?
 
-  segment      GuestSegment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
-  guestAccount GuestAccount  @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
+  segment      GuestSegment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
 
   @@unique([segmentId, guestAccountId], name: "segment_guest_active")
   @@index([tenantId, segmentId])
@@ -3109,11 +3199,11 @@ model CheckoutIdempotencyKey {
   id              String                    @id @default(cuid())
   key             String
   tenantId        String
-  routeType       String                    // "payment-intent" | "checkout-session"
+  routeType       String // "payment-intent" | "checkout-session"
   status          CheckoutIdempotencyStatus @default(PROCESSING)
   responsePayload Json?
   createdAt       DateTime                  @default(now())
-  expiresAt       DateTime                  // 24h TTL
+  expiresAt       DateTime // 24h TTL
 
   @@unique([tenantId, key, routeType])
   @@index([expiresAt])
@@ -3128,18 +3218,18 @@ model CheckoutIdempotencyKey {
 model RumEvent {
   id           String   @id @default(cuid())
   tenantId     String
-  lcp          Float?   // ms — only on hard reload
-  inp          Float?   // ms — per route
-  cls          Float?   // unitless — per route
-  sessionId    String   // random UUID per tab, sessionStorage-based, 30min TTL
-  deviceType   String   // "desktop" | "mobile" | "tablet" | "other"
-  pathname     String   // window.location.pathname, never querystring
-  isHardReload Boolean  // true = full page load, false = SPA navigation
-  connection   String?  // "4g" | "3g" | "2g" | "slow-2g"
+  lcp          Float? // ms — only on hard reload
+  inp          Float? // ms — per route
+  cls          Float? // unitless — per route
+  sessionId    String // random UUID per tab, sessionStorage-based, 30min TTL
+  deviceType   String // "desktop" | "mobile" | "tablet" | "other"
+  pathname     String // window.location.pathname, never querystring
+  isHardReload Boolean // true = full page load, false = SPA navigation
+  connection   String? // "4g" | "3g" | "2g" | "slow-2g"
   occurredAt   DateTime
   createdAt    DateTime @default(now())
 
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, createdAt])
   @@index([tenantId, sessionId])
@@ -3153,7 +3243,7 @@ model RumRateLimit {
   count       Int      @default(0)
   windowStart DateTime @default(now())
 
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
@@ -3161,38 +3251,38 @@ model RumRateLimit {
 /// Daily RUM aggregates — retained 90 days. Used for trend dashboards.
 /// P75 calculated from raw data, not bucket approximation.
 model RumDailyAggregate {
-  id              String   @id @default(cuid())
-  tenantId        String
-  date            DateTime @db.Date
+  id       String   @id @default(cuid())
+  tenantId String
+  date     DateTime @db.Date
 
-  sessions        Int      @default(0)
-  sessionsDesktop Int      @default(0)
-  sessionsMobile  Int      @default(0)
-  sessionsTablet  Int      @default(0)
-  sessionsOther   Int      @default(0)
+  sessions        Int @default(0)
+  sessionsDesktop Int @default(0)
+  sessionsMobile  Int @default(0)
+  sessionsTablet  Int @default(0)
+  sessionsOther   Int @default(0)
 
-  lcpP75          Float?
-  lcpGoodCount    Int      @default(0)
-  lcpNeedsWork    Int      @default(0)
-  lcpPoor         Int      @default(0)
-  lcpCount        Int      @default(0)
+  lcpP75       Float?
+  lcpGoodCount Int    @default(0)
+  lcpNeedsWork Int    @default(0)
+  lcpPoor      Int    @default(0)
+  lcpCount     Int    @default(0)
 
-  inpP75          Float?
-  inpGoodCount    Int      @default(0)
-  inpNeedsWork    Int      @default(0)
-  inpPoor         Int      @default(0)
-  inpCount        Int      @default(0)
+  inpP75       Float?
+  inpGoodCount Int    @default(0)
+  inpNeedsWork Int    @default(0)
+  inpPoor      Int    @default(0)
+  inpCount     Int    @default(0)
 
-  clsP75          Float?
-  clsGoodCount    Int      @default(0)
-  clsNeedsWork    Int      @default(0)
-  clsPoor         Int      @default(0)
-  clsCount        Int      @default(0)
+  clsP75       Float?
+  clsGoodCount Int    @default(0)
+  clsNeedsWork Int    @default(0)
+  clsPoor      Int    @default(0)
+  clsCount     Int    @default(0)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, date])
   @@index([tenantId, date])
@@ -3260,7 +3350,7 @@ model AnalyticsLocation {
   id      String @id @default(cuid())
   country String // ISO 3166-1 alpha-2
   city    String
-  lat     Float  // City centroid — never exact visitor position
+  lat     Float // City centroid — never exact visitor position
   lng     Float
 
   events AnalyticsEvent[]
@@ -3280,8 +3370,8 @@ model AnalyticsEvent {
   occurredAt DateTime
   receivedAt DateTime           @default(now())
 
-  page      String?
-  referrer  String?
+  page     String?
+  referrer String?
 
   utmSource   String?
   utmMedium   String?
@@ -3330,24 +3420,24 @@ model AnalyticsDailyMetric {
 /// Interactive map for spot-based booking. Multiple maps per installation,
 /// one per accommodation category.
 model SpotMap {
-  id            String   @id @default(cuid())
-  tenantId      String
-  tenantAppId   String   // FK → TenantApp (the installation)
-  imageUrl      String   // Cloudinary URL
-  imagePublicId String   // Cloudinary public_id (for deletion)
-  title         String   @default("Välj din plats")
-  subtitle      String   @default("")
-  addonPrice    Int      // fixed surcharge in öre
-  currency      String   @default("SEK")
-  isActive      Boolean  @default(false) // activated on wizard completion
-  draftConfig   Json?    // draft snapshot of desired state (markers + settings)
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenantAppId    String // FK → TenantApp (the installation)
+  imageUrl       String // Cloudinary URL
+  imagePublicId  String // Cloudinary public_id (for deletion)
+  title          String    @default("Välj din plats")
+  subtitle       String    @default("")
+  addonPrice     Int // fixed surcharge in öre
+  currency       String    @default("SEK")
+  isActive       Boolean   @default(false) // activated on wizard completion
+  draftConfig    Json? // draft snapshot of desired state (markers + settings)
   draftUpdatedAt DateTime?
-  version       Int      @default(0) // optimistic lock — incremented on each publish
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  version        Int       @default(0) // optimistic lock — incremented on each publish
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  tenant             Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  tenantApp          TenantApp               @relation(fields: [tenantAppId], references: [id], onDelete: Cascade)
+  tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantApp          TenantApp              @relation(fields: [tenantAppId], references: [id], onDelete: Cascade)
   markers            SpotMarker[]
   accommodationItems SpotMapAccommodation[]
 
@@ -3375,20 +3465,20 @@ model SpotMarker {
   id                  String   @id @default(cuid())
   tenantId            String
   spotMapId           String
-  accommodationId     String   // FK → Accommodation (room category)
-  accommodationUnitId String?  // FK → AccommodationUnit (physical unit, e.g. Mews Resource)
-  label               String   // "32a", "Sjöutsikt" etc
-  x                   Float    // 0.0–100.0, percentage of image width
-  y                   Float    // 0.0–100.0, percentage of image height
-  priceOverride       Int?     // null = inherit SpotMap.addonPrice; set = override in öre
-  color               String?  // null = default accent; set = custom hex e.g. "#e53935"
+  accommodationId     String // FK → Accommodation (room category)
+  accommodationUnitId String? // FK → AccommodationUnit (physical unit, e.g. Mews Resource)
+  label               String // "32a", "Sjöutsikt" etc
+  x                   Float // 0.0–100.0, percentage of image width
+  y                   Float // 0.0–100.0, percentage of image height
+  priceOverride       Int? // null = inherit SpotMap.addonPrice; set = override in öre
+  color               String? // null = default accent; set = custom hex e.g. "#e53935"
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  spotMap       SpotMap             @relation(fields: [spotMapId], references: [id], onDelete: Cascade)
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  spotMap       SpotMap            @relation(fields: [spotMapId], references: [id], onDelete: Cascade)
   accommodation Accommodation      @relation(fields: [accommodationId], references: [id])
-  unit          AccommodationUnit?  @relation(fields: [accommodationUnitId], references: [id], onDelete: SetNull)
+  unit          AccommodationUnit? @relation(fields: [accommodationUnitId], references: [id], onDelete: SetNull)
 
   // Partial unique index on (spotMapId, accommodationUnitId) WHERE accommodationUnitId IS NOT NULL
   // — enforced in DB via migration SQL, not expressible as @@unique in Prisma
@@ -3407,11 +3497,11 @@ model PendingSpotReservation {
   accommodationUnitId String
   checkIn             DateTime
   checkOut            DateTime
-  checkoutSessionId   String   @unique  // one reservation per session
-  expiresAt           DateTime          // TTL: now + 15 minutes
+  checkoutSessionId   String   @unique // one reservation per session
+  expiresAt           DateTime // TTL: now + 15 minutes
   createdAt           DateTime @default(now())
 
-  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, accommodationUnitId, checkIn, checkOut])
   @@index([expiresAt])
@@ -3499,29 +3589,29 @@ model EmailAppTemplate {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
-  campaigns   EmailCampaign[]
-  steps       EmailAutomationStep[]
+  campaigns EmailCampaign[]
+  steps     EmailAutomationStep[]
 
   @@index([tenantId])
 }
 
 model EmailCampaign {
-  id             String                  @id @default(cuid())
+  id             String           @id @default(cuid())
   tenantId       String
-  tenant         Tenant                  @relation(fields: [tenantId], references: [id])
+  tenant         Tenant           @relation(fields: [tenantId], references: [id])
   templateId     String
-  template       EmailAppTemplate        @relation(fields: [templateId], references: [id])
+  template       EmailAppTemplate @relation(fields: [templateId], references: [id])
   segmentId      String?
-  segment        GuestSegment?           @relation(fields: [segmentId], references: [id])
+  segment        GuestSegment?    @relation(fields: [segmentId], references: [id])
   status         CampaignStatus
   scheduledAt    DateTime?
   sentAt         DateTime?
-  recipientCount Int                     @default(0)
-  createdAt      DateTime                @default(now())
-  updatedAt      DateTime                @updatedAt
+  recipientCount Int              @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
-  recipients     CampaignRecipient[]
-  analytics      EmailCampaignAnalytics?
+  recipients CampaignRecipient[]
+  analytics  EmailCampaignAnalytics?
 
   @@index([tenantId, status])
 }
@@ -3548,34 +3638,34 @@ model CampaignRecipient {
 }
 
 model EmailAutomation {
-  id                String                      @id @default(cuid())
+  id                String                 @id @default(cuid())
   tenantId          String
-  tenant            Tenant                      @relation(fields: [tenantId], references: [id])
+  tenant            Tenant                 @relation(fields: [tenantId], references: [id])
   name              String
   trigger           AutomationTrigger
   status            AutomationStatus
-  allowReenrollment Boolean                     @default(false)
+  allowReenrollment Boolean                @default(false)
   steps             EmailAutomationStep[]
   enrollments       AutomationEnrollment[]
-  createdAt         DateTime                    @default(now())
-  updatedAt         DateTime                    @updatedAt
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
-  analytics         EmailAutomationAnalytics?
+  analytics EmailAutomationAnalytics?
 
   @@index([tenantId])
 }
 
 model EmailAutomationStep {
-  id           String          @id @default(cuid())
+  id           String           @id @default(cuid())
   automationId String
-  automation   EmailAutomation @relation(fields: [automationId], references: [id])
+  automation   EmailAutomation  @relation(fields: [automationId], references: [id])
   templateId   String
   template     EmailAppTemplate @relation(fields: [templateId], references: [id])
-  delaySeconds Int             @default(0)
+  delaySeconds Int              @default(0)
   order        Int
-  createdAt    DateTime        @default(now())
+  createdAt    DateTime         @default(now())
 
-  enrollments  AutomationEnrollment[]
+  enrollments AutomationEnrollment[]
 
   @@unique([automationId, order])
 }
@@ -3654,4 +3744,327 @@ model EmailAutomationAnalytics {
   complained   Int             @default(0)
   unsubscribed Int             @default(0)
   updatedAt    DateTime        @updatedAt
+}
+
+// ============================================================================
+// B2B ("Företag") — mirrors Shopify Company → CompanyLocation → Contact
+// FAS 1: schema only. No service/UI/API code yet.
+// ============================================================================
+
+/// A B2B buyer organization. Owns one or more locations.
+/// Orders are never placed against the Company directly — always against a CompanyLocation.
+model Company {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  name       String
+  externalId String?
+
+  tags       String[]
+  note       String?
+  metafields Json?
+
+  status           CompanyStatus @default(ACTIVE)
+  orderingApproved Boolean       @default(true)
+
+  /// Loose reference to the main point-of-contact (GuestAccount.id via a CompanyLocationContact).
+  /// No @relation — lookup goes through contacts. Null until a contact is flagged as main.
+  mainContactId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  locations CompanyLocation[]
+
+  @@unique([tenantId, externalId])
+  @@index([tenantId, status])
+  @@index([tenantId, orderingApproved])
+}
+
+/// A location owned by a Company. Carries billing, tax, credit, and payment-terms context.
+/// Orders are placed against a location — not the Company itself.
+model CompanyLocation {
+  id        String  @id @default(cuid())
+  tenantId  String
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name       String
+  externalId String?
+
+  billingAddress  Json
+  shippingAddress Json?
+
+  taxId          String?
+  taxIdValidated Boolean    @default(false)
+  taxSetting     TaxSetting @default(COLLECT)
+  taxExemptions  String[]
+
+  paymentTermsId   String?
+  paymentTerms     PaymentTerms? @relation(fields: [paymentTermsId], references: [id])
+  depositPercent   Int           @default(0)
+  creditLimitCents BigInt?
+
+  checkoutMode                CheckoutMode @default(AUTO_SUBMIT)
+  allowOneTimeShippingAddress Boolean      @default(true)
+
+  storeCreditBalanceCents BigInt @default(0)
+
+  metafields Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contacts CompanyLocationContact[]
+
+  @@unique([tenantId, companyId, externalId])
+  @@index([tenantId, companyId])
+}
+
+/// Join table between CompanyLocation and GuestAccount.
+/// A GuestAccount can be a contact at many locations with different roles.
+model CompanyLocationContact {
+  id                String          @id @default(cuid())
+  tenantId          String
+  companyLocationId String
+  companyLocation   CompanyLocation @relation(fields: [companyLocationId], references: [id], onDelete: Cascade)
+  guestAccountId    String
+  guestAccount      GuestAccount    @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
+
+  role          ContactRole @default(ORDERING_ONLY)
+  isMainContact Boolean     @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@unique([companyLocationId, guestAccountId])
+  @@index([guestAccountId])
+  @@index([tenantId])
+}
+
+// ── Payment Terms ───────────────────────────────────────────────
+
+/// Payment-terms template assigned to CompanyLocations.
+/// System defaults have tenantId = NULL and are seeded; tenant-custom rows have tenantId set.
+///
+/// Prisma DSL cannot express a partial unique index on (name) WHERE "tenantId" IS NULL,
+/// so the uniqueness of system-default names is enforced by a raw SQL partial unique index
+/// appended at the end of the migration file (see SpotMarker for the reference pattern).
+/// Seed uses findFirst + create/update to remain idempotent for the null-tenant rows.
+model PaymentTerms {
+  id       String  @id @default(cuid())
+  tenantId String?
+
+  name      String
+  type      PaymentTermsType
+  netDays   Int?
+  fixedDate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyLocations CompanyLocation[]
+
+  @@index([tenantId])
+}
+
+// ── Catalogs ────────────────────────────────────────────────────
+
+/// B2B price list / catalog. Attached to CompanyLocations via CompanyLocationCatalog.
+model Catalog {
+  id       String @id @default(cuid())
+  tenantId String
+
+  name   String
+  status CatalogStatus @default(ACTIVE)
+
+  /// Flat percent adjustment applied to base prices (-100.00 to 100.00). Null = no adjustment.
+  overallAdjustmentPercent Decimal? @db.Decimal(5, 2)
+  includeAllProducts       Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fixedPrices   CatalogFixedPrice[]
+  quantityRules CatalogQuantityRule[]
+  inclusions    CatalogInclusion[]
+  assignments   CompanyLocationCatalog[]
+
+  @@index([tenantId, status])
+}
+
+/// Fixed price override for a single Accommodation or ProductVariant within a Catalog.
+/// Loose FKs (no @relation) on accommodation/variant — resolved at query time.
+model CatalogFixedPrice {
+  id        String  @id @default(cuid())
+  catalogId String
+  catalog   Catalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+
+  accommodationId  String?
+  productVariantId String?
+
+  fixedPriceCents BigInt
+
+  @@unique([catalogId, accommodationId])
+  @@unique([catalogId, productVariantId])
+}
+
+/// Scopes a Catalog to a subset of inventory when includeAllProducts = false.
+/// Loose FKs on accommodation/variant/collection — resolved at query time.
+model CatalogInclusion {
+  id        String  @id @default(cuid())
+  catalogId String
+  catalog   Catalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+
+  accommodationId  String?
+  productVariantId String?
+  collectionId     String?
+
+  @@unique([catalogId, accommodationId])
+  @@unique([catalogId, productVariantId])
+  @@unique([catalogId, collectionId])
+}
+
+/// Per-line quantity constraints and volume pricing inside a Catalog.
+model CatalogQuantityRule {
+  id        String  @id @default(cuid())
+  catalogId String
+  catalog   Catalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+
+  accommodationId  String?
+  productVariantId String?
+
+  minQuantity Int?
+  maxQuantity Int?
+  increment   Int?
+
+  /// Optional volume-price ladder: [{ minQty, priceCents }]
+  volumePricing Json?
+}
+
+/// Assigns a Catalog to a CompanyLocation. A location may have multiple assigned catalogs;
+/// resolution order is application-layer concern (FAS 2).
+model CompanyLocationCatalog {
+  id                String  @id @default(cuid())
+  companyLocationId String
+  catalogId         String
+  catalog           Catalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([companyLocationId, catalogId])
+}
+
+// ── Support entities ────────────────────────────────────────────
+
+/// Tokenized card-on-file for a CompanyLocation (Stripe payment method id etc.).
+/// The provider holds the sensitive data — we only store safe display metadata + tokens.
+model VaultedCard {
+  id                String @id @default(cuid())
+  tenantId          String
+  companyLocationId String
+
+  provider                String
+  providerCustomerId      String
+  providerPaymentMethodId String
+
+  last4    String
+  brand    String
+  expMonth Int
+  expYear  Int
+
+  createdByGuestAccountId String?
+  createdAt               DateTime @default(now())
+
+  @@index([companyLocationId])
+  @@index([tenantId])
+}
+
+/// Append-only ledger of store-credit movement per CompanyLocation.
+/// Balance on CompanyLocation.storeCreditBalanceCents is denormalized — this is the source of truth.
+model StoreCreditTransaction {
+  id                String @id @default(cuid())
+  tenantId          String
+  companyLocationId String
+
+  amountCents BigInt
+  reason      StoreCreditReason
+
+  orderId   String?
+  note      String?
+  expiresAt DateTime?
+
+  createdByStaffId String?
+  createdAt        DateTime @default(now())
+
+  @@index([companyLocationId, createdAt])
+  @@index([tenantId])
+}
+
+/// Self-service B2B account application submitted through the storefront.
+/// Once approved, staff materialize into Company + CompanyLocation + GuestAccount.
+model CompanyAccountRequest {
+  id       String @id @default(cuid())
+  tenantId String
+
+  submittedData Json
+  status        AccountRequestStatus @default(PENDING)
+
+  companyId         String?
+  companyLocationId String?
+  guestAccountId    String?
+
+  reviewedAt        DateTime?
+  reviewedByStaffId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, status])
+}
+
+/// Per-tenant, per-page-type SEO defaults (Shopify "Theme SEO settings").
+/// Templates are interpolated with entity + tenant data at resolve time.
+model PageTypeSeoDefault {
+  id       String      @id @default(cuid())
+  tenantId String
+  pageType SeoPageType
+
+  titlePattern          String?
+  descriptionPattern    String?
+  ogImagePattern        String?
+  structuredDataEnabled Boolean @default(true)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, pageType])
+}
+
+enum SeoPageType {
+  HOMEPAGE
+  ACCOMMODATION
+  ACCOMMODATION_CATEGORY
+  ACCOMMODATION_INDEX
+  PRODUCT
+  PRODUCT_COLLECTION
+  PRODUCT_INDEX
+  PAGE
+  ARTICLE
+  BLOG
+  SEARCH
+  NOT_FOUND
+}
+
+/// 301/302 redirect table for handle changes and merchant-authored redirects.
+/// Middleware consults this before serving 404.
+model SeoRedirect {
+  id         String   @id @default(cuid())
+  tenantId   String
+  fromPath   String
+  toPath     String
+  statusCode Int      @default(301)
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, fromPath])
 }
