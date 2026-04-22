@@ -5,6 +5,8 @@ vi.mock("../logger", () => ({
 }));
 
 import {
+  SEO_HOMEPAGE_DESCRIPTION_MAX,
+  SEO_HOMEPAGE_TITLE_MAX,
   SeoDefaultsSchema,
   SeoMetadataSchema,
   safeParseSeoDefaults,
@@ -155,21 +157,21 @@ describe("SeoDefaultsSchema", () => {
 
     it("rejects title longer than SEO_HOMEPAGE_TITLE_MAX", () => {
       const r = SeoDefaultsSchema.safeParse({
-        homepage: { title: "x".repeat(256) },
+        homepage: { title: "x".repeat(SEO_HOMEPAGE_TITLE_MAX + 1) },
       });
       expect(r.success).toBe(false);
     });
 
     it("accepts title at exactly SEO_HOMEPAGE_TITLE_MAX", () => {
       const r = SeoDefaultsSchema.safeParse({
-        homepage: { title: "x".repeat(255) },
+        homepage: { title: "x".repeat(SEO_HOMEPAGE_TITLE_MAX) },
       });
       expect(r.success).toBe(true);
     });
 
     it("rejects description longer than SEO_HOMEPAGE_DESCRIPTION_MAX", () => {
       const r = SeoDefaultsSchema.safeParse({
-        homepage: { description: "x".repeat(501) },
+        homepage: { description: "x".repeat(SEO_HOMEPAGE_DESCRIPTION_MAX + 1) },
       });
       expect(r.success).toBe(false);
     });

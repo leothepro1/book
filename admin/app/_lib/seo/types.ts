@@ -85,16 +85,18 @@ export type SeoMetadata = z.infer<typeof SeoMetadataSchema>;
 /**
  * Hard length limits for merchant-facing homepage SEO fields.
  *
+ * Tuned to Google's SERP truncation behaviour so merchants see in the
+ * live SERP preview roughly what will actually ship. Exceeding these
+ * limits is rejected at save; the admin counter goes amber at 80% and
+ * red at 100%.
+ *
  * These are the single source of truth for:
  *   - Zod schema validation on save.
- *   - Admin character-counter thresholds (warn at 80%, error at 100%).
- *
- * Google's SERP truncation behavior is not enforced here — we allow up
- * to the Zod limit, the admin UI surfaces Google's softer "recommended"
- * length elsewhere. Exceeding these hard limits is rejected at save.
+ *   - Admin character-counter thresholds.
+ *   - Server-action input-validator length bounds.
  */
-export const SEO_HOMEPAGE_TITLE_MAX = 255;
-export const SEO_HOMEPAGE_DESCRIPTION_MAX = 500;
+export const SEO_HOMEPAGE_TITLE_MAX = 70;
+export const SEO_HOMEPAGE_DESCRIPTION_MAX = 150;
 
 /** Fraction at which the character counter transitions to warn state. */
 export const SEO_CHAR_COUNTER_WARN_THRESHOLD = 0.8;
