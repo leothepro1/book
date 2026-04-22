@@ -350,36 +350,42 @@ export default function GuestHeader({ config, guestLoggedIn = false, guestInitia
     if (langButton) rightButtons.push(<Fragment key="lang">{langButton}</Fragment>);
   }
 
-  // Account button — links to /login (logged out) or /account (logged in)
-  const accountHref = guestLoggedIn ? "/account" : "/login";
-  rightButtons.push(
-    <Fragment key="account">
-      {guestLoggedIn ? (
-        <a href={accountHref} className="gh-account gh-account--active" aria-label="Konto">
-          <span className="gh-account__initials">{guestInitials || "?"}</span>
-        </a>
-      ) : (
-        <a href={accountHref} className="gh-account" aria-label="Logga in">
-          <span
-            className="material-symbols-rounded"
-            style={{
-              fontSize: 28,
-              width: 28,
-              height: 28,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "var(--text)",
-              fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 28",
-            }}
-            aria-hidden="true"
-          >
-            person
-          </span>
-        </a>
-      )}
-    </Fragment>,
-  );
+  // Account button — links to /login (logged out) or /account (logged in).
+  // Gated on the tenant's `showLoginLinks` flag (settings → Kundkonton).
+  // Default true; hide only when the merchant has explicitly turned it off
+  // so legacy tenants without the flag keep the login link visible.
+  const showLoginLinks = config.features?.showLoginLinks !== false;
+  if (showLoginLinks) {
+    const accountHref = guestLoggedIn ? "/account" : "/login";
+    rightButtons.push(
+      <Fragment key="account">
+        {guestLoggedIn ? (
+          <a href={accountHref} className="gh-account gh-account--active" aria-label="Konto">
+            <span className="gh-account__initials">{guestInitials || "?"}</span>
+          </a>
+        ) : (
+          <a href={accountHref} className="gh-account" aria-label="Logga in">
+            <span
+              className="material-symbols-rounded"
+              style={{
+                fontSize: 28,
+                width: 28,
+                height: 28,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--text)",
+                fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 28",
+              }}
+              aria-hidden="true"
+            >
+              person
+            </span>
+          </a>
+        )}
+      </Fragment>,
+    );
+  }
 
   // Cart button — always last on the right, only visible when items in cart
   rightButtons.push(<Fragment key="cart"><CartHeaderButton tenantId={config.tenantId} /></Fragment>);

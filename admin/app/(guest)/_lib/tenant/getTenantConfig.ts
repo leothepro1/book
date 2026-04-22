@@ -90,6 +90,15 @@ async function fetchTenantConfig(
   });
   config._publishedLocales = publishedLocaleRows.map((r) => r.locale);
 
+  // Merge direct-column tenant flags into features. These live outside
+  // the draft/publish JSON cycle and reflect admin-only immediate-effect
+  // settings. Cache invalidation is the responsibility of the writer
+  // (see app/(admin)/settings/customer-accounts/actions.ts).
+  config.features = {
+    ...config.features,
+    showLoginLinks: tenant.showLoginLinks,
+  };
+
   // Set primary/current locale
   const tenantPrimaryLocale = await getTenantPrimaryLocale(tenant.id);
   config._primaryLocale = tenantPrimaryLocale;
@@ -254,6 +263,7 @@ function getDefaultConfig(tenantId: string): TenantConfig {
       accountEnabled: false,
       notificationsEnabled: true,
       languageSwitcherEnabled: true,
+      showLoginLinks: true,
     },
     supportLinks: {},
     rules: [],

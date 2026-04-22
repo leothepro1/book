@@ -14,7 +14,6 @@ import { CustomerAccountsContent } from '@/app/(admin)/settings/customer-account
 import { BillingContent } from '@/app/(admin)/settings/billing/BillingContent';
 import { AppsContent } from '@/app/(admin)/settings/apps/AppsContent';
 import { GeneralContent } from '@/app/(admin)/settings/general/GeneralContent';
-import { PreferencesContent } from '@/app/(admin)/settings/preferences/PreferencesContent';
 import { useRole } from './RoleContext';
 import { useNavigationGuard } from './NavigationGuard';
 
@@ -48,7 +47,6 @@ const NAV_ITEMS: { items: SettingsNavItem[]; divider?: boolean }[] = [
       { id: 'checkout', label: 'Kassa', icon: 'shopping_cart_checkout', adminOnly: true },
       { id: 'customer-accounts', label: 'Kundkonton', icon: 'manage_accounts', adminOnly: true },
       { id: 'general', label: 'Allmänt', icon: 'storefront' },
-      { id: 'preferences', label: 'Preferenser', icon: 'tune' },
       { id: 'apps', label: 'Appar', icon: 'home_storage', adminOnly: true },
       { id: 'integrations', label: 'Integrationer', icon: 'linked_services', adminOnly: true },
       { id: 'domains', label: 'Domäner', icon: 'travel_explore', adminOnly: true },
@@ -294,8 +292,6 @@ export function SettingsPanel() {
                 <BillingContent key={resetKey} onSubTitleChange={setSubTitle} />
               ) : activeItem === 'general' ? (
                 <GeneralContent key={resetKey} onSubTitleChange={setSubTitle} />
-              ) : activeItem === 'preferences' ? (
-                <PreferencesContent key={resetKey} onSubTitleChange={setSubTitle} />
               ) : (
                 <div key={resetKey} style={{ padding: 0 }}>
                   <p style={{ color: 'var(--admin-text-secondary)', fontSize: 13 }}>

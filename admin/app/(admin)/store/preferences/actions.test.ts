@@ -13,28 +13,36 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/_lib/db/prisma", () => ({
+// Mock specifiers must match what the SUT imports — actions.ts now
+// uses relative paths (same reason lib/seo uses relative paths
+// internally: vitest's @-alias resolution breaks on transitive
+// cross-dir imports). See M3 commit for the original diagnosis.
+vi.mock("../../../_lib/db/prisma", () => ({
   prisma: {
     tenant: { update: vi.fn() },
     mediaAsset: { findFirst: vi.fn() },
   },
 }));
 
-vi.mock("@/app/_lib/logger", () => ({ log: vi.fn() }));
+vi.mock("../../../_lib/logger", () => ({ log: vi.fn() }));
 
-vi.mock("@/app/(admin)/_lib/tenant/getCurrentTenant", () => ({
+vi.mock("../../_lib/tenant/getCurrentTenant", () => ({
   getCurrentTenant: vi.fn(),
 }));
 
-vi.mock("@/app/(admin)/_lib/auth/devAuth", () => ({
+vi.mock("../../_lib/auth/devAuth", () => ({
   requireAdmin: vi.fn(),
 }));
 
 import type { Tenant } from "@prisma/client";
 
-import { prisma } from "@/app/_lib/db/prisma";
-import { requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
-import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
+import { prisma } from "../../../_lib/db/prisma";
+import { requireAdmin } from "../../_lib/auth/devAuth";
+import { getCurrentTenant } from "../../_lib/tenant/getCurrentTenant";
+import {
+  SEO_HOMEPAGE_DESCRIPTION_MAX,
+  SEO_HOMEPAGE_TITLE_MAX,
+} from "../../../_lib/seo/types";
 
 import {
   getHomepagePreferences,
@@ -259,7 +267,7 @@ describe("saveHomepagePreferences — rejection paths", () => {
 
   it("rejects titles over SEO_HOMEPAGE_TITLE_MAX (Zod at boundary)", async () => {
     const result = await saveHomepagePreferences({
-      title: "x".repeat(256),
+      title: "x".repeat(SEO_HOMEPAGE_TITLE_MAX + 1),
       description: "",
       ogImagePublicId: null,
     });
@@ -270,7 +278,7 @@ describe("saveHomepagePreferences — rejection paths", () => {
   it("rejects descriptions over SEO_HOMEPAGE_DESCRIPTION_MAX", async () => {
     const result = await saveHomepagePreferences({
       title: "Home",
-      description: "x".repeat(501),
+      description: "x".repeat(SEO_HOMEPAGE_DESCRIPTION_MAX + 1),
       ogImagePublicId: null,
     });
     expect(result.ok).toBe(false);

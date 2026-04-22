@@ -1,0 +1,121 @@
+/**
+ * Customer accounts settings panel.
+ *
+ * Two stacked containers. Each outer <div> inside #settings-content gets
+ * the standard admin card look (white bg, rounded, soft shadow) from
+ * settings-panel.css. This file only styles the inner elements.
+ */
+
+/* ── Group label (appears above the inner row) ────────────── */
+.ca-settings__label {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--admin-text);
+  line-height: var(--line-height-tight);
+  padding: 0px 0px 7px 0px;
+}
+
+/* ── Bordered wrapper that groups rows with dividers ─────── */
+/* Mirrors the email-nav pattern: one outer border + radius,
+ * rows inside share it, dividers separate them. */
+.ca-settings__list {
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+/* ── Inner settings row ───────────────────────────────────── */
+.ca-settings__row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px;
+  background: transparent;
+}
+
+/* Horizontal divider between rows inside the same list. */
+.ca-settings__divider {
+  height: 1px;
+  background: var(--admin-border);
+  margin: 0 16px;
+}
+
+.ca-settings__row-icon {
+  flex-shrink: 0;
+  color: var(--admin-text-secondary);
+  display: inline-flex;
+}
+
+.ca-settings__row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.ca-settings__row-title {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--admin-text);
+  line-height: var(--line-height-tight);
+}
+
+.ca-settings__row-desc {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-normal);
+  color: var(--admin-text-secondary);
+  line-height: var(--line-height-tight);
+  margin-top: 2.6px;
+}
+
+.ca-settings__row-control {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Compact the trailing CTA (e.g. "Anpassa") to match settings-row
+ * density. Overrides the global .settings-btn--outline padding only
+ * within this panel — other panels keep their larger button form. */
+.ca-settings__row-control .settings-btn--outline {
+  padding: 4px 10px;
+}
+
+/* ── Stacked row variant (header on top, extra content below) ── */
+/* Used by the URL row: icon + title + desc on the first line,
+ * a full-width disabled input stacked below. */
+.ca-settings__row--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.ca-settings__row--stacked .ca-settings__row-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+}
+
+/* ── URL-input row variant ───────────────────────────────── */
+/* No icon/text — the input fills the row. Disabled look per spec.
+ * Inherits row padding so it sits flush with surrounding rows. */
+.ca-settings__url-input {
+  width: 100%;
+  padding: 9px 12px;
+  font-family: var(--sf-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--font-sm);
+  color: var(--admin-text);
+  background: #f3f3f3;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  text-overflow: ellipsis;
+  cursor: not-allowed;
+}
+
+.ca-settings__url-input:disabled {
+  color: var(--admin-text);
+  -webkit-text-fill-color: var(--admin-text); /* Safari: keep the text readable */
+  opacity: 1; /* Override browser's dimmed default so the URL stays legible */
+}

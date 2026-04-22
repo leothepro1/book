@@ -25,16 +25,16 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
-import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
-import { requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
-import { prisma } from "@/app/_lib/db/prisma";
-import { log } from "@/app/_lib/logger";
+import { getCurrentTenant } from "../../_lib/tenant/getCurrentTenant";
+import { requireAdmin } from "../../_lib/auth/devAuth";
+import { prisma } from "../../../_lib/db/prisma";
+import { log } from "../../../_lib/logger";
 import {
   SEO_HOMEPAGE_DESCRIPTION_MAX,
   SEO_HOMEPAGE_TITLE_MAX,
   SeoDefaultsSchema,
   safeParseSeoDefaults,
-} from "@/app/_lib/seo/types";
+} from "../../../_lib/seo/types";
 
 // ── Shared types ─────────────────────────────────────────────
 

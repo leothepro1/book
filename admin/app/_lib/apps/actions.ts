@@ -30,6 +30,18 @@ async function resolveTenantId(): Promise<string | null> {
 
 // ── Sidebar Data (lightweight, for server layout) ───────────────
 
+/**
+ * One sub-item under a sidebar app (or sales-channel) in the admin.
+ * When an app declares sub-items, the sidebar renders the item as an
+ * accordion using the same chevron + CSS as Produkter / Boenden /
+ * Webbshop. Absence of `subItems` keeps the flat rendering.
+ */
+export type SidebarAppSubItem = {
+  /** Absolute route path — must start with `/`. */
+  href: string;
+  label: string;
+};
+
 export type SidebarApp = {
   appId: string;
   name: string;
@@ -37,6 +49,11 @@ export type SidebarApp = {
   iconUrl?: string;
   isSalesChannel: boolean;
   channelHandle?: string;
+  /**
+   * Optional accordion sub-items rendered under this app's sidebar
+   * entry. Empty or undefined → flat link (current default).
+   */
+  subItems?: SidebarAppSubItem[];
 };
 
 /**

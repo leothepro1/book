@@ -25,6 +25,7 @@ const ORDER_ITEMS = [
 ];
 
 const CUSTOMER_ITEMS = [
+  { href: '/customers/companies', label: 'Företag' },
   { href: '/customers/segments', label: 'Kundsegment' },
 ];
 
@@ -44,6 +45,12 @@ const CONTENT_ITEMS = [
   { href: '/menus', label: 'Menyer' },
 ];
 
+// Webbshop (sales channel) sub-items. Preferences lives here —
+// matches Shopify's "Online Store → Preferences" IA. Not in Settings.
+const WEBSHOP_ITEMS = [
+  { href: '/store/preferences', label: 'Preferenser' },
+];
+
 // Curved connector SVG for active sub-item
 const CONNECTOR_SVG = `data:image/svg+xml,%3Csvg%20width%3D'21'%20height%3D'28'%20viewBox%3D'0%200%2021%2028'%20fill%3D'none'%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%3E%3Cpath%20d%3D'M19%2014.25H19.75V15.75H19V14.25ZM10.077%2013.362L10.7452%2013.0215V13.0215L10.077%2013.362ZM11.388%2014.673L11.7285%2014.0048H11.7285L11.388%2014.673ZM10.5%200V10.2H9V0H10.5ZM14.55%2014.25H19V15.75H14.55V14.25ZM10.5%2010.2C10.5%2011.0525%2010.5006%2011.6467%2010.5384%2012.1093C10.5755%2012.5632%2010.6446%2012.824%2010.7452%2013.0215L9.40873%2013.7025C9.18239%2013.2582%209.08803%2012.7781%209.04336%2012.2315C8.99942%2011.6936%209%2011.0277%209%2010.2H10.5ZM14.55%2015.75C13.7223%2015.75%2013.0564%2015.7506%2012.5185%2015.7066C11.9719%2015.662%2011.4918%2015.5676%2011.0475%2015.3413L11.7285%2014.0048C11.926%2014.1054%2012.1868%2014.1745%2012.6407%2014.2116C13.1033%2014.2494%2013.6975%2014.25%2014.55%2014.25V15.75ZM10.7452%2013.0215C10.9609%2013.4448%2011.3052%2013.7891%2011.7285%2014.0048L11.0475%2015.3413C10.3419%2014.9817%209.76825%2014.4081%209.40873%2013.7025L10.7452%2013.0215Z'%20fill%3D'%23B5B5B5'/%3E%3Cpath%20d%3D'M17%2012L20%2015L17%2018'%20stroke%3D'%23B5B5B5'%20stroke-width%3D'1.5'%20stroke-linecap%3D'round'%20stroke-linejoin%3D'round'/%3E%3C/svg%3E`;
 
@@ -61,7 +68,11 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
   const isOrdersLinkActive = pathname === '/orders' || (pathname.startsWith('/orders/') && !pathname.startsWith('/orders/abandoned'));
   const isOrderAccordionOpen = isOrdersLinkActive || ORDER_ITEMS.some((item) => isActive(item.href));
-  const isCustomersLinkActive = pathname === '/customers' || (pathname.startsWith('/customers/') && !pathname.startsWith('/customers/segments'));
+  const isCustomersLinkActive =
+    pathname === '/customers' ||
+    (pathname.startsWith('/customers/') &&
+      !pathname.startsWith('/customers/segments') &&
+      !pathname.startsWith('/customers/companies'));
   const isCustomerAccordionOpen = isCustomersLinkActive || CUSTOMER_ITEMS.some((item) => isActive(item.href));
   const isAnalyticsLinkActive = pathname === '/analytics';
   const isAnalyticsAccordionOpen = isAnalyticsLinkActive || ANALYTICS_ITEMS.some((item) => isActive(item.href));
@@ -70,6 +81,15 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
   const isAccommodationsLinkActive = pathname === '/accommodations' || (pathname.startsWith('/accommodations/') && !pathname.startsWith('/accommodation-categories'));
   const isAccommodationAccordionOpen = isAccommodationsLinkActive || ACCOMMODATION_ITEMS.some((item) => isActive(item.href));
   const isContentActive = CONTENT_ITEMS.some((item) => isActive(item.href));
+  // Webbshop: parent link is `/store`. Active when on /store or any
+  // WEBSHOP_ITEMS sub-path. Accordion opens whenever parent or child
+  // is active — same pattern as Produkter / Boenden.
+  const isWebshopLinkActive =
+    pathname === '/store' ||
+    (pathname.startsWith('/store/') &&
+      !WEBSHOP_ITEMS.some((item) => pathname.startsWith(item.href)));
+  const isWebshopAccordionOpen =
+    isWebshopLinkActive || WEBSHOP_ITEMS.some((item) => isActive(item.href));
 
   const guardedClick = (e: MouseEvent<HTMLAnchorElement>, href: string) => {
     if (isGuarded) {
@@ -624,36 +644,81 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
             <div className="admin-group-label" style={{ padding: '0 8px', marginBottom: 6 }}>
               Försäljningskanaler
             </div>
-            {/* Webbshop — always present, always first */}
-            {(() => {
-              const active = isActive('/store');
-              return (
-                <Link
-                  href="/store"
-                  onClick={(e) => guardedClick(e, '/store')}
-                  className={`flex items-center gap-3 ${
-                    active
-                      ? 'bg-[#e3e3e3] text-[#303030]'
-                      : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
-                  }`}
-                  style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
-                >
-                  <span
-                    className="material-symbols-rounded flex-shrink-0"
-                    style={{ fontSize: 18, fontVariationSettings: active
+            {/* Webbshop — accordion with sub-items (same pattern as
+                Produkter / Boenden). Preferenser lives here. */}
+            <div>
+              <Link
+                href="/store"
+                onClick={(e) => guardedClick(e, '/store')}
+                className={`flex items-center gap-3 ${
+                  isWebshopLinkActive
+                    ? 'bg-[#e3e3e3] text-[#303030]'
+                    : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
+                }`}
+                style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
+              >
+                <span
+                  className="material-symbols-rounded flex-shrink-0"
+                  style={{
+                    fontSize: 18,
+                    fontVariationSettings: isWebshopAccordionOpen
                       ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                      : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
-                  >
-                    storefront
-                  </span>
-                  <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-                    isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-                  }`} style={{ fontWeight: active ? 600 : 500 }}>
-                    Webbshop
-                  </span>
-                </Link>
-              );
-            })()}
+                      : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
+                  }}
+                >
+                  storefront
+                </span>
+                <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
+                  isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+                }`} style={{ fontWeight: isWebshopLinkActive ? 600 : 500 }}>
+                  Webbshop
+                </span>
+              </Link>
+
+              <div className={`overflow-hidden transition-all duration-300 ${
+                isWebshopAccordionOpen && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+              }`}>
+                <div className="flex flex-col">
+                  {WEBSHOP_ITEMS.map((sub, idx) => {
+                    const subActive = isActive(sub.href);
+                    const activeIdx = WEBSHOP_ITEMS.findIndex((s) => isActive(s.href));
+                    const hasActiveSub = activeIdx !== -1;
+                    const showLine = hasActiveSub && !subActive && idx < activeIdx;
+
+                    return (
+                      <Link
+                        key={sub.href}
+                        href={sub.href}
+                        onClick={(e) => guardedClick(e, sub.href)}
+                        className={`relative block text-[13px] ${
+                          subActive
+                            ? 'bg-[#e3e3e3] text-[#303030]'
+                            : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
+                        }`}
+                        style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontWeight: subActive ? 600 : 500 }}
+                      >
+                        {subActive ? (
+                          <img
+                            src={CONNECTOR_SVG}
+                            alt=""
+                            className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
+                            style={{ width: 21, height: 28, left: 7.5, marginTop: -1.5 }}
+                          />
+                        ) : showLine ? (
+                          <img
+                            src={LINE_SVG}
+                            alt=""
+                            className="absolute pointer-events-none"
+                            style={{ width: 21, left: 7.5, top: -6, bottom: -6, height: 'calc(100% + 12px)' }}
+                          />
+                        ) : null}
+                        {sub.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
             {/* Installed sales channel apps */}
             {sidebarApps.filter((a) => a.isSalesChannel).map((app) => {
               const active = isActive(`/apps/${app.appId}`);

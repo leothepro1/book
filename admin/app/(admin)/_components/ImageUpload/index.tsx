@@ -13,6 +13,27 @@ type ImageUploadProps = {
   variant?: "default" | "compact";
   /** File accept attribute (default: images only) */
   accept?: string;
+  /**
+   * Hover-overlay label shown over an uploaded image (default: "Ändra").
+   * Callers that want a longer phrase like "Ändra bild" override this.
+   */
+  overlayLabel?: string;
+  /**
+   * Whether to render the filename badge over the uploaded image
+   * (default: true). Some surfaces — e.g. the social-share preview
+   * card — show the image as a pure visual and don't want the
+   * filename overlaying it.
+   */
+  showFilename?: boolean;
+  /**
+   * Fixed height for the image slot. Applied to both the empty-state
+   * picker and the uploaded-result card. When set, overrides the
+   * default 16:10 aspect-ratio sizing so the image box always
+   * occupies the same vertical space regardless of upload state.
+   *
+   * Accepts any valid CSS length (px number auto-converted to `"Xpx"`).
+   */
+  height?: number | string;
 };
 
 export function ImageUpload({
@@ -24,8 +45,19 @@ export function ImageUpload({
   placeholder = "Välj fil...",
   variant = "default",
   accept = "image/jpeg,image/png,image/webp,image/avif",
+  overlayLabel = "Ändra",
+  showFilename = true,
+  height,
 }: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  // When a fixed height is requested, override both the default
+  // aspect-ratio (img-upload-result) and the min-height
+  // (img-upload-empty) via inline style so the image slot is exactly
+  // the requested size in both states.
+  const fixedHeightStyle: React.CSSProperties | undefined =
+    height !== undefined
+      ? { height, minHeight: height, aspectRatio: "auto" }
+      : undefined;
   const { upload, isUploading, error } = useUpload(folder);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -78,6 +110,7 @@ export function ImageUpload({
         <div
           className="img-upload-result"
           onClick={() => !isUploading && inputRef.current?.click()}
+          style={fixedHeightStyle}
         >
           {isUploading && !displayUrl ? (
             <div className="img-upload-skeleton" />
@@ -92,12 +125,14 @@ export function ImageUpload({
               <div className="img-upload-progressbar" />
             </div>
           )}
-          <span className="img-upload-result-filename">
-            {fileName ?? (value ? value.split("/").pop() : "bild")}
-          </span>
+          {showFilename && (
+            <span className="img-upload-result-filename">
+              {fileName ?? (value ? value.split("/").pop() : "bild")}
+            </span>
+          )}
           {!isUploading && (
             <div className="img-upload-result-overlay">
-              <span className="img-upload-result-overlay-label">Ändra</span>
+              <span className="img-upload-result-overlay-label">{overlayLabel}</span>
             </div>
           )}
         </div>
@@ -145,7 +180,11 @@ export function ImageUpload({
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         onClick={() => !isUploading && inputRef.current?.click()}
-        style={{ cursor: isUploading ? "not-allowed" : "pointer", opacity: isUploading ? 0.7 : 1 }}
+        style={{
+          cursor: isUploading ? "not-allowed" : "pointer",
+          opacity: isUploading ? 0.7 : 1,
+          ...fixedHeightStyle,
+        }}
       >
         <svg className="img-upload-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path fillRule="evenodd" d="M3.5 0 3 .5v23l.5.5h17l.5-.5v-16l-.15-.35-7-7L13.5 0h-10ZM4 23V1h9v6.5l.5.5H20v15H4ZM19.3 7 14 1.7V7h5.3Z" fill="currentColor" />

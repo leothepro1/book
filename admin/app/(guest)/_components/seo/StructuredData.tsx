@@ -15,8 +15,8 @@
  * cannot break out of the enclosing script tag.
  */
 
-import { stringifyJsonLd } from "@/app/_lib/seo/json-ld-safe";
-import type { StructuredDataObject } from "@/app/_lib/seo/types";
+import { stringifyJsonLd } from "../../../_lib/seo/json-ld-safe";
+import type { StructuredDataObject } from "../../../_lib/seo/types";
 
 interface StructuredDataProps {
   readonly data: readonly StructuredDataObject[];
