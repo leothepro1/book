@@ -46,6 +46,11 @@ import { z } from "zod";
 vi.mock("../../logger", () => ({ log: vi.fn() }));
 
 import type {
+  AccommodationCategory,
+  AccommodationCategoryItem,
+  AccommodationMedia,
+  AccommodationStatus,
+  AccommodationType,
   Product,
   ProductCollection,
   ProductCollectionItem,
@@ -55,12 +60,23 @@ import type {
   ProductVariant,
 } from "@prisma/client";
 
+import type { AccommodationWithMedia } from "../adapters/accommodation";
+import {
+  accommodationCategorySeoAdapter,
+  type AccommodationCategoryItemWithAccommodation,
+  type AccommodationCategoryWithItems,
+} from "../adapters/accommodation-category";
+import {
+  accommodationIndexSeoAdapter,
+  type AccommodationIndexSeoInput,
+} from "../adapters/accommodation-index";
 import { productSeoAdapter, type ProductWithMedia } from "../adapters/product";
 import {
   productCollectionSeoAdapter,
   type ProductCollectionItemWithProduct,
   type ProductCollectionWithItems,
 } from "../adapters/product-collection";
+import { searchSeoAdapter, type SearchSeoInput } from "../adapters/search";
 import type { SeoTenantContext, StructuredDataObject } from "../types";
 
 // ── Rich Results schemas ──────────────────────────────────────
@@ -181,7 +197,20 @@ const BreadcrumbListSchema = z
  *   - name (or about, inverse pattern)
  * We always emit name; `url` is strongly recommended. `description`
  * is optional but emitted when the source collection has one.
+ *
+ * `about` is optional: accommodation-index and accommodation-
+ * category emit `about: { @type: "Accommodation" }` to disambiguate
+ * accommodation-listing pages from product-listing pages. The
+ * structured value (`{ @type: "Accommodation" }`) is schema.org's
+ * idiomatic shape — a Thing reference specifying what the page
+ * is primarily about.
  */
+const CollectionPageAboutSchema = z
+  .object({
+    "@type": z.string().min(1),
+  })
+  .passthrough();
+
 const CollectionPageSchema = z
   .object({
     "@context": SchemaOrgContext,
@@ -189,6 +218,7 @@ const CollectionPageSchema = z
     name: z.string().min(1),
     url: z.string().url().optional(),
     description: z.string().min(1).optional(),
+    about: CollectionPageAboutSchema.optional(),
   })
   .strict();
 
@@ -647,5 +677,291 @@ describe("Rich Results — locale variants", () => {
       "en",
     );
     expectAllRichResultsValid(out);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// M5 Batch B adapters
+// ──────────────────────────────────────────────────────────────
+//
+// Every JSON-LD block emitted by the three Batch B adapters
+// (accommodation-index, accommodation-category, search) passes
+// the same validators used by Batch A, plus the newly loosened
+// CollectionPageSchema that accepts `about: { @type }`.
+
+function makeAccommodationMedia(
+  overrides: Partial<AccommodationMedia> = {},
+): AccommodationMedia {
+  return {
+    id: "am1",
+    accommodationId: "acc_1",
+    url: "https://cdn.example/acc.jpg",
+    altText: "",
+    sortOrder: 0,
+    source: "MANUAL",
+    ...overrides,
+  };
+}
+
+function makeAccommodation(
+  overrides: Partial<AccommodationWithMedia> = {},
+): AccommodationWithMedia {
+  return {
+    id: "acc_1",
+    tenantId: "tenant_rich",
+    name: "Stuga",
+    slug: "stuga",
+    shortName: null,
+    externalCode: null,
+    externalId: null,
+    pmsProvider: null,
+    pmsSyncedAt: null,
+    pmsData: null,
+    seo: null,
+    accommodationType: "CABIN" as AccommodationType,
+    status: "ACTIVE",
+    nameOverride: null,
+    descriptionOverride: null,
+    description: "",
+    maxGuests: 4,
+    minGuests: 1,
+    defaultGuests: 2,
+    maxAdults: null,
+    minAdults: null,
+    maxChildren: null,
+    minChildren: null,
+    extraBeds: 0,
+    roomSizeSqm: 30,
+    bedrooms: 2,
+    bathrooms: 1,
+    floorNumber: null,
+    basePricePerNight: 120000,
+    currency: "SEK",
+    taxRate: 1200,
+    totalUnits: 1,
+    baseAvailability: 1,
+    roomTypeGroupId: null,
+    sortOrder: 0,
+    archivedAt: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-04-01T00:00:00Z"),
+    media: [],
+    ...overrides,
+  };
+}
+
+function makeIndexInput(
+  overrides: Partial<AccommodationIndexSeoInput> = {},
+): AccommodationIndexSeoInput {
+  return {
+    tenantId: "tenant_rich",
+    activeLocales: ["sv"],
+    featuredAccommodations: [],
+    ...overrides,
+  };
+}
+
+function makeCategoryItem(
+  accommodationOverrides: Partial<AccommodationWithMedia> = {},
+  joinOverrides: Partial<AccommodationCategoryItem> = {},
+  media: AccommodationMedia[] = [],
+): AccommodationCategoryItemWithAccommodation {
+  const accommodation = makeAccommodation({
+    ...accommodationOverrides,
+    media,
+  });
+  const join: AccommodationCategoryItem = {
+    id: `aci_${accommodation.id}`,
+    categoryId: "cat_rich",
+    accommodationId: accommodation.id,
+    sortOrder: 0,
+    createdAt: new Date("2026-02-01T00:00:00Z"),
+    ...joinOverrides,
+  };
+  return { ...join, accommodation };
+}
+
+function makeAccommodationCategory(
+  overrides: Partial<AccommodationCategoryWithItems> = {},
+): AccommodationCategoryWithItems {
+  const base: AccommodationCategory = {
+    id: "cat_rich",
+    tenantId: "tenant_rich",
+    title: "Stugor",
+    description: "Våra stugor",
+    slug: "stugor",
+    imageUrl: "https://cdn.example/stugor.jpg",
+    status: "ACTIVE" as AccommodationStatus,
+    visibleInSearch: true,
+    sortOrder: 0,
+    pmsRef: null,
+    version: 1,
+    seo: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-04-01T00:00:00Z"),
+  };
+  return { ...base, items: [], ...overrides };
+}
+
+function makeSearchInput(overrides: Partial<SearchSeoInput> = {}): SearchSeoInput {
+  return {
+    tenantId: "tenant_rich",
+    activeLocales: ["sv"],
+    ...overrides,
+  };
+}
+
+// ── accommodation-index ──────────────────────────────────────
+
+describe("Rich Results — accommodation-index adapter", () => {
+  const tenant = makeTenant();
+
+  it("empty featured list: CollectionPage + BreadcrumbList only, still valid", () => {
+    const out = accommodationIndexSeoAdapter.toStructuredData(
+      makeIndexInput({ featuredAccommodations: [] }),
+      tenant,
+      "sv",
+    );
+    expectAllRichResultsValid(out);
+    expect(out.find((o) => o["@type"] === "ItemList")).toBeUndefined();
+  });
+
+  it("CollectionPage.about={@type:Accommodation} is accepted by the validator", () => {
+    const out = accommodationIndexSeoAdapter.toStructuredData(
+      makeIndexInput(),
+      tenant,
+      "sv",
+    );
+    const page = out.find((o) => o["@type"] === "CollectionPage");
+    expect(page?.about).toEqual({ "@type": "Accommodation" });
+    expectAllRichResultsValid(out);
+  });
+
+  it("with 1 featured accommodation: CollectionPage + ItemList + BreadcrumbList all valid", () => {
+    const out = accommodationIndexSeoAdapter.toStructuredData(
+      makeIndexInput({
+        featuredAccommodations: [
+          makeAccommodation({ media: [makeAccommodationMedia()] }),
+        ],
+      }),
+      tenant,
+      "sv",
+    );
+    expectAllRichResultsValid(out);
+  });
+
+  it("with 20 featured accommodations: full ItemList still valid", () => {
+    const featured = Array.from({ length: 20 }, (_, i) =>
+      makeAccommodation({ id: `a${i}`, slug: `a-${i}`, name: `A${i}` }),
+    );
+    const out = accommodationIndexSeoAdapter.toStructuredData(
+      makeIndexInput({ featuredAccommodations: featured }),
+      tenant,
+      "sv",
+    );
+    expectAllRichResultsValid(out);
+  });
+
+  it("with 21 featured accommodations (oversize): output is capped to 20, still valid", () => {
+    const featured = Array.from({ length: 21 }, (_, i) =>
+      makeAccommodation({ id: `a${i}`, slug: `a-${i}`, name: `A${i}` }),
+    );
+    const out = accommodationIndexSeoAdapter.toStructuredData(
+      makeIndexInput({ featuredAccommodations: featured }),
+      tenant,
+      "sv",
+    );
+    const list = out.find((o) => o["@type"] === "ItemList");
+    expect((list?.itemListElement as unknown[]).length).toBe(20);
+    expectAllRichResultsValid(out);
+  });
+
+  it("BreadcrumbList is 2-level (Hem → Boenden)", () => {
+    const out = accommodationIndexSeoAdapter.toStructuredData(
+      makeIndexInput(),
+      tenant,
+      "sv",
+    );
+    const crumb = out.find((o) => o["@type"] === "BreadcrumbList");
+    expect((crumb?.itemListElement as unknown[]).length).toBe(2);
+    expectAllRichResultsValid(out);
+  });
+});
+
+// ── accommodation-category ──────────────────────────────────
+
+describe("Rich Results — accommodation-category adapter", () => {
+  const tenant = makeTenant();
+
+  it("non-indexable (empty items): returns no JSON-LD to validate", () => {
+    const out = accommodationCategorySeoAdapter.toStructuredData(
+      makeAccommodationCategory({ items: [] }),
+      tenant,
+      "sv",
+    );
+    // Empty list — nothing to validate. Explicit assertion that no
+    // invalid objects leaked through.
+    expect(out).toEqual([]);
+  });
+
+  it("non-indexable (DRAFT / INACTIVE): returns no JSON-LD", () => {
+    const out = accommodationCategorySeoAdapter.toStructuredData(
+      makeAccommodationCategory({
+        status: "INACTIVE" as AccommodationStatus,
+        items: [makeCategoryItem()],
+      }),
+      tenant,
+      "sv",
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("indexable with 1 member: CollectionPage + ItemList + BreadcrumbList all valid", () => {
+    const out = accommodationCategorySeoAdapter.toStructuredData(
+      makeAccommodationCategory({
+        items: [makeCategoryItem({}, {}, [makeAccommodationMedia()])],
+      }),
+      tenant,
+      "sv",
+    );
+    expectAllRichResultsValid(out);
+  });
+
+  it("BreadcrumbList is 3-level (Hem → Boenden → {category.title})", () => {
+    const out = accommodationCategorySeoAdapter.toStructuredData(
+      makeAccommodationCategory({ items: [makeCategoryItem()] }),
+      tenant,
+      "sv",
+    );
+    const crumb = out.find((o) => o["@type"] === "BreadcrumbList");
+    expect((crumb?.itemListElement as unknown[]).length).toBe(3);
+    expectAllRichResultsValid(out);
+  });
+
+  it("indexable with 20 members: full ItemList valid", () => {
+    const items = Array.from({ length: 20 }, (_, i) =>
+      makeCategoryItem(
+        { id: `a${i}`, slug: `a-${i}`, name: `A${i}` },
+        { sortOrder: i },
+      ),
+    );
+    const out = accommodationCategorySeoAdapter.toStructuredData(
+      makeAccommodationCategory({ items }),
+      tenant,
+      "sv",
+    );
+    expectAllRichResultsValid(out);
+  });
+});
+
+// ── search ──────────────────────────────────────────────────
+
+describe("Rich Results — search adapter", () => {
+  const tenant = makeTenant();
+
+  it("always returns an empty structured-data array (no JSON-LD to validate)", () => {
+    expect(
+      searchSeoAdapter.toStructuredData(makeSearchInput(), tenant, "sv"),
+    ).toEqual([]);
   });
 });
