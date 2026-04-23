@@ -101,6 +101,10 @@ export const searchSeoAdapter: SeoAdapter<SearchSeoInput> = {
       description: null,
       featuredImageId: null,
       seoOverrides: null,
+      // TODO(m7-followup): stabilize updatedAt/publishedAt in toSeoable.
+      // Cosmetic only — search adapter emits no sitemap entries, and
+      // Seoable updatedAt/publishedAt have no crawler impact for
+      // noindex'd routes.
       updatedAt: new Date(),
       publishedAt: new Date(),
       locale: tenant.defaultLocale,

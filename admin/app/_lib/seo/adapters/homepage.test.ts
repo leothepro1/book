@@ -15,6 +15,7 @@ function makeTenant(
     defaultLocale: "sv",
     seoDefaults: { titleTemplate: "{entityTitle} | {siteName}" },
     activeLocales: ["sv", "en"],
+    contentUpdatedAt: new Date("2026-04-01T00:00:00Z"),
     ...overrides,
   };
 }
@@ -194,5 +195,51 @@ describe("homepageSeoAdapter.getSitemapEntries", () => {
     for (const entry of entries) {
       expect(entry.alternates).toHaveLength(3);
     }
+  });
+});
+
+// ── Lastmod stability (M7 prep) ───────────────────────────────
+//
+// Pre-M7 the adapter emitted `new Date()` for Seoable
+// updatedAt/publishedAt and sitemap lastmod. Fixed to
+// `tenant.contentUpdatedAt` — currently proxied to Tenant.updatedAt
+// (see SeoTenantContext JSDoc for the post-M7 migration path).
+
+describe("homepageSeoAdapter — lastmod stability", () => {
+  it("toSeoable updatedAt/publishedAt === tenant.contentUpdatedAt", () => {
+    const tenantTs = new Date("2026-02-20T12:34:56Z");
+    const seoable = homepageSeoAdapter.toSeoable(
+      {},
+      makeTenant({ contentUpdatedAt: tenantTs }),
+    );
+    expect(seoable.updatedAt.getTime()).toBe(tenantTs.getTime());
+    expect(seoable.publishedAt?.getTime()).toBe(tenantTs.getTime());
+  });
+
+  it("getSitemapEntries lastmod === tenant.contentUpdatedAt for every locale", () => {
+    const tenantTs = new Date("2026-02-20T12:34:56Z");
+    const entries = homepageSeoAdapter.getSitemapEntries(
+      {},
+      makeTenant({ contentUpdatedAt: tenantTs }),
+      ["sv", "en", "de"],
+    );
+    for (const entry of entries) {
+      expect(entry.lastmod?.getTime()).toBe(tenantTs.getTime());
+    }
+  });
+
+  it("toSeoable is deterministic across two calls with identical input", () => {
+    const tenant = makeTenant();
+    const a = homepageSeoAdapter.toSeoable({}, tenant);
+    const b = homepageSeoAdapter.toSeoable({}, tenant);
+    expect(a.updatedAt.getTime()).toBe(b.updatedAt.getTime());
+    expect(a.publishedAt?.getTime()).toBe(b.publishedAt?.getTime());
+  });
+
+  it("getSitemapEntries is deterministic across two calls with identical input", () => {
+    const tenant = makeTenant();
+    const a = homepageSeoAdapter.getSitemapEntries({}, tenant, ["sv"]);
+    const b = homepageSeoAdapter.getSitemapEntries({}, tenant, ["sv"]);
+    expect(a[0].lastmod?.getTime()).toBe(b[0].lastmod?.getTime());
   });
 });

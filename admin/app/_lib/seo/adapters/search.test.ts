@@ -19,6 +19,7 @@ function makeTenant(
     defaultLocale: "sv",
     seoDefaults: { titleTemplate: "{entityTitle} | {siteName}" },
     activeLocales: ["sv", "en"],
+    contentUpdatedAt: new Date("2026-04-01T00:00:00Z"),
     ...overrides,
   };
 }

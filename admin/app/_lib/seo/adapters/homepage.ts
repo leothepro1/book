@@ -51,6 +51,12 @@ export const homepageSeoAdapter: SeoAdapter<HomepageEntity> = {
     if (h?.description !== undefined) overrides.description = h.description;
     if (h?.ogImageId !== undefined) overrides.ogImageId = h.ogImageId;
 
+    // Deterministic content-change signal for the synthetic
+    // homepage Seoable. Sourced from tenant-level
+    // `contentUpdatedAt` — currently a proxy for `Tenant.updatedAt`
+    // (see SeoTenantContext JSDoc). Never `new Date()`: crawlers
+    // use lastmod as a cache-busting hint and churn across resolves
+    // made every render look like a fresh publish.
     const seoable: Seoable = {
       resourceType: "homepage",
       id: tenant.id,
@@ -60,8 +66,8 @@ export const homepageSeoAdapter: SeoAdapter<HomepageEntity> = {
       description: null,
       featuredImageId: null,
       seoOverrides: overrides,
-      updatedAt: new Date(),
-      publishedAt: new Date(),
+      updatedAt: tenant.contentUpdatedAt,
+      publishedAt: tenant.contentUpdatedAt,
       locale: tenant.defaultLocale,
     };
     return seoable;
@@ -96,6 +102,12 @@ export const homepageSeoAdapter: SeoAdapter<HomepageEntity> = {
    */
   isIndexable: () => true,
 
+  /**
+   * Homepage sitemap entries. `lastmod = tenant.contentUpdatedAt` —
+   * the best available signal for "something on the site changed."
+   * Always a real Date for any persisted tenant (Prisma
+   * `@updatedAt`), so no null fallback needed here.
+   */
   getSitemapEntries(
     _entity: HomepageEntity,
     tenant: SeoTenantContext,
@@ -103,7 +115,7 @@ export const homepageSeoAdapter: SeoAdapter<HomepageEntity> = {
   ): SitemapEntry[] {
     return locales.map((locale) => ({
       url: buildAbsoluteUrl(tenant, locale, "/"),
-      lastmod: new Date(),
+      lastmod: tenant.contentUpdatedAt,
       alternates: locales.map((l) => ({
         hreflang: l,
         url: buildAbsoluteUrl(tenant, l, "/"),

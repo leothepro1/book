@@ -89,6 +89,7 @@ function makeTenant(
       twitterSite: "@apelviken",
     },
     activeLocales: ["sv", "en", "de"],
+    contentUpdatedAt: new Date("2026-04-01T00:00:00Z"),
     ...overrides,
   };
 }

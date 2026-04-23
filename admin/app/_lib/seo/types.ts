@@ -249,6 +249,19 @@ export interface SeoTenantContext {
   readonly seoDefaults: SeoDefaults;
   /** All published locales. Used by hreflang resolution in M8. */
   readonly activeLocales: readonly string[];
+  /**
+   * Best-available signal for when tenant-level content last changed.
+   * Currently sourced from `Tenant.updatedAt`, which overshoots (moves
+   * on non-content mutations like Stripe reconnect or email settings
+   * changes) but never undershoots. Used as the `lastmod` source for
+   * synthetic pages (homepage, accommodation-index) that have no
+   * per-entity `updatedAt`.
+   *
+   * TODO(post-m7): migrate to a dedicated `Tenant.settingsPublishedAt`
+   * column so `lastmod` fires only on actual `publishDraft`. One-line
+   * source swap — every callsite reads through this field.
+   */
+  readonly contentUpdatedAt: Date;
 }
 
 // ── Resolution IO ──────────────────────────────────────────────

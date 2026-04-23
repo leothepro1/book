@@ -95,6 +95,24 @@ function indexUrl(tenant: SeoTenantContext, locale: string): string {
   return buildAbsoluteUrl(tenant, locale, STAYS_ROUTE_PREFIX);
 }
 
+/**
+ * Newest `updatedAt` across the featured accommodations, or `null`
+ * when the list is empty. Used as the content-change signal for
+ * Seoable.updatedAt and sitemap `lastmod` — keeps the adapter
+ * deterministic across resolves (no `new Date()` churn).
+ *
+ * When this returns null (empty tenant), callers fall back to
+ * `tenant.contentUpdatedAt` so a synthetic page still has a
+ * stable, semantically meaningful timestamp.
+ */
+function maxUpdatedAt(
+  featured: readonly AccommodationWithMedia[],
+): Date | null {
+  if (featured.length === 0) return null;
+  const maxTime = Math.max(...featured.map((a) => a.updatedAt.getTime()));
+  return new Date(maxTime);
+}
+
 // ── Adapter ──────────────────────────────────────────────────
 
 export const accommodationIndexSeoAdapter: SeoAdapter<AccommodationIndexSeoInput> =
@@ -102,6 +120,13 @@ export const accommodationIndexSeoAdapter: SeoAdapter<AccommodationIndexSeoInput
     resourceType: "accommodation_index",
 
     toSeoable(entity, tenant) {
+      // Deterministic content-change signal: MAX(updatedAt) across
+      // the featured accommodations (what actually changes on the
+      // page), falling back to tenant-level contentUpdatedAt when
+      // the list is empty. Never `new Date()` — that churned every
+      // resolve and broke sitemap crawler heuristics.
+      const contentTimestamp =
+        maxUpdatedAt(entity.featuredAccommodations) ?? tenant.contentUpdatedAt;
       const seoable: Seoable = {
         resourceType: "accommodation_index",
         // Stable across requests — same tenant → same id — so
@@ -117,12 +142,8 @@ export const accommodationIndexSeoAdapter: SeoAdapter<AccommodationIndexSeoInput
         description: null,
         featuredImageId: null,
         seoOverrides: null,
-        // No meaningful "updated" signal — index content is
-        // synthetic. `now()` is fine for lastmod / publishedAt
-        // because crawlers use it as a cache-busting hint and
-        // "recently updated" is honest for a synthetic page.
-        updatedAt: new Date(),
-        publishedAt: new Date(),
+        updatedAt: contentTimestamp,
+        publishedAt: contentTimestamp,
         locale: tenant.defaultLocale,
       };
       return seoable;
@@ -184,11 +205,18 @@ export const accommodationIndexSeoAdapter: SeoAdapter<AccommodationIndexSeoInput
      * priority/changefreq — SitemapEntry doesn't carry those today
      * (TODO(m5-followup): extend the sitemap type if ops request
      * explicit priorities).
+     *
+     * `lastmod` is deterministic: MAX(updatedAt) across the featured
+     * accommodations, or `tenant.contentUpdatedAt` when the list is
+     * empty. The M7 XML serializer emits the tag unconditionally for
+     * this adapter because either source is always a real Date.
      */
     getSitemapEntries(entity, tenant, locales) {
+      const lastmod =
+        maxUpdatedAt(entity.featuredAccommodations) ?? tenant.contentUpdatedAt;
       return locales.map((locale): SitemapEntry => ({
         url: indexUrl(tenant, locale),
-        lastmod: new Date(),
+        lastmod,
         alternates: locales.map((l) => ({
           hreflang: l,
           url: indexUrl(tenant, l),

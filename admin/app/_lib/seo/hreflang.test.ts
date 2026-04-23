@@ -18,6 +18,7 @@ function makeTenant(overrides: Partial<SeoTenantContext> = {}): SeoTenantContext
     defaultLocale: "sv",
     seoDefaults: { titleTemplate: "{entityTitle} | {siteName}" },
     activeLocales: ["sv", "en", "de"],
+    contentUpdatedAt: new Date("2026-04-01T00:00:00Z"),
     ...overrides,
   };
 }

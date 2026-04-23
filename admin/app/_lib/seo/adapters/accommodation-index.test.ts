@@ -28,6 +28,7 @@ function makeTenant(
     defaultLocale: "sv",
     seoDefaults: { titleTemplate: "{entityTitle} | {siteName}" },
     activeLocales: ["sv", "en"],
+    contentUpdatedAt: new Date("2026-04-01T00:00:00Z"),
     ...overrides,
   };
 }
@@ -480,5 +481,120 @@ describe("accommodationIndexSeoAdapter.getSitemapEntries", () => {
       expect(entry.url).not.toContain("?");
       expect(entry.url).not.toMatch(/page/i);
     }
+  });
+});
+
+// ── Lastmod stability (M7 prep) ───────────────────────────────
+//
+// Pre-M7 the adapter emitted `new Date()` for every Seoable
+// updatedAt/publishedAt and every sitemap lastmod. That churned
+// per render, broke deterministic caching, and gave crawlers a
+// fresh-on-every-crawl signal regardless of actual change.
+//
+// The fixed semantics:
+//   - toSeoable.updatedAt/publishedAt = MAX(featured.updatedAt)
+//     ?? tenant.contentUpdatedAt
+//   - getSitemapEntries.lastmod = MAX(featured.updatedAt)
+//     ?? tenant.contentUpdatedAt
+// Both are always a real Date (tenant.contentUpdatedAt is Date,
+// not nullable), so the adapter never emits null lastmod.
+
+describe("accommodationIndexSeoAdapter — lastmod stability", () => {
+  it("toSeoable uses MAX(updatedAt) across featured accommodations", () => {
+    const older = makeAccommodation({
+      id: "a_old",
+      slug: "a-old",
+      updatedAt: new Date("2026-03-01T00:00:00Z"),
+    });
+    const newer = makeAccommodation({
+      id: "a_new",
+      slug: "a-new",
+      updatedAt: new Date("2026-04-15T00:00:00Z"),
+    });
+    const seoable = accommodationIndexSeoAdapter.toSeoable(
+      makeInput({ featuredAccommodations: [older, newer] }),
+      makeTenant(),
+    );
+    expect(seoable.updatedAt.getTime()).toBe(
+      new Date("2026-04-15T00:00:00Z").getTime(),
+    );
+    expect(seoable.publishedAt?.getTime()).toBe(
+      new Date("2026-04-15T00:00:00Z").getTime(),
+    );
+  });
+
+  it("toSeoable falls back to tenant.contentUpdatedAt when featured list is empty", () => {
+    // Empty tenant. contentUpdatedAt is a real Date (Prisma
+    // @updatedAt) — never null. No epoch-0 or `new Date()` path.
+    const tenantTs = new Date("2026-02-20T12:34:56Z");
+    const seoable = accommodationIndexSeoAdapter.toSeoable(
+      makeInput({ featuredAccommodations: [] }),
+      makeTenant({ contentUpdatedAt: tenantTs }),
+    );
+    expect(seoable.updatedAt.getTime()).toBe(tenantTs.getTime());
+    expect(seoable.publishedAt?.getTime()).toBe(tenantTs.getTime());
+  });
+
+  it("toSeoable is deterministic across two calls with identical input", () => {
+    const input = makeInput({
+      featuredAccommodations: [makeAccommodation()],
+    });
+    const tenant = makeTenant();
+    const a = accommodationIndexSeoAdapter.toSeoable(input, tenant);
+    const b = accommodationIndexSeoAdapter.toSeoable(input, tenant);
+    expect(a.updatedAt.getTime()).toBe(b.updatedAt.getTime());
+    expect(a.publishedAt?.getTime()).toBe(b.publishedAt?.getTime());
+  });
+
+  it("getSitemapEntries lastmod uses MAX(updatedAt) across featured", () => {
+    const older = makeAccommodation({
+      id: "a_old",
+      slug: "a-old",
+      updatedAt: new Date("2026-03-01T00:00:00Z"),
+    });
+    const newer = makeAccommodation({
+      id: "a_new",
+      slug: "a-new",
+      updatedAt: new Date("2026-04-15T00:00:00Z"),
+    });
+    const entries = accommodationIndexSeoAdapter.getSitemapEntries(
+      makeInput({ featuredAccommodations: [older, newer] }),
+      makeTenant(),
+      ["sv", "en"],
+    );
+    for (const e of entries) {
+      expect(e.lastmod?.getTime()).toBe(
+        new Date("2026-04-15T00:00:00Z").getTime(),
+      );
+    }
+  });
+
+  it("getSitemapEntries lastmod falls back to tenant.contentUpdatedAt when featured list is empty", () => {
+    const tenantTs = new Date("2026-02-20T12:34:56Z");
+    const entries = accommodationIndexSeoAdapter.getSitemapEntries(
+      makeInput({ featuredAccommodations: [] }),
+      makeTenant({ contentUpdatedAt: tenantTs }),
+      ["sv"],
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0].lastmod?.getTime()).toBe(tenantTs.getTime());
+  });
+
+  it("getSitemapEntries is deterministic across two calls with identical input", () => {
+    const input = makeInput({
+      featuredAccommodations: [makeAccommodation()],
+    });
+    const tenant = makeTenant();
+    const a = accommodationIndexSeoAdapter.getSitemapEntries(
+      input,
+      tenant,
+      ["sv"],
+    );
+    const b = accommodationIndexSeoAdapter.getSitemapEntries(
+      input,
+      tenant,
+      ["sv"],
+    );
+    expect(a[0].lastmod?.getTime()).toBe(b[0].lastmod?.getTime());
   });
 });

@@ -174,4 +174,32 @@ describe("tenantToSeoContext", () => {
     // safeParseSeoDefaults returns the defaults on malformed input
     expect(ctx.seoDefaults.titleTemplate).toBe("{entityTitle} | {siteName}");
   });
+
+  // ── contentUpdatedAt — Tenant.updatedAt proxy ──────────────
+  //
+  // Today sourced from Tenant.updatedAt (Prisma @updatedAt).
+  // Used by synthetic-page adapters (homepage, accommodation-index)
+  // as the `lastmod` source when no per-entity updatedAt exists.
+  // The migration path to a dedicated Tenant.settingsPublishedAt
+  // column is documented in SeoTenantContext.contentUpdatedAt
+  // JSDoc (search: "TODO(post-m7)").
+
+  it("contentUpdatedAt === tenant.updatedAt (current proxy semantic)", () => {
+    const updatedAt = new Date("2026-04-23T09:15:00Z");
+    const ctx = tenantToSeoContext({
+      tenant: makeTenant({ updatedAt }),
+      locales: [makeLocale({ primary: true, published: true })],
+    });
+    expect(ctx.contentUpdatedAt.getTime()).toBe(updatedAt.getTime());
+  });
+
+  it("contentUpdatedAt is stable across two calls with identical tenant", () => {
+    const tenant = makeTenant({
+      updatedAt: new Date("2026-04-01T00:00:00Z"),
+    });
+    const locales = [makeLocale({ primary: true, published: true })];
+    const a = tenantToSeoContext({ tenant, locales });
+    const b = tenantToSeoContext({ tenant, locales });
+    expect(a.contentUpdatedAt.getTime()).toBe(b.contentUpdatedAt.getTime());
+  });
 });

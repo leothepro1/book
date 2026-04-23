@@ -80,5 +80,10 @@ export function tenantToSeoContext(args: {
     defaultLocale,
     seoDefaults: safeParseSeoDefaults(tenant.seoDefaults),
     activeLocales,
+    // `Tenant.updatedAt` is Prisma `@updatedAt` — guaranteed non-null
+    // on any persisted row. See SeoTenantContext.contentUpdatedAt JSDoc
+    // for the semantic-proxy rationale and the M7 followup that will
+    // migrate this to a dedicated publish-timestamp column.
+    contentUpdatedAt: tenant.updatedAt,
   };
 }

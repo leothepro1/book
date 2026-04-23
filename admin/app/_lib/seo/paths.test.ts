@@ -10,6 +10,7 @@ const tenant: SeoTenantContext = {
   defaultLocale: "sv",
   seoDefaults: { titleTemplate: "x" },
   activeLocales: ["sv", "en", "de"],
+  contentUpdatedAt: new Date("2026-04-01T00:00:00Z"),
 };
 
 describe("buildLocalePath", () => {
