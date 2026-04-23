@@ -30,10 +30,18 @@ import type {
  * A single URL entry produced by `SeoAdapter.getSitemapEntries()`.
  * The shape matches the subset of sitemap.org the M7 sitemap generator
  * emits — one canonical URL plus optional hreflang alternates.
+ *
+ * `lastmod` is nullable because adapters for synthetic resources
+ * (homepage, accommodation-index) may lack any content-change signal
+ * when the underlying collection is empty. Sitemap.org allows
+ * omitting `<lastmod>` in that case; the M7 XML serializer drops
+ * the tag when `lastmod === null` rather than fabricating a value.
+ * Entity-backed adapters (accommodation, product, category,
+ * collection) always return a real `Date` from `entity.updatedAt`.
  */
 export interface SitemapEntry {
   readonly url: string;
-  readonly lastmod: Date;
+  readonly lastmod: Date | null;
   readonly alternates?: ReadonlyArray<{
     readonly hreflang: string;
     readonly url: string;
