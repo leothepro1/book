@@ -17,6 +17,11 @@ vi.mock("../logger", () => ({ log: vi.fn() }));
 import type {
   AccommodationMedia,
   PageTypeSeoDefault,
+  Product,
+  ProductMedia,
+  ProductStatus,
+  ProductType,
+  ProductVariant,
 } from "@prisma/client";
 
 import { log } from "../logger";
@@ -30,6 +35,10 @@ import {
   accommodationSeoAdapter,
 } from "./adapters/accommodation";
 import { homepageSeoAdapter } from "./adapters/homepage";
+import {
+  type ProductWithMedia,
+  productSeoAdapter,
+} from "./adapters/product";
 import type {
   ImageService,
   PageTypeSeoDefaultRepository,
@@ -690,5 +699,141 @@ describe("SeoResolver.resolve — adapter output validation (M5 prep)", () => {
       resourceId: "acc_1",
       requestId,
     });
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// Product integration (M5 Batch A.1)
+// ──────────────────────────────────────────────────────────────
+
+function makeProductMedia(overrides: Partial<ProductMedia> = {}): ProductMedia {
+  return {
+    id: "pmed_1",
+    productId: "prod_1",
+    url: "https://cdn.example/product.jpg",
+    type: "image",
+    alt: "Product",
+    sortOrder: 0,
+    filename: "product.jpg",
+    width: 1200,
+    height: 630,
+    createdAt: new Date("2026-03-01T00:00:00Z"),
+    ...overrides,
+  };
+}
+
+function makeProductVariant(
+  overrides: Partial<ProductVariant> = {},
+): ProductVariant {
+  return {
+    id: "pvar_1",
+    productId: "prod_1",
+    option1: null,
+    option2: null,
+    option3: null,
+    imageUrl: null,
+    price: 0,
+    compareAtPrice: null,
+    sku: null,
+    trackInventory: false,
+    inventoryQuantity: 0,
+    continueSellingWhenOutOfStock: false,
+    version: 1,
+    sortOrder: 0,
+    createdAt: new Date("2026-03-01T00:00:00Z"),
+    updatedAt: new Date("2026-03-01T00:00:00Z"),
+    ...overrides,
+  };
+}
+
+function makeProduct(
+  overrides: Partial<ProductWithMedia> = {},
+): ProductWithMedia {
+  const base: Product = {
+    id: "prod_1",
+    tenantId: "tenant_t",
+    title: "Frukost-buffé",
+    description: "Lokala råvaror.",
+    slug: "frukost-buffe",
+    status: "ACTIVE" as ProductStatus,
+    productType: "STANDARD" as ProductType,
+    price: 12900,
+    currency: "SEK",
+    compareAtPrice: null,
+    trackInventory: false,
+    inventoryQuantity: 0,
+    continueSellingWhenOutOfStock: false,
+    taxable: true,
+    seo: null,
+    version: 1,
+    sortOrder: 0,
+    archivedAt: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-04-01T00:00:00Z"),
+    templateId: null,
+  };
+  return {
+    ...base,
+    media: [makeProductMedia()],
+    variants: [],
+    ...overrides,
+  };
+}
+
+describe("SeoResolver.resolve — Product (integration, M5 Batch A.1)", () => {
+  beforeEach(() => {
+    _clearSeoAdaptersForTests();
+    registerSeoAdapter(productSeoAdapter);
+  });
+
+  it("end-to-end: title / description / canonical / OG / JSON-LD shape", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "product",
+      entity: makeProduct(),
+      locale: "sv",
+    });
+
+    expect(r.title).toBe("Frukost-buffé | Apelviken");
+    expect(r.description).toBe("Lokala råvaror.");
+    expect(r.canonicalUrl).toBe(
+      "https://apelviken-x.rutgr.com/shop/products/frukost-buffe",
+    );
+    expect(r.canonicalPath).toBe("/shop/products/frukost-buffe");
+    expect(r.noindex).toBe(false);
+
+    // OG uses the first image from the adapter hook.
+    expect(r.openGraph.image).toEqual({
+      url: "https://cdn.example/product.jpg",
+      width: 1200,
+      height: 630,
+      alt: "Product",
+    });
+
+    // JSON-LD: Product + BreadcrumbList.
+    expect(r.structuredData).toHaveLength(2);
+    expect(r.structuredData[0]["@type"]).toBe("Product");
+    expect(r.structuredData[1]["@type"]).toBe("BreadcrumbList");
+  });
+
+  it("zero-price product: resolve succeeds, title/description retained, no Product JSON-LD", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "product",
+      entity: makeProduct({
+        price: 0,
+        variants: [makeProductVariant({ price: 0 })],
+      }),
+      locale: "sv",
+    });
+
+    expect(r.title).toBe("Frukost-buffé | Apelviken");
+    expect(r.description).toBe("Lokala råvaror.");
+    // No Product schema, BreadcrumbList remains.
+    const types = r.structuredData.map((o) => o["@type"]);
+    expect(types).not.toContain("Product");
+    expect(types).toContain("BreadcrumbList");
   });
 });

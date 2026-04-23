@@ -36,6 +36,8 @@ export {
 // Exported so app bootstrap can register them with the registry.
 export type { AccommodationWithMedia } from "./adapters/accommodation";
 export { accommodationSeoAdapter } from "./adapters/accommodation";
+export type { ProductWithMedia } from "./adapters/product";
+export { productSeoAdapter } from "./adapters/product";
 
 // ── Types ─────────────────────────────────────────────────────
 export type {
