@@ -1,0 +1,133 @@
+/* ────────────────────────────────────────────────────────────────────────
+ * Tabs — generic BEM prefix `.tabs-*`
+ *
+ * Two variants:
+ *   - underline (default): horizontal list with bottom border + active underline
+ *   - pills:               rounded backgrounds for dense nav bars
+ *
+ * Two sizes:
+ *   - md (default): 13px font, 10px/14px padding
+ *   - sm:           12px font, 6px/10px padding
+ *
+ * Reuses admin design tokens from base.css (no hardcoded colors).
+ * ───────────────────────────────────────────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.tabs__tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--admin-text-secondary);
+  font-family: inherit;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 120ms, background 120ms, border-color 120ms;
+  white-space: nowrap;
+}
+
+.tabs__tab:hover:not(.tabs__tab--active):not(.tabs__tab--disabled) {
+  color: var(--admin-text);
+}
+
+.tabs__tab--active {
+  color: var(--admin-text);
+}
+
+.tabs__tab--disabled {
+  color: var(--admin-text-tertiary);
+  cursor: not-allowed;
+  opacity: 0.5;
+  pointer-events: none; /* belt + suspenders for link-mode disabled tabs */
+}
+
+.tabs__tab:focus-visible {
+  outline: 2px solid var(--admin-border-focus);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+/* ── Sizes ── */
+
+.tabs--sm .tabs__tab {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.tabs--md .tabs__tab {
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+/* ── Underline variant ── */
+
+.tabs--underline {
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.tabs--underline .tabs__tab {
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tabs--underline .tabs__tab--active {
+  border-bottom-color: var(--admin-text);
+}
+
+/* ── Pills variant ── */
+
+.tabs--pills {
+  gap: 4px;
+}
+
+.tabs--pills .tabs__tab {
+  border-radius: 999px;
+}
+
+.tabs--pills .tabs__tab--active {
+  background: var(--admin-text);
+  color: #fff;
+}
+
+/* ── Badge ── */
+
+.tabs__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--admin-surface-raised, #e5e5e5);
+  color: var(--admin-text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.tabs__tab--active .tabs__badge {
+  background: var(--admin-text);
+  color: #fff;
+}
+
+/* Pills: invert badge color on active pill so it stays legible on dark bg */
+.tabs--pills .tabs__tab--active .tabs__badge {
+  background: #fff;
+  color: var(--admin-text);
+}
+
+.tabs--sm .tabs__badge {
+  min-width: 18px;
+  height: 18px;
+  font-size: 10px;
+  padding: 0 5px;
+}

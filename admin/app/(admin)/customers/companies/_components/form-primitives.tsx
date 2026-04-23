@@ -25,7 +25,20 @@
  * a design-system commitment.
  */
 
-import { useCallback, useId, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+
+// NOTE: Older primitives (TextField, SelectField, etc.) use `help` and surface
+// errors via render-prop parents. Newer primitives (NumberInput, DateRangeField)
+// use `helpText` and explicit `error` props per FAS 6.0 conventions.
+// TODO: Align older primitives in a dedicated cleanup pass.
 
 // ── TextField ───────────────────────────────────────────────────
 
@@ -537,6 +550,210 @@ export function PercentInput({
   );
 }
 
+// ── NumberInput ─────────────────────────────────────────────────
+
+/**
+ * Integer-or-decimal number input with inline −/+ steppers.
+ *
+ * Contract:
+ *   - `value` is always a finite number (null is not supported; wrap at
+ *     call site if the field is optional).
+ *   - Clamping is deferred to blur + stepper clicks. Typing a transient
+ *     out-of-range value does not clobber mid-entry; the final clamp
+ *     fires once the user leaves the field or uses a stepper.
+ *   - `precision` controls how many fractional digits the input accepts
+ *     AND the display formatting after clamp. Step size is independent.
+ *   - `suffix` is decorative inline content, not part of the value.
+ *   - Steppers are `tabIndex={-1}` so keyboard users step via ArrowUp/
+ *     ArrowDown on the input itself (mouse users retain the buttons).
+ */
+export function NumberInput({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  step = 1,
+  precision = 0,
+  suffix,
+  helpText,
+  error,
+  required,
+  disabled,
+  id: idProp,
+  placeholder,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  precision?: number;
+  suffix?: string;
+  helpText?: string;
+  error?: string;
+  required?: boolean;
+  disabled?: boolean;
+  id?: string;
+  placeholder?: string;
+}) {
+  const reactId = useId();
+  const id = idProp ?? reactId;
+  const helpId = helpText ? `${id}-help` : undefined;
+  const errorId = error ? `${id}-error` : undefined;
+  const describedBy = [errorId, helpId].filter(Boolean).join(" ") || undefined;
+
+  const format = useCallback(
+    (n: number) => (precision === 0 ? String(Math.round(n)) : n.toFixed(precision)),
+    [precision],
+  );
+
+  const clamp = useCallback(
+    (n: number) => {
+      const lo = min ?? Number.NEGATIVE_INFINITY;
+      const hi = max ?? Number.POSITIVE_INFINITY;
+      return Math.min(hi, Math.max(lo, n));
+    },
+    [min, max],
+  );
+
+  const normalise = useCallback(
+    (n: number) => {
+      const clamped = clamp(n);
+      const factor = Math.pow(10, precision);
+      return Math.round(clamped * factor) / factor;
+    },
+    [clamp, precision],
+  );
+
+  const allowedPattern = useMemo(
+    () =>
+      precision === 0
+        ? /^-?\d*$/
+        : new RegExp(`^-?\\d*(\\.\\d{0,${precision}})?$`),
+    [precision],
+  );
+
+  const [display, setDisplay] = useState(() => format(value));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // External value changes (parent setState, reset buttons, etc.) re-sync
+  // the display — but only when the user isn't actively typing, to avoid
+  // clobbering an in-progress keystroke with a reformatted snapshot.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (document.activeElement !== inputRef.current) {
+      setDisplay(format(value));
+    }
+  }, [value, format]);
+
+  const handleType = useCallback(
+    (raw: string) => {
+      // Accept comma or dot as decimal separator during typing; the regex
+      // test runs against the dot-normalised form.
+      const probe = raw.replace(",", ".");
+      if (!allowedPattern.test(probe)) return;
+      setDisplay(raw);
+      if (probe === "" || probe === "-" || probe === "." || probe === "-.") return;
+      const parsed = Number(probe);
+      if (!Number.isFinite(parsed)) return;
+      onChange(parsed); // unclamped; blur performs final clamp
+    },
+    [allowedPattern, onChange],
+  );
+
+  const handleBlur = useCallback(() => {
+    const probe = display.replace(",", ".");
+    const parsed = Number(probe);
+    if (!Number.isFinite(parsed) || probe === "" || probe === "-") {
+      setDisplay(format(value));
+      return;
+    }
+    const next = normalise(parsed);
+    setDisplay(format(next));
+    if (next !== value) onChange(next);
+  }, [display, value, format, normalise, onChange]);
+
+  const stepBy = useCallback(
+    (direction: 1 | -1) => {
+      const next = normalise(value + direction * step);
+      setDisplay(format(next));
+      if (next !== value) onChange(next);
+    },
+    [value, step, normalise, format, onChange],
+  );
+
+  const atMin = min !== undefined && value <= min;
+  const atMax = max !== undefined && value >= max;
+
+  return (
+    <div className="co-field">
+      <label htmlFor={id} className="co-field__label">
+        {label}
+        {required ? <span className="co-field__required"> *</span> : null}
+      </label>
+      <div className={`co-number${disabled ? " co-number--disabled" : ""}`}>
+        <button
+          type="button"
+          className="co-number__stepper co-number__stepper--dec"
+          onClick={() => stepBy(-1)}
+          disabled={disabled || atMin}
+          aria-label={`Minska ${label}`}
+          tabIndex={-1}
+        >
+          −
+        </button>
+        <div className="co-number__input-wrap">
+          <input
+            ref={inputRef}
+            id={id}
+            type="text"
+            inputMode={precision === 0 ? "numeric" : "decimal"}
+            className="co-input co-number__input"
+            value={display}
+            placeholder={placeholder}
+            disabled={disabled}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy}
+            onChange={(e) => handleType(e.target.value)}
+            onBlur={handleBlur}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                stepBy(1);
+              } else if (e.key === "ArrowDown") {
+                e.preventDefault();
+                stepBy(-1);
+              }
+            }}
+          />
+          {suffix ? <span className="co-number__suffix">{suffix}</span> : null}
+        </div>
+        <button
+          type="button"
+          className="co-number__stepper co-number__stepper--inc"
+          onClick={() => stepBy(1)}
+          disabled={disabled || atMax}
+          aria-label={`Öka ${label}`}
+          tabIndex={-1}
+        >
+          +
+        </button>
+      </div>
+      {error ? (
+        <div id={errorId} className="co-field__error" role="alert">
+          {error}
+        </div>
+      ) : helpText ? (
+        <div id={helpId} className="co-field__help">
+          {helpText}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // ── RadioGroup ──────────────────────────────────────────────────
 
 export function RadioGroup<T extends string>({
@@ -606,6 +823,235 @@ export function DateField({
       {help ? <div className="co-field__help">{help}</div> : null}
     </div>
   );
+}
+
+// ── DateRangeField ──────────────────────────────────────────────
+
+/**
+ * Paired date-picker for a calendar range (check-in / check-out, from / to).
+ *
+ * Contract:
+ *   - `value` is the authoritative Date pair; nulls permitted for partial
+ *     input states (user has picked one side, hasn't picked the other yet).
+ *   - `onChange` fires ONLY when the resulting pair passes range validation.
+ *     Invalid ranges (end < start, or end === start when !allowSameDay)
+ *     surface an inline error but do NOT propagate to the parent. This keeps
+ *     parent state always valid while letting the user see their in-progress
+ *     input with a clear reason why it isn't saved yet.
+ *   - Effective min/max on each input combines the explicit `minDate`/
+ *     `maxDate` caps with the partner input's current value, so the native
+ *     picker's own UI already forbids impossible picks on browsers that
+ *     honour `min`/`max`.
+ *   - `allowSameDay` defaults to `false` — the typical hospitality case is
+ *     check-in < check-out. Analytics-style pickers can set it true.
+ */
+export function DateRangeField({
+  label,
+  startLabel = "Från",
+  endLabel = "Till",
+  value,
+  onChange,
+  minDate,
+  maxDate,
+  helpText,
+  error,
+  required,
+  disabled,
+  id: idProp,
+  allowSameDay = false,
+}: {
+  label: string;
+  startLabel?: string;
+  endLabel?: string;
+  value: { start: Date | null; end: Date | null };
+  onChange: (value: { start: Date | null; end: Date | null }) => void;
+  minDate?: Date;
+  maxDate?: Date;
+  helpText?: string;
+  error?: string;
+  required?: boolean;
+  disabled?: boolean;
+  id?: string;
+  allowSameDay?: boolean;
+}) {
+  const reactId = useId();
+  const id = idProp ?? reactId;
+  const startId = `${id}-start`;
+  const endId = `${id}-end`;
+  const helpId = helpText ? `${id}-help` : undefined;
+  const errorId = `${id}-error`;
+
+  // Local string mirror. The UI shows these even when a range is invalid,
+  // so the user can see what they typed and fix it. Parent `value` only
+  // advances through onChange (fired on valid edits).
+  const [startStr, setStartStr] = useState(() => dateToInputString(value.start));
+  const [endStr, setEndStr] = useState(() => dateToInputString(value.end));
+  const [internalError, setInternalError] = useState<string | null>(null);
+
+  // External prop change → re-sync local strings and clear any internal
+  // validation error. If the parent changed its value without going through
+  // our onChange, the new value is by definition the truth.
+  useEffect(() => {
+    setStartStr(dateToInputString(value.start));
+    setEndStr(dateToInputString(value.end));
+    setInternalError(null);
+  }, [value.start, value.end]);
+
+  // Parent `error` wins for display (matches NumberInput). Internal validation
+  // still gates onChange propagation — invalid ranges never reach the parent —
+  // but the displayed message defers to the parent when provided.
+  // TODO: i18n — error messages hardcoded in Swedish. When a non-Swedish consumer
+  // emerges, accept invalidRangeError prop or route through future i18n helper.
+  const displayError = error ?? internalError ?? null;
+  const describedBy =
+    [displayError ? errorId : null, helpId].filter(Boolean).join(" ") || undefined;
+
+  const validateAndFire = useCallback(
+    (nextStartStr: string, nextEndStr: string) => {
+      const nextStart = inputStringToDate(nextStartStr);
+      const nextEnd = inputStringToDate(nextEndStr);
+
+      if (nextStart && nextEnd) {
+        const invalid = allowSameDay
+          ? nextEnd < nextStart
+          : nextEnd <= nextStart;
+        if (invalid) {
+          setInternalError(
+            allowSameDay
+              ? "Slutdatumet måste vara samma dag eller efter startdatumet."
+              : "Slutdatumet måste vara efter startdatumet.",
+          );
+          return;
+        }
+      }
+      setInternalError(null);
+      onChange({ start: nextStart, end: nextEnd });
+    },
+    [allowSameDay, onChange],
+  );
+
+  const handleStart = useCallback(
+    (raw: string) => {
+      setStartStr(raw);
+      validateAndFire(raw, endStr);
+    },
+    [endStr, validateAndFire],
+  );
+
+  const handleEnd = useCallback(
+    (raw: string) => {
+      setEndStr(raw);
+      validateAndFire(startStr, raw);
+    },
+    [startStr, validateAndFire],
+  );
+
+  // Effective min/max per input, combining explicit caps with the partner's
+  // current value.
+  const minDateStr = minDate ? dateToInputString(minDate) : undefined;
+  const maxDateStr = maxDate ? dateToInputString(maxDate) : undefined;
+
+  // Start input: cannot exceed end (or end - 1 day if !allowSameDay).
+  const startMaxCandidates: string[] = [];
+  if (maxDateStr) startMaxCandidates.push(maxDateStr);
+  const endAsDate = inputStringToDate(endStr);
+  if (endAsDate) {
+    const cap = allowSameDay ? endAsDate : addDays(endAsDate, -1);
+    startMaxCandidates.push(dateToInputString(cap));
+  }
+  const startMax =
+    startMaxCandidates.length > 0
+      ? startMaxCandidates.slice().sort()[0] // earliest wins (ISO sorts chronologically)
+      : undefined;
+
+  // End input: cannot precede start (or start + 1 day if !allowSameDay).
+  const endMinCandidates: string[] = [];
+  if (minDateStr) endMinCandidates.push(minDateStr);
+  const startAsDate = inputStringToDate(startStr);
+  if (startAsDate) {
+    const floor = allowSameDay ? startAsDate : addDays(startAsDate, 1);
+    endMinCandidates.push(dateToInputString(floor));
+  }
+  const endMin =
+    endMinCandidates.length > 0
+      ? endMinCandidates.slice().sort().slice(-1)[0] // latest wins
+      : undefined;
+
+  return (
+    <div className="co-field co-daterange">
+      <div className="co-field__label">
+        {label}
+        {required ? <span className="co-field__required"> *</span> : null}
+      </div>
+      <div className="co-daterange__group">
+        <div className="co-field co-daterange__cell">
+          <label htmlFor={startId} className="co-daterange__sub">
+            {startLabel}
+          </label>
+          <input
+            id={startId}
+            type="date"
+            className="co-input"
+            value={startStr}
+            min={minDateStr}
+            max={startMax}
+            required={required}
+            disabled={disabled}
+            aria-invalid={displayError ? true : undefined}
+            aria-describedby={describedBy}
+            onChange={(e) => handleStart(e.target.value)}
+          />
+        </div>
+        <div className="co-field co-daterange__cell">
+          <label htmlFor={endId} className="co-daterange__sub">
+            {endLabel}
+          </label>
+          <input
+            id={endId}
+            type="date"
+            className="co-input"
+            value={endStr}
+            min={endMin}
+            max={maxDateStr}
+            required={required}
+            disabled={disabled}
+            aria-invalid={displayError ? true : undefined}
+            aria-describedby={describedBy}
+            onChange={(e) => handleEnd(e.target.value)}
+          />
+        </div>
+      </div>
+      {displayError ? (
+        <div id={errorId} className="co-field__error" role="alert">
+          {displayError}
+        </div>
+      ) : helpText ? (
+        <div id={helpId} className="co-field__help">
+          {helpText}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function dateToInputString(d: Date | null): string {
+  if (!d || Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function inputStringToDate(s: string): Date | null {
+  if (!s) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return null;
+  const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function addDays(d: Date, days: number): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
 }
 
 // ── WriteActionsSlot ────────────────────────────────────────────

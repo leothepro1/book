@@ -14,6 +14,10 @@ import path from "node:path";
  * and test resolution stay in lock-step.
  */
 export default defineConfig({
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./vitest.setup.ts"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./"),
