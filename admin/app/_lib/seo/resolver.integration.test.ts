@@ -58,6 +58,10 @@ import {
   type AccommodationCategoryWithItems,
   accommodationCategorySeoAdapter,
 } from "./adapters/accommodation-category";
+import {
+  type SearchSeoInput,
+  searchSeoAdapter,
+} from "./adapters/search";
 import type {
   ImageService,
   PageTypeSeoDefaultRepository,
@@ -1181,5 +1185,71 @@ describe("SeoResolver.resolve — AccommodationCategory (integration, M5 Batch B
     expect(r.noindex).toBe(true);
     // No JSON-LD (adapter short-circuits).
     expect(r.structuredData).toEqual([]);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// Search integration (M5 Batch B.3)
+// ──────────────────────────────────────────────────────────────
+
+function makeSearchInput(
+  overrides: Partial<SearchSeoInput> = {},
+): SearchSeoInput {
+  return {
+    tenantId: "tenant_t",
+    activeLocales: ["sv", "en", "de"],
+    ...overrides,
+  };
+}
+
+describe("SeoResolver.resolve — Search (integration, M5 Batch B.3)", () => {
+  beforeEach(() => {
+    _clearSeoAdaptersForTests();
+    registerSeoAdapter(searchSeoAdapter);
+  });
+
+  it("always emits robots: noindex, never JSON-LD (no query)", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "search",
+      entity: makeSearchInput(),
+      locale: "sv",
+    });
+
+    expect(r.noindex).toBe(true);
+    expect(r.structuredData).toEqual([]);
+    // Default title falls through tenant template: "Sök | {siteName}".
+    expect(r.title).toBe("Sök | Apelviken");
+  });
+
+  it("resolver's searchQuery branch overrides the title, noindex remains true", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "search",
+      entity: makeSearchInput(),
+      locale: "sv",
+      searchQuery: "stuga",
+    });
+
+    // Resolver's existing branch: 'Search results for "stuga" | Apelviken'.
+    expect(r.title).toBe('Search results for "stuga" | Apelviken');
+    expect(r.noindex).toBe(true);
+    expect(r.structuredData).toEqual([]);
+  });
+
+  it("canonical on /search is still constructed (even though noindex)", async () => {
+    // A noindex page still has a canonical; Google uses canonical to
+    // consolidate signals regardless of indexability.
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "search",
+      entity: makeSearchInput(),
+      locale: "sv",
+    });
+    expect(r.canonicalUrl).toBe("https://apelviken-x.rutgr.com/search");
+    expect(r.canonicalPath).toBe("/search");
   });
 });

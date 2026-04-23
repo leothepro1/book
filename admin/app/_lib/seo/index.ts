@@ -57,6 +57,8 @@ export {
   MAX_ITEMLIST_MEMBERS,
   productCollectionSeoAdapter,
 } from "./adapters/product-collection";
+export type { SearchSeoInput } from "./adapters/search";
+export { searchPageUrl, searchSeoAdapter } from "./adapters/search";
 
 // ── Types ─────────────────────────────────────────────────────
 export type {

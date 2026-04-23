@@ -43,6 +43,7 @@ describe("ensureSeoBootstrapped — idempotency", () => {
       "homepage",
       "product",
       "product_collection",
+      "search",
     ]);
   });
 
@@ -50,12 +51,12 @@ describe("ensureSeoBootstrapped — idempotency", () => {
     ensureSeoBootstrapped();
     ensureSeoBootstrapped();
     // One call per adapter on the first bootstrap; zero on subsequent calls.
-    expect(registerSeoAdapter).toHaveBeenCalledTimes(6);
+    expect(registerSeoAdapter).toHaveBeenCalledTimes(7);
   });
 
   it("calling 10 times registers each adapter exactly once", () => {
     for (let i = 0; i < 10; i++) ensureSeoBootstrapped();
-    expect(registerSeoAdapter).toHaveBeenCalledTimes(6);
+    expect(registerSeoAdapter).toHaveBeenCalledTimes(7);
   });
 
   it("after _resetSeoBootstrapForTests, a new call re-registers all", () => {
@@ -63,8 +64,8 @@ describe("ensureSeoBootstrapped — idempotency", () => {
     _resetSeoBootstrapForTests();
     _clearSeoAdaptersForTests();
     ensureSeoBootstrapped();
-    // First bootstrap: 6 calls. Second bootstrap after reset: 6 more. Total 12.
-    expect(registerSeoAdapter).toHaveBeenCalledTimes(12);
+    // First bootstrap: 7 calls. Second bootstrap after reset: 7 more. Total 14.
+    expect(registerSeoAdapter).toHaveBeenCalledTimes(14);
   });
 });
 
