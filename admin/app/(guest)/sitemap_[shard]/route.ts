@@ -45,10 +45,21 @@ const SHARD_PATTERN =
 
 export const dynamic = "force-dynamic";
 
-type RouteCtx = { params: Promise<{ shard: string }> };
+/**
+ * Next.js 16 does not extract a bracket-suffixed segment from a folder
+ * name that carries a prefix (`sitemap_[shard]`) into typed params —
+ * generated route types surface `params: Promise<{}>`. Parse the shard
+ * from `req.url` instead; the URL always carries the full pathname and
+ * the regex validator below rejects anything malformed.
+ */
+// Match Next.js 16's generated signature exactly: params is a Promise of
+// an empty object. `{}` means "any object" in TS, so tests that still
+// pass `{ shard }` for mocking convenience remain assignable.
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+type RouteCtx = { params: Promise<{}> };
 
-export async function GET(_req: Request, { params }: RouteCtx): Promise<Response> {
-  const { shard } = await params;
+export async function GET(req: Request, _ctx: RouteCtx): Promise<Response> {
+  const shard = new URL(req.url).pathname.replace(/^\/sitemap_/, "");
 
   // Parse + validate shard segment. 404 on any malformed input.
   const match = SHARD_PATTERN.exec(shard);
