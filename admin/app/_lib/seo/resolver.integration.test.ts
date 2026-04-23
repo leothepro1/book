@@ -46,6 +46,10 @@ import {
   type ProductCollectionWithItems,
   productCollectionSeoAdapter,
 } from "./adapters/product-collection";
+import {
+  type AccommodationIndexSeoInput,
+  accommodationIndexSeoAdapter,
+} from "./adapters/accommodation-index";
 import type {
   ImageService,
   PageTypeSeoDefaultRepository,
@@ -972,6 +976,100 @@ describe("SeoResolver.resolve — ProductCollection (integration, M5 Batch A.2)"
     expect(types).toContain("BreadcrumbList");
     // Empty collection must not emit ItemList (empty ItemList fails
     // Rich Results validation).
+    expect(types).not.toContain("ItemList");
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// Accommodation index integration (M5 Batch B.1)
+// ──────────────────────────────────────────────────────────────
+
+function makeAccommodationIndexInput(
+  overrides: Partial<AccommodationIndexSeoInput> = {},
+): AccommodationIndexSeoInput {
+  return {
+    tenantId: "tenant_t",
+    activeLocales: ["sv", "en", "de"],
+    featuredAccommodations: [],
+    ...overrides,
+  };
+}
+
+describe("SeoResolver.resolve — AccommodationIndex (integration, M5 Batch B.1)", () => {
+  beforeEach(() => {
+    _clearSeoAdaptersForTests();
+    registerSeoAdapter(accommodationIndexSeoAdapter);
+  });
+
+  it("end-to-end: title 'Boenden | {siteName}', canonical /stays, JSON-LD shape", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "accommodation_index",
+      entity: makeAccommodationIndexInput({
+        featuredAccommodations: [makeAccommodation()],
+      }),
+      locale: "sv",
+    });
+
+    expect(r.title).toBe("Boenden | Apelviken");
+    expect(r.canonicalUrl).toBe("https://apelviken-x.rutgr.com/stays");
+    expect(r.canonicalPath).toBe("/stays");
+    expect(r.noindex).toBe(false);
+
+    const types = r.structuredData.map((o) => o["@type"]);
+    expect(types).toEqual(["CollectionPage", "ItemList", "BreadcrumbList"]);
+  });
+
+  it("canonical stays /stays even on page 5 (no query, no pagination in canonical)", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "accommodation_index",
+      entity: makeAccommodationIndexInput(),
+      locale: "sv",
+      pagination: { page: 5, totalPages: 10 },
+    });
+
+    expect(r.canonicalPath).toBe("/stays");
+    expect(r.canonicalUrl).toBe("https://apelviken-x.rutgr.com/stays");
+    // Pagination DOES suffix the title (resolver behavior).
+    expect(r.title).toBe("Boenden | Apelviken – Page 5");
+  });
+
+  it("hreflang alternates all point to /stays (never /stays?page=N)", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "accommodation_index",
+      entity: makeAccommodationIndexInput(),
+      locale: "sv",
+      pagination: { page: 3, totalPages: 10 },
+    });
+    for (const entry of r.hreflang) {
+      expect(entry.url).not.toContain("?");
+      expect(entry.url).not.toMatch(/page/i);
+    }
+    // Entries cover sv + en + de + x-default.
+    expect(r.hreflang.map((h) => h.code)).toEqual([
+      "sv",
+      "en",
+      "de",
+      "x-default",
+    ]);
+  });
+
+  it("empty featured list: resolve succeeds, CollectionPage + BreadcrumbList remain, no ItemList", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "accommodation_index",
+      entity: makeAccommodationIndexInput({ featuredAccommodations: [] }),
+      locale: "sv",
+    });
+    const types = r.structuredData.map((o) => o["@type"]);
+    expect(types).toContain("CollectionPage");
+    expect(types).toContain("BreadcrumbList");
     expect(types).not.toContain("ItemList");
   });
 });
