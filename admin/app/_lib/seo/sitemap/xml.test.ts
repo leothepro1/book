@@ -1,11 +1,37 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  sitemapIndexToXml,
-  sitemapShardToXml,
+  sitemapIndexToXml as _sitemapIndexToXmlRaw,
+  sitemapShardToXml as _sitemapShardToXmlRaw,
   xmlEscape,
 } from "./xml";
-import type { BuiltShard } from "./types";
+import type { BuiltShard, BuiltSitemapIndex } from "./types";
+import {
+  expectValidSitemapIndex,
+  expectValidSitemapUrlset,
+} from "./__tests__/sitemap-validation";
+
+// ── Validating serializer wrappers ───────────────────────────
+//
+// Every serializer output in this file is automatically piped
+// through the M7.5 structural validator (sitemap-validation.ts).
+// Schema drift anywhere in the hand-rolled `xml.ts` surfaces here
+// before it ships. The original assertions (substring checks +
+// `.not.toContain()` guards) stay — they catch specific contract
+// choices (e.g. "lastmod tag omitted when null"), while the
+// validator wrapper catches structural conformance.
+
+function sitemapIndexToXml(index: BuiltSitemapIndex): string {
+  const xml = _sitemapIndexToXmlRaw(index);
+  expectValidSitemapIndex(xml);
+  return xml;
+}
+
+function sitemapShardToXml(shard: BuiltShard): string {
+  const xml = _sitemapShardToXmlRaw(shard);
+  expectValidSitemapUrlset(xml);
+  return xml;
+}
 
 // ── xmlEscape ────────────────────────────────────────────────
 

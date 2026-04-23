@@ -53,6 +53,7 @@ import {
   SitemapAggregationError,
   buildSitemapIndexForTenant,
 } from "@/app/_lib/seo/sitemap/aggregator";
+import { expectValidSitemapIndex } from "@/app/_lib/seo/sitemap/__tests__/sitemap-validation";
 import type {
   BuiltSitemapIndex,
   BuiltSitemapIndexShardRef,
@@ -115,6 +116,9 @@ describe("GET /sitemap.xml — happy path", () => {
     expect(body).toContain(`<?xml version="1.0" encoding="UTF-8"?>`);
     expect(body).toContain("<sitemapindex");
     expect(body).toContain("sitemap_pages_1.xml");
+    // Structural validation (M7.5): body MUST parse and pass
+    // sitemap.org 0.9 schema.
+    expectValidSitemapIndex(body);
   });
 
   it("sets Content-Type: application/xml; charset=utf-8", async () => {

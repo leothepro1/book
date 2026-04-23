@@ -44,6 +44,7 @@ import {
   SitemapAggregationError,
   buildShardForTenant,
 } from "@/app/_lib/seo/sitemap/aggregator";
+import { expectValidSitemapUrlset } from "@/app/_lib/seo/sitemap/__tests__/sitemap-validation";
 import type {
   BuiltShard,
   SitemapResourceType,
@@ -118,6 +119,8 @@ describe("GET /sitemap_<type>_<n>.xml — happy path", () => {
     expect(body).toContain("<?xml");
     expect(body).toContain("<urlset");
     expect(body).toContain("/shop/products/x");
+    // Structural validation (M7.5).
+    expectValidSitemapUrlset(body);
   });
 
   it("sets Content-Type + edge Cache-Control on 200", async () => {
@@ -151,6 +154,9 @@ describe("GET /sitemap_<type>_<n>.xml — happy path", () => {
     expect(body).toContain("<urlset");
     expect(body).toContain("</urlset>");
     expect(body).not.toContain("<url>");
+    // Structural validation (M7.5): empty urlset must still parse
+    // and pass the schema.
+    expectValidSitemapUrlset(body);
   });
 
   it("forwards resourceType + shardIndex to buildShardForTenant", async () => {

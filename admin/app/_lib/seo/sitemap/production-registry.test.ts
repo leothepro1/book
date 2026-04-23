@@ -43,6 +43,8 @@ import {
   type SitemapResourceType,
 } from "./types";
 import type { SeoTenantContext } from "../types";
+import { sitemapIndexToXml } from "./xml";
+import { expectValidSitemapIndex } from "./__tests__/sitemap-validation";
 
 // ── Prisma method aliases ───────────────────────────────────
 
@@ -290,6 +292,9 @@ describe("PRODUCTION_SHARD_REGISTRY × buildSitemapIndexForTenant — end-to-end
         /^https:\/\/apelviken\.rutgr\.com\/sitemap_[a-z_]+_1\.xml$/,
       );
     }
+
+    // E2E sanity: the serialized XML must pass structural validation.
+    expectValidSitemapIndex(sitemapIndexToXml(index));
   });
 
   it("empty tenant → only the pages shard (homepage always emitted)", async () => {
@@ -318,5 +323,8 @@ describe("PRODUCTION_SHARD_REGISTRY × buildSitemapIndexForTenant — end-to-end
     expect(index.shards).toHaveLength(1);
     expect(index.shards[0].resourceType).toBe("pages");
     expect(index.shards[0].shardIndex).toBe(1);
+
+    // Serialized XML must pass structural validation.
+    expectValidSitemapIndex(sitemapIndexToXml(index));
   });
 });
