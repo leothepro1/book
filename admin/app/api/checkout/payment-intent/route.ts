@@ -21,7 +21,9 @@ import { getPlatformFeeBps } from "@/app/_lib/payments/platform-fee";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { resolveProduct } from "@/app/_lib/products/resolve";
-import { resolveAccommodationPrice, AccommodationPriceError } from "@/app/_lib/accommodations";
+import { AccommodationPriceError } from "@/app/_lib/accommodations";
+import { computeAccommodationLinePrice } from "@/app/_lib/pricing/line-pricing";
+import type { AccommodationLinePriceResult } from "@/app/_lib/pricing/line-pricing";
 import { emitAnalyticsEvent } from "@/app/_lib/analytics";
 import { resolveAddonLineItems, AddonValidationError } from "@/app/_lib/accommodations/addons";
 import type { ResolvedAddonLineItem } from "@/app/_lib/accommodations/addons";
@@ -148,19 +150,16 @@ export async function POST(req: Request) {
   let accommodationExternalId: string | null = null;
 
   if (body.accommodationId) {
+    let priceResult: AccommodationLinePriceResult;
     try {
-      const priceResult = await resolveAccommodationPrice({
+      priceResult = await computeAccommodationLinePrice({
         tenantId: tenant.id,
         accommodationId: body.accommodationId,
         ratePlanId: ratePlanId ?? undefined,
-        checkIn: new Date(checkIn),
-        checkOut: new Date(checkOut),
-        guests,
+        checkInDate: new Date(checkIn).toISOString().slice(0, 10),
+        checkOutDate: new Date(checkOut).toISOString().slice(0, 10),
+        guestCounts: { adults: guests, children: 0, infants: 0 },
       });
-      totalPrice = priceResult.totalPrice;
-      currency = priceResult.currency;
-      ratePlanName = priceResult.ratePlan.name;
-      accommodationExternalId = priceResult.externalId;
     } catch (err) {
       if (err instanceof AccommodationPriceError) {
         const status = err.code === "PMS_UNAVAILABLE" ? 503 : 400;
@@ -177,6 +176,13 @@ export async function POST(req: Request) {
         { status: 503 },
       );
     }
+    // BigInt → number at the route boundary. Values are ören integers
+    // well within Number.MAX_SAFE_INTEGER; Number(subtotalCents) is
+    // bit-identical to the pre-refactor `priceResult.totalPrice`.
+    totalPrice = Number(priceResult.subtotalCents);
+    currency = priceResult.currency;
+    ratePlanName = priceResult.ratePlan.name;
+    accommodationExternalId = priceResult.accommodationExternalId;
   }
 
   // ── Resolve addon line items ────────────────────────────────
