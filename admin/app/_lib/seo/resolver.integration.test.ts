@@ -15,7 +15,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../logger", () => ({ log: vi.fn() }));
 
 import type {
+  AccommodationCategory,
+  AccommodationCategoryItem,
   AccommodationMedia,
+  AccommodationStatus,
   PageTypeSeoDefault,
   Product,
   ProductCollection,
@@ -50,6 +53,11 @@ import {
   type AccommodationIndexSeoInput,
   accommodationIndexSeoAdapter,
 } from "./adapters/accommodation-index";
+import {
+  type AccommodationCategoryItemWithAccommodation,
+  type AccommodationCategoryWithItems,
+  accommodationCategorySeoAdapter,
+} from "./adapters/accommodation-category";
 import type {
   ImageService,
   PageTypeSeoDefaultRepository,
@@ -1071,5 +1079,107 @@ describe("SeoResolver.resolve — AccommodationIndex (integration, M5 Batch B.1)
     expect(types).toContain("CollectionPage");
     expect(types).toContain("BreadcrumbList");
     expect(types).not.toContain("ItemList");
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// Accommodation category integration (M5 Batch B.2)
+// ──────────────────────────────────────────────────────────────
+
+function makeCategoryItem(
+  accommodationOverrides: Partial<AccommodationWithMedia> = {},
+  joinOverrides: Partial<AccommodationCategoryItem> = {},
+  media: AccommodationMedia[] = [],
+): AccommodationCategoryItemWithAccommodation {
+  const accommodation = makeAccommodation({
+    ...accommodationOverrides,
+    media,
+  });
+  const join: AccommodationCategoryItem = {
+    id: `aci_${accommodation.id}`,
+    categoryId: "cat_1",
+    accommodationId: accommodation.id,
+    sortOrder: 0,
+    createdAt: new Date("2026-02-01T00:00:00Z"),
+    ...joinOverrides,
+  };
+  return { ...join, accommodation };
+}
+
+function makeCategory(
+  overrides: Partial<AccommodationCategoryWithItems> = {},
+): AccommodationCategoryWithItems {
+  const base: AccommodationCategory = {
+    id: "cat_1",
+    tenantId: "tenant_t",
+    title: "Stugor",
+    description: "Våra hemtrevliga stugor",
+    slug: "stugor",
+    imageUrl: "https://cdn.example/stugor.jpg",
+    status: "ACTIVE" as AccommodationStatus,
+    visibleInSearch: true,
+    sortOrder: 0,
+    pmsRef: null,
+    version: 1,
+    seo: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-04-01T00:00:00Z"),
+  };
+  return { ...base, items: [], ...overrides };
+}
+
+describe("SeoResolver.resolve — AccommodationCategory (integration, M5 Batch B.2)", () => {
+  beforeEach(() => {
+    _clearSeoAdaptersForTests();
+    registerSeoAdapter(accommodationCategorySeoAdapter);
+  });
+
+  it("happy path: CollectionPage + ItemList + BreadcrumbList (3 level)", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const entity = makeCategory({
+      items: [
+        makeCategoryItem({ id: "a1", slug: "a1", name: "A1" }, { sortOrder: 0 }),
+        makeCategoryItem({ id: "a2", slug: "a2", name: "A2" }, { sortOrder: 1 }),
+      ],
+    });
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "accommodation_category",
+      entity,
+      locale: "sv",
+    });
+
+    expect(r.title).toBe("Stugor | Apelviken");
+    expect(r.description).toBe("Våra hemtrevliga stugor");
+    expect(r.canonicalUrl).toBe(
+      "https://apelviken-x.rutgr.com/stays/categories/stugor",
+    );
+    expect(r.noindex).toBe(false);
+
+    const types = r.structuredData.map((o) => o["@type"]);
+    expect(types).toEqual(["CollectionPage", "ItemList", "BreadcrumbList"]);
+
+    // Breadcrumb is 3 levels exactly (Hem → Boenden → Stugor).
+    const crumb = r.structuredData.find(
+      (o) => o["@type"] === "BreadcrumbList",
+    );
+    expect((crumb?.itemListElement as unknown[]).length).toBe(3);
+  });
+
+  it("empty category: resolveSeo succeeds, robots: noindex, NO JSON-LD", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "accommodation_category",
+      entity: makeCategory({ items: [] }),
+      locale: "sv",
+    });
+
+    // Resolve succeeds.
+    expect(r.title).toBe("Stugor | Apelviken");
+    // Empty category is noindex (thin content guard).
+    expect(r.noindex).toBe(true);
+    // No JSON-LD (adapter short-circuits).
+    expect(r.structuredData).toEqual([]);
   });
 });
