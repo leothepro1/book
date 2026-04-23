@@ -57,6 +57,7 @@ import {
   safeParseSeoMetadata,
 } from "../types";
 import type { AccommodationWithMedia } from "./accommodation";
+import { buildAccommodationItemList } from "./_itemlist";
 import type { SeoAdapter, SitemapEntry } from "./base";
 
 // ── Constants ─────────────────────────────────────────────────
@@ -134,10 +135,6 @@ export function categorySeoInclude(tenantId: string) {
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function resolvedAccommodationTitle(acc: AccommodationWithMedia): string {
-  return acc.nameOverride ?? acc.name;
-}
-
 function categoryUrl(
   entity: AccommodationCategoryWithItems,
   tenant: SeoTenantContext,
@@ -148,14 +145,6 @@ function categoryUrl(
     locale,
     `${CATEGORY_ROUTE_PREFIX}/${entity.slug}`,
   );
-}
-
-function accommodationDetailUrl(
-  acc: AccommodationWithMedia,
-  tenant: SeoTenantContext,
-  locale: string,
-): string {
-  return buildAbsoluteUrl(tenant, locale, `/stays/${acc.slug}`);
 }
 
 /**
@@ -294,45 +283,15 @@ export const accommodationCategorySeoAdapter: SeoAdapter<AccommodationCategoryWi
   };
 
 // ── JSON-LD builders ────────────────────────────────────────
-
-/**
- * Build ItemList from a list of accommodations. Positions 1-indexed
- * (schema.org convention). `image` emitted only when the
- * accommodation has at least one media row.
- *
- * This is structurally identical to the helper in
- * `accommodation-index.ts`. Kept duplicated here intentionally
- * until both adapters have landed and a shared helper extraction
- * can be evaluated in a follow-up commit (Batch B plan, item B.4).
- */
-function buildAccommodationItemList(
-  accommodations: readonly AccommodationWithMedia[],
-  tenant: SeoTenantContext,
-  locale: string,
-): StructuredDataObject {
-  return {
-    "@context": "https://schema.org",
-    "@type": "ItemList",
-    itemListElement: accommodations.map((acc, idx) => {
-      const item: Record<string, unknown> = {
-        "@type": "ListItem",
-        position: idx + 1,
-        name: resolvedAccommodationTitle(acc),
-        url: accommodationDetailUrl(acc, tenant, locale),
-      };
-      const firstMedia = acc.media[0];
-      if (firstMedia) item.image = firstMedia.url;
-      return item;
-    }),
-  };
-}
+// `buildAccommodationItemList` is shared with accommodation-index;
+// see `./_itemlist.ts` for the extracted helper and rationale.
 
 /**
  * 3-level breadcrumb: Hem → Boenden → {category.title}. The
  * accommodation-index adapter emits the parallel 2-level
- * breadcrumb. Both link to `/stays` with identical URL
- * construction; the shared ItemList helper is a natural
- * extraction target (see buildAccommodationItemList above).
+ * breadcrumb. Breadcrumbs stay adapter-local because their
+ * shape differs — extracting them would be a bad abstraction
+ * (2-level vs 3-level switching would pollute the helper).
  */
 function breadcrumbList(
   entity: AccommodationCategoryWithItems,

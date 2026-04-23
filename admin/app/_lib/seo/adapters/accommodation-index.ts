@@ -43,6 +43,7 @@ import type {
   StructuredDataObject,
 } from "../types";
 import type { AccommodationWithMedia } from "./accommodation";
+import { buildAccommodationItemList } from "./_itemlist";
 import type { SeoAdapter, SitemapEntry } from "./base";
 
 // ── Constants ─────────────────────────────────────────────────
@@ -89,18 +90,6 @@ export interface AccommodationIndexSeoInput {
 }
 
 // ── Helpers ──────────────────────────────────────────────────
-
-function resolvedAccommodationTitle(acc: AccommodationWithMedia): string {
-  return acc.nameOverride ?? acc.name;
-}
-
-function accommodationDetailUrl(
-  acc: AccommodationWithMedia,
-  tenant: SeoTenantContext,
-  locale: string,
-): string {
-  return buildAbsoluteUrl(tenant, locale, `/stays/${acc.slug}`);
-}
 
 function indexUrl(tenant: SeoTenantContext, locale: string): string {
   return buildAbsoluteUrl(tenant, locale, STAYS_ROUTE_PREFIX);
@@ -218,37 +207,8 @@ export const accommodationIndexSeoAdapter: SeoAdapter<AccommodationIndexSeoInput
   };
 
 // ── JSON-LD builders ────────────────────────────────────────
-
-/**
- * Build ItemList from a list of accommodations. Positions 1-indexed
- * (schema.org convention). `image` emitted only when the
- * accommodation has at least one media row.
- *
- * Lives in this file today; if accommodation-category ends up with
- * an identical builder, extract to `_itemlist.ts` in a follow-up
- * (per the Batch B plan).
- */
-function buildAccommodationItemList(
-  accommodations: readonly AccommodationWithMedia[],
-  tenant: SeoTenantContext,
-  locale: string,
-): StructuredDataObject {
-  return {
-    "@context": "https://schema.org",
-    "@type": "ItemList",
-    itemListElement: accommodations.map((acc, idx) => {
-      const item: Record<string, unknown> = {
-        "@type": "ListItem",
-        position: idx + 1,
-        name: resolvedAccommodationTitle(acc),
-        url: accommodationDetailUrl(acc, tenant, locale),
-      };
-      const firstMedia = acc.media[0];
-      if (firstMedia) item.image = firstMedia.url;
-      return item;
-    }),
-  };
-}
+// `buildAccommodationItemList` is shared with accommodation-category;
+// see `./_itemlist.ts` for the extracted helper and rationale.
 
 /**
  * 2-level breadcrumb: Home → Boenden. The index itself is the
