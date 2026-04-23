@@ -321,3 +321,89 @@ describe("handleSitemapError", () => {
     ).toBe(503);
   });
 });
+
+// ──────────────────────────────────────────────────────────────
+// textRobotsResponse
+// ──────────────────────────────────────────────────────────────
+
+import {
+  handleRobotsError,
+  textRobotsResponse,
+} from "./route-helpers";
+
+describe("textRobotsResponse", () => {
+  it("edge cacheMode: 200, text/plain, s-maxage=3600 SWR=86400", () => {
+    const res = textRobotsResponse("User-agent: *\nAllow: /\n", "edge");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    expect(res.headers.get("cache-control")).toBe(
+      "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400",
+    );
+  });
+
+  it("no-store cacheMode: 200, text/plain, Cache-Control no-store", () => {
+    const res = textRobotsResponse("User-agent: *\nDisallow: /\n", "no-store");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("returns body text verbatim", async () => {
+    const body = "User-agent: *\nDisallow: /admin\n";
+    const res = textRobotsResponse(body, "edge");
+    expect(await res.text()).toBe(body);
+  });
+
+  it("never 404/503 — status is always 200", () => {
+    expect(textRobotsResponse("", "edge").status).toBe(200);
+    expect(textRobotsResponse("", "no-store").status).toBe(200);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// handleRobotsError
+// ──────────────────────────────────────────────────────────────
+
+describe("handleRobotsError", () => {
+  it("returns 200 (NEVER 503) so crawlers don't crawl-everything-for-24h", () => {
+    const res = handleRobotsError(new Error("boom"), "tenant_err");
+    expect(res.status).toBe(200);
+  });
+
+  it("body is exactly 'User-agent: *\\nDisallow: /\\n' (fail-safe)", async () => {
+    const res = handleRobotsError(new Error("boom"), null);
+    expect(await res.text()).toBe("User-agent: *\nDisallow: /\n");
+  });
+
+  it("Cache-Control: no-store (transient fail-safe must not stick in edge)", () => {
+    const res = handleRobotsError(new Error("boom"), "tenant_err");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("logs seo.robots.route_error with tenantId + error string", () => {
+    const err = new Error("db gone");
+    handleRobotsError(err, "tenant_x");
+    expect(log).toHaveBeenCalledWith("error", "seo.robots.route_error", {
+      tenantId: "tenant_x",
+      error: String(err),
+    });
+  });
+
+  it("passes tenantId: null through to the log context", () => {
+    handleRobotsError(new Error("pre-resolve fail"), null);
+    expect(log).toHaveBeenCalledWith("error", "seo.robots.route_error", {
+      tenantId: null,
+      error: String(new Error("pre-resolve fail")),
+    });
+  });
+
+  it("non-Error thrown value serializes via String() without crashing", () => {
+    const thrown: unknown = { weird: "shape" };
+    const res = handleRobotsError(thrown, "tenant_x");
+    expect(res.status).toBe(200);
+    const call = vi
+      .mocked(log)
+      .mock.calls.find((c) => c[1] === "seo.robots.route_error");
+    expect(call?.[2]?.error).toBe("[object Object]");
+  });
+});
