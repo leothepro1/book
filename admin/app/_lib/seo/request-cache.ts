@@ -156,6 +156,16 @@ export const resolveSeoForRequest = cache(
 
 // ── Per-resource-type fetch+resolve helpers ──────────────────
 
+/**
+ * Generate a per-request correlation id. Used by the resolver and every
+ * adapter log event so that one HTTP request's SEO work is grep-able in
+ * structured logs. `crypto.randomUUID()` is Node 19+ / Edge-runtime safe
+ * and deterministic in that it never collides in practice.
+ */
+function newRequestId(): string {
+  return crypto.randomUUID();
+}
+
 async function fetchAndResolveHomepage(
   tenantId: string,
   locale: string,
@@ -173,6 +183,7 @@ async function fetchAndResolveHomepage(
     resourceType: "homepage",
     entity: {},
     locale,
+    requestId: newRequestId(),
   });
 }
 
@@ -193,5 +204,6 @@ async function fetchAndResolveAccommodation(
     resourceType: "accommodation",
     entity: accommodation,
     locale,
+    requestId: newRequestId(),
   });
 }

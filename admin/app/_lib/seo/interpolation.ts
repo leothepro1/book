@@ -40,6 +40,12 @@ export interface InterpolateOptions {
    * When omitted, the log still fires but with `tenantId: null`.
    */
   tenantId?: string;
+  /**
+   * Per-request correlation id. When the resolver calls `interpolate()`
+   * it forwards `ctx.requestId` so missing-key logs correlate with
+   * every other log emitted during the same resolution.
+   */
+  requestId?: string;
 }
 
 /**
@@ -63,6 +69,7 @@ export function interpolate(
       log("warn", "seo.interpolation.missing_key", {
         path: rawPath,
         tenantId: options.tenantId ?? null,
+        requestId: options.requestId ?? null,
       });
       return match;
     }

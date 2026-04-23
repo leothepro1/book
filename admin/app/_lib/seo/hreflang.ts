@@ -63,6 +63,7 @@ export function resolveHreflang(
       tenantId: tenant.id,
       resourceId: seoable.id,
       canonicalPath: resolvedCanonicalPath,
+      requestId: ctx.requestId ?? null,
     });
 
     const url = `${origin}${resolvedCanonicalPath}`;

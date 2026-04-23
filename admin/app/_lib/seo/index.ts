@@ -40,6 +40,7 @@ export { accommodationSeoAdapter } from "./adapters/accommodation";
 // ── Types ─────────────────────────────────────────────────────
 export type {
   Seoable,
+  SeoLogContext,
   SeoMetadata,
   SeoDefaults,
   SeoTenantContext,
@@ -55,6 +56,7 @@ export {
   SeoResourceTypes,
   SeoMetadataSchema,
   SeoDefaultsSchema,
+  SeoableSchema,
   safeParseSeoMetadata,
   safeParseSeoDefaults,
 } from "./types";

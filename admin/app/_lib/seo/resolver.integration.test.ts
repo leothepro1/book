@@ -19,6 +19,8 @@ import type {
   PageTypeSeoDefault,
 } from "@prisma/client";
 
+import { log } from "../logger";
+import type { SeoAdapter } from "./adapters/base";
 import {
   _clearSeoAdaptersForTests,
   registerSeoAdapter,
@@ -35,6 +37,7 @@ import type {
 import { SeoResolver } from "./resolver";
 import type {
   ResolvedImage,
+  Seoable,
   SeoResolutionContext,
   SeoTenantContext,
 } from "./types";
@@ -558,5 +561,134 @@ describe("SeoResolver.resolve — Homepage (integration, M5)", () => {
       locale: "sv",
     });
     expect(r.openGraph.type).toBe("website");
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// Adapter output hardening (M5 prep)
+// ──────────────────────────────────────────────────────────────
+
+describe("SeoResolver.resolve — adapter output validation (M5 prep)", () => {
+  beforeEach(() => {
+    _clearSeoAdaptersForTests();
+    vi.mocked(log).mockClear();
+  });
+
+  it("substitutes a safe fallback Seoable when the adapter returns a malformed shape", async () => {
+    // Adapter returns a Seoable missing the required `path` field.
+    // The resolver must not throw — it must log and render safe SEO.
+    const brokenAdapter: SeoAdapter = {
+      resourceType: "accommodation",
+      // Cast through unknown: we deliberately violate the adapter
+      // contract at runtime to exercise the resolver's defensive path.
+      toSeoable: () =>
+        ({
+          resourceType: "accommodation",
+          id: "acc_1",
+          tenantId: "tenant_t",
+          // path: MISSING
+          title: "Stuga Björk",
+          description: null,
+          featuredImageId: null,
+          seoOverrides: null,
+          updatedAt: new Date(),
+          publishedAt: null,
+          locale: "sv",
+        }) as unknown as Seoable,
+      toStructuredData: () => [],
+      isIndexable: () => true,
+      getSitemapEntries: () => [],
+    };
+    registerSeoAdapter(brokenAdapter);
+
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const tenant = makeTenant();
+    const entity = makeAccommodation();
+
+    // Must not throw.
+    const r = await resolver.resolve(makeCtx(tenant, entity));
+
+    // Fallback Seoable → path "/", title = tenant.siteName, noindex=true.
+    expect(r.canonicalPath).toBe("/");
+    expect(r.canonicalUrl).toBe("https://apelviken-x.rutgr.com/");
+    expect(r.title).toBe("Apelviken | Apelviken");
+    expect(r.noindex).toBe(true);
+
+    // Log event emitted with resource + tenant context + issues list.
+    const invalidCalls = vi
+      .mocked(log)
+      .mock.calls.filter((c) => c[1] === "seo.adapter.output_invalid");
+    expect(invalidCalls).toHaveLength(1);
+    const [, , logCtx] = invalidCalls[0];
+    expect(logCtx).toMatchObject({
+      tenantId: "tenant_t",
+      resourceType: "accommodation",
+      resourceId: "acc_1",
+    });
+    // `issues` is serialized to JSON for the logger's primitive-only
+    // context type. Parse it back for assertion — we don't couple the
+    // test to the exact issue list Zod emits, only to the presence of
+    // the missing-field we deliberately omitted.
+    const serialized = (logCtx as { issues: string }).issues;
+    expect(typeof serialized).toBe("string");
+    const issues = JSON.parse(serialized) as Array<{ path: string }>;
+    expect(issues.some((i) => i.path === "path")).toBe(true);
+  });
+
+  it("propagates ctx.requestId into structured log events", async () => {
+    // Use a tenant override whose canonical is set so hreflang
+    // logs the `seo.hreflang.canonical_overridden` event — a log
+    // with a requestId field wired through the resolver.
+    registerSeoAdapter(accommodationSeoAdapter);
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const tenant = makeTenant();
+    const entity = makeAccommodation({
+      seo: { canonicalPath: "/custom-canonical" },
+    });
+    const requestId = "req_test_fixed_id_42";
+
+    await resolver.resolve(
+      makeCtx(tenant, entity, { requestId }),
+    );
+
+    const overrideCalls = vi
+      .mocked(log)
+      .mock.calls.filter(
+        (c) => c[1] === "seo.hreflang.canonical_overridden",
+      );
+    expect(overrideCalls).toHaveLength(1);
+    expect(overrideCalls[0][2]).toMatchObject({
+      tenantId: "tenant_t",
+      resourceId: "acc_1",
+      requestId,
+    });
+  });
+
+  it("propagates ctx.requestId into adapter-emitted logs (zero-price warn)", async () => {
+    // Accommodation with basePricePerNight === 0 triggers
+    // `seo.structured_data.zero_price_skipped` inside the adapter.
+    // The adapter receives logContext from the resolver and must
+    // include requestId in its log call.
+    registerSeoAdapter(accommodationSeoAdapter);
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const tenant = makeTenant();
+    const entity = makeAccommodation({ basePricePerNight: 0 });
+    const requestId = "req_zero_price_probe";
+
+    await resolver.resolve(
+      makeCtx(tenant, entity, { requestId }),
+    );
+
+    const calls = vi
+      .mocked(log)
+      .mock.calls.filter(
+        (c) => c[1] === "seo.structured_data.zero_price_skipped",
+      );
+    expect(calls).toHaveLength(1);
+    expect(calls[0][2]).toMatchObject({
+      tenantId: "tenant_t",
+      resourceId: "acc_1",
+      requestId,
+    });
   });
 });

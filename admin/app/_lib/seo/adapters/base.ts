@@ -18,6 +18,7 @@
 import type {
   ResolvedImage,
   Seoable,
+  SeoLogContext,
   SeoResourceType,
   SeoTenantContext,
   StructuredDataObject,
@@ -71,11 +72,17 @@ export interface SeoAdapter<TEntity = unknown> {
    * Produce adapter-specific JSON-LD objects (e.g. `Accommodation`,
    * `Product`). Runs only when `PageTypeSeoDefault.structuredDataEnabled`
    * is true for the tenant/page-type.
+   *
+   * `logContext` carries per-request correlation data (currently just
+   * `requestId`) so that adapter-emitted logs can be tied back to the
+   * originating HTTP request. Optional — tests and callers outside
+   * the resolver can omit it.
    */
   toStructuredData(
     entity: TEntity,
     tenant: SeoTenantContext,
     locale: string,
+    logContext?: SeoLogContext,
   ): StructuredDataObject[];
 
   /**

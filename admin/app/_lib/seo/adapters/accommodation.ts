@@ -150,7 +150,7 @@ export const accommodationSeoAdapter: SeoAdapter<AccommodationWithMedia> = {
     return !overrides?.noindex;
   },
 
-  toStructuredData(entity, tenant, _locale) {
+  toStructuredData(entity, tenant, _locale, logContext) {
     const name = resolvedTitle(entity);
     const description = resolvedDescription(entity);
 
@@ -206,6 +206,7 @@ export const accommodationSeoAdapter: SeoAdapter<AccommodationWithMedia> = {
         tenantId: tenant.id,
         resourceId: entity.id,
         resourceType: "accommodation",
+        requestId: logContext?.requestId ?? null,
       });
     }
 

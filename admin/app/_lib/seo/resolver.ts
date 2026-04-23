@@ -36,10 +36,12 @@ import type {
   ResolvedImage,
   ResolvedSeo,
   Seoable,
+  SeoLogContext,
   SeoResolutionContext,
   SeoResourceType,
   StructuredDataObject,
 } from "./types";
+import { SeoableSchema } from "./types";
 
 /**
  * Resolves SEO metadata for any seoable entity.
@@ -65,7 +67,10 @@ export class SeoResolver {
    */
   async resolve(ctx: SeoResolutionContext): Promise<ResolvedSeo> {
     const adapter = getSeoAdapter(ctx.resourceType);
-    const seoable = adapter.toSeoable(ctx.entity, ctx.tenant);
+    const seoable = validateSeoableOrFallback(
+      adapter.toSeoable(ctx.entity, ctx.tenant),
+      ctx,
+    );
     const typeDefaults = await this.pageTypeDefaults.get(
       ctx.tenant.id,
       ctx.resourceType,
@@ -148,13 +153,13 @@ export class SeoResolver {
       title = interpolate(
         pattern,
         { entity: seoable, tenant: ctx.tenant },
-        { tenantId: ctx.tenant.id },
+        { tenantId: ctx.tenant.id, requestId: ctx.requestId },
       );
     } else {
       title = interpolate(
         ctx.tenant.seoDefaults.titleTemplate,
         { entityTitle: seoable.title, siteName: ctx.tenant.siteName },
-        { tenantId: ctx.tenant.id },
+        { tenantId: ctx.tenant.id, requestId: ctx.requestId },
       );
     }
 
@@ -198,7 +203,7 @@ export class SeoResolver {
       raw = interpolate(
         pattern,
         { entity: seoable, tenant: ctx.tenant },
-        { tenantId: ctx.tenant.id },
+        { tenantId: ctx.tenant.id, requestId: ctx.requestId },
       );
     } else if (seoable.description) {
       raw = seoable.description;
@@ -340,20 +345,34 @@ export class SeoResolver {
     if (ctx.resourceType === "homepage") {
       const orgRaw = ctx.tenant.seoDefaults.organizationSchema;
       if (orgRaw) {
-        const validated = validateOrganizationSchema(orgRaw, ctx.tenant.id);
+        const validated = validateOrganizationSchema(
+          orgRaw,
+          ctx.tenant.id,
+          ctx.requestId,
+        );
         if (validated) result.push(validated);
       }
       const lbRaw = ctx.tenant.seoDefaults.localBusinessSchema;
       if (lbRaw) {
-        const validated = validateLocalBusinessSchema(lbRaw, ctx.tenant.id);
+        const validated = validateLocalBusinessSchema(
+          lbRaw,
+          ctx.tenant.id,
+          ctx.requestId,
+        );
         if (validated) result.push(validated);
       }
     }
 
     // 2. Adapter-produced schemas (gated by per-type toggle).
     if (typeDefaults?.structuredDataEnabled !== false) {
+      const logContext: SeoLogContext = { requestId: ctx.requestId };
       result.push(
-        ...adapter.toStructuredData(ctx.entity, ctx.tenant, ctx.locale),
+        ...adapter.toStructuredData(
+          ctx.entity,
+          ctx.tenant,
+          ctx.locale,
+          logContext,
+        ),
       );
     }
 
@@ -367,6 +386,7 @@ export class SeoResolver {
           log("warn", "seo.structured_data.invalid_extension", {
             tenantId: ctx.tenant.id,
             resourceId: seoable.id,
+            requestId: ctx.requestId ?? null,
           });
         }
       }
@@ -437,12 +457,14 @@ function hasMinimumJsonLdShape(obj: Record<string, unknown>): boolean {
 function validateOrganizationSchema(
   raw: Record<string, unknown>,
   tenantId: string,
+  requestId: string | undefined,
 ): StructuredDataObject | null {
   if (!hasMinimumJsonLdShape(raw)) {
     log("warn", "seo.structured_data.missing_required_field", {
       tenantId,
       schema: "Organization",
       field: "@context or @type",
+      requestId: requestId ?? null,
     });
     return null;
   }
@@ -452,6 +474,7 @@ function validateOrganizationSchema(
       tenantId,
       schema: "Organization",
       field: "name",
+      requestId: requestId ?? null,
     });
     return null;
   }
@@ -466,12 +489,14 @@ function validateOrganizationSchema(
 function validateLocalBusinessSchema(
   raw: Record<string, unknown>,
   tenantId: string,
+  requestId: string | undefined,
 ): StructuredDataObject | null {
   if (!hasMinimumJsonLdShape(raw)) {
     log("warn", "seo.structured_data.missing_required_field", {
       tenantId,
       schema: "LocalBusiness",
       field: "@context or @type",
+      requestId: requestId ?? null,
     });
     return null;
   }
@@ -481,6 +506,7 @@ function validateLocalBusinessSchema(
       tenantId,
       schema: "LocalBusiness",
       field: "name",
+      requestId: requestId ?? null,
     });
     return null;
   }
@@ -490,6 +516,7 @@ function validateLocalBusinessSchema(
       tenantId,
       schema: "LocalBusiness",
       field: "address",
+      requestId: requestId ?? null,
     });
     return null;
   }
@@ -499,8 +526,73 @@ function validateLocalBusinessSchema(
       tenantId,
       schema: "LocalBusiness",
       field: "address.streetAddress",
+      requestId: requestId ?? null,
     });
     return null;
   }
   return raw as StructuredDataObject;
+}
+
+/**
+ * Runtime-validate an adapter's `toSeoable` output. On success return
+ * the value unchanged (typed cast — Zod parsed shape is structurally
+ * identical to `Seoable`). On failure log
+ * `seo.adapter.output_invalid` and substitute a safe synthetic
+ * `Seoable` that:
+ *
+ *   - preserves `ctx.resourceType`, `tenantId`, `locale` for downstream
+ *     consumers that key on those;
+ *   - pins `path = "/"` — we have no reliable path, and `/` is a real
+ *     URL the tenant always serves, so hreflang and canonical at least
+ *     produce valid URLs;
+ *   - sets `seoOverrides.noindex = true` — we don't know what we're
+ *     indexing, so don't index it. Safe default under the "keep the
+ *     page rendering" rule in the spec.
+ *
+ * Never throws. The resolver continues with the fallback Seoable so
+ * the storefront page still renders `<head>` metadata.
+ */
+function validateSeoableOrFallback(
+  candidate: Seoable,
+  ctx: SeoResolutionContext,
+): Seoable {
+  const parsed = SeoableSchema.safeParse(candidate);
+  if (parsed.success) {
+    return candidate;
+  }
+  // The logger's context type accepts only primitives — serialize
+  // the issue list to a JSON string so operators can still parse
+  // individual failures out of structured logs.
+  const issuesSerialized = JSON.stringify(
+    parsed.error.issues.map((i) => ({
+      path: i.path.join("."),
+      code: i.code,
+      message: i.message,
+    })),
+  );
+  log("error", "seo.adapter.output_invalid", {
+    tenantId: ctx.tenant.id,
+    resourceType: ctx.resourceType,
+    // Best-effort resource id from the raw candidate — may itself be
+    // invalid (wrong type, undefined), so we stringify defensively.
+    resourceId:
+      typeof (candidate as { id?: unknown }).id === "string"
+        ? (candidate as { id: string }).id
+        : null,
+    issues: issuesSerialized,
+    requestId: ctx.requestId ?? null,
+  });
+  return {
+    resourceType: ctx.resourceType,
+    id: `fallback-${ctx.tenant.id}`,
+    tenantId: ctx.tenant.id,
+    path: "/",
+    title: ctx.tenant.siteName,
+    description: null,
+    featuredImageId: null,
+    seoOverrides: { noindex: true, nofollow: false },
+    updatedAt: new Date(),
+    publishedAt: null,
+    locale: ctx.locale,
+  };
 }
