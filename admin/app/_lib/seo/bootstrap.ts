@@ -22,6 +22,7 @@ import { accommodationSeoAdapter } from "./adapters/accommodation";
 import { registerSeoAdapter } from "./adapters/base";
 import { homepageSeoAdapter } from "./adapters/homepage";
 import { productSeoAdapter } from "./adapters/product";
+import { productCollectionSeoAdapter } from "./adapters/product-collection";
 
 let bootstrapped = false;
 
@@ -39,6 +40,7 @@ export function ensureSeoBootstrapped(): void {
   registerSeoAdapter(accommodationSeoAdapter);
   registerSeoAdapter(homepageSeoAdapter);
   registerSeoAdapter(productSeoAdapter);
+  registerSeoAdapter(productCollectionSeoAdapter);
   bootstrapped = true;
 }
 

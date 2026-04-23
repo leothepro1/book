@@ -18,6 +18,8 @@ import type {
   AccommodationMedia,
   PageTypeSeoDefault,
   Product,
+  ProductCollection,
+  ProductCollectionItem,
   ProductMedia,
   ProductStatus,
   ProductType,
@@ -39,6 +41,11 @@ import {
   type ProductWithMedia,
   productSeoAdapter,
 } from "./adapters/product";
+import {
+  type ProductCollectionItemWithProduct,
+  type ProductCollectionWithItems,
+  productCollectionSeoAdapter,
+} from "./adapters/product-collection";
 import type {
   ImageService,
   PageTypeSeoDefaultRepository,
@@ -835,5 +842,136 @@ describe("SeoResolver.resolve — Product (integration, M5 Batch A.1)", () => {
     const types = r.structuredData.map((o) => o["@type"]);
     expect(types).not.toContain("Product");
     expect(types).toContain("BreadcrumbList");
+  });
+});
+
+// ──────────────────────────────────────────────────────────────
+// ProductCollection integration (M5 Batch A.2)
+// ──────────────────────────────────────────────────────────────
+
+function makeCollectionItem(
+  productOverrides: Partial<Product> = {},
+  joinOverrides: Partial<ProductCollectionItem> = {},
+  media: ProductMedia[] = [],
+): ProductCollectionItemWithProduct {
+  const base: Product = {
+    id: "prod_m1",
+    tenantId: "tenant_t",
+    title: "Member",
+    description: "",
+    slug: "member",
+    status: "ACTIVE" as ProductStatus,
+    productType: "STANDARD" as ProductType,
+    price: 10000,
+    currency: "SEK",
+    compareAtPrice: null,
+    trackInventory: false,
+    inventoryQuantity: 0,
+    continueSellingWhenOutOfStock: false,
+    taxable: true,
+    seo: null,
+    version: 1,
+    sortOrder: 0,
+    archivedAt: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-03-01T00:00:00Z"),
+    templateId: null,
+    ...productOverrides,
+  };
+  const join: ProductCollectionItem = {
+    id: `pci_${base.id}`,
+    collectionId: "coll_1",
+    productId: base.id,
+    sortOrder: 0,
+    createdAt: new Date("2026-02-01T00:00:00Z"),
+    ...joinOverrides,
+  };
+  return { ...join, product: { ...base, media } };
+}
+
+function makeCollection(
+  overrides: Partial<ProductCollectionWithItems> = {},
+): ProductCollectionWithItems {
+  const base: ProductCollection = {
+    id: "coll_1",
+    tenantId: "tenant_t",
+    title: "Mat & Dryck",
+    description: "Våra bästa erbjudanden.",
+    slug: "mat-och-dryck",
+    imageUrl: "https://cdn.example/collection.jpg",
+    status: "ACTIVE" as ProductStatus,
+    sortOrder: 0,
+    seo: null,
+    version: 1,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-04-01T00:00:00Z"),
+  };
+  return { ...base, items: [], ...overrides };
+}
+
+describe("SeoResolver.resolve — ProductCollection (integration, M5 Batch A.2)", () => {
+  beforeEach(() => {
+    _clearSeoAdaptersForTests();
+    registerSeoAdapter(productCollectionSeoAdapter);
+  });
+
+  it("end-to-end: title / description / canonical / OG / JSON-LD", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const entity = makeCollection({
+      items: [
+        makeCollectionItem(
+          { id: "pm1", slug: "one", title: "One" },
+          { sortOrder: 0 },
+        ),
+        makeCollectionItem(
+          { id: "pm2", slug: "two", title: "Two" },
+          { sortOrder: 1 },
+        ),
+      ],
+    });
+
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "product_collection",
+      entity,
+      locale: "sv",
+    });
+
+    expect(r.title).toBe("Mat & Dryck | Apelviken");
+    expect(r.description).toBe("Våra bästa erbjudanden.");
+    expect(r.canonicalUrl).toBe(
+      "https://apelviken-x.rutgr.com/shop/collections/mat-och-dryck",
+    );
+    expect(r.canonicalPath).toBe("/shop/collections/mat-och-dryck");
+    expect(r.noindex).toBe(false);
+
+    // OG pulled from imageUrl via the adapter hook.
+    expect(r.openGraph.image?.url).toBe(
+      "https://cdn.example/collection.jpg",
+    );
+
+    // JSON-LD: CollectionPage + ItemList + BreadcrumbList
+    const types = r.structuredData.map((o) => o["@type"]);
+    expect(types).toEqual(["CollectionPage", "ItemList", "BreadcrumbList"]);
+  });
+
+  it("empty collection: resolve succeeds, CollectionPage present, no ItemList", async () => {
+    const resolver = new SeoResolver(fakeImgService(), fakeRepo());
+    const r = await resolver.resolve({
+      tenant: makeTenant(),
+      resourceType: "product_collection",
+      entity: makeCollection({ items: [] }),
+      locale: "sv",
+    });
+
+    // resolve succeeds end-to-end.
+    expect(r.title).toBe("Mat & Dryck | Apelviken");
+
+    const types = r.structuredData.map((o) => o["@type"]);
+    expect(types).toContain("CollectionPage");
+    expect(types).toContain("BreadcrumbList");
+    // Empty collection must not emit ItemList (empty ItemList fails
+    // Rich Results validation).
+    expect(types).not.toContain("ItemList");
   });
 });

@@ -38,6 +38,15 @@ export type { AccommodationWithMedia } from "./adapters/accommodation";
 export { accommodationSeoAdapter } from "./adapters/accommodation";
 export type { ProductWithMedia } from "./adapters/product";
 export { productSeoAdapter } from "./adapters/product";
+export type {
+  ProductCollectionItemWithProduct,
+  ProductCollectionWithItems,
+} from "./adapters/product-collection";
+export {
+  collectionSeoInclude,
+  MAX_ITEMLIST_MEMBERS,
+  productCollectionSeoAdapter,
+} from "./adapters/product-collection";
 
 // ── Types ─────────────────────────────────────────────────────
 export type {
