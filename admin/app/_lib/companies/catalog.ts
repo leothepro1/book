@@ -4,17 +4,26 @@
  * A Catalog holds the pricing rules that modify base product prices for
  * buyers at one or more CompanyLocations. It has three kinds of child rows:
  *
- *   - CatalogFixedPrice      — flat override of a specific product's unit price
+ *   - CatalogFixedPrice      — flat override of a specific variant's unit price
  *   - CatalogQuantityRule    — min/max/increment + optional volume tier ladder
  *   - CatalogInclusion       — scope rows when includeAllProducts = false
+ *
+ * B2B catalog rules apply only to products (FAS 6.2B):
+ *   - setFixedPrice / setQuantityRule: variant-only
+ *   - addInclusion: variant | collection (2-way XOR)
+ *
+ * Accommodation pricing is PMS-authoritative and never flows through this
+ * service — see Pass 3 Risk #8 and computeAccommodationLinePrice
+ * (app/_lib/pricing/line-pricing.ts).
  *
  * Mutating catalog rules here does NOT touch existing Orders: prices are
  * snapshotted into OrderLineItem at checkout (FAS 4). Historical orders
  * therefore remain stable when rules change.
  *
- * Polymorphic-XOR: FAS 1 could not express a CHECK constraint on the
- * (accommodationId, productVariantId, collectionId) triplet. The XOR rule is
- * enforced here at the service boundary — see normaliseProductRef().
+ * Partial unique indexes enforce one rule per (catalog, target) pair. The
+ * inclusion XOR (variant | collection) is enforced in normaliseInclusionRef
+ * at the service boundary since Prisma DSL can't express a cross-column
+ * CHECK.
  */
 
 import { Prisma } from "@prisma/client";
@@ -43,7 +52,6 @@ import {
   type CreateCatalogInput,
   type InclusionRef,
   type ListCatalogsInput,
-  type ProductRef,
   type SetFixedPriceInput,
   type SetQuantityRuleInput,
   type UpdateCatalogPatch,
@@ -73,39 +81,29 @@ async function assertCatalogInTenant(
 }
 
 /**
- * XOR the polymorphic reference into (accommodationId | productVariantId |
- * collectionId) columns. `allowCollection` distinguishes fixed-price /
- * quantity-rule refs (type = accommodation|variant only) from inclusion refs
- * (also accepts collection).
+ * XOR the inclusion reference into (productVariantId | collectionId)
+ * columns. Enforced here because Prisma DSL can't express a cross-column
+ * CHECK constraint on the polymorphic shape.
+ *
+ * Fixed-price and quantity-rule paths no longer need normalisation —
+ * ProductRef is variant-only, so callers use `params.productRef.id`
+ * directly for the productVariantId column.
  */
-function normaliseProductRef(
-  ref: ProductRef | InclusionRef,
-  allowCollection: boolean,
-): {
-  accommodationId: string | null;
+function normaliseInclusionRef(ref: InclusionRef): {
   productVariantId: string | null;
   collectionId: string | null;
 } {
-  const acc = ref.type === "accommodation" ? ref.id : null;
   const variant = ref.type === "variant" ? ref.id : null;
-  const coll =
-    ref.type === "collection" && allowCollection ? ref.id : null;
+  const coll = ref.type === "collection" ? ref.id : null;
 
-  if (ref.type === "collection" && !allowCollection) {
-    throw new ValidationError("collection ref is not allowed here", {
-      polymorphicXor: "REF_TYPE_NOT_ALLOWED",
-    });
-  }
-
-  const setCount = [acc, variant, coll].filter((x) => x !== null).length;
+  const setCount = [variant, coll].filter((x) => x !== null).length;
   if (setCount !== 1) {
     throw new ValidationError(
-      "Exactly one of accommodation/variant/collection must be set",
+      "Exactly one of variant/collection must be set",
       { polymorphicXor: "XOR_VIOLATION" },
     );
   }
   return {
-    accommodationId: acc,
     productVariantId: variant,
     collectionId: coll,
   };
@@ -289,7 +287,7 @@ export async function setFixedPrice(
   input: SetFixedPriceInput,
 ): Promise<CatalogFixedPrice> {
   const params = SetFixedPriceInputSchema.parse(input);
-  const ref = normaliseProductRef(params.productRef, false);
+  const productVariantId = params.productRef.id;
 
   // Race-safe upsert: if two callers see `existing === null` at the same
   // time, the loser hits the partial unique index and we re-run the closure
@@ -298,12 +296,11 @@ export async function setFixedPrice(
     prisma.$transaction(async (tx) => {
       await assertCatalogInTenantInTx(tx, params.tenantId, params.catalogId);
 
-      // Upsert semantics: one row per (catalogId, productRef).
+      // Upsert semantics: one row per (catalogId, productVariantId).
       const existing = await tx.catalogFixedPrice.findFirst({
         where: {
           catalogId: params.catalogId,
-          accommodationId: ref.accommodationId,
-          productVariantId: ref.productVariantId,
+          productVariantId,
         },
       });
       if (existing) {
@@ -315,8 +312,7 @@ export async function setFixedPrice(
       return tx.catalogFixedPrice.create({
         data: {
           catalogId: params.catalogId,
-          accommodationId: ref.accommodationId,
-          productVariantId: ref.productVariantId,
+          productVariantId,
           fixedPriceCents: params.fixedPriceCents,
         },
       });
@@ -361,9 +357,10 @@ export async function setQuantityRule(
   input: SetQuantityRuleInput,
 ): Promise<CatalogQuantityRule> {
   const params = SetQuantityRuleInputSchema.parse(input);
-  const ref = normaliseProductRef(params.productRef, false);
+  const productVariantId = params.productRef.id;
 
-  // Race-safe upsert against the partial unique index on (catalogId, ref).
+  // Race-safe upsert against the partial unique index on
+  // (catalogId, productVariantId).
   const row = await upsertWithRaceRetry(() =>
     prisma.$transaction(async (tx) => {
       await assertCatalogInTenantInTx(tx, params.tenantId, params.catalogId);
@@ -371,14 +368,12 @@ export async function setQuantityRule(
       const existing = await tx.catalogQuantityRule.findFirst({
         where: {
           catalogId: params.catalogId,
-          accommodationId: ref.accommodationId,
-          productVariantId: ref.productVariantId,
+          productVariantId,
         },
       });
       const data = {
         catalogId: params.catalogId,
-        accommodationId: ref.accommodationId,
-        productVariantId: ref.productVariantId,
+        productVariantId,
         minQuantity: params.minQuantity ?? null,
         maxQuantity: params.maxQuantity ?? null,
         increment: params.increment ?? null,
@@ -430,7 +425,7 @@ export async function addInclusion(
   input: AddInclusionInput,
 ): Promise<CatalogInclusion> {
   const params = AddInclusionInputSchema.parse(input);
-  const ref = normaliseProductRef(params.productRef, true);
+  const ref = normaliseInclusionRef(params.productRef);
 
   // Race-safe upsert: under concurrent callers, the loser of the create
   // race hits the partial unique index on the set polymorphic column.
@@ -440,7 +435,6 @@ export async function addInclusion(
       const existing = await tx.catalogInclusion.findFirst({
         where: {
           catalogId: params.catalogId,
-          accommodationId: ref.accommodationId,
           productVariantId: ref.productVariantId,
           collectionId: ref.collectionId,
         },
@@ -449,7 +443,6 @@ export async function addInclusion(
       return tx.catalogInclusion.create({
         data: {
           catalogId: params.catalogId,
-          accommodationId: ref.accommodationId,
           productVariantId: ref.productVariantId,
           collectionId: ref.collectionId,
         },

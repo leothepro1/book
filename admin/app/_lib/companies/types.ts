@@ -302,19 +302,32 @@ export const ListCatalogsInputSchema = z.object({
 export type ListCatalogsInput = z.infer<typeof ListCatalogsInputSchema>;
 
 /**
- * Polymorphic product reference used throughout pricing. Shared by the
- * catalog-mutation API (fixed prices, inclusions, quantity rules) and the
- * pricing resolver. Exactly one of `accommodation` | `variant` is set on the
- * resolver side; catalog inclusions also admit `collection`.
+ * Product reference used throughout B2B pricing. Shared by the
+ * catalog-mutation API (fixed prices, quantity rules) and the pricing
+ * resolver.
+ *
+ * Variant-only by design (FAS 6.2B): accommodation pricing is
+ * PMS-authoritative and never flows through B2B catalogs — see Pass 3
+ * Risk #8 and computeAccommodationLinePrice
+ * (app/_lib/pricing/line-pricing.ts).
+ *
+ * The `type: "variant"` discriminator is kept on the object shape even
+ * though it's now trivially constant. It gives callers a single uniform
+ * shape and leaves room to re-widen if a future product class emerges.
  */
-export const ProductRefSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("accommodation"), id: z.string().min(1) }),
-  z.object({ type: z.literal("variant"), id: z.string().min(1) }),
-]);
+export const ProductRefSchema = z.object({
+  type: z.literal("variant"),
+  id: z.string().min(1),
+});
 export type ProductRef = z.infer<typeof ProductRefSchema>;
 
+/**
+ * Inclusion reference — 2-way XOR over variant | collection. A catalog
+ * inclusion may scope by a single variant id or by a whole collection
+ * (everything-in-this-collection pattern). Accommodations are out of
+ * scope — see ProductRefSchema.
+ */
 export const InclusionRefSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("accommodation"), id: z.string().min(1) }),
   z.object({ type: z.literal("variant"), id: z.string().min(1) }),
   z.object({ type: z.literal("collection"), id: z.string().min(1) }),
 ]);

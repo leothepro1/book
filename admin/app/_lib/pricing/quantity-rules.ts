@@ -27,7 +27,6 @@ export type QuantityRuleViolation =
 
 interface RuleRow {
   catalogId: string;
-  accommodationId: string | null;
   productVariantId: string | null;
   minQuantity: number | null;
   maxQuantity: number | null;
@@ -35,9 +34,7 @@ interface RuleRow {
 }
 
 function matchesRef(row: RuleRow, ref: ProductRef): boolean {
-  return ref.type === "accommodation"
-    ? row.accommodationId === ref.id
-    : row.productVariantId === ref.id;
+  return row.productVariantId === ref.id;
 }
 
 function evaluate(
@@ -122,7 +119,6 @@ export async function batchValidate(params: {
         where: { catalogId: { in: winningCatalogIds } },
         select: {
           catalogId: true,
-          accommodationId: true,
           productVariantId: true,
           minQuantity: true,
           maxQuantity: true,

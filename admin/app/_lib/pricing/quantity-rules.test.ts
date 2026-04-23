@@ -5,7 +5,6 @@ vi.mock("@/app/_lib/logger", () => ({ log: vi.fn() }));
 
 vi.mock("@/app/_lib/db/prisma", () => ({
   prisma: {
-    accommodation: { findMany: vi.fn() },
     productVariant: { findMany: vi.fn() },
     catalog: { findMany: vi.fn() },
     productCollectionItem: { findMany: vi.fn() },
@@ -18,7 +17,6 @@ const { validateQuantityForLocation, batchValidate } = await import(
 );
 const { prisma } = await import("@/app/_lib/db/prisma");
 type MockPrisma = {
-  accommodation: Record<string, ReturnType<typeof vi.fn>>;
   productVariant: Record<string, ReturnType<typeof vi.fn>>;
   catalog: Record<string, ReturnType<typeof vi.fn>>;
   productCollectionItem: Record<string, ReturnType<typeof vi.fn>>;
@@ -31,7 +29,6 @@ const LOCATION = "cl_1";
 
 function reset(): void {
   for (const model of [
-    m.accommodation,
     m.productVariant,
     m.catalog,
     m.productCollectionItem,
@@ -127,7 +124,6 @@ describe("violation detection", () => {
     const v = await runWith(
       {
         catalogId: "ca_a",
-        accommodationId: null,
         productVariantId: "pv_1",
         minQuantity: 5,
         maxQuantity: null,
@@ -142,7 +138,6 @@ describe("violation detection", () => {
     const v = await runWith(
       {
         catalogId: "ca_a",
-        accommodationId: null,
         productVariantId: "pv_1",
         minQuantity: null,
         maxQuantity: 10,
@@ -157,7 +152,6 @@ describe("violation detection", () => {
     const v = await runWith(
       {
         catalogId: "ca_a",
-        accommodationId: null,
         productVariantId: "pv_1",
         minQuantity: null,
         maxQuantity: null,
@@ -172,7 +166,6 @@ describe("violation detection", () => {
     const v = await runWith(
       {
         catalogId: "ca_a",
-        accommodationId: null,
         productVariantId: "pv_1",
         minQuantity: 5,
         maxQuantity: 100,
@@ -214,7 +207,6 @@ describe("rules follow the winning catalog", () => {
         return [
           {
             catalogId: "ca_winner",
-            accommodationId: null,
             productVariantId: "pv_1",
             minQuantity: 1, // permissive
             maxQuantity: null,
@@ -253,7 +245,6 @@ describe("batchValidate", () => {
     m.catalogQuantityRule.findMany.mockResolvedValue([
       {
         catalogId: "ca_a",
-        accommodationId: null,
         productVariantId: "pv_1",
         minQuantity: 10,
         maxQuantity: null,

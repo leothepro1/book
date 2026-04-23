@@ -4259,17 +4259,17 @@ model Catalog {
   @@index([tenantId, status])
 }
 
-/// Fixed price override for a single Accommodation or ProductVariant within a Catalog.
-/// Loose FKs (no @relation) on accommodation/variant — resolved at query time.
+/// Fixed price override for a single ProductVariant within a Catalog.
+/// Loose FK (no @relation) on productVariantId — resolved at query time.
 ///
-/// Uniqueness is enforced by PARTIAL unique indexes — not @@unique — because
+/// Scope: VARIANTS ONLY (FAS 6.2B). Accommodation pricing is
+/// PMS-authoritative and never flows through this table — see Pass 3
+/// Risk #8 and computeAccommodationLinePrice.
+///
+/// Uniqueness is enforced by a PARTIAL unique index — not @@unique — because
 /// Prisma's @@unique generates NULLS-DISTINCT indexes, which allow degenerate
-/// all-null-ref rows to race through and leave the polymorphic XOR unenforced
-/// at the DB level. Same pattern as the PaymentTerms system-default index:
-/// DSL cannot express `WHERE col IS NOT NULL`, so the constraints are added
-/// via raw SQL in the b2b_polymorphic_partial_unique migration.
-///   CatalogFixedPrice_catalogId_accommodationId_partial_key
-///     — UNIQUE (catalogId, accommodationId) WHERE accommodationId IS NOT NULL
+/// null rows. DSL cannot express `WHERE col IS NOT NULL`, so the constraint
+/// is added via raw SQL:
 ///   CatalogFixedPrice_catalogId_productVariantId_partial_key
 ///     — UNIQUE (catalogId, productVariantId) WHERE productVariantId IS NOT NULL
 model CatalogFixedPrice {
@@ -4277,19 +4277,21 @@ model CatalogFixedPrice {
   catalogId String
   catalog   Catalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
 
-  accommodationId  String?
   productVariantId String?
 
   fixedPriceCents BigInt
 }
 
 /// Scopes a Catalog to a subset of inventory when includeAllProducts = false.
-/// Loose FKs on accommodation/variant/collection — resolved at query time.
+/// Loose FKs on variant/collection — resolved at query time. 2-way XOR
+/// enforced at the service boundary by normaliseInclusionRef.
 ///
-/// Uniqueness enforced by PARTIAL unique indexes (see CatalogFixedPrice for
-/// rationale). Three indexes — one per polymorphic column — added in the
-/// b2b_polymorphic_partial_unique migration:
-///   CatalogInclusion_catalogId_accommodationId_partial_key
+/// Scope: variant | collection (FAS 6.2B). Accommodation scoping is
+/// intentionally unsupported — accommodation pricing is PMS-authoritative
+/// and B2B catalogs never apply to it.
+///
+/// Uniqueness enforced by PARTIAL unique indexes (see CatalogFixedPrice
+/// for rationale). Two indexes — one per polymorphic column:
 ///   CatalogInclusion_catalogId_productVariantId_partial_key
 ///   CatalogInclusion_catalogId_collectionId_partial_key
 model CatalogInclusion {
@@ -4297,26 +4299,25 @@ model CatalogInclusion {
   catalogId String
   catalog   Catalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
 
-  accommodationId  String?
   productVariantId String?
   collectionId     String?
 }
 
-/// Per-line quantity constraints and volume pricing inside a Catalog.
+/// Per-variant quantity constraints and volume pricing inside a Catalog.
 ///
-/// Uniqueness enforced by PARTIAL unique indexes (see CatalogFixedPrice for
-/// rationale). Without these, two quantity-rule rows for the same
+/// Scope: VARIANTS ONLY (FAS 6.2B). Accommodation pricing is
+/// PMS-authoritative and never flows through B2B catalogs.
+///
+/// Uniqueness enforced by a PARTIAL unique index (see CatalogFixedPrice for
+/// rationale). Without it, two quantity-rule rows for the same
 /// (catalogId, productVariantId) could co-exist — the service's findFirst
-/// would pick one arbitrarily and leak a ghost rule. Added in the
-/// b2b_polymorphic_partial_unique migration:
-///   CatalogQuantityRule_catalogId_accommodationId_partial_key
+/// would pick one arbitrarily and leak a ghost rule:
 ///   CatalogQuantityRule_catalogId_productVariantId_partial_key
 model CatalogQuantityRule {
   id        String  @id @default(cuid())
   catalogId String
   catalog   Catalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
 
-  accommodationId  String?
   productVariantId String?
 
   minQuantity Int?

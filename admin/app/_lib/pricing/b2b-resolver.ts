@@ -6,27 +6,25 @@
  * Contract
  * ───────────────────────────────────────────────────────────────────────────
  *
+ * • Scope: VARIANTS ONLY (FAS 6.2B). Accommodation pricing is
+ *   PMS-authoritative and comes exclusively from
+ *   computeAccommodationLinePrice (app/_lib/pricing/line-pricing.ts).
+ *   B2B catalogs never affect accommodation prices — see Pass 3 Risk #8.
+ *
  * • Pure read: runs no writes; safe to call speculatively from cart preview,
  *   checkout validation, or admin "price inspection" tooling.
  *
  * • Per-unit semantics: the resolver never multiplies by quantity. Callers
- *   compute `resolved.priceCents * quantity` themselves. For accommodations
- *   this is per-night; for variants this is per-cart-item-unit.
+ *   compute `resolved.priceCents * quantity` themselves.
  *
  * • Base price source:
- *     - accommodation: `Accommodation.basePricePerNight` (Int ören → BigInt).
- *       The live PMS rate-plan price (resolveAccommodationPrice) is
- *       intentionally NOT used here — it depends on dates the resolver does
- *       not receive. B2B rules therefore adjust the per-night *base*; the
- *       checkout flow integrates rate plans separately and will call this
- *       resolver per-night.
  *     - variant: `effectivePrice(product.price, variant.price)` — same rule
  *       the D2C storefront uses today.
  *
  * • Algorithm (order matters, per FAS 3 spec):
  *     STEP 1  Fetch base. If no companyLocationId → short-circuit to BASE.
  *     STEP 2  Fetch ACTIVE catalogs assigned to the location.
- *     STEP 3  For each catalog that covers this product, compute a candidate
+ *     STEP 3  For each catalog that covers this variant, compute a candidate
  *             price: VOLUME → FIXED → ADJUSTMENT.
  *     STEP 4  Pick the LOWEST candidate. Tie-break by earliest createdAt.
  *     STEP 5  No covering catalog → BASE.
@@ -75,19 +73,16 @@ type LoadedCatalog = {
   overallAdjustmentPercent: Prisma.Decimal | null;
   fixedPrices: Array<{
     id: string;
-    accommodationId: string | null;
     productVariantId: string | null;
     fixedPriceCents: bigint;
   }>;
   quantityRules: Array<{
     id: string;
-    accommodationId: string | null;
     productVariantId: string | null;
     volumePricing: unknown;
   }>;
   inclusions: Array<{
     id: string;
-    accommodationId: string | null;
     productVariantId: string | null;
     collectionId: string | null;
   }>;
@@ -166,12 +161,10 @@ function parseVolumePricing(
 }
 
 function refMatches(
-  row: { accommodationId: string | null; productVariantId: string | null },
+  row: { productVariantId: string | null },
   ref: ProductRef,
 ): boolean {
-  return ref.type === "accommodation"
-    ? row.accommodationId === ref.id
-    : row.productVariantId === ref.id;
+  return row.productVariantId === ref.id;
 }
 
 // ── Base price loaders ─────────────────────────────────────────
@@ -183,20 +176,11 @@ async function loadBasePrices(
   basePrices: Map<string, bigint>;
   variantToProduct: Map<string, string>;
 }> {
-  const accIds = refs
-    .filter((r) => r.type === "accommodation")
-    .map((r) => r.id);
-  const variantIds = refs.filter((r) => r.type === "variant").map((r) => r.id);
+  const variantIds = refs.map((r) => r.id);
 
-  const [accommodations, variants] = await Promise.all([
-    accIds.length > 0
-      ? prisma.accommodation.findMany({
-          where: { id: { in: accIds }, tenantId },
-          select: { id: true, basePricePerNight: true },
-        })
-      : Promise.resolve([]),
+  const variants =
     variantIds.length > 0
-      ? prisma.productVariant.findMany({
+      ? await prisma.productVariant.findMany({
           where: {
             id: { in: variantIds },
             product: { tenantId },
@@ -208,18 +192,11 @@ async function loadBasePrices(
             product: { select: { price: true } },
           },
         })
-      : Promise.resolve([]),
-  ]);
+      : [];
 
   const basePrices = new Map<string, bigint>();
   const variantToProduct = new Map<string, string>();
 
-  for (const a of accommodations) {
-    basePrices.set(
-      refKey({ type: "accommodation", id: a.id }),
-      BigInt(a.basePricePerNight),
-    );
-  }
   for (const v of variants) {
     const unitInt = effectivePrice(v.product.price, v.price);
     basePrices.set(refKey({ type: "variant", id: v.id }), BigInt(unitInt));
@@ -375,19 +352,16 @@ async function loadAssignedActiveCatalogs(
         overallAdjustmentPercent: r.overallAdjustmentPercent,
         fixedPrices: r.fixedPrices.map((fp) => ({
           id: fp.id,
-          accommodationId: fp.accommodationId,
           productVariantId: fp.productVariantId,
           fixedPriceCents: fp.fixedPriceCents,
         })),
         quantityRules: r.quantityRules.map((qr) => ({
           id: qr.id,
-          accommodationId: qr.accommodationId,
           productVariantId: qr.productVariantId,
           volumePricing: qr.volumePricing,
         })),
         inclusions: r.inclusions.map((inc) => ({
           id: inc.id,
-          accommodationId: inc.accommodationId,
           productVariantId: inc.productVariantId,
           collectionId: inc.collectionId,
         })),

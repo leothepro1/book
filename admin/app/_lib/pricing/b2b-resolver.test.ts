@@ -6,7 +6,6 @@ vi.mock("@/app/_lib/logger", () => ({ log: vi.fn() }));
 
 vi.mock("@/app/_lib/db/prisma", () => ({
   prisma: {
-    accommodation: { findMany: vi.fn() },
     productVariant: { findMany: vi.fn() },
     catalog: { findMany: vi.fn() },
     productCollectionItem: { findMany: vi.fn() },
@@ -23,7 +22,6 @@ const {
 } = await import("./b2b-resolver");
 const { prisma } = await import("@/app/_lib/db/prisma");
 type MockPrisma = {
-  accommodation: Record<string, ReturnType<typeof vi.fn>>;
   productVariant: Record<string, ReturnType<typeof vi.fn>>;
   catalog: Record<string, ReturnType<typeof vi.fn>>;
   productCollectionItem: Record<string, ReturnType<typeof vi.fn>>;
@@ -36,7 +34,6 @@ const now = new Date("2026-04-22T10:00:00.000Z");
 
 function resetAllMocks(): void {
   for (const model of [
-    m.accommodation,
     m.productVariant,
     m.catalog,
     m.productCollectionItem,
@@ -45,12 +42,6 @@ function resetAllMocks(): void {
   }
   // Default: no collection memberships unless a test says otherwise.
   m.productCollectionItem.findMany.mockResolvedValue([]);
-}
-
-function mockAccommodationBase(id: string, basePricePerNight: number) {
-  m.accommodation.findMany.mockResolvedValue([
-    { id, basePricePerNight },
-  ]);
 }
 
 function mockVariantBase(
@@ -91,11 +82,11 @@ describe("companyLocationId null → BASE", () => {
   beforeEach(() => resetAllMocks());
 
   it("returns base without loading any catalogs", async () => {
-    mockAccommodationBase("acc_1", 50000);
+    mockVariantBase("pv_1", 50000, 0);
     const out = await resolvePriceForLocation({
       tenantId: TENANT,
       companyLocationId: null,
-      productRef: { type: "accommodation", id: "acc_1" },
+      productRef: { type: "variant", id: "pv_1" },
       quantity: 1,
     });
     expect(out.priceCents).toBe(BigInt(50000));
@@ -112,12 +103,12 @@ describe("location with zero assigned catalogs → BASE", () => {
   beforeEach(() => resetAllMocks());
 
   it("returns base", async () => {
-    mockAccommodationBase("acc_1", 80000);
+    mockVariantBase("pv_1", 80000, 0);
     m.catalog.findMany.mockResolvedValue([]);
     const out = await resolvePriceForLocation({
       tenantId: TENANT,
       companyLocationId: LOCATION,
-      productRef: { type: "accommodation", id: "acc_1" },
+      productRef: { type: "variant", id: "pv_1" },
       quantity: 1,
     });
     expect(out.priceCents).toBe(BigInt(80000));
@@ -131,7 +122,7 @@ describe("single catalog, includeAll + adjustment", () => {
   beforeEach(() => resetAllMocks());
 
   it("applies the adjustment", async () => {
-    mockAccommodationBase("acc_1", 10000);
+    mockVariantBase("pv_1", 10000, 0);
     m.catalog.findMany.mockResolvedValue([
       catalog({
         includeAllProducts: true,
@@ -141,7 +132,7 @@ describe("single catalog, includeAll + adjustment", () => {
     const out = await resolvePriceForLocation({
       tenantId: TENANT,
       companyLocationId: LOCATION,
-      productRef: { type: "accommodation", id: "acc_1" },
+      productRef: { type: "variant", id: "pv_1" },
       quantity: 1,
     });
     expect(out.priceCents).toBe(BigInt(9000));
@@ -156,7 +147,7 @@ describe("single catalog, not including the product", () => {
   beforeEach(() => resetAllMocks());
 
   it("returns BASE when the catalog does not cover the product", async () => {
-    mockAccommodationBase("acc_1", 10000);
+    mockVariantBase("pv_1", 10000, 0);
     m.catalog.findMany.mockResolvedValue([
       catalog({
         includeAllProducts: false,
@@ -166,7 +157,7 @@ describe("single catalog, not including the product", () => {
     const out = await resolvePriceForLocation({
       tenantId: TENANT,
       companyLocationId: LOCATION,
-      productRef: { type: "accommodation", id: "acc_1" },
+      productRef: { type: "variant", id: "pv_1" },
       quantity: 1,
     });
     expect(out.priceCents).toBe(BigInt(10000));
@@ -180,8 +171,8 @@ describe("single catalog, not including the product", () => {
 describe("single catalog, explicit Inclusion", () => {
   beforeEach(() => resetAllMocks());
 
-  it("applies when an Inclusion row matches the ref", async () => {
-    mockAccommodationBase("acc_1", 10000);
+  it("applies when an Inclusion row matches the ref by direct variant id", async () => {
+    mockVariantBase("pv_1", 10000, 0);
     m.catalog.findMany.mockResolvedValue([
       catalog({
         includeAllProducts: false,
@@ -189,8 +180,7 @@ describe("single catalog, explicit Inclusion", () => {
         inclusions: [
           {
             id: "inc_1",
-            accommodationId: "acc_1",
-            productVariantId: null,
+            productVariantId: "pv_1",
             collectionId: null,
           },
         ],
@@ -199,7 +189,7 @@ describe("single catalog, explicit Inclusion", () => {
     const out = await resolvePriceForLocation({
       tenantId: TENANT,
       companyLocationId: LOCATION,
-      productRef: { type: "accommodation", id: "acc_1" },
+      productRef: { type: "variant", id: "pv_1" },
       quantity: 1,
     });
     expect(out.priceCents).toBe(BigInt(8000));
@@ -225,7 +215,6 @@ describe("collection-based Inclusion for variants", () => {
         inclusions: [
           {
             id: "inc_1",
-            accommodationId: null,
             productVariantId: null,
             collectionId: "col_1",
           },
@@ -252,7 +241,6 @@ describe("collection-based Inclusion for variants", () => {
         inclusions: [
           {
             id: "inc_1",
-            accommodationId: null,
             productVariantId: null,
             collectionId: "col_1",
           },
@@ -283,7 +271,6 @@ describe("single catalog, fixed price only", () => {
         fixedPrices: [
           {
             id: "cfp_1",
-            accommodationId: null,
             productVariantId: "pv_1",
             fixedPriceCents: BigInt(7500),
           },
@@ -318,7 +305,6 @@ describe("fixed price + adjustment on same catalog", () => {
         fixedPrices: [
           {
             id: "cfp_1",
-            accommodationId: null,
             productVariantId: "pv_1",
             fixedPriceCents: BigInt(7500),
           },
@@ -349,7 +335,6 @@ describe("volume tier at exact boundary (qty = tier.minQty)", () => {
         quantityRules: [
           {
             id: "qr_1",
-            accommodationId: null,
             productVariantId: "pv_1",
             volumePricing: [
               { minQty: 10, priceCents: "9000" },
@@ -384,7 +369,6 @@ describe("volume below lowest tier", () => {
         quantityRules: [
           {
             id: "qr_1",
-            accommodationId: null,
             productVariantId: "pv_1",
             volumePricing: [{ minQty: 10, priceCents: "9000" }],
           },
@@ -392,7 +376,6 @@ describe("volume below lowest tier", () => {
         fixedPrices: [
           {
             id: "cfp_1",
-            accommodationId: null,
             productVariantId: "pv_1",
             fixedPriceCents: BigInt(9500),
           },
@@ -424,7 +407,6 @@ describe("volume + fixed + adjustment on same catalog", () => {
         fixedPrices: [
           {
             id: "cfp_1",
-            accommodationId: null,
             productVariantId: "pv_1",
             fixedPriceCents: BigInt(9400),
           },
@@ -432,7 +414,6 @@ describe("volume + fixed + adjustment on same catalog", () => {
         quantityRules: [
           {
             id: "qr_1",
-            accommodationId: null,
             productVariantId: "pv_1",
             volumePricing: [{ minQty: 5, priceCents: "8000" }],
           },
@@ -465,7 +446,6 @@ describe("two catalogs — lowest price wins", () => {
         fixedPrices: [
           {
             id: "cfp_a",
-            accommodationId: null,
             productVariantId: "pv_1",
             fixedPriceCents: BigInt(8000),
           },
@@ -478,7 +458,6 @@ describe("two catalogs — lowest price wins", () => {
         fixedPrices: [
           {
             id: "cfp_b",
-            accommodationId: null,
             productVariantId: "pv_1",
             fixedPriceCents: BigInt(7500),
           },
@@ -544,7 +523,6 @@ describe("mixed coverage — one via inclusion, one via includeAll", () => {
         inclusions: [
           {
             id: "inc_1",
-            accommodationId: null,
             productVariantId: "pv_1",
             collectionId: null,
           },
@@ -674,7 +652,7 @@ describe("batchResolvePricesForLocation batching", () => {
       ],
     });
     expect(m.catalog.findMany).toHaveBeenCalledTimes(1);
-    // variants and accommodations each batch into one findMany.
+    // all variant refs batch into one findMany.
     expect(m.productVariant.findMany).toHaveBeenCalledTimes(1);
   });
 });
@@ -709,13 +687,13 @@ describe("basePriceCents is always returned", () => {
 describe("product missing in tenant", () => {
   beforeEach(() => resetAllMocks());
 
-  it("throws NotFoundError for an accommodation that does not exist", async () => {
-    m.accommodation.findMany.mockResolvedValue([]);
+  it("throws NotFoundError for a variant that does not exist", async () => {
+    m.productVariant.findMany.mockResolvedValue([]);
     await expect(
       resolvePriceForLocation({
         tenantId: TENANT,
         companyLocationId: null,
-        productRef: { type: "accommodation", id: "acc_missing" },
+        productRef: { type: "variant", id: "pv_missing" },
         quantity: 1,
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -728,12 +706,12 @@ describe("resolvedAt", () => {
   beforeEach(() => resetAllMocks());
 
   it("is a Date close to call time", async () => {
-    mockAccommodationBase("acc_1", 100);
+    mockVariantBase("pv_1", 100, 0);
     const before = Date.now();
     const out = await resolvePriceForLocation({
       tenantId: TENANT,
       companyLocationId: null,
-      productRef: { type: "accommodation", id: "acc_1" },
+      productRef: { type: "variant", id: "pv_1" },
       quantity: 1,
     });
     const after = Date.now();

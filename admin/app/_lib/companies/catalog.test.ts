@@ -217,16 +217,16 @@ describe("deleteCatalog", () => {
   });
 });
 
-describe("setFixedPrice — polymorphic XOR + upsert", () => {
+describe("setFixedPrice — upsert", () => {
   beforeEach(() => resetAllMocks());
 
-  it("rejects when no ref is set (parsed out by Zod before service)", async () => {
+  it("rejects when id is empty (Zod min(1) catches it)", async () => {
     await expect(
       catalogApi.setFixedPrice({
         tenantId: TENANT,
         catalogId: "ca_1",
         // Cast through unknown to pass TS; runtime Zod catches it.
-        productRef: { type: "accommodation", id: "" } as unknown as never,
+        productRef: { type: "variant", id: "" } as unknown as never,
         fixedPriceCents: BigInt(1000),
       }),
     ).rejects.toBeInstanceOf(Error);
@@ -237,7 +237,7 @@ describe("setFixedPrice — polymorphic XOR + upsert", () => {
       catalogApi.setFixedPrice({
         tenantId: TENANT,
         catalogId: "ca_1",
-        productRef: { type: "accommodation", id: "acc_1" },
+        productRef: { type: "variant", id: "pv_1" },
         fixedPriceCents: BigInt(-1),
       }),
     ).rejects.toBeInstanceOf(Error);
@@ -257,7 +257,6 @@ describe("setFixedPrice — polymorphic XOR + upsert", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           catalogId: "ca_1",
-          accommodationId: null,
           productVariantId: "pv_1",
           fixedPriceCents: BigInt(5000),
         }),
@@ -272,7 +271,7 @@ describe("setFixedPrice — polymorphic XOR + upsert", () => {
     await catalogApi.setFixedPrice({
       tenantId: TENANT,
       catalogId: "ca_1",
-      productRef: { type: "accommodation", id: "acc_1" },
+      productRef: { type: "variant", id: "pv_1" },
       fixedPriceCents: BigInt(9000),
     });
     expect(m.catalogFixedPrice.update).toHaveBeenCalledWith({
@@ -373,7 +372,7 @@ describe("setQuantityRule", () => {
 describe("addInclusion", () => {
   beforeEach(() => resetAllMocks());
 
-  it("accepts collection refs (unlike fixed-price / quantity-rule)", async () => {
+  it("accepts collection refs (unlike fixed-price / quantity-rule which are variant-only)", async () => {
     m.catalog.findFirst.mockResolvedValue({ id: "ca_1" });
     m.catalogInclusion.findFirst.mockResolvedValue(null);
     m.catalogInclusion.create.mockResolvedValue({ id: "inc_1" });
@@ -387,7 +386,6 @@ describe("addInclusion", () => {
         data: expect.objectContaining({
           catalogId: "ca_1",
           collectionId: "col_1",
-          accommodationId: null,
           productVariantId: null,
         }),
       }),
@@ -400,7 +398,7 @@ describe("addInclusion", () => {
     const row = await catalogApi.addInclusion({
       tenantId: TENANT,
       catalogId: "ca_1",
-      productRef: { type: "accommodation", id: "acc_1" },
+      productRef: { type: "variant", id: "pv_1" },
     });
     expect(row.id).toBe("inc_existing");
     expect(m.catalogInclusion.create).not.toHaveBeenCalled();
@@ -416,7 +414,7 @@ describe("cross-tenant isolation", () => {
       catalogApi.setFixedPrice({
         tenantId: TENANT,
         catalogId: "ca_other",
-        productRef: { type: "accommodation", id: "acc_1" },
+        productRef: { type: "variant", id: "pv_1" },
         fixedPriceCents: BigInt(100),
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -503,14 +501,14 @@ describe("race retry — setQuantityRule", () => {
       return findCall === 1 ? null : { id: "qr_winner" };
     });
     m.catalogQuantityRule.create.mockRejectedValueOnce(
-      prismaP2002(["catalogId", "accommodationId"]),
+      prismaP2002(["catalogId", "productVariantId"]),
     );
     m.catalogQuantityRule.update.mockResolvedValue({ id: "qr_winner" });
 
     const row = await catalogApi.setQuantityRule({
       tenantId: TENANT,
       catalogId: "ca_1",
-      productRef: { type: "accommodation", id: "acc_1" },
+      productRef: { type: "variant", id: "pv_1" },
       minQuantity: 5,
     });
     expect(row.id).toBe("qr_winner");
