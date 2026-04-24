@@ -11,6 +11,13 @@ export {
   computeDraftTotals,
   computeAndPersistDraftTotalsInTx,
 } from "./orchestrator";
+export {
+  buildDiscountEngineInput,
+  buildDraftTotalsInput,
+  deriveStayWindow,
+  resolveLineTaxRateBp,
+} from "./context";
+export type { RawDraftOrder, RawDraftLineItem } from "./context";
 export type {
   DraftTotals,
   DraftTotalsInput,

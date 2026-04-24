@@ -256,3 +256,88 @@ export type RemoveLineItemResult = {
   draft: DraftOrder;
   totals: DraftTotals;
 };
+
+// ── FAS 6.5B discount services ──────────────────────────────────
+
+export const ApplyDiscountCodeInputSchema = z.object({
+  tenantId: z.string().min(1),
+  draftOrderId: z.string().min(1),
+  code: z
+    .string()
+    .min(1)
+    .max(64)
+    .transform((s) => s.trim()),
+  actorUserId: z.string().optional(),
+});
+
+export type ApplyDiscountCodeInput = z.infer<typeof ApplyDiscountCodeInputSchema>;
+
+/** Snapshot of the applied discount, returned by applyDiscountCode. */
+export type AppliedDiscountSummary = {
+  discountId: string;
+  code: string;
+  title: string;
+  description: string | null;
+  discountAmountCents: bigint;
+  valueType: "PERCENTAGE" | "FIXED_AMOUNT";
+};
+
+export type ApplyDiscountCodeResult = {
+  draft: DraftOrder;
+  totals: DraftTotals;
+  discount: AppliedDiscountSummary;
+};
+
+export const RemoveDiscountCodeInputSchema = z.object({
+  tenantId: z.string().min(1),
+  draftOrderId: z.string().min(1),
+  actorUserId: z.string().optional(),
+});
+
+export type RemoveDiscountCodeInput = z.infer<typeof RemoveDiscountCodeInputSchema>;
+
+export type RemoveDiscountCodeResult = {
+  draft: DraftOrder;
+  totals: DraftTotals;
+};
+
+export const PreviewApplyDiscountCodeInputSchema = z.object({
+  tenantId: z.string().min(1),
+  draftOrderId: z.string().min(1),
+  code: z
+    .string()
+    .min(1)
+    .max(64)
+    .transform((s) => s.trim()),
+});
+
+export type PreviewApplyDiscountCodeInput = z.infer<
+  typeof PreviewApplyDiscountCodeInputSchema
+>;
+
+export type PreviewDiscountResult =
+  | {
+      valid: true;
+      impact: AppliedDiscountSummary;
+      projectedTotals: DraftTotals;
+    }
+  | {
+      valid: false;
+      error: string; // DiscountEvaluationError string literal
+    };
+
+// ── FAS 6.5B lifecycle: freezePrices ────────────────────────────
+
+export const FreezePricesInputSchema = z.object({
+  tenantId: z.string().min(1),
+  draftOrderId: z.string().min(1),
+  actorUserId: z.string().optional(),
+});
+
+export type FreezePricesInput = z.infer<typeof FreezePricesInputSchema>;
+
+export type FreezePricesResult = {
+  draft: DraftOrder;
+  totals: DraftTotals;
+  frozenAt: Date;
+};

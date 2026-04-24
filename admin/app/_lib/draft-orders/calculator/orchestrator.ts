@@ -29,64 +29,21 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/app/_lib/db/prisma";
 import { calculateDiscountImpact } from "@/app/_lib/discounts/apply";
 import { NotFoundError } from "@/app/_lib/errors/service-errors";
-import { getTaxRate } from "@/app/_lib/orders/tax";
 import { computeDraftTotalsPure } from "./core";
+import {
+  buildDiscountEngineInput,
+  buildDraftTotalsInput,
+  type RawDraftOrder,
+  type RawDraftLineItem,
+} from "./context";
 import type {
   DraftCalculatorOptions,
   DraftTotals,
   DraftTotalsInput,
   DraftTotalsLineBreakdown,
-  DraftTotalsLineInput,
 } from "./types";
 
 type Tx = Prisma.TransactionClient;
-
-// ── Types shaped to the Prisma rows (trimmed to fields we read) ──
-
-type RawDraftOrder = {
-  id: string;
-  tenantId: string;
-  status: string;
-  buyerKind: "GUEST" | "COMPANY" | "WALK_IN";
-  companyLocationId: string | null;
-  contactEmail: string | null;
-  guestAccountId: string | null;
-  currency: string;
-  taxesIncluded: boolean;
-  shippingCents: bigint;
-  pricesFrozenAt: Date | null;
-  appliedDiscountCode: string | null;
-  // Persisted snapshot (used only on the frozen path)
-  subtotalCents: bigint;
-  orderDiscountCents: bigint;
-  totalTaxCents: bigint;
-  totalCents: bigint;
-  lineItems: RawDraftLineItem[];
-};
-
-type RawDraftLineItem = {
-  id: string;
-  lineType: "ACCOMMODATION" | "PRODUCT" | "CUSTOM";
-  accommodationId: string | null;
-  productId: string | null;
-  checkInDate: Date | null;
-  checkOutDate: Date | null;
-  quantity: number;
-  unitPriceCents: bigint;
-  subtotalCents: bigint;
-  lineDiscountCents: bigint;
-  lineDiscountType: "PERCENTAGE" | "FIXED_AMOUNT" | null;
-  lineDiscountValue: unknown; // Decimal — read as string via .toString()
-  taxable: boolean;
-  taxCode: string | null;
-  // Persisted snapshot (used only on the frozen path)
-  taxAmountCents: bigint;
-  totalCents: bigint;
-};
-
-// ── Constants ──────────────────────────────────────────────────
-
-const MS_PER_DAY = 86_400_000;
 
 // ── Public API ─────────────────────────────────────────────────
 
@@ -153,52 +110,18 @@ export async function computeDraftTotals(
     // COLLECT_UNLESS_EXEMPT is treated as COLLECT in 6.4.
   }
 
-  // ── Map DraftBuyerKind → ConditionContext BuyerKind (WALK_IN → GUEST) ──
-  const ctxBuyerKind: "GUEST" | "COMPANY" =
-    draft.buyerKind === "COMPANY" ? "COMPANY" : "GUEST";
-
   // ── Resolve discount code (CODE path only — see SCOPE NOTE) ──
   const orchestratorWarnings: string[] = [];
   let orderDiscountImpact = null as DraftTotalsInput["orderDiscountImpact"];
 
   if (draft.appliedDiscountCode) {
-    const stayWindow = deriveStayWindow(draft.lineItems);
-    const productIds = Array.from(
-      new Set(
-        draft.lineItems
-          .map((l) => l.productId ?? l.accommodationId)
-          .filter((x): x is string => Boolean(x)),
-      ),
+    const { ctx, discountLineItems } = buildDiscountEngineInput(
+      draft,
+      draft.lineItems,
     );
-    const itemCount = draft.lineItems.reduce(
-      (sum, l) => sum + Math.max(0, l.quantity),
-      0,
-    );
-    const orderAmount = draft.lineItems.reduce(
-      (sum, l) => sum + Number(l.subtotalCents - l.lineDiscountCents),
-      0,
-    );
-    const discountLineItems = draft.lineItems.map((l) => ({
-      id: l.id,
-      productId: l.productId ?? l.accommodationId ?? "",
-      totalAmount: Number(l.subtotalCents - l.lineDiscountCents),
-    }));
-
     const impact = await calculateDiscountImpact({
       tenantId,
-      ctx: {
-        orderAmount: Math.max(0, orderAmount),
-        productIds,
-        itemCount,
-        guestEmail: draft.contactEmail ?? undefined,
-        guestAccountId: draft.guestAccountId ?? undefined,
-        guestSegmentIds: [], // engine re-hydrates from guestEmail
-        checkInDate: stayWindow.checkInDate,
-        checkOutDate: stayWindow.checkOutDate,
-        nights: stayWindow.nights,
-        buyerKind: ctxBuyerKind,
-        companyLocationId: draft.companyLocationId ?? undefined,
-      },
+      ctx,
       code: draft.appliedDiscountCode,
       lineItems: discountLineItems,
     });
@@ -210,32 +133,14 @@ export async function computeDraftTotals(
     }
   }
 
-  // ── Assemble core input ──
-  const lines: DraftTotalsLineInput[] = draft.lineItems.map((l) => ({
-    id: l.id,
-    lineType: l.lineType,
-    unitPriceCents: l.unitPriceCents,
-    quantity: l.quantity,
-    subtotalCents: l.subtotalCents,
-    taxable: l.taxable,
-    taxRateBp: resolveLineTaxRateBp(l, accTaxRateMap),
-    lineDiscountCents: l.lineDiscountCents,
-    lineDiscountType: l.lineDiscountType,
-    lineDiscountValue:
-      l.lineDiscountValue === null || l.lineDiscountValue === undefined
-        ? null
-        : String(l.lineDiscountValue),
-  }));
-
-  const input: DraftTotalsInput = {
-    currency: draft.currency,
-    buyerKind: ctxBuyerKind,
-    taxesIncluded: draft.taxesIncluded,
+  // ── Assemble core input via shared builder ──
+  const input = buildDraftTotalsInput({
+    draft,
+    lineItems: draft.lineItems,
+    accTaxRateMap,
     companyTaxExempt,
-    shippingCents: draft.shippingCents,
-    lines,
     orderDiscountImpact,
-  };
+  });
 
   const totals = computeDraftTotalsPure(input);
 
@@ -343,49 +248,6 @@ function assembleFrozenSnapshot(draft: RawDraftOrder): DraftTotals {
   };
 }
 
-/**
- * Resolve the tax rate for a line per audit §2:
- *   - `!line.taxable` → 0 bp (per-line kill switch).
- *   - ACCOMMODATION → `Accommodation.taxRate`, fallback 0.
- *   - PRODUCT / CUSTOM → `getTaxRate(...)` stub (0 today).
- */
-function resolveLineTaxRateBp(
-  line: RawDraftLineItem,
-  accTaxRateMap: Map<string, number>,
-): number {
-  if (!line.taxable) return 0;
-  if (line.lineType === "ACCOMMODATION") {
-    if (line.accommodationId) {
-      return accTaxRateMap.get(line.accommodationId) ?? 0;
-    }
-    return 0;
-  }
-  // PRODUCT / CUSTOM — flat tenant-level stub. Returns 0 until a real
-  // tax engine is wired per Q2-open resolution.
-  return getTaxRate("STANDARD", "SE");
-}
-
-/** Derive a single stay window spanning all accommodation lines. */
-function deriveStayWindow(lines: RawDraftLineItem[]): {
-  checkInDate: Date | undefined;
-  checkOutDate: Date | undefined;
-  nights: number;
-} {
-  const accLines = lines.filter(
-    (l) => l.lineType === "ACCOMMODATION" && l.checkInDate && l.checkOutDate,
-  );
-  if (accLines.length === 0) {
-    return { checkInDate: undefined, checkOutDate: undefined, nights: 0 };
-  }
-  let earliest = accLines[0].checkInDate as Date;
-  let latest = accLines[0].checkOutDate as Date;
-  for (const l of accLines) {
-    const ci = l.checkInDate as Date;
-    const co = l.checkOutDate as Date;
-    if (ci < earliest) earliest = ci;
-    if (co > latest) latest = co;
-  }
-  const diff = latest.getTime() - earliest.getTime();
-  const nights = diff > 0 ? Math.ceil(diff / MS_PER_DAY) : 0;
-  return { checkInDate: earliest, checkOutDate: latest, nights };
-}
+// Pure helpers (resolveLineTaxRateBp, deriveStayWindow,
+// buildDiscountEngineInput, buildDraftTotalsInput) live in `./context`
+// as of FAS 6.5B so the discount services can share them.

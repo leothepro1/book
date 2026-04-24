@@ -34,3 +34,11 @@ export * from "./types";
 // ── Services (FAS 6.5A) ──
 export { createDraft } from "./create";
 export { addLineItem, updateLineItem, removeLineItem } from "./lines";
+
+// ── Services (FAS 6.5B) ──
+export {
+  applyDiscountCode,
+  removeDiscountCode,
+  previewApplyDiscountCode,
+} from "./discount";
+export { freezePrices } from "./lifecycle";
