@@ -25,6 +25,7 @@
  * + core.ts Step 7 comment).
  */
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/app/_lib/db/prisma";
 import { calculateDiscountImpact } from "@/app/_lib/discounts/apply";
 import { NotFoundError } from "@/app/_lib/errors/service-errors";
@@ -37,6 +38,8 @@ import type {
   DraftTotalsLineBreakdown,
   DraftTotalsLineInput,
 } from "./types";
+
+type Tx = Prisma.TransactionClient;
 
 // ── Types shaped to the Prisma rows (trimmed to fields we read) ──
 
@@ -90,14 +93,22 @@ const MS_PER_DAY = 86_400_000;
 /**
  * Compute a draft's live totals.
  *
+ * When `tx` is provided, all reads use the caller's transaction client so
+ * the calculator sees pre-commit state. Services performing mutations
+ * (FAS 6.5+) pass their `tx` here and persist the resulting totals back to
+ * the DraftOrder row inside the same transaction for atomicity.
+ *
  * @throws `NotFoundError` when no DraftOrder matches (tenantId, id).
  */
 export async function computeDraftTotals(
   tenantId: string,
   draftOrderId: string,
   options: DraftCalculatorOptions = {},
+  tx?: Tx,
 ): Promise<DraftTotals> {
-  const draft = (await prisma.draftOrder.findFirst({
+  const db = tx ?? prisma;
+
+  const draft = (await db.draftOrder.findFirst({
     where: { id: draftOrderId, tenantId },
     include: { lineItems: { orderBy: { position: "asc" } } },
   })) as RawDraftOrder | null;
@@ -124,7 +135,7 @@ export async function computeDraftTotals(
   );
   const accTaxRateMap = new Map<string, number>();
   if (accommodationIds.length > 0) {
-    const rows = await prisma.accommodation.findMany({
+    const rows = await db.accommodation.findMany({
       where: { id: { in: accommodationIds }, tenantId },
       select: { id: true, taxRate: true },
     });
@@ -134,7 +145,7 @@ export async function computeDraftTotals(
   // ── Resolve companyTaxExempt (audit §5) ──
   let companyTaxExempt = false;
   if (draft.buyerKind === "COMPANY" && draft.companyLocationId) {
-    const loc = await prisma.companyLocation.findFirst({
+    const loc = await db.companyLocation.findFirst({
       where: { id: draft.companyLocationId, tenantId },
       select: { taxSetting: true },
     });
@@ -235,6 +246,56 @@ export async function computeDraftTotals(
       warnings: [...orchestratorWarnings, ...totals.warnings],
     };
   }
+  return totals;
+}
+
+// ── Persist helper (FAS 6.5+) ──────────────────────────────────
+
+/**
+ * Compute totals within the caller's transaction AND persist them back to
+ * the DraftOrder + DraftLineItem rows in the same tx. Returns the computed
+ * DraftTotals so callers can include it in service results without
+ * re-reading the DB.
+ *
+ * Called by service-layer mutations (addLineItem, updateLineItem,
+ * removeLineItem, applyDiscountCode, etc.) that want totals refreshed
+ * atomically with their mutation.
+ *
+ * Increments `DraftOrder.version` to keep optimistic-concurrency chains
+ * consistent.
+ */
+export async function computeAndPersistDraftTotalsInTx(
+  tx: Tx,
+  tenantId: string,
+  draftOrderId: string,
+  options: DraftCalculatorOptions = {},
+): Promise<DraftTotals> {
+  const totals = await computeDraftTotals(tenantId, draftOrderId, options, tx);
+
+  // Never persist on the frozen path — it's read-only by definition.
+  if (totals.source === "FROZEN_SNAPSHOT") return totals;
+
+  await tx.draftOrder.update({
+    where: { id: draftOrderId },
+    data: {
+      subtotalCents: totals.subtotalCents,
+      orderDiscountCents: totals.orderDiscountCents,
+      totalTaxCents: totals.taxCents,
+      totalCents: totals.totalCents,
+      version: { increment: 1 },
+    },
+  });
+
+  for (const breakdown of totals.perLine) {
+    await tx.draftLineItem.update({
+      where: { id: breakdown.lineId },
+      data: {
+        taxAmountCents: breakdown.taxCents,
+        totalCents: breakdown.totalCents,
+      },
+    });
+  }
+
   return totals;
 }
 

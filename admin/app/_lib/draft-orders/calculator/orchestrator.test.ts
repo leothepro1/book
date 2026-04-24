@@ -122,6 +122,41 @@ describe("computeDraftTotals — happy path", () => {
   });
 });
 
+// ── tx injection (FAS 6.5A) ─────────────────────────────────────
+
+describe("computeDraftTotals — tx injection", () => {
+  it("routes all reads through the passed tx, never touching global prisma", async () => {
+    const mockTx = {
+      draftOrder: {
+        findFirst: vi
+          .fn()
+          .mockResolvedValue(makeRawDraft({ taxesIncluded: false })),
+      },
+      accommodation: { findMany: vi.fn().mockResolvedValue([]) },
+      companyLocation: { findFirst: vi.fn().mockResolvedValue(null) },
+    };
+
+    const result = await computeDraftTotals(
+      "tenant_1",
+      "draft_1",
+      {},
+      mockTx as never,
+    );
+
+    expect(result.source).toBe("COMPUTED");
+    expect(mockTx.draftOrder.findFirst).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.draftOrder.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("falls back to global prisma when tx is omitted (backward-compat)", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeRawDraft({ taxesIncluded: true }),
+    );
+    await computeDraftTotals("tenant_1", "draft_1");
+    expect(mockPrisma.draftOrder.findFirst).toHaveBeenCalledTimes(1);
+  });
+});
+
 // ── Frozen short-circuit (audit §6) ─────────────────────────────
 
 describe("computeDraftTotals — frozen snapshot short-circuit", () => {

@@ -3013,6 +3013,16 @@ model OrderNumberSequence {
   updatedAt  DateTime @updatedAt
 }
 
+/// Atomic counter for sequential draft-order display numbers per tenant.
+/// Mirrors OrderNumberSequence; first call for a tenant returns 1001.
+/// Service layer (draft-orders/sequence.ts) formats as "D-{year}-{NNNN}".
+/// Counter never resets — year is display decoration only.
+model DraftOrderNumberSequence {
+  tenantId   String   @id
+  lastNumber Int      @default(1000)
+  updatedAt  DateTime @updatedAt
+}
+
 // ============================================================================
 // GIFT CARDS
 // ============================================================================

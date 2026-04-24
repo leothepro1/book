@@ -33,7 +33,14 @@ export type PlatformEventType =
   | "booking.checked_out"
   | "guest.created"
   | "guest.updated"
-  | "availability.updated";
+  | "availability.updated"
+  // ── DraftOrder events (FAS 6.5) ──
+  | "draft_order.created"
+  | "draft_order.updated"
+  | "draft_order.cancelled"
+  | "draft_order.invoiced"
+  | "draft_order.paid"
+  | "draft_order.completed";
 
 export type PlatformEvent = {
   type: PlatformEventType;
