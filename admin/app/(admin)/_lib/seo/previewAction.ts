@@ -1,0 +1,96 @@
+"use server";
+
+/**
+ * previewSeoAction — client-facing server action for SearchListingEditor
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * The admin's SearchListingEditor debounces user input and calls this
+ * action on every settled keystroke. It's the thin boundary wrapper
+ * around `previewSeoForEntity`:
+ *
+ *   1. `requireAdmin` — no anonymous previews.
+ *   2. Resolve tenant via the standard admin `getCurrentTenant` path.
+ *   3. `SeoMetadataSchema.safeParse` on client-supplied overrides —
+ *      same schema that validates persisted entity.seo.
+ *   4. Call the preview engine.
+ *   5. On any engine throw, structured log + return a generic user-
+ *      visible error. Never leak internals to the client.
+ *
+ * The locale argument is the tenant's default locale; per-request
+ * locale derivation is M8 (hreflang pipeline). For now, previews
+ * always render in `tenant.defaultLocale`.
+ */
+
+import { getCurrentTenant } from "../tenant/getCurrentTenant";
+import { requireAdmin } from "../auth/devAuth";
+import { log } from "../../../_lib/logger";
+import {
+  previewSeoForEntity,
+  type SeoPreviewResult,
+} from "../../../_lib/seo/preview";
+import { tenantToSeoContext } from "../../../_lib/tenant/seo-context";
+import { prisma } from "../../../_lib/db/prisma";
+import {
+  SeoMetadataSchema,
+  type SeoResourceType,
+} from "../../../_lib/seo/types";
+
+export type PreviewSeoActionResult =
+  | { readonly ok: true; readonly preview: SeoPreviewResult }
+  | { readonly ok: false; readonly error: string };
+
+export interface PreviewSeoActionArgs {
+  readonly resourceType: SeoResourceType;
+  readonly entityId: string;
+  readonly overrides: unknown;
+}
+
+export async function previewSeoAction(
+  args: PreviewSeoActionArgs,
+): Promise<PreviewSeoActionResult> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard;
+
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) {
+    return { ok: false, error: "Inte inloggad" };
+  }
+
+  const parsed = SeoMetadataSchema.partial().safeParse(args.overrides);
+  if (!parsed.success) {
+    return { ok: false, error: "Ogiltig indata" };
+  }
+
+  // Resolve locale from tenant's primary locale row — the same path
+  // the SEO engine uses for defaultLocale. Per-request admin-locale
+  // derivation is M8 scope.
+  const locales = await prisma.tenantLocale.findMany({
+    where: { tenantId: tenantData.tenant.id },
+  });
+  const tenantCtx = tenantToSeoContext({
+    tenant: tenantData.tenant,
+    locales,
+  });
+
+  try {
+    const preview = await previewSeoForEntity({
+      tenantId: tenantData.tenant.id,
+      resourceType: args.resourceType,
+      entityId: args.entityId,
+      overrides: parsed.data,
+      locale: tenantCtx.defaultLocale,
+    });
+    return { ok: true, preview };
+  } catch (error) {
+    log("error", "seo.preview.failed", {
+      tenantId: tenantData.tenant.id,
+      resourceType: args.resourceType,
+      entityId: args.entityId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      ok: false,
+      error: "Kunde inte generera förhandsvisning",
+    };
+  }
+}

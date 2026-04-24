@@ -1,0 +1,102 @@
+/* ── SearchListingPreview — Google-SERP-style result card ───── */
+/*
+ * Typography tuned to match Google's SERP desktop rendering closely
+ * enough to give merchants an accurate feel for truncation + line
+ * height. Not pixel-perfect — Google varies card layout by device,
+ * query, and experiment. Uses admin color tokens so dark-mode
+ * swaps apply uniformly with the rest of the admin UI.
+ */
+
+.slp {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* System font stack — Google uses Roboto/Arial, but system default
+     reads as close enough on every OS and keeps us Bedfront-local. */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Oxygen, Ubuntu, Cantarell, sans-serif;
+  line-height: 1.4;
+}
+
+.slp__top-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 26px;
+  margin-bottom: 2px;
+}
+
+.slp__favicon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--admin-surface-raised, #f2f2f2);
+  border: 1px solid var(--admin-border, #d9d9d9);
+  padding: 3px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.slp__site-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.slp__site-name {
+  font-size: 13px;
+  color: var(--admin-text, #202124);
+  line-height: 1.2;
+}
+
+.slp__display-url {
+  font-size: 12px;
+  color: var(--admin-text-secondary, #4d5156);
+  line-height: 1.3;
+  /* Allow the breadcrumb to wrap naturally — long slugs shouldn't
+     force the container wider. */
+  word-break: break-word;
+}
+
+.slp__title {
+  /* Google SERP title is historically the only blue-link element
+     on the card. Admin tokens don't declare a semantic link color
+     today — declare a local fallback so the card still reads as
+     a SERP result. */
+  color: var(--slp-link-color, #1a0dab);
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.3;
+  margin: 4px 0 0;
+  /* Single-line ellipsis for long titles — matches desktop SERP. */
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* Purely visual — no actual href. Show the cursor to signal
+     "this is how it looks as a link" without enabling navigation. */
+  cursor: pointer;
+}
+
+.slp__description {
+  color: var(--admin-text, #4d5156);
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 2px 0 0;
+  /* Google truncates descriptions at ~2 lines on desktop SERPs. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.slp__price {
+  color: var(--admin-text-tertiary, #5f6368);
+  font-size: 13px;
+  line-height: 1.3;
+  margin: 4px 0 0;
+}

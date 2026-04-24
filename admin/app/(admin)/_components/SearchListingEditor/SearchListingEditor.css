@@ -1,0 +1,136 @@
+/* ── SearchListingEditor — Sökmotorlistning panel ─────────────── */
+/*
+ * Card container matching the admin form's CARD literal (white bg,
+ * 12px radius, shadow stack from design tokens). Header row with the
+ * panel title + pencil toggle. Preview fills the body. When edit
+ * mode is active, a separator and three fields stack below.
+ */
+
+.sle {
+  background: #fff;
+  border-radius: 0.75rem;
+  padding: 16px;
+  box-shadow:
+    0 0.3125rem 0.3125rem -0.15625rem #00000008,
+    0 0.1875rem 0.1875rem -0.09375rem #00000005,
+    0 0.125rem 0.125rem -0.0625rem #00000005,
+    0 0.0625rem 0.0625rem -0.03125rem #00000008,
+    0 0.03125rem 0.03125rem #0000000a,
+    0 0 0 0.0625rem #0000000f;
+}
+
+.sle__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sle__title {
+  font-size: 15px;
+  font-weight: 550;
+  color: var(--admin-text, #202124);
+  margin: 0;
+}
+
+.sle__pencil {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 8px);
+  color: var(--admin-text-secondary, #4d5156);
+  cursor: pointer;
+  transition: background var(--duration-fast, 120ms) var(--ease-default, ease);
+}
+
+.sle__pencil:hover {
+  background: var(--admin-surface-raised, #f2f2f2);
+  color: var(--admin-text, #202124);
+}
+
+.sle__pencil:focus-visible {
+  outline: none;
+  border-color: var(--admin-accent, #2783de);
+  box-shadow: var(--admin-input-focus-ring, 0 0 0 3px rgba(39, 131, 222, 0.1));
+}
+
+.sle__preview {
+  /* The SerpPreview child already sets its own typography + line
+     height. We just give it some padding space. */
+  padding: 4px 0 2px;
+}
+
+/* Edit panel sits below the preview with a hairline separator so
+   merchants can see "preview above, fields below" without needing
+   a heading. */
+.sle__edit-panel {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--admin-border, #d9d9d9);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sle__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sle__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--admin-text, #202124);
+  line-height: 1.2;
+}
+
+.sle__input {
+  width: 100%;
+  border: 1px solid var(--admin-border, #d9d9d9);
+  border-radius: var(--admin-input-radius, 8px);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--admin-text, #202124);
+  background: #fff;
+  outline: none;
+  transition: border-color var(--duration-fast, 120ms) var(--ease-default, ease);
+}
+
+.sle__input:focus {
+  border-color: var(--admin-input-focus, #2783de);
+  box-shadow: var(--admin-input-focus-ring, 0 0 0 3px rgba(39, 131, 222, 0.1));
+}
+
+.sle__textarea {
+  resize: vertical;
+  min-height: 72px;
+  line-height: 1.5;
+}
+
+.sle__input--readonly {
+  background: var(--admin-surface-raised, #f7f7f7);
+  color: var(--admin-text-secondary, #4d5156);
+  cursor: not-allowed;
+}
+
+.sle__counter {
+  font-size: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+.sle__url-subtext {
+  font-size: 12px;
+  color: var(--admin-text-tertiary, #5f6368);
+  line-height: 1.3;
+  word-break: break-all;
+}
