@@ -254,3 +254,80 @@ export async function updateAccommodation(
 
   return { ok: true, data: { id } };
 }
+
+// ── Archive + delete ─────────────────────────────────────────────
+//
+// Mirrors archiveProduct / deleteProduct from the products domain.
+// Archive is always safe — the accommodation row stays, just flagged
+// ARCHIVED + archivedAt, and disappears from storefront queries via
+// the (status, archivedAt) filter baked into queries.ts. Delete is
+// hard — accommodation row gone for good — so we refuse when any
+// Booking still references it (Prisma's default NoAction FK would
+// throw a confusing DB error otherwise).
+
+export async function archiveAccommodation(
+  id: string,
+): Promise<ActionResult<{ id: string }>> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return { ok: false, error: "Inte inloggad" };
+  const tenantId = tenantData.tenant.id;
+
+  const existing = await prisma.accommodation.findFirst({
+    where: { id, tenantId },
+    select: { id: true },
+  });
+  if (!existing) return { ok: false, error: "Boendet hittades inte" };
+
+  await prisma.accommodation.update({
+    where: { id },
+    data: { status: "ARCHIVED", archivedAt: new Date() },
+  });
+
+  log("info", "accommodation.archived", { tenantId, accommodationId: id });
+
+  revalidatePath("/accommodations");
+  revalidatePath(`/accommodations/${id}`);
+  return { ok: true, data: { id } };
+}
+
+export async function deleteAccommodation(
+  id: string,
+): Promise<ActionResult<{ id: string }>> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const tenantData = await getCurrentTenant();
+  if (!tenantData) return { ok: false, error: "Inte inloggad" };
+  const tenantId = tenantData.tenant.id;
+
+  const existing = await prisma.accommodation.findFirst({
+    where: { id, tenantId },
+    select: { id: true },
+  });
+  if (!existing) return { ok: false, error: "Boendet hittades inte" };
+
+  // Refuse hard-delete while bookings still reference the row.
+  // Booking.accommodationId is nullable without a cascading onDelete,
+  // so Postgres would throw a FK violation mid-transaction. Return
+  // a clean Swedish error up-front so the admin can archive instead.
+  const bookingCount = await prisma.booking.count({
+    where: { accommodationId: id },
+  });
+  if (bookingCount > 0) {
+    return {
+      ok: false,
+      error:
+        "Boendet kan inte raderas — det har kopplingar till bokningar. Arkivera istället.",
+    };
+  }
+
+  await prisma.accommodation.delete({ where: { id } });
+
+  log("info", "accommodation.deleted", { tenantId, accommodationId: id });
+
+  revalidatePath("/accommodations");
+  return { ok: true, data: { id } };
+}

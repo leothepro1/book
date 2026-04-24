@@ -1,147 +1,106 @@
 "use client";
 
 /**
- * Header write actions for a Company detail page — drops in where FAS 4
- * left `<div data-fas5-actions>`. Mirrors the products header-right layout:
+ * CompanyHeaderActions — exact mirror of the customer detail page's
+ * header-actions cluster:
  *
- *   primary/secondary status toggle (Arkivera / Återställ)
- *   "Fler åtgärder" overflow menu with disabled v1 items
+ *   "Fler åtgärder" dropdown (Skicka e-post + Inaktivera företag)
+ *   + prev/next navigation buttons.
+ *
+ * Class names (`ord-header-actions*`) and icon choices (expand_more,
+ * mail, block, expand_less, expand_more) are identical to
+ * CustomerDetailClient — only the labels, aria-labels and the nav
+ * targets change. Both dropdown items are intentionally non-functional
+ * stubs, matching the customer equivalent.
  */
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { CompanyStatus } from "@prisma/client";
-import {
-  archiveCompanyAction,
-  unarchiveCompanyAction,
-} from "../actions";
+import { EditorIcon } from "@/app/_components/EditorIcon";
+
+interface Props {
+  companyId: string;
+  prevCompanyId: string | null;
+  nextCompanyId: string | null;
+}
 
 export function CompanyHeaderActions({
-  companyId,
-  companyName,
-  status,
-}: {
-  companyId: string;
-  companyName: string;
-  status: CompanyStatus;
-}) {
+  companyId: _companyId,
+  prevCompanyId,
+  nextCompanyId,
+}: Props) {
   const router = useRouter();
-  const [, startTransition] = useTransition();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
 
-  // Close the overflow menu on outside click — mirrors products pattern.
+  // Close the dropdown on outside click — same pattern as
+  // CustomerDetailClient.
   useEffect(() => {
-    if (!menuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
+    if (!actionsOpen) return;
+    const handle = (e: MouseEvent) => {
+      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) {
+        setActionsOpen(false);
       }
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [menuOpen]);
-
-  function handleArchive() {
-    if (
-      !confirm(
-        `Vill du arkivera "${companyName}"? Företaget döljs från standardlistan men kan återställas.`,
-      )
-    )
-      return;
-    setBusy(true);
-    setError(null);
-    startTransition(async () => {
-      const result = await archiveCompanyAction(companyId);
-      setBusy(false);
-      if (!result.ok) {
-        setError(result.error);
-        setTimeout(() => setError(null), 5000);
-        return;
-      }
-      router.refresh();
-    });
-  }
-
-  function handleUnarchive() {
-    setBusy(true);
-    setError(null);
-    startTransition(async () => {
-      const result = await unarchiveCompanyAction(companyId);
-      setBusy(false);
-      if (!result.ok) {
-        setError(result.error);
-        setTimeout(() => setError(null), 5000);
-        return;
-      }
-      router.refresh();
-    });
-  }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [actionsOpen]);
 
   return (
-    <div className="pf-header__actions">
-      {error ? (
-        <span className="co-flash co-flash--error" style={{ margin: 0, padding: "6px 10px" }}>
-          {error}
-        </span>
-      ) : null}
-      {status === "ARCHIVED" ? (
+    <div className="ord-header-actions">
+      {/* Fler åtgärder */}
+      <div className="ord-header-actions__more" ref={actionsRef}>
         <button
           type="button"
-          className="co-btn co-btn--primary"
-          onClick={handleUnarchive}
-          disabled={busy}
-        >
-          {busy ? "Återställer…" : "Återställ"}
-        </button>
-      ) : (
-        <button
-          type="button"
-          className="co-btn co-btn--ghost"
-          onClick={handleArchive}
-          disabled={busy}
-        >
-          {busy ? "Arkiverar…" : "Arkivera"}
-        </button>
-      )}
-      <div className="co-actions-menu" ref={menuRef}>
-        <button
-          type="button"
-          className="co-actions-menu__toggle"
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
+          className="ord-header-actions__btn"
+          onClick={() => setActionsOpen((v) => !v)}
         >
           Fler åtgärder
-          <span className="material-symbols-rounded" aria-hidden="true" style={{ fontSize: 16 }}>
-            expand_more
-          </span>
+          <EditorIcon name="expand_more" size={18} />
         </button>
-        {menuOpen ? (
-          <div className="co-actions-menu__list" role="menu">
+        {actionsOpen && (
+          <div className="ord-header-actions__dropdown">
             <button
               type="button"
-              role="menuitem"
-              className="co-actions-menu__item"
-              disabled
-              title="Exporter kommer i en senare version"
+              className="ord-header-actions__dropdown-item"
             >
-              Exportera CSV (kommer snart)
+              <EditorIcon name="mail" size={16} />
+              Skicka e-post
             </button>
             <button
               type="button"
-              role="menuitem"
-              className="co-actions-menu__item co-actions-menu__item--danger"
-              disabled
-              title="Permanent borttagning kommer i en senare version. Arkivera i stället."
+              className="ord-header-actions__dropdown-item ord-header-actions__dropdown-item--danger"
+              onClick={() => setActionsOpen(false)}
             >
-              Radera företag (inaktiverat)
+              <EditorIcon name="block" size={16} />
+              Inaktivera företag
             </button>
           </div>
-        ) : null}
+        )}
       </div>
+      {/* Prev / Next */}
+      <button
+        type="button"
+        className="ord-header-actions__nav"
+        disabled={!prevCompanyId}
+        onClick={() =>
+          prevCompanyId && router.push(`/customers/companies/${prevCompanyId}`)
+        }
+        aria-label="Föregående företag"
+      >
+        <EditorIcon name="expand_less" size={18} />
+      </button>
+      <button
+        type="button"
+        className="ord-header-actions__nav"
+        disabled={!nextCompanyId}
+        onClick={() =>
+          nextCompanyId && router.push(`/customers/companies/${nextCompanyId}`)
+        }
+        aria-label="Nästa företag"
+      >
+        <EditorIcon name="expand_more" size={18} />
+      </button>
     </div>
   );
 }

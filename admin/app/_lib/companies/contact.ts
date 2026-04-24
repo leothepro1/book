@@ -446,6 +446,53 @@ export async function resolveGuestCompanyContext(params: {
   };
 }
 
+/**
+ * Search guests who are NOT currently a CompanyContact at any company in
+ * this tenant — i.e. the pool of candidates eligible to join a company as
+ * a new customer. Tenant-scoped. Case-insensitive substring match on name
+ * and email. Capped to `take` rows (default 20) to bound the payload.
+ *
+ * A guest can be a contact at AT MOST one company globally per the
+ * one-company-per-guest invariant (unique index + cross-company pre-check
+ * in createContact). Excluding guests with ANY CompanyContact row is
+ * therefore equivalent to "guests not already tied to a company" — the
+ * correct candidate set for "Lägg till kund" on a company detail page.
+ */
+export async function listGuestsWithoutCompany(params: {
+  tenantId: string;
+  query?: string;
+  take?: number;
+}): Promise<Array<{ id: string; email: string; firstName: string | null; lastName: string | null; name: string | null }>> {
+  const take = Math.min(Math.max(params.take ?? 20, 1), 100);
+  const q = params.query?.trim() ?? "";
+
+  const where: Prisma.GuestAccountWhereInput = {
+    tenantId: params.tenantId,
+    NOT: { companyContacts: { some: {} } },
+  };
+  if (q.length > 0) {
+    where.OR = [
+      { email: { contains: q, mode: "insensitive" } },
+      { firstName: { contains: q, mode: "insensitive" } },
+      { lastName: { contains: q, mode: "insensitive" } },
+      { name: { contains: q, mode: "insensitive" } },
+    ];
+  }
+
+  return prisma.guestAccount.findMany({
+    where,
+    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+    take,
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      name: true,
+    },
+  });
+}
+
 // ── Internal — exported for sibling services in this domain ────
 
 export { assertGuestFreeOfOtherCompanyInTx };

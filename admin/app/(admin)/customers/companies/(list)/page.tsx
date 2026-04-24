@@ -3,9 +3,9 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/app/_lib/db/prisma";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { listCompaniesWithMainContacts } from "@/app/_lib/companies";
-import CompaniesClient from "./CompaniesClient";
-import "../customers.css";
-import "../../files/files.css";
+import CompaniesClient from "../CompaniesClient";
+import "../../customers.css";
+import "../../../files/files.css";
 
 /**
  * /admin/customers/companies — B2B companies list.

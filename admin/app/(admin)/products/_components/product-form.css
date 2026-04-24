@@ -138,6 +138,7 @@
 
 .pf-card-title {
   font-size: 13px;
+  line-height: 1em;
   font-weight: 550;
   color: var(--admin-text);
 }

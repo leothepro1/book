@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { CustomersClient } from "./CustomersClient";
-import "./customers.css";
-import "../files/files.css";
+import { CustomersClient } from "../CustomersClient";
+import "../customers.css";
+import "../../files/files.css";
 
 export default function CustomersPage() {
   return (

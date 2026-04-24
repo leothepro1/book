@@ -31,6 +31,7 @@ import {
   CreateCompanyInputSchema,
   ListCompaniesInputSchema,
   UpdateCompanyPatchSchema,
+  UpdateLocationPatchSchema,
   type Company,
   type CompanyContact,
   type CompanyLocation,
@@ -38,6 +39,7 @@ import {
   type CreateCompanyInput,
   type ListCompaniesInput,
   type UpdateCompanyPatch,
+  type UpdateLocationPatch,
 } from "./types";
 
 type Tx = Prisma.TransactionClient;
@@ -278,6 +280,191 @@ export async function updateCompany(params: {
     });
   }
   return (await getCompany(params)) as Company;
+}
+
+/**
+ * Atomic "edit company profile" — updates Company + the company's first
+ * CompanyLocation in one transaction. Used by the admin "Redigera
+ * företagsuppgifter" modal, which presents both the Company-level fields
+ * (name, externalId, tags, note) and the first-location-scoped fields
+ * (billing address, taxId/orgnr, paymentTermsId, taxSetting) as one form.
+ *
+ * The "first location" is the company's oldest CompanyLocation (createdAt
+ * ASC) — the same row that createCompany seeded at creation time. That is
+ * where org-number and billing address live for the common single-location
+ * company; multi-location companies edit other locations from their own
+ * detail pages.
+ *
+ * Atomicity matters: partial success (company renamed but address save
+ * failed, or vice versa) leaves the admin UI inconsistent. Both updates
+ * run inside the same `$transaction` so a failure on either side rolls
+ * both back.
+ *
+ * Returns the refreshed rows so the caller can revalidate with confidence.
+ */
+export async function updateCompanyProfile(params: {
+  tenantId: string;
+  companyId: string;
+  companyPatch?: UpdateCompanyPatch;
+  firstLocationPatch?: UpdateLocationPatch;
+}): Promise<{ company: Company; firstLocation: CompanyLocation | null }> {
+  const companyPatch = params.companyPatch
+    ? UpdateCompanyPatchSchema.parse(params.companyPatch)
+    : undefined;
+  const firstLocationPatch = params.firstLocationPatch
+    ? UpdateLocationPatchSchema.parse(params.firstLocationPatch)
+    : undefined;
+
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Company row must exist in this tenant. Holds the authoritative
+    //    tenantId for later paymentTerms access check.
+    const company = await tx.company.findFirst({
+      where: { id: params.companyId, tenantId: params.tenantId },
+      select: { id: true },
+    });
+    if (!company) {
+      throw new NotFoundError("Company not found in tenant", {
+        companyId: params.companyId,
+        tenantId: params.tenantId,
+      });
+    }
+
+    // 2. Apply Company patch (only touched fields).
+    if (companyPatch) {
+      const data: Prisma.CompanyUpdateInput = {};
+      if (companyPatch.name !== undefined) data.name = companyPatch.name;
+      if (companyPatch.externalId !== undefined) {
+        data.externalId = companyPatch.externalId;
+      }
+      if (companyPatch.tags !== undefined) data.tags = companyPatch.tags;
+      if (companyPatch.note !== undefined) data.note = companyPatch.note;
+      if (companyPatch.metafields !== undefined) {
+        data.metafields =
+          companyPatch.metafields === null
+            ? Prisma.JsonNull
+            : (companyPatch.metafields as Prisma.InputJsonValue);
+      }
+      if (Object.keys(data).length > 0) {
+        await tx.company.update({
+          where: { id: params.companyId },
+          data,
+        });
+      }
+    }
+
+    // 3. Look up the first location (oldest), then apply firstLocationPatch.
+    const firstLocation = await tx.companyLocation.findFirst({
+      where: { tenantId: params.tenantId, companyId: params.companyId },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { id: true },
+    });
+
+    if (firstLocationPatch && firstLocation) {
+      // Validate paymentTermsId accessibility before the write — mirrors
+      // the single-location updateLocation service.
+      if (firstLocationPatch.paymentTermsId) {
+        const terms = await tx.paymentTerms.findUnique({
+          where: { id: firstLocationPatch.paymentTermsId },
+          select: { tenantId: true },
+        });
+        if (!terms) {
+          throw new NotFoundError("Payment terms not found", {
+            paymentTermsId: firstLocationPatch.paymentTermsId,
+          });
+        }
+        if (terms.tenantId !== null && terms.tenantId !== params.tenantId) {
+          throw new ValidationError(
+            "Payment terms not accessible to this tenant",
+            {
+              paymentTermsId: firstLocationPatch.paymentTermsId,
+              tenantId: params.tenantId,
+            },
+          );
+        }
+      }
+
+      const data: Prisma.CompanyLocationUpdateInput = {};
+      if (firstLocationPatch.name !== undefined) {
+        data.name = firstLocationPatch.name;
+      }
+      if (firstLocationPatch.externalId !== undefined) {
+        data.externalId = firstLocationPatch.externalId;
+      }
+      if (firstLocationPatch.billingAddress !== undefined) {
+        data.billingAddress =
+          firstLocationPatch.billingAddress as Prisma.InputJsonValue;
+      }
+      if (firstLocationPatch.shippingAddress !== undefined) {
+        data.shippingAddress =
+          firstLocationPatch.shippingAddress === null
+            ? Prisma.JsonNull
+            : (firstLocationPatch.shippingAddress as Prisma.InputJsonValue);
+      }
+      if (firstLocationPatch.paymentTermsId !== undefined) {
+        data.paymentTerms = firstLocationPatch.paymentTermsId
+          ? { connect: { id: firstLocationPatch.paymentTermsId } }
+          : { disconnect: true };
+      }
+      if (firstLocationPatch.depositPercent !== undefined) {
+        data.depositPercent = firstLocationPatch.depositPercent;
+      }
+      if (firstLocationPatch.creditLimitCents !== undefined) {
+        data.creditLimitCents = firstLocationPatch.creditLimitCents;
+      }
+      if (firstLocationPatch.checkoutMode !== undefined) {
+        data.checkoutMode = firstLocationPatch.checkoutMode;
+      }
+      if (firstLocationPatch.taxSetting !== undefined) {
+        data.taxSetting = firstLocationPatch.taxSetting;
+      }
+      if (firstLocationPatch.taxId !== undefined) {
+        data.taxId = firstLocationPatch.taxId;
+      }
+      if (firstLocationPatch.taxIdValidated !== undefined) {
+        data.taxIdValidated = firstLocationPatch.taxIdValidated;
+      }
+      if (firstLocationPatch.taxExemptions !== undefined) {
+        data.taxExemptions = firstLocationPatch.taxExemptions;
+      }
+      if (firstLocationPatch.allowOneTimeShippingAddress !== undefined) {
+        data.allowOneTimeShippingAddress =
+          firstLocationPatch.allowOneTimeShippingAddress;
+      }
+      if (firstLocationPatch.metafields !== undefined) {
+        data.metafields =
+          firstLocationPatch.metafields === null
+            ? Prisma.JsonNull
+            : (firstLocationPatch.metafields as Prisma.InputJsonValue);
+      }
+      if (Object.keys(data).length > 0) {
+        await tx.companyLocation.update({
+          where: { id: firstLocation.id },
+          data,
+        });
+      }
+    }
+
+    const companyAfter = await tx.company.findFirst({
+      where: { id: params.companyId, tenantId: params.tenantId },
+    });
+    const firstLocationAfter = firstLocation
+      ? await tx.companyLocation.findFirst({
+          where: { id: firstLocation.id, tenantId: params.tenantId },
+        })
+      : null;
+    return { company: companyAfter as Company, firstLocation: firstLocationAfter };
+  });
+
+  log("info", "company.profile_updated", {
+    tenantId: params.tenantId,
+    companyId: params.companyId,
+    companyFields: companyPatch ? Object.keys(companyPatch).join(",") : "",
+    locationFields: firstLocationPatch
+      ? Object.keys(firstLocationPatch).join(",")
+      : "",
+  });
+
+  return result;
 }
 
 async function setCompanyStatus(

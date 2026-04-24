@@ -19,6 +19,25 @@ import { useRouter } from "next/navigation";
 import type { CompanyStatus } from "@prisma/client";
 import { EditorIcon } from "@/app/_components/EditorIcon";
 import { CompanyStatusBadge } from "./CompanyStatusBadge";
+import {
+  AddContactModal,
+  type LocationChoice,
+} from "./AddContactModal";
+import {
+  ChangeMainContactModal,
+  type MainContactCandidate,
+} from "./ChangeMainContactModal";
+import {
+  EditCompanyModal,
+  type EditCompanyInitial,
+} from "./EditCompanyModal";
+import { RemoveContactModal } from "./RemoveContactModal";
+
+type ActionKey =
+  | "edit-company"
+  | "add-contact"
+  | "change-main-contact"
+  | "remove-contact";
 
 const CARD: React.CSSProperties = {
   background: "#fff",
@@ -35,23 +54,49 @@ export interface ContactPill {
 }
 
 interface Props {
+  companyId: string;
   name: string;
   status: CompanyStatus;
   orderingApproved: boolean;
   organizationNumber: string | null;
   contacts: ContactPill[];
+  /** Every CompanyContact on this company — used as the picker source for
+   * "Byt huvudkontakt" and as the dataset for upcoming actions. */
+  contactCandidates: MainContactCandidate[];
+  /** Seed values for the "Redigera företagsuppgifter" modal — company-
+   * level fields plus the first-location-scoped fields (org-nr, billing
+   * address). Payment terms and tax setting have their own card. */
+  editInitial: EditCompanyInitial;
+  /** Every CompanyLocation on this company — used by the "Lägg till kund"
+   * modal to let staff pick which locations a new contact gets access to.
+   * Single-location companies skip the picker. */
+  locations: LocationChoice[];
 }
 
 export function CompanyMetaCard({
+  companyId,
   name,
   status,
   orderingApproved,
   organizationNumber,
   contacts,
+  contactCandidates,
+  editInitial,
+  locations,
 }: Props) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [openAction, setOpenAction] = useState<ActionKey | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  function openActionModal(key: ActionKey) {
+    setMenuOpen(false);
+    setOpenAction(key);
+  }
+
+  function closeActionModal() {
+    setOpenAction(null);
+  }
 
   // Stäng dropdown vid utsideklick
   useEffect(() => {
@@ -98,22 +143,28 @@ export function CompanyMetaCard({
               background: "var(--admin-surface)",
               borderRadius: 12,
               padding: 4,
-              minWidth: 200,
+              minWidth: 220,
               boxShadow:
                 "0 20px 24px #1919190d, 0 5px 8px #19191907, 0 0 0 1px #2a1c0012",
               zIndex: 20,
             }}
           >
-            {/* Dropdown-länkar fylls på i nästa iteration */}
-            <div
-              style={{
-                padding: "8px 10px",
-                fontSize: 13,
-                color: "var(--admin-text-tertiary)",
-              }}
-            >
-              Inga åtgärder ännu
-            </div>
+            <MenuItem
+              label="Redigera företagsuppgifter"
+              onClick={() => openActionModal("edit-company")}
+            />
+            <MenuItem
+              label="Lägg till kund"
+              onClick={() => openActionModal("add-contact")}
+            />
+            <MenuItem
+              label="Byt huvudkontakt"
+              onClick={() => openActionModal("change-main-contact")}
+            />
+            <MenuItem
+              label="Ta bort kund"
+              onClick={() => openActionModal("remove-contact")}
+            />
           </div>
         ) : null}
       </div>
@@ -217,6 +268,64 @@ export function CompanyMetaCard({
           ))
         )}
       </div>
+
+      <EditCompanyModal
+        open={openAction === "edit-company"}
+        onClose={closeActionModal}
+        companyId={companyId}
+        initial={editInitial}
+      />
+      <AddContactModal
+        open={openAction === "add-contact"}
+        onClose={closeActionModal}
+        companyId={companyId}
+        locations={locations}
+      />
+      <ChangeMainContactModal
+        open={openAction === "change-main-contact"}
+        onClose={closeActionModal}
+        companyId={companyId}
+        contacts={contactCandidates}
+      />
+      <RemoveContactModal
+        open={openAction === "remove-contact"}
+        onClose={closeActionModal}
+        companyId={companyId}
+        contacts={contactCandidates}
+      />
     </div>
+  );
+}
+
+function MenuItem({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      style={{
+        display: "block",
+        width: "100%",
+        padding: "8px 10px",
+        background: "transparent",
+        border: "none",
+        borderRadius: 8,
+        cursor: "pointer",
+        fontFamily: "inherit",
+        fontSize: 13,
+        fontWeight: 450,
+        color: "var(--admin-text)",
+        textAlign: "left",
+        transition: "background var(--duration-fast)",
+      }}
+    >
+      {label}
+    </button>
   );
 }

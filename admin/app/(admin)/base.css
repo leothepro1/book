@@ -364,6 +364,7 @@ label,
   font-size: var(--font-md);
   font-weight: 400;
   color: var(--admin-text);
+  line-height: 1em;
   display: block;
   margin-bottom: 7px;
 }

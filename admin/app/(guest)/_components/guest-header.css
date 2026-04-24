@@ -317,11 +317,12 @@
 }
 
 .gh-account--active {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: #3F87AC;
-  transition: opacity 0.15s;
+    background: #F6F6F6;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    transition: opacity .15s;
+    border: 1px solid #D8D8D8;
 }
 
 .gh-account--active:hover {
@@ -329,10 +330,10 @@
 }
 
 .gh-account__initials {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   font-family: var(--font-body, inherit);
-  color: var(--background, #fff);
+  color: #1a1a1a;
   line-height: 1;
   letter-spacing: 0.02em;
   user-select: none;

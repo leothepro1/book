@@ -1,22 +1,18 @@
 /**
- * Loading skeleton for /customers/companies/[companyId] — mirrors the
- * real detail page structure one-to-one:
- *   • Same admin-header with breadcrumb icon + chevron
- *   • Same .cst-overview bar (3 items)
- *   • Same .pf-body two-column split (70/30)
- *   • Same CARD containers (box-shadow, border-radius, padding) for
- *     every sidebar + main-column card — only the contents inside are
- *     shimmer blocks.
+ * Loading skeleton for /customers/[id] — mirrors CustomerDetailClient:
+ *   pf-header:    group icon + chevron + name + "Fler åtgärder" + prev/next
+ *   cst-overview: Spenderat belopp, Bokningar, Kund sedan
+ *   pf-main:      Senaste bokning-kort + Tidslinje (comment input + events)
+ *   pf-sidebar:   Kund-kort, Taggar-kort, Anteckningar-kort
  *
- * Containers render with their real CSS so the layout doesn't shift
- * when the actual page streams in.
+ * Containers, overview chips, field labels and card titles render as-is
+ * so the layout stays stable when CustomerDetailClient mounts.
  */
 
 import { EditorIcon } from "@/app/_components/EditorIcon";
 import "@/app/(admin)/products/_components/product-form.css";
 import "@/app/(admin)/orders/orders.css";
-import "../../customers.css";
-import "../_components/companies.css";
+import "../customers.css";
 
 const CARD: React.CSSProperties = {
   background: "#fff",
@@ -26,11 +22,11 @@ const CARD: React.CSSProperties = {
     "0 .3125rem .3125rem -.15625rem #00000008, 0 .1875rem .1875rem -.09375rem #00000005, 0 .125rem .125rem -.0625rem #00000005, 0 .0625rem .0625rem -.03125rem #00000008, 0 .03125rem .03125rem #0000000a, 0 0 0 .0625rem #0000000f",
 };
 
-export default function CompanyDetailLoading() {
+export default function CustomerDetailLoading() {
   return (
     <div className="admin-page admin-page--no-preview products-page">
       <div className="admin-editor">
-        {/* Header — same breadcrumb structure as the real page */}
+        {/* Header */}
         <div className="admin-header pf-header">
           <h1
             className="admin-title"
@@ -44,7 +40,7 @@ export default function CompanyDetailLoading() {
                 className="material-symbols-rounded"
                 style={{ fontSize: 22 }}
               >
-                domain
+                group
               </span>
             </span>
             <EditorIcon
@@ -62,18 +58,28 @@ export default function CompanyDetailLoading() {
             />
           </h1>
           <div
-            className="pf-header__actions"
+            className="ord-header-actions"
             style={{ display: "flex", gap: 8 }}
           >
             <span
               className="sk sk--btn"
-              style={{ width: 120 }}
+              style={{ width: 130 }}
+              aria-hidden
+            />
+            <span
+              className="sk"
+              style={{ width: 32, height: 30, borderRadius: 8 }}
+              aria-hidden
+            />
+            <span
+              className="sk"
+              style={{ width: 32, height: 30, borderRadius: 8 }}
               aria-hidden
             />
           </div>
         </div>
 
-        {/* Overview bar — 3 items, same grid as cst-overview */}
+        {/* Overview — 3 items */}
         <div className="cst-overview">
           <div className="cst-overview__inner">
             {["Spenderat belopp", "Bokningar", "Kund sedan"].map((label) => (
@@ -89,16 +95,22 @@ export default function CompanyDetailLoading() {
           </div>
         </div>
 
-        {/* Body — pf-main + pf-sidebar, same gap as the real page */}
+        {/* Body */}
         <div className="pf-body">
-          {/* ── Main column (70%) ───────────────────────────── */}
+          {/* ── Main column ───────────────────────────────── */}
           <div className="pf-main">
-            {/* Senaste bokning-kort */}
+            {/* Senaste bokning */}
             <div style={CARD}>
               <div className="pf-card-header" style={{ marginBottom: 12 }}>
                 <span className="pf-card-title">Senaste bokning</span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
                 <span className="sk sk--avatar" aria-hidden />
                 <div style={{ flex: 1 }}>
                   <span
@@ -120,52 +132,38 @@ export default function CompanyDetailLoading() {
               </div>
             </div>
 
-            {/* Faktureringsadress */}
+            {/* Tidslinje (comment input + events) */}
             <div style={CARD}>
-              <div className="pf-card-header" style={{ marginBottom: 12 }}>
-                <span className="pf-card-title">Faktureringsadress</span>
-              </div>
-              <FieldSkeleton label="Gatuadress" />
-              <FieldSkeleton label="Adresstillägg" />
+              {/* Comment input area */}
               <div
-                className="pf-field"
-                style={{ display: "flex", gap: 8, alignItems: "flex-end" }}
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "flex-start",
+                  paddingBottom: 12,
+                  borderBottom: "1px solid var(--admin-border)",
+                }}
               >
+                <span className="sk sk--avatar" aria-hidden />
                 <div style={{ flex: 1 }}>
-                  <label className="admin-label">Postnummer</label>
                   <span
                     className="sk sk--input"
-                    style={{ width: "100%" }}
-                    aria-hidden
-                  />
-                </div>
-                <div style={{ flex: 2 }}>
-                  <label className="admin-label">Ort</label>
-                  <span
-                    className="sk sk--input"
-                    style={{ width: "100%" }}
+                    style={{ display: "block" }}
                     aria-hidden
                   />
                 </div>
               </div>
-              <FieldSkeleton label="Land" last />
-            </div>
-
-            {/* Tidslinje */}
-            <div style={CARD}>
-              <div className="pf-card-header" style={{ marginBottom: 12 }}>
-                <span className="pf-card-title">Tidslinje</span>
-              </div>
-              {Array.from({ length: 4 }).map((_, i) => (
+              {/* Timeline events */}
+              {Array.from({ length: 3 }).map((_, i) => (
                 <div
                   key={`tl-${i}`}
                   style={{
                     display: "flex",
-                    alignItems: "center",
+                    alignItems: "flex-start",
                     gap: 12,
-                    padding: "10px 0",
+                    padding: "12px 0",
                     borderBottom:
-                      i < 3 ? "1px solid var(--admin-border)" : "none",
+                      i < 2 ? "1px solid var(--admin-border)" : "none",
                   }}
                   aria-hidden
                 >
@@ -173,11 +171,11 @@ export default function CompanyDetailLoading() {
                   <div style={{ flex: 1 }}>
                     <span
                       className="sk sk--line-md"
-                      style={{ width: "70%" }}
+                      style={{ width: "75%" }}
                     />
                     <span
                       className="sk sk--line-sm"
-                      style={{ width: "30%", marginTop: 6 }}
+                      style={{ width: "35%", marginTop: 6 }}
                     />
                   </div>
                 </div>
@@ -185,99 +183,68 @@ export default function CompanyDetailLoading() {
             </div>
           </div>
 
-          {/* ── Sidebar (30%) ───────────────────────────────── */}
+          {/* ── Sidebar ───────────────────────────────────── */}
           <div className="pf-sidebar">
-            {/* CompanyMetaCard */}
-            <div style={{ ...CARD, position: "relative" }}>
-              {/* more_horiz placeholder */}
-              <span
-                className="sk"
-                style={{
-                  position: "absolute",
-                  top: 12,
-                  right: 12,
-                  width: 24,
-                  height: 24,
-                  borderRadius: 6,
-                }}
-                aria-hidden
-              />
-              {/* 1. Bolagsnamn */}
-              <span
-                className="sk sk--title"
-                style={{ width: "80%", display: "block" }}
-                aria-hidden
-              />
-              {/* 2. Status-badge */}
-              <div style={{ marginTop: 10 }}>
-                <span className="sk sk--badge" aria-hidden />
-              </div>
-              {/* 3. Organisationsnummer */}
-              <div style={{ marginTop: 12 }}>
-                <span
-                  className="sk sk--line-sm"
-                  style={{ width: "60%" }}
-                  aria-hidden
-                />
-              </div>
-              {/* 4. Label + 5. pills */}
-              <div
-                style={{
-                  marginTop: 16,
-                  fontSize: 12,
-                  fontWeight: 550,
-                  color: "var(--admin-text)",
-                }}
-              >
-                Kunder
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 6,
-                  marginTop: 6,
-                }}
-              >
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <span
-                    key={`pill-${i}`}
-                    className="sk sk--pill"
-                    style={{ width: 80 + i * 12 }}
-                    aria-hidden
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* BillingSettingsCard */}
+            {/* Kund-kort */}
             <div style={CARD}>
-              <div className="pf-card-header" style={{ marginBottom: 8 }}>
-                <span className="pf-card-title">Betalningsvillkor</span>
-              </div>
+              <div className="ord-sidebar-label">Kund</div>
               <span
-                className="sk sk--input"
-                style={{ display: "block" }}
+                className="sk sk--line-md"
+                style={{ width: "70%", marginTop: 4 }}
                 aria-hidden
               />
-              <div
-                className="pf-card-header"
-                style={{ marginTop: 16, marginBottom: 8 }}
-              >
-                <span className="pf-card-title">Skatt</span>
+
+              <div className="ord-sidebar-label" style={{ marginTop: 16 }}>
+                Kontaktuppgifter
               </div>
               <span
-                className="sk sk--input"
-                style={{ display: "block" }}
+                className="sk sk--line-sm"
+                style={{ width: "85%", marginTop: 4 }}
+                aria-hidden
+              />
+              <span
+                className="sk sk--line-sm"
+                style={{ width: "55%", marginTop: 6 }}
+                aria-hidden
+              />
+
+              <div className="ord-sidebar-label" style={{ marginTop: 16 }}>
+                Adress
+              </div>
+              <span
+                className="sk sk--line-sm"
+                style={{ width: "75%", marginTop: 4 }}
+                aria-hidden
+              />
+              <span
+                className="sk sk--line-sm"
+                style={{ width: "55%", marginTop: 6 }}
+                aria-hidden
+              />
+              <span
+                className="sk sk--line-sm"
+                style={{ width: "35%", marginTop: 6 }}
+                aria-hidden
+              />
+
+              <div className="ord-sidebar-label" style={{ marginTop: 16 }}>
+                E-postmarknadsföring
+              </div>
+              <span
+                className="sk sk--badge"
+                style={{ marginTop: 4 }}
                 aria-hidden
               />
             </div>
 
-            {/* CompanyTagsCard */}
+            {/* Taggar-kort */}
             <div style={CARD}>
-              <div className="pf-card-header" style={{ marginBottom: 8 }}>
-                <span className="pf-card-title">Taggar</span>
-              </div>
+              <label
+                className="mi-card__field-label"
+                style={{ marginBottom: 6, display: "block" }}
+              >
+                Taggar
+              </label>
               <span
                 className="sk sk--input"
                 style={{ display: "block" }}
@@ -290,19 +257,19 @@ export default function CompanyDetailLoading() {
                   gap: 6,
                   marginTop: 8,
                 }}
+                aria-hidden
               >
                 {[72, 56, 88].map((w, i) => (
                   <span
                     key={`tag-${i}`}
                     className="sk sk--pill"
                     style={{ width: w }}
-                    aria-hidden
                   />
                 ))}
               </div>
             </div>
 
-            {/* CompanyNoteCard */}
+            {/* Anteckningar-kort */}
             <div style={CARD}>
               <div className="ord-note-header">
                 <span className="pf-card-title">Anteckningar</span>
@@ -328,19 +295,6 @@ export default function CompanyDetailLoading() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function FieldSkeleton({ label, last }: { label: string; last?: boolean }) {
-  return (
-    <div className="pf-field" style={last ? { marginBottom: 0 } : undefined}>
-      <label className="admin-label">{label}</label>
-      <span
-        className="sk sk--input"
-        style={{ width: "100%", display: "block" }}
-        aria-hidden
-      />
     </div>
   );
 }

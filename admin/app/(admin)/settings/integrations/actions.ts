@@ -7,6 +7,38 @@ import { invalidateAdapterCache } from "@/app/_lib/integrations/resolve";
 import { encryptCredentials, decryptCredentials } from "@/app/_lib/integrations/crypto";
 import { PmsProviderSchema } from "@/app/_lib/integrations/types";
 import type { PmsProvider } from "@/app/_lib/integrations/types";
+import { getMewsDemoCredentials } from "@/app/_lib/integrations/adapters/mews/demo-credentials";
+
+/**
+ * Dev-only: the admin "Fake PMS" option reroutes to a real Mews demo
+ * connection so the dev tenant mirrors the operator's private Mews
+ * demo hotel. Platform-side Mews fields (clientToken, clientName,
+ * webhookSecret) reuse the public demo-env identity; the hotel-
+ * specific accessToken comes from DEV_MEWS_DEMO_ACCESS_TOKEN in
+ * .env.local. Returns null when the env var is missing so the caller
+ * can fall back to the synthetic FakeAdapter behaviour.
+ */
+function resolveFakeAsMewsDemo(): {
+  provider: PmsProvider;
+  credentials: Record<string, string>;
+} | null {
+  if (process.env.NODE_ENV === "production") return null;
+  const accessToken = process.env.DEV_MEWS_DEMO_ACCESS_TOKEN?.trim();
+  if (!accessToken) return null;
+  const demo = getMewsDemoCredentials();
+  return {
+    provider: "mews",
+    credentials: {
+      clientToken: demo.clientToken,
+      accessToken,
+      clientName: demo.clientName,
+      webhookSecret: demo.webhookSecret,
+      enterpriseId: demo.enterpriseId,
+      useDemoEnvironment: "true",
+      initialSyncDays: String(demo.initialSyncDays),
+    },
+  };
+}
 
 // ── Response types ──────────────────────────────────────────
 
@@ -94,9 +126,22 @@ export async function testNewConnection(
     return { ok: false, error: "Okänd leverantör" };
   }
 
+  // Swap "Fake PMS" for the operator's private Mews demo hotel when
+  // the env-sourced access token is available. Keeps the button label
+  // unchanged but tests the real Mews API.
+  let resolvedProvider: PmsProvider = providerResult.data;
+  let resolvedCredentials: Record<string, string> = credentials;
+  if (resolvedProvider === "fake") {
+    const aliased = resolveFakeAsMewsDemo();
+    if (aliased) {
+      resolvedProvider = aliased.provider;
+      resolvedCredentials = aliased.credentials;
+    }
+  }
+
   try {
-    const adapter = getAdapter(providerResult.data, credentials);
-    const result = await adapter.testConnection(credentials);
+    const adapter = getAdapter(resolvedProvider, resolvedCredentials);
+    const result = await adapter.testConnection(resolvedCredentials);
     return result.ok
       ? { ok: true }
       : { ok: false, error: result.error ?? "Anslutningen misslyckades" };
@@ -142,7 +187,8 @@ export async function connectIntegration(
   if (!providerResult.success) {
     return { ok: false, error: "Okänd leverantör" };
   }
-  const validProvider: PmsProvider = providerResult.data;
+  let validProvider: PmsProvider = providerResult.data;
+  let resolvedCredentials: Record<string, string> = credentials;
 
   if (validProvider === "manual") {
     return { ok: false, error: "Manuell leverantör kan inte kopplas in" };
@@ -152,10 +198,24 @@ export async function connectIntegration(
     return { ok: false, error: "Fake-leverantör är inte tillgänglig i produktion" };
   }
 
+  // Swap "Fake PMS" → real Mews demo connection when the operator has
+  // set DEV_MEWS_DEMO_ACCESS_TOKEN. The saved TenantIntegration row
+  // stores provider="mews" so `resolveAdapter()` later uses the real
+  // MewsAdapter with the operator's hotel credentials, not the
+  // synthetic FakeAdapter. Falls back to synthetic fake when the env
+  // var is missing so the option still works for bare dev setups.
+  if (validProvider === "fake") {
+    const aliased = resolveFakeAsMewsDemo();
+    if (aliased) {
+      validProvider = aliased.provider;
+      resolvedCredentials = aliased.credentials;
+    }
+  }
+
   // Test connection first
   try {
-    const adapter = getAdapter(validProvider, credentials);
-    const testResult = await adapter.testConnection(credentials);
+    const adapter = getAdapter(validProvider, resolvedCredentials);
+    const testResult = await adapter.testConnection(resolvedCredentials);
     if (!testResult.ok) {
       return { ok: false, error: testResult.error ?? "Anslutningen misslyckades" };
     }
@@ -165,12 +225,12 @@ export async function connectIntegration(
   }
 
   // Encrypt and save
-  const { encrypted, iv } = encryptCredentials(credentials);
+  const { encrypted, iv } = encryptCredentials(resolvedCredentials);
 
   const encryptedBytes = new Uint8Array(encrypted);
   const ivBytes = new Uint8Array(iv);
 
-  const isDemoEnvironment = credentials.useDemoEnvironment === "true";
+  const isDemoEnvironment = resolvedCredentials.useDemoEnvironment === "true";
 
   await prisma.tenantIntegration.upsert({
     where: { tenantId: tenant.tenant.id },
@@ -181,7 +241,7 @@ export async function connectIntegration(
       credentialsIv: ivBytes,
       status: "active",
       consecutiveFailures: 0,
-      externalTenantId: credentials.enterpriseId || null,
+      externalTenantId: resolvedCredentials.enterpriseId || null,
       isDemoEnvironment,
     },
     update: {
@@ -192,7 +252,7 @@ export async function connectIntegration(
       consecutiveFailures: 0,
       lastError: null,
       lastErrorAt: null,
-      externalTenantId: credentials.enterpriseId || null,
+      externalTenantId: resolvedCredentials.enterpriseId || null,
       isDemoEnvironment,
     },
   });
@@ -204,17 +264,22 @@ export async function connectIntegration(
   // adapter failures and a spuriously tripped circuit breaker.
   invalidateAdapterCache(tenant.tenant.id);
 
-  // Fire-and-forget: auto-sync PMS products on connect
-  // Creates accommodation products + collections automatically
-  import("@/app/_lib/products/pms-sync")
-    .then(({ syncPmsProducts }) =>
-      syncPmsProducts(tenant.tenant.id, validProvider),
-    )
+  // Fire-and-forget: auto-sync accommodations from the PMS on connect.
+  // The previous call site here used the deprecated syncPmsProducts
+  // stub which returned 0 created / 0 updated unconditionally — no
+  // accommodation rows were ever created from the connected hotel.
+  // syncAccommodations is the real engine: it calls adapter.getRoomTypes
+  // against the live PMS, upserts Accommodation rows, and seeds
+  // AccommodationCategory + physical-unit rows in one pass.
+  import("@/app/_lib/accommodations")
+    .then(({ syncAccommodations }) => syncAccommodations(tenant.tenant.id))
     .then((r) =>
-      console.log(`[pms-sync] Auto-sync on connect: ${r.created} created, ${r.updated} updated, ${r.errors.length} errors`),
+      console.log(
+        `[accommodations-sync] Auto-sync on connect: ${r.created} created, ${r.updated} updated, ${r.unchanged} unchanged, ${r.skipped} skipped, ${r.errors.length} errors`,
+      ),
     )
     .catch((err) =>
-      console.error("[pms-sync] Auto-sync on connect failed:", err),
+      console.error("[accommodations-sync] Auto-sync on connect failed:", err),
     );
 
   return { ok: true };

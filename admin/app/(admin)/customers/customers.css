@@ -1,3 +1,36 @@
+/* ── Skeleton shimmer primitives (shared across /customers + /customers/companies)
+ *
+ * Usage: render placeholder UI with real containers (.CARD box-shadow,
+ * padding, gap) in place and substitute dynamic content with <span
+ * className="sk sk--..." />. The loading.tsx file mirrors the real page
+ * structure so the layout doesn't shift when data streams in.
+ */
+@keyframes sk-pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+.sk {
+  display: block;
+  background: #e8e8e8;
+  border-radius: 4px;
+  animation: sk-pulse 1.2s ease-in-out infinite;
+}
+
+.sk--line-xs { height: 10px; }
+.sk--line-sm { height: 12px; }
+.sk--line-md { height: 14px; }
+.sk--line-lg { height: 18px; }
+.sk--title   { height: 22px; border-radius: 6px; }
+.sk--input   { height: 36px; border-radius: 8px; }
+.sk--btn     { height: 30px; border-radius: 8px; }
+.sk--pill    { height: 20px; border-radius: 999px; }
+.sk--badge   { height: 22px; width: 80px; border-radius: 8px; }
+.sk--avatar  { height: 36px; width: 36px; border-radius: 50%; }
+.sk--block   { height: 80px; border-radius: 8px; }
+.sk--chip    { height: 28px; width: 100px; border-radius: 8px; }
+
 /* ── Customers page — exact mirror of orders page layout ── */
 .container:has(.customers-page) {
   max-width: none;

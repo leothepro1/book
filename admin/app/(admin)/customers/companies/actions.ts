@@ -41,6 +41,7 @@ import {
   deleteLocation,
   grantAccess,
   issueCredit,
+  listGuestsWithoutCompany,
   mapServiceErrorToMessage,
   removeContact,
   revokeAccess,
@@ -48,8 +49,10 @@ import {
   unarchiveCompany,
   unassignCatalog,
   updateCompany,
+  updateCompanyProfile,
   updateLocation,
 } from "@/app/_lib/companies";
+import type { TaxSetting } from "@prisma/client";
 
 type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -101,6 +104,32 @@ export async function searchGuestsForCompanyContact(
   return result.guests.map((g) => ({
     id: g.id,
     name: [g.firstName, g.lastName].filter(Boolean).join(" ").trim(),
+    email: g.email,
+  }));
+}
+
+/**
+ * Söker gäster som KAN läggas till som ny kontakt på ett företag — dvs
+ * gäster som inte redan är CompanyContact någonstans i tenanten. Speglar
+ * "Lägg till kund"-modalens picker. Kanske inte ens har testats mot
+ * companyId men parametern är med för framtida spärrar (t.ex. exkludera
+ * alla på detta företag inklusive).
+ */
+export async function searchAddableGuestsAction(
+  query: string,
+): Promise<Array<{ id: string; name: string; email: string }>> {
+  const ctx = await requireContext();
+  if (!ctx.ok) return [];
+  const rows = await listGuestsWithoutCompany({
+    tenantId: ctx.tenantId,
+    query,
+    take: 20,
+  });
+  return rows.map((g) => ({
+    id: g.id,
+    name:
+      g.name?.trim() ||
+      [g.firstName, g.lastName].filter(Boolean).join(" ").trim(),
     email: g.email,
   }));
 }
@@ -175,6 +204,75 @@ export async function updateCompanyAction(
       actorUserId: ctx.staffUserId,
     });
     revalidateCompanyPaths(companyId);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Atomic profile edit — backs the "Redigera företagsuppgifter" modal on
+ * the company detail page. Updates Company + the first CompanyLocation in
+ * one transaction so partial failure can never leave the UI in a mixed
+ * state. Emits a single COMPANY_UPDATED event so the timeline reads as one
+ * action regardless of how many underlying columns changed.
+ */
+export async function updateCompanyProfileAction(input: {
+  companyId: string;
+  company: {
+    name?: string;
+    externalId?: string | null;
+    tags?: string[];
+    note?: string | null;
+  };
+  firstLocation?: {
+    billingAddress?: {
+      line1: string;
+      line2?: string;
+      postalCode: string;
+      city: string;
+      country: string;
+    };
+    taxId?: string | null;
+    paymentTermsId?: string | null;
+    taxSetting?: TaxSetting;
+  };
+}): Promise<ActionResult> {
+  const ctx = await requireContext();
+  if (!ctx.ok) return ctx;
+  try {
+    await updateCompanyProfile({
+      tenantId: ctx.tenantId,
+      companyId: input.companyId,
+      companyPatch: input.company,
+      firstLocationPatch: input.firstLocation
+        ? {
+            ...(input.firstLocation.billingAddress !== undefined
+              ? {
+                  billingAddress:
+                    input.firstLocation.billingAddress as Record<string, unknown>,
+                }
+              : {}),
+            ...(input.firstLocation.taxId !== undefined
+              ? { taxId: input.firstLocation.taxId }
+              : {}),
+            ...(input.firstLocation.paymentTermsId !== undefined
+              ? { paymentTermsId: input.firstLocation.paymentTermsId }
+              : {}),
+            ...(input.firstLocation.taxSetting !== undefined
+              ? { taxSetting: input.firstLocation.taxSetting }
+              : {}),
+          }
+        : undefined,
+    });
+    await createCompanyEvent({
+      tenantId: ctx.tenantId,
+      companyId: input.companyId,
+      type: "COMPANY_UPDATED",
+      message: "Företagsuppgifter uppdaterade",
+      actorUserId: ctx.staffUserId,
+    });
+    revalidateCompanyPaths(input.companyId);
     return { ok: true, data: undefined };
   } catch (err) {
     return fail(err);
@@ -385,6 +483,60 @@ export async function createContactAction(input: {
   }
 }
 
+/**
+ * Företagsnivå-add: lägger till en ny kontakt på företaget och beviljar
+ * access till EN eller FLERA platser i samma steg. Service-lagret är
+ * idempotent — om (companyId, guestAccountId) redan finns återanvänds
+ * raden och createMany(skipDuplicates) på platsernas access-rader gör
+ * flerdubbla grants harmlösa.
+ *
+ * Invariants som upprätthålls i service-lagret (se contact.ts):
+ *   • En GuestAccount får bara ha CompanyContact på ETT företag i tenanten.
+ *   • Platsernas access-rader valideras mot (tenantId, companyId).
+ *
+ * Returnerar contactId så klienten kan länka vidare om det behövs.
+ */
+export async function addContactToCompanyAction(input: {
+  companyId: string;
+  contact:
+    | { guestAccountId: string }
+    | { email: string; name: string };
+  locationIds: string[];
+  title?: string;
+  locale?: string;
+}): Promise<ActionResult<{ contactId: string }>> {
+  const ctx = await requireContext();
+  if (!ctx.ok) return ctx;
+  if (!Array.isArray(input.locationIds) || input.locationIds.length === 0) {
+    return { ok: false, error: "Välj minst en plats för kunden" };
+  }
+  try {
+    const contact = await createContact({
+      tenantId: ctx.tenantId,
+      companyId: input.companyId,
+      contact: input.contact,
+      title: input.title,
+      locale: input.locale,
+      grantAccessToLocationIds: input.locationIds,
+    });
+    await createCompanyEvent({
+      tenantId: ctx.tenantId,
+      companyId: input.companyId,
+      type: "CONTACT_ADDED",
+      message: "Kund tillagd",
+      metadata: {
+        contactId: contact.id,
+        locationCount: input.locationIds.length,
+      },
+      actorUserId: ctx.staffUserId,
+    });
+    revalidateCompanyPaths(input.companyId);
+    return { ok: true, data: { contactId: contact.id } };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
 export async function removeContactAction(input: {
   companyId: string;
   contactId: string;
@@ -394,6 +546,14 @@ export async function removeContactAction(input: {
   if (!ctx.ok) return ctx;
   try {
     await removeContact({ tenantId: ctx.tenantId, contactId: input.contactId });
+    await createCompanyEvent({
+      tenantId: ctx.tenantId,
+      companyId: input.companyId,
+      type: "CONTACT_REMOVED",
+      message: "Kund borttagen",
+      metadata: { contactId: input.contactId },
+      actorUserId: ctx.staffUserId,
+    });
     revalidateCompanyPaths(input.companyId, input.locationId);
     return { ok: true, data: undefined };
   } catch (err) {
