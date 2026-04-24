@@ -145,7 +145,11 @@ describe("BedfrontPaymentsAdapter", () => {
 
       expect(mockPICreate).not.toHaveBeenCalled();
       expect(mockPIRetrieve).toHaveBeenCalledTimes(1);
-      expect(result).toEqual({ mode: "embedded", clientSecret: "pi_existing_secret" });
+      expect(result).toEqual({
+        mode: "embedded",
+        clientSecret: "pi_existing_secret",
+        providerSessionId: "pi_existing",
+      });
     });
   });
 

@@ -54,6 +54,7 @@ describe("initiateOrderPayment", () => {
     expect(result).toEqual({
       mode: "embedded",
       clientSecret: "fake_secret_order_1",
+      providerSessionId: "fake_pi_order_1",
     });
   });
 

@@ -51,3 +51,7 @@ export {
   DEFAULT_DRAFT_HOLD_DURATION_MS,
 } from "./holds";
 export { HOLD_TRANSITIONS, canHoldTransition } from "./state-machine";
+
+// ── Services (FAS 6.5D) ──
+export { sendInvoice, cancelDraft } from "./lifecycle";
+export { convertDraftToOrder } from "./convert";

@@ -34,6 +34,7 @@ import type Stripe from "stripe";
 import { upsertGuestAccountFromOrder } from "@/app/_lib/guest-auth/account";
 import { createGiftCard } from "@/app/_lib/gift-cards/create";
 import { releaseDiscountUsageInTx } from "@/app/_lib/discounts/release";
+import { handleDraftOrderPaymentIntentSucceeded } from "./handle-draft-order-pi";
 
 export async function POST(req: Request) {
   const stripe = getStripe();
@@ -554,6 +555,15 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
 // Branches on pi.metadata.orderType to determine fulfillment logic.
 
 async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
+  // FAS 6.5D: branch on pi.metadata.kind for draft-originated invoices.
+  // Draft invoices carry kind="draft_order_invoice" + draftOrderId;
+  // existing Order-first flows use orderId. Any PI with BOTH (shouldn't
+  // happen) prefers the draft path since it's the newer, explicit marker.
+  if (pi.metadata?.kind === "draft_order_invoice" && pi.metadata?.draftOrderId) {
+    await handleDraftOrderPaymentIntentSucceeded(pi);
+    return;
+  }
+
   const orderId = pi.metadata?.orderId;
   if (!orderId) {
     // PaymentIntent without orderId — not from our system or legacy flow
@@ -761,3 +771,4 @@ async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
     }
   }
 }
+

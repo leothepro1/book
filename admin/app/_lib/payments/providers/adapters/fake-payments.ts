@@ -30,6 +30,7 @@ export class FakePaymentAdapter implements PaymentAdapter {
     return {
       mode: "embedded",
       clientSecret: `fake_secret_${request.sessionId}`,
+      providerSessionId: `fake_pi_${request.sessionId}`,
     };
   }
 

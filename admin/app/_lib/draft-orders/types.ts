@@ -16,6 +16,9 @@ import type {
   DraftOrderStatus,
   DraftBuyerKind,
   DraftLineItemType,
+  Order,
+  OrderLineItem,
+  Booking,
 } from "@prisma/client";
 import type { DraftTotals } from "./calculator";
 
@@ -28,6 +31,9 @@ export type {
   DraftOrderStatus,
   DraftBuyerKind,
   DraftLineItemType,
+  Order,
+  OrderLineItem,
+  Booking,
 };
 
 // ── Shared helper schemas ────────────────────────────────────────
@@ -413,3 +419,161 @@ export type PlaceHoldsForDraftResult = {
   failed: Array<{ draftLineItemId: string; error: string }>;
   skipped: Array<{ draftLineItemId: string; reason: string }>;
 };
+
+// ── FAS 6.5D lifecycle: sendInvoice ──────────────────────────────
+
+/**
+ * Invoice sending moves a draft from OPEN / APPROVED → INVOICED.
+ *
+ * REQUIRES all ACCOMMODATION DraftReservations in PLACED state. Prevents
+ * the "invoiced but not held" failure mode. Admin workflow:
+ *   addLineItem → placeHoldsForDraft → freezePrices → sendInvoice.
+ *
+ * S5 is an intentional escalation of commitment level:
+ *   - freezePrices is a calculation decision (no hold requirement)
+ *   - placeHoldForDraftLine is optional for admin
+ *   - sendInvoice is a customer commitment (requires holds)
+ */
+export const SendInvoiceInputSchema = z.object({
+  tenantId: z.string().min(1),
+  draftOrderId: z.string().min(1),
+  /** Override the default 30-day share-link TTL. Clamped [1d, 90d] by the service. */
+  shareLinkTtlMs: z.number().int().positive().optional(),
+  /** Stored on DraftOrder.invoiceEmailSubject for a future email-send path. */
+  invoiceEmailSubject: z.string().max(200).optional(),
+  /** Stored on DraftOrder.invoiceEmailMessage. */
+  invoiceEmailMessage: z.string().max(10000).optional(),
+  actorUserId: z.string().optional(),
+});
+
+export type SendInvoiceInput = z.infer<typeof SendInvoiceInputSchema>;
+export type SendInvoiceArgs = z.input<typeof SendInvoiceInputSchema>;
+
+export type SendInvoiceResult = {
+  draft: DraftOrder;
+  /** Public URL the buyer uses to view + pay the invoice. */
+  invoiceUrl: string;
+  /** Opaque token embedded in invoiceUrl; also stored on DraftOrder.shareLinkToken. */
+  shareLinkToken: string;
+  shareLinkExpiresAt: Date;
+  /** Stripe PaymentIntent client_secret — returned so the admin UI can inline-preview. */
+  clientSecret: string;
+  /** Stripe PaymentIntent ID (pi_...). Stored on DraftOrder.metafields.stripePaymentIntentId. */
+  stripePaymentIntentId: string;
+};
+
+// ── FAS 6.5D lifecycle: cancelDraft ──────────────────────────────
+
+/**
+ * Cancel a draft from non-terminal status. PAID drafts are rejected
+ * (per C3) because refund handling is out of 6.5D scope — staff must
+ * issue the Stripe refund manually, then run cancelDraft.
+ *
+ * Hold release is best-effort: per-reservation adapter.releaseHold
+ * errors are logged and surfaced via result.holdReleaseErrors but do
+ * NOT abort the cancel. The cron picks up stragglers.
+ */
+export const CancelDraftInputSchema = z.object({
+  tenantId: z.string().min(1),
+  draftOrderId: z.string().min(1),
+  /** Required when status is INVOICED or OVERDUE. */
+  reason: z.string().max(500).optional(),
+  actorUserId: z.string().optional(),
+  /** "admin_ui" (default) or "cron" for event-trail attribution. */
+  actorSource: z.enum(["admin_ui", "cron"]).default("admin_ui"),
+});
+
+export type CancelDraftInput = z.infer<typeof CancelDraftInputSchema>;
+export type CancelDraftArgs = z.input<typeof CancelDraftInputSchema>;
+
+export type CancelDraftResult = {
+  draft: DraftOrder;
+  /** Number of reservations RELEASED in this call (excludes ones already terminal). */
+  releasedHolds: number;
+  /** Per-reservation adapter-release errors (non-fatal — logged only). */
+  holdReleaseErrors: Array<{ draftLineItemId: string; error: string }>;
+  /** True iff we attempted to cancel a Stripe PaymentIntent for this draft. */
+  stripePaymentIntentCancelAttempted: boolean;
+  /** Error string iff the PI-cancel call failed; null on success or not-attempted. */
+  stripePaymentIntentCancelError: string | null;
+};
+
+// ── FAS 6.5D lifecycle: convertDraftToOrder ──────────────────────
+
+/**
+ * Promote a PAID draft to a COMPLETED order.
+ *
+ * Called by the Stripe webhook handler after the INVOICED → PAID tx,
+ * or by an admin recovery tool. Produces Order + OrderLineItems +
+ * Bookings atomically, commits the discount, and confirms every
+ * DraftReservation at the PMS.
+ *
+ * actorSource controls the confirmHold idempotency strategy:
+ *   - "webhook"                → deterministic key (Stripe-retry safe;
+ *                                same PI + same reservation = same key,
+ *                                hitting the PmsIdempotencyKey cache)
+ *   - "admin_manual_recovery"  → attemptNonce appended to the key,
+ *                                producing a fresh claim. Escapes the
+ *                                cached-FAILED trap (audit §13 F2).
+ */
+export const ConvertDraftToOrderInputSchema = z.object({
+  tenantId: z.string().min(1),
+  draftOrderId: z.string().min(1),
+  /** Stripe PaymentIntent ID that settled for this draft (pi_...). */
+  stripePaymentIntentId: z.string().min(1),
+  /** Webhook (normal) vs admin manual recovery (retry after cached FAILED). */
+  actorSource: z.enum(["webhook", "admin_manual_recovery"]).default("webhook"),
+  actorUserId: z.string().optional(),
+});
+
+export type ConvertDraftToOrderInput = z.infer<
+  typeof ConvertDraftToOrderInputSchema
+>;
+export type ConvertDraftToOrderArgs = z.input<
+  typeof ConvertDraftToOrderInputSchema
+>;
+
+export type ConvertDraftToOrderResult = {
+  draft: DraftOrder;
+  order: Order;
+  orderLineItems: OrderLineItem[];
+  bookings: Booking[];
+  /** True on idempotent replay — draft already converted; existing Order returned. */
+  alreadyConverted: boolean;
+};
+
+// ── FAS 6.5D typed accessors for DraftOrder.metafields ───────────
+
+/**
+ * Typed read of the Stripe PaymentIntent ID stored on a DraftOrder.
+ *
+ * Per Q5 (audit §15.2), we store the PaymentIntent ID in
+ * `DraftOrder.metafields.stripePaymentIntentId` rather than adding a
+ * dedicated column, to minimise schema churn in 6.5D. This accessor
+ * is the ONLY type-safe read path — consumers must not touch
+ * `metafields` directly, so a future migration to a column stays
+ * a one-line refactor here.
+ *
+ * Returns null when no invoice has been sent (metafields absent or
+ * missing the key) or when the stored value is not a non-empty string.
+ */
+export function getDraftStripePaymentIntentId(
+  draft: Pick<DraftOrder, "metafields">,
+): string | null {
+  const mf = draft.metafields;
+  if (mf === null || mf === undefined) return null;
+  if (typeof mf !== "object" || Array.isArray(mf)) return null;
+  const v = (mf as Record<string, unknown>).stripePaymentIntentId;
+  return typeof v === "string" && v.length > 0 ? v : null;
+}
+
+/**
+ * Typed read of a draft's public invoice URL. Simple passthrough today —
+ * lives here so consumers have a single import surface for draft-level
+ * data accessors and the field can migrate to a derived shape later.
+ */
+export function getDraftInvoiceUrl(
+  draft: Pick<DraftOrder, "invoiceUrl">,
+): string | null {
+  return draft.invoiceUrl ?? null;
+}

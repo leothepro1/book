@@ -49,7 +49,7 @@ export interface PaymentSessionRequest {
 
 export type PaymentSessionInit =
   | { mode: "redirect"; redirectUrl: string; providerSessionId?: string }
-  | { mode: "embedded"; clientSecret: string };
+  | { mode: "embedded"; clientSecret: string; providerSessionId?: string };
 
 // ── Webhook event (normalized from any provider) ────────────────
 

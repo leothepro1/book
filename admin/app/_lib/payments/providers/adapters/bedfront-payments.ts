@@ -118,7 +118,11 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
           sessionId,
           paymentIntentId: pi.id,
         });
-        return { mode: "embedded", clientSecret: pi.client_secret! };
+        return {
+          mode: "embedded",
+          clientSecret: pi.client_secret!,
+          providerSessionId: pi.id,
+        };
       }
     }
 
@@ -198,7 +202,11 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
       feeBps,
     });
 
-    return { mode: "embedded", clientSecret: paymentIntent.client_secret! };
+    return {
+      mode: "embedded",
+      clientSecret: paymentIntent.client_secret!,
+      providerSessionId: paymentIntent.id,
+    };
   }
 
   // ── Checkout Session mode (redirect / Stripe hosted page) ──────

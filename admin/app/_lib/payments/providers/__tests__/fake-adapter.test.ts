@@ -29,6 +29,7 @@ describe("FakePaymentAdapter", () => {
       expect(result).toEqual({
         mode: "embedded",
         clientSecret: "fake_secret_order_123",
+        providerSessionId: "fake_pi_order_123",
       });
     });
 
