@@ -615,6 +615,7 @@ model Tenant {
   // SEO engine
   pageTypeSeoDefaults PageTypeSeoDefault[]
   seoRedirects        SeoRedirect[]
+  seoRedirectHits     SeoRedirectHit[]
 
   // Cancellation engine
   cancellationRequests          CancellationRequest[]
@@ -4456,19 +4457,97 @@ enum SeoPageType {
   NOT_FOUND
 }
 
-/// 301/302 redirect table for handle changes and merchant-authored redirects.
-/// Middleware consults this before serving 404.
+/// 301/302 redirect table for handle changes and merchant-authored
+/// redirects. Middleware consults this before serving 404 (actually
+/// before routing, via admin/middleware.ts in M11.1b).
+///
+/// Shopify-grade invariants:
+///   1. Write-path (`collapseAndCreate` in seo/redirects/writes.ts)
+///      collapses chains atomically: any existing redirect whose
+///      toPath matches the OLD slug is updated to point at the NEW
+///      slug. Any existing redirect whose fromPath matches the NEW
+///      slug (A → B → A revert case) is deleted first.
+///   2. Middleware never traverses chains — single DB lookup, single
+///      301.
+///   3. Unique [tenantId, fromPath, locale] prevents two redirects
+///      from the same source in the same locale.
+///   4. Cycle detection is structurally guaranteed by (1).
+///   5. Hit tracking: SeoRedirectHit is append-only; the
+///      aggregate-seo-redirect-hits cron rolls counts up into
+///      hitCount + lastHitAt on this row.
 model SeoRedirect {
   id         String   @id @default(cuid())
   tenantId   String
+
+  /// Source path, NO protocol, NO host, lowercased, NO trailing
+  /// slash. e.g. "/shop/products/old-slug". Matched 1:1 against
+  /// normalized request pathname by the middleware.
   fromPath   String
+
+  /// Destination path, same shape as fromPath. Always points at a
+  /// live entity's current path (chain-collapsed at write-time).
   toPath     String
+
+  /// BCP-47 locale for the fromPath. In M11.1 every row is
+  /// tenant.defaultLocale — locale-prefix routing lands with M8.
+  /// The column carves the namespace so /en/foo and /sv/foo can
+  /// route independently once M8 ships.
+  locale     String
+
   statusCode Int      @default(301)
+
+  /// Denormalized hit counter, updated by the
+  /// aggregate-seo-redirect-hits cron from SeoRedirectHit rows.
+  /// Admin UI (M11.3) reads this directly.
+  hitCount   Int      @default(0)
+
+  /// Last observed hit, set by the same cron. Null for redirects
+  /// that haven't fired yet.
+  lastHitAt  DateTime?
+
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  hits   SeoRedirectHit[]
 
-  @@unique([tenantId, fromPath])
+  /// Unique per-locale path within a tenant. Insert-path conflicts
+  /// surface as P2002 — the save transaction rolls back and the
+  /// caller returns a typed user-visible error.
+  @@unique([tenantId, fromPath, locale])
+
+  /// Tenant-scoped scan for `cleanupRedirectsForDeletedEntity`
+  /// (find redirects pointing at an entity's routes) + admin UI
+  /// "redirects pointing at this URL" lookups.
+  @@index([tenantId, toPath])
+
+  /// Tenant-scoped scan for admin list view (sort by recency).
+  @@index([tenantId, createdAt])
+}
+
+/// Append-only per-redirect hit log. Written by middleware via a
+/// fire-and-forget POST to /api/internal/seo-redirect-hit (M11.1b).
+/// Drained every 5 min by the aggregate-seo-redirect-hits cron into
+/// SeoRedirect.hitCount.
+///
+/// Dedicated table (not AnalyticsEvent) so the admin analytics
+/// dashboard isn't diluted by high-volume redirect pings — a popular
+/// old URL can fire thousands of hits/day and would distort session
+/// + visitor counts otherwise.
+model SeoRedirectHit {
+  id         String   @id @default(cuid())
+  tenantId   String
+  redirectId String
+  occurredAt DateTime @default(now())
+
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  redirect SeoRedirect @relation(fields: [redirectId], references: [id], onDelete: Cascade)
+
+  /// Tenant + time scan for the aggregation cron's "drain window".
+  @@index([tenantId, occurredAt])
+
+  /// redirectId scan for the roll-up group-by.
+  @@index([redirectId])
 }
 
 // ═══════════════════════════════════════════════════════════════════
