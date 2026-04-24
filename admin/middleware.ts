@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { SUPPORTED_LOCALES, PRIMARY_LOCALE } from '@/app/_lib/translations/locales';
 import { getCachedLocalePublished, setCachedLocalePublished } from '@/app/_lib/translations/locale-cache';
+import { normalizeRedirectPath } from '@/app/_lib/seo/redirects/paths';
 
 const isPublicRoute = createRouteMatcher([
   '/',
@@ -213,16 +214,233 @@ function handleGuestSessionGate(request: NextRequest): NextResponse | null {
   return NextResponse.redirect(loginUrl);
 }
 
+// ── SEO redirects (M11.1b) ───────────────────────────────────
+//
+// Serves 301/302 redirects from the `SeoRedirect` table for
+// paths whose entity slug has changed. Runs BEFORE session
+// gating, auth, and locale handling — a renamed product must
+// redirect regardless of who the visitor is.
+//
+// Edge runtime can't use Prisma, so lookups go through two
+// internal Node.js routes:
+//   /api/internal/resolve-tenant-by-host  → tenantId + locale
+//   /api/internal/seo-redirect-lookup     → redirect row or null
+//
+// Both responses are LRU-cached for 60s (positive AND negative).
+// Negative caching is load-bearing: every 404 under /stays/*
+// would otherwise round-trip to Prisma.
+//
+// Hit logging (`/api/internal/seo-redirect-hit`) is fire-and-
+// forget — never awaited, never blocks the 301.
+
+const SEO_REDIRECT_CACHE_TTL_MS = 60_000;
+const SEO_TENANT_CACHE_TTL_MS = 60_000;
+const SEO_REDIRECT_CACHE_MAX_SIZE = 5000;
+const SEO_TENANT_CACHE_MAX_SIZE = 1000;
+
+// Fast-path filter. Only paths under these prefixes own merchant-
+// editable slugs and therefore can have redirects. Keeps non-
+// redirectable paths (e.g. /api/*, /editor/*, /_next/*) from
+// round-tripping to the DB — critical at 10k-tenant scale.
+// Case-insensitive: `/Shop/Products/FOO` still takes the redirect
+// path (normalizeRedirectPath lowercases before lookup). A case-
+// sensitive filter would miss crawler/legacy uppercase variants.
+const SEO_REDIRECTABLE_PATH_PATTERN =
+  /^\/(stays(\/categories)?|shop\/(products|collections))\//i;
+
+type SeoRedirectRow = {
+  id: string;
+  toPath: string;
+  statusCode: number;
+};
+
+type SeoTenantRow = {
+  id: string;
+  defaultLocale: string;
+};
+
+const seoRedirectCache = new Map<
+  string,
+  { value: SeoRedirectRow | null; expiresAt: number }
+>();
+const seoTenantCache = new Map<
+  string,
+  { value: SeoTenantRow | null; expiresAt: number }
+>();
+
+function cacheSeoTenant(host: string, value: SeoTenantRow | null): void {
+  seoTenantCache.set(host, {
+    value,
+    expiresAt: Date.now() + SEO_TENANT_CACHE_TTL_MS,
+  });
+  if (seoTenantCache.size > SEO_TENANT_CACHE_MAX_SIZE) {
+    const firstKey = seoTenantCache.keys().next().value;
+    if (firstKey !== undefined) seoTenantCache.delete(firstKey);
+  }
+}
+
+function cacheSeoRedirect(key: string, value: SeoRedirectRow | null): void {
+  seoRedirectCache.set(key, {
+    value,
+    expiresAt: Date.now() + SEO_REDIRECT_CACHE_TTL_MS,
+  });
+  if (seoRedirectCache.size > SEO_REDIRECT_CACHE_MAX_SIZE) {
+    const firstKey = seoRedirectCache.keys().next().value;
+    if (firstKey !== undefined) seoRedirectCache.delete(firstKey);
+  }
+}
+
+async function resolveTenantByHostCached(
+  request: NextRequest,
+  host: string,
+): Promise<SeoTenantRow | null> {
+  const cached = seoTenantCache.get(host);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  try {
+    const url = new URL(
+      '/api/internal/resolve-tenant-by-host',
+      request.nextUrl.origin,
+    );
+    url.searchParams.set('host', host);
+
+    const res = await fetch(url.toString(), {
+      headers: { 'x-cron-secret': process.env.CRON_SECRET ?? '' },
+    });
+
+    if (!res.ok) {
+      cacheSeoTenant(host, null);
+      return null;
+    }
+
+    const data = (await res.json()) as { tenant: SeoTenantRow | null };
+    const value = data.tenant ?? null;
+    cacheSeoTenant(host, value);
+    return value;
+  } catch (err) {
+    console.error('[middleware] Failed to resolve tenant for SEO redirect:', err);
+    cacheSeoTenant(host, null);
+    return null;
+  }
+}
+
+async function lookupSeoRedirectCached(
+  request: NextRequest,
+  tenantId: string,
+  path: string,
+  locale: string,
+): Promise<SeoRedirectRow | null> {
+  const key = `${tenantId}|${path}|${locale}`;
+  const cached = seoRedirectCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  try {
+    const url = new URL(
+      '/api/internal/seo-redirect-lookup',
+      request.nextUrl.origin,
+    );
+    url.searchParams.set('tenantId', tenantId);
+    url.searchParams.set('path', path);
+    url.searchParams.set('locale', locale);
+
+    const res = await fetch(url.toString(), {
+      headers: { 'x-cron-secret': process.env.CRON_SECRET ?? '' },
+    });
+
+    if (!res.ok) {
+      cacheSeoRedirect(key, null);
+      return null;
+    }
+
+    const data = (await res.json()) as { redirect: SeoRedirectRow | null };
+    const value = data.redirect ?? null;
+    cacheSeoRedirect(key, value);
+    return value;
+  } catch (err) {
+    console.error('[middleware] Failed SEO redirect lookup:', err);
+    cacheSeoRedirect(key, null);
+    return null;
+  }
+}
+
+async function emitSeoRedirectHit(
+  request: NextRequest,
+  tenantId: string,
+  redirectId: string,
+): Promise<void> {
+  try {
+    const url = new URL(
+      '/api/internal/seo-redirect-hit',
+      request.nextUrl.origin,
+    );
+    await fetch(url.toString(), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-cron-secret': process.env.CRON_SECRET ?? '',
+      },
+      body: JSON.stringify({ tenantId, redirectId }),
+    });
+  } catch {
+    // Hit logging failures never affect request flow.
+  }
+}
+
+// Test-only: reset caches between test runs. Module state is shared
+// across imports, and middleware.test.ts needs a clean slate per
+// scenario to verify cache hit vs miss behaviour.
+export function __resetSeoRedirectCachesForTest(): void {
+  seoRedirectCache.clear();
+  seoTenantCache.clear();
+}
+
+export async function handleSeoRedirect(
+  request: NextRequest,
+): Promise<NextResponse | null> {
+  const rawPath = request.nextUrl.pathname;
+  if (!SEO_REDIRECTABLE_PATH_PATTERN.test(rawPath)) return null;
+
+  const host = request.headers.get('host');
+  if (!host) return null;
+
+  const tenant = await resolveTenantByHostCached(request, host);
+  if (!tenant) return null;
+
+  const normalizedPath = normalizeRedirectPath(rawPath);
+  const redirect = await lookupSeoRedirectCached(
+    request,
+    tenant.id,
+    normalizedPath,
+    tenant.defaultLocale,
+  );
+  if (!redirect) return null;
+
+  void emitSeoRedirectHit(request, tenant.id, redirect.id);
+
+  const destUrl = new URL(redirect.toPath, request.url);
+  for (const [key, value] of request.nextUrl.searchParams) {
+    destUrl.searchParams.set(key, value);
+  }
+
+  return NextResponse.redirect(destUrl, redirect.statusCode);
+}
+
 // ── Middleware entry point ────────────────────────────────────
 
 // I dev: skippa Clerk helt — ingen handshake, ingen redirect
 const middleware = process.env.NODE_ENV === 'development'
   ? async (request: NextRequest) => {
+      const seoRedirect = await handleSeoRedirect(request);
+      if (seoRedirect) return seoRedirect;
+
       const guestRedirect = handleGuestSessionGate(request);
       if (guestRedirect) return guestRedirect;
       return await handleLocale(request);
     }
   : clerkMiddleware(async (auth, request) => {
+      const seoRedirect = await handleSeoRedirect(request);
+      if (seoRedirect) return seoRedirect;
+
       const guestRedirect = handleGuestSessionGate(request);
       if (guestRedirect) return guestRedirect;
 
