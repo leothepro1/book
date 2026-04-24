@@ -25,6 +25,8 @@ import type { MediaLibraryResult } from "@/app/(admin)/_components/MediaLibrary"
 import { createProduct, updateProduct, archiveProduct, deleteProduct, effectivePrice, listCollections, assignProductTemplate } from "@/app/_lib/products";
 import { listProductTemplates } from "@/app/_lib/products/template-actions";
 import type { ProductMediaInput, ProductOptionInput, ProductVariantInput } from "@/app/_lib/products";
+import { SearchListingEditor } from "@/app/(admin)/_components/SearchListingEditor";
+import type { SeoPreviewResult } from "@/app/_lib/seo/preview";
 import {
   DndContext,
   PointerSensor,
@@ -86,7 +88,35 @@ type ExistingProduct = {
   tags?: Array<{ tag: { id: string; name: string } }>;
 };
 
-export default function ProductForm({ product, basePath = "/products" }: { product?: ExistingProduct; basePath?: string }) {
+// ── /new-flow placeholder slug ───────────────────────────────
+// Shown in the SearchListingEditor's read-only URL input when no
+// product row exists yet. Mirrors NEW_ENTITY_PLACEHOLDER_SLUG.product
+// in the preview engine; kept inline here rather than exported so
+// the engine's map stays the sole authority for URL synthesis.
+const NEW_PRODUCT_PLACEHOLDER_SLUG = "ny-produkt";
+
+export default function ProductForm({
+  product,
+  basePath = "/products",
+  seo,
+  initialPreview,
+}: {
+  product?: ExistingProduct;
+  basePath?: string;
+  /**
+   * Current per-entity SEO overrides (parsed at the page boundary
+   * via `safeParseSeoMetadata`). Not stored on `ExistingProduct` to
+   * avoid widening that type with an untyped JSON field — the
+   * parse-at-boundary pattern matches Batch 2's AccommodationForm.
+   */
+  seo?: { title: string; description: string };
+  /**
+   * SSR-prepared preview snapshot for the first render. Both /new
+   * and /[id] compute this server-side — /new passes entityId=null
+   * to the engine and gets a `ny-produkt` placeholder URL.
+   */
+  initialPreview?: SeoPreviewResult;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isSaving, setIsSaving] = useState(false);
@@ -97,6 +127,21 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
 
   // Mark dirty on any change
   const markDirty = useCallback(() => setDirty(true), []);
+
+  // ── SEO overrides (title + description in Batch 3; OG image +
+  // noindex land later). Server action shallow-merges incoming with
+  // stored seo so fields this form doesn't edit survive every save.
+  const [seoState, setSeoState] = useState<{ title: string; description: string }>(
+    () => seo ?? { title: "", description: "" },
+  );
+
+  const handleSeoChange = useCallback(
+    (next: { title: string; description: string }) => {
+      setSeoState(next);
+      markDirty();
+    },
+    [markDirty],
+  );
 
   const isEdit = !!product;
   // ── Core fields (pre-populated from product when editing) ──
@@ -401,6 +446,10 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
             continueSellingWhenOutOfStock: product?.continueSellingWhenOutOfStock ?? false,
             collectionIds: Array.from(selectedCollectionIds),
             tags,
+            seo: {
+              title: seoState.title,
+              description: seoState.description,
+            },
           };
 
       let result;
@@ -425,7 +474,7 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
         setTimeout(() => setSaveError(null), 5000);
       }
     });
-  }, [title, description, price, compareAtPrice, taxable, status, media, options, variants, selectedCollectionIds, tags, router, isEdit, product]);
+  }, [title, description, price, compareAtPrice, taxable, status, media, options, variants, selectedCollectionIds, tags, seoState, router, isEdit, product, basePath]);
 
   const handleDiscard = useCallback(() => {
     setIsDiscarding(true);
@@ -455,11 +504,12 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
     setSelectedCollectionIds(new Set((product?.collectionItems ?? []).map((ci) => ci.collection.id)));
     setTags((product?.tags ?? []).map((t) => t.tag.name));
     setTagInput("");
+    setSeoState(seo ?? { title: "", description: "" });
     setTimeout(() => {
       setDirty(false);
       setIsDiscarding(false);
     }, 100);
-  }, [product]);
+  }, [product, seo]);
 
   return (
     <div className="admin-page admin-page--no-preview products-page">
@@ -819,6 +869,22 @@ export default function ProductForm({ product, basePath = "/products" }: { produ
                 </>
               )}
             </div>
+
+            {/* ── Sökmotorlistning ── */}
+            <SearchListingEditor
+              resourceType="product"
+              entityId={isEdit && product ? product.id : null}
+              value={{
+                title: seoState.title,
+                description: seoState.description,
+                slug:
+                  isEdit && product
+                    ? product.slug
+                    : NEW_PRODUCT_PLACEHOLDER_SLUG,
+              }}
+              onChange={handleSeoChange}
+              initialPreview={initialPreview}
+            />
           </div>
 
           {/* Right column (30%) */}

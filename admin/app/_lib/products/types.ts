@@ -20,6 +20,8 @@
 
 import { z } from "zod";
 
+import { SeoMetadataSchema } from "@/app/_lib/seo/types";
+
 // ── Enums ────────────────────────────────────────────────────
 
 export const ProductStatusSchema = z.enum(["ACTIVE", "DRAFT", "ARCHIVED"]);
@@ -195,6 +197,13 @@ export const CreateProductSchema = z.object({
   variants: z.array(ProductVariantInputSchema).default([]),
   collectionIds: z.array(z.string()).default([]),
   tags: z.array(z.string().min(1).max(100)).default([]),
+  /**
+   * Per-entity SEO overrides. Client sends a partial payload; the
+   * server action persists the parsed object verbatim into
+   * `Product.seo` JSONB. Validated via `SeoMetadataSchema.partial()`
+   * — no merge needed on create (no prior row to preserve).
+   */
+  seo: SeoMetadataSchema.partial().optional(),
 }).refine(
   (d) => !d.compareAtPrice || d.compareAtPrice > d.price,
   { message: "Jämförpris måste vara högre än priset", path: ["compareAtPrice"] },
@@ -222,6 +231,12 @@ export const UpdateProductSchema = z.object({
   variants: z.array(ProductVariantInputSchema).optional(),
   collectionIds: z.array(z.string()).optional(),
   tags: z.array(z.string().min(1).max(100)).optional(),
+  /**
+   * Per-entity SEO overrides. Server action shallow-merges into the
+   * stored `Product.seo` JSONB so fields the current form doesn't
+   * edit (OG image, noindex, etc.) carry through unchanged.
+   */
+  seo: SeoMetadataSchema.partial().optional(),
 }).refine(
   (d) => {
     if (d.compareAtPrice === undefined || d.compareAtPrice === null) return true;

@@ -40,6 +40,8 @@ import type { InventoryChangeReason } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import type { ResolvedProduct } from "./types";
 import { resolveProduct } from "./resolve";
+import { log } from "@/app/_lib/logger";
+import { safeParseSeoMetadata } from "@/app/_lib/seo/types";
 
 // ── Result types ─────────────────────────────────────────────
 
@@ -114,6 +116,17 @@ export async function createProduct(
 
   const slug = await resolveUniqueSlug(tenantId, titleToSlug(data.title));
 
+  // ── SEO (optional) — strip `undefined` for Prisma's InputJsonValue.
+  //
+  // Zod `.partial()` surfaces every missing key as `undefined`;
+  // Prisma rejects those inside object JSON values. JSON-stringify +
+  // re-parse drops them, and the parse we just ran guarantees the
+  // resulting shape satisfies `SeoMetadataSchema.partial()`.
+  const seoJson: Prisma.InputJsonValue | null =
+    data.seo !== undefined
+      ? (JSON.parse(JSON.stringify(data.seo)) as Prisma.InputJsonValue)
+      : null;
+
   try {
     const product = await prisma.$transaction(async (tx) => {
       // 1. Create product
@@ -132,6 +145,7 @@ export async function createProduct(
           inventoryQuantity: data.inventoryQuantity,
           continueSellingWhenOutOfStock: data.continueSellingWhenOutOfStock,
           version: 1,
+          ...(seoJson !== null && { seo: seoJson }),
         },
       });
 
@@ -261,6 +275,15 @@ export async function createProduct(
       return product;
     });
 
+    if (data.seo !== undefined) {
+      log("info", "seo.entity.seo_created", {
+        tenantId,
+        resourceType: "product",
+        entityId: product.id,
+        fieldsChanged: Object.keys(data.seo).join(","),
+      });
+    }
+
     revalidatePath("/(guest)", "layout");
     return { ok: true, data: { id: product.id, slug: product.slug } };
   } catch (error) {
@@ -295,10 +318,26 @@ export async function updateProduct(
     select: {
       id: true, slug: true, title: true, version: true, price: true, currency: true,
       productType: true,
+      seo: true,
       options: { orderBy: { sortOrder: "asc" }, select: { name: true, values: true } },
     },
   });
   if (!existing) return { ok: false, error: "Produkten hittades inte" };
+
+  // ── SEO: parse + shallow-merge at the boundary ──
+  //
+  // Overrides from the form win over stored entity.seo; fields the
+  // UI doesn't edit yet (noindex, ogImageId, ogImageAlt, etc.) carry
+  // through unchanged. Mirrors the Batch 2 accommodations merge —
+  // `SeoMetadataSchema.partial()` inside UpdateProductSchema already
+  // validated the inbound shape, so we only need to strip
+  // `undefined` for Prisma's InputJsonValue.
+  let mergedSeoJson: Prisma.InputJsonValue | undefined;
+  if (data.seo !== undefined) {
+    const existingSeo = safeParseSeoMetadata(existing.seo) ?? {};
+    const merged = { ...existingSeo, ...data.seo };
+    mergedSeoJson = JSON.parse(JSON.stringify(merged)) as Prisma.InputJsonValue;
+  }
 
   // Validate variants against options (use provided options, or fall back to existing)
   if (data.variants && data.variants.length > 0) {
@@ -344,6 +383,7 @@ export async function updateProduct(
           ...(data.trackInventory !== undefined && { trackInventory: data.trackInventory }),
           ...(data.inventoryQuantity !== undefined && { inventoryQuantity: data.inventoryQuantity }),
           ...(data.continueSellingWhenOutOfStock !== undefined && { continueSellingWhenOutOfStock: data.continueSellingWhenOutOfStock }),
+          ...(mergedSeoJson !== undefined && { seo: mergedSeoJson }),
           version: { increment: 1 },
         },
       });
@@ -483,6 +523,15 @@ export async function updateProduct(
 
       return product;
     });
+
+    if (data.seo !== undefined) {
+      log("info", "seo.entity.seo_updated", {
+        tenantId,
+        resourceType: "product",
+        entityId: productId,
+        fieldsChanged: Object.keys(data.seo).join(","),
+      });
+    }
 
     revalidatePath("/(guest)", "layout");
     return { ok: true, data: { id: product.id, slug: product.slug, version: product.version } };
