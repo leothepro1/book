@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useTransition, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { EditorIcon } from "@/app/_components/EditorIcon";
@@ -9,6 +9,9 @@ import { MediaLibraryModal } from "@/app/(admin)/_components/MediaLibrary";
 import type { MediaLibraryResult } from "@/app/(admin)/_components/MediaLibrary";
 import { PublishBarUI } from "@/app/(admin)/_components/PublishBar/PublishBar";
 import { createCollection, updateCollection, searchProducts, listCollections } from "@/app/_lib/products";
+import { SearchListingEditor } from "@/app/(admin)/_components/SearchListingEditor";
+import type { SeoPreviewResult } from "@/app/_lib/seo/preview";
+import { stripHtml } from "@/app/_lib/seo/text";
 import {
   DndContext,
   PointerSensor,
@@ -44,7 +47,32 @@ type ExistingCollection = {
   items: Array<{ product: { id: string; title: string; media: Array<{ url: string }> } }>;
 };
 
-export default function CollectionForm({ collection }: { collection?: ExistingCollection }) {
+// ── /new-flow placeholder slug ───────────────────────────────
+// Mirrors NEW_ENTITY_PLACEHOLDER_SLUG.product_collection in the
+// preview engine; kept inline rather than exported so the engine's
+// map stays the sole authority for URL synthesis.
+const NEW_COLLECTION_PLACEHOLDER_SLUG = "ny-produktserie";
+
+export default function CollectionForm({
+  collection,
+  seo,
+  initialPreview,
+}: {
+  collection?: ExistingCollection;
+  /**
+   * Current per-entity SEO overrides (parsed at the page boundary
+   * via `safeParseSeoMetadata`). Not stored on `ExistingCollection`
+   * to avoid widening that type with an untyped JSON field — parse-
+   * at-boundary pattern from Batch 2/3.
+   */
+  seo?: { title: string; description: string };
+  /**
+   * SSR-prepared preview snapshot. Both /new and /[id] compute this
+   * server-side — /new passes `entityId: null` to get the placeholder
+   * URL; /[id] passes the real entity id.
+   */
+  initialPreview?: SeoPreviewResult;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isSaving, setIsSaving] = useState(false);
@@ -57,11 +85,31 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
   // ── Core fields ──
   const [title, setTitle] = useState(collection?.title ?? "");
   const [description, setDescription] = useState(collection?.description ?? "");
+  // Memoized HTML strip — piped into SearchListingEditor as the
+  // composed-value fallback + auto-follow parent description.
+  const strippedDescription = useMemo(
+    () => stripHtml(description),
+    [description],
+  );
   const [imageUrl, setImageUrl] = useState(collection?.imageUrl ?? "");
   const [mediaLibOpen, setMediaLibOpen] = useState(false);
   const [status, setStatus] = useState<"ACTIVE" | "DRAFT">(collection?.status === "ACTIVE" ? "ACTIVE" : "DRAFT");
   const [statusOpen, setStatusOpen] = useState(false);
   const statusRef = useRef<HTMLDivElement>(null);
+
+  // ── SEO overrides (title + description in M6.6; OG image +
+  // noindex ship later). Server action shallow-merges over stored
+  // seo so future fields carry through unchanged.
+  const [seoState, setSeoState] = useState<{ title: string; description: string }>(
+    () => seo ?? { title: "", description: "" },
+  );
+  const handleSeoChange = useCallback(
+    (next: { title: string; description: string }) => {
+      setSeoState(next);
+    },
+    [],
+  );
+
   // ── Product picker ──
   type ProductItem = { id: string; title: string; status: string; price: number; currency: string; media: Array<{ url: string }> };
   const [productPickerOpen, setProductPickerOpen] = useState(false);
@@ -180,7 +228,7 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
   useEffect(() => {
     if (!readyRef.current) return;
     setDirty(true);
-  }, [title, description, imageUrl, status, addedProducts.length]);
+  }, [title, description, imageUrl, status, addedProducts.length, seoState]);
   useEffect(() => {
     const t = setTimeout(() => { readyRef.current = true; }, 300);
     return () => clearTimeout(t);
@@ -194,9 +242,13 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
     setSaveError(null);
     startTransition(async () => {
       const productIds = addedProducts.map((p) => p.id);
+      const seoPayload = {
+        title: seoState.title,
+        description: seoState.description,
+      };
       const result = isEdit
-        ? await updateCollection(collection!.id, { title, description, imageUrl: imageUrl || null, status, productIds })
-        : await createCollection({ title, description, imageUrl: imageUrl || null, status, productIds });
+        ? await updateCollection(collection!.id, { title, description, imageUrl: imageUrl || null, status, productIds, seo: seoPayload })
+        : await createCollection({ title, description, imageUrl: imageUrl || null, status, productIds, seo: seoPayload });
 
       setIsSaving(false);
       if (result.ok) {
@@ -213,7 +265,7 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
         setTimeout(() => setSaveError(null), 5000);
       }
     });
-  }, [title, description, imageUrl, status, addedProducts, isEdit, collection, router]);
+  }, [title, description, imageUrl, status, addedProducts, seoState, isEdit, collection, router]);
 
   const handleDiscard = useCallback(() => {
     setIsDiscarding(true);
@@ -227,9 +279,10 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
         price: 0, currency: "SEK", media: i.product.media,
       })),
     );
+    setSeoState(seo ?? { title: "", description: "" });
     setSaveError(null);
     setTimeout(() => { setDirty(false); setIsDiscarding(false); }, 100);
-  }, [collection]);
+  }, [collection, seo]);
 
   return (
     <div className="admin-page admin-page--no-preview products-page">
@@ -345,6 +398,29 @@ export default function CollectionForm({ collection }: { collection?: ExistingCo
                 )}
               </div>
             </div>
+
+            {/* ── Sökmotorlistning ── */}
+            <SearchListingEditor
+              resourceType="product_collection"
+              entityId={isEdit && collection ? collection.id : null}
+              value={{
+                title: seoState.title || title,
+                description:
+                  seoState.description || strippedDescription,
+                slug:
+                  isEdit && collection
+                    ? collection.slug
+                    : NEW_COLLECTION_PLACEHOLDER_SLUG,
+              }}
+              override={{
+                title: seoState.title,
+                description: seoState.description,
+              }}
+              parentTitle={title}
+              parentDescription={strippedDescription}
+              onChange={handleSeoChange}
+              initialPreview={initialPreview}
+            />
           </div>
 
           {/* Right column (30%) */}

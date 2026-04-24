@@ -797,12 +797,25 @@ export async function createCollection(
   const data = parsed.data;
   const slug = await resolveUniqueCollectionSlug(tenantId, titleToSlug(data.title));
 
+  // SEO at the save boundary — strip empties so cleared-override
+  // fields aren't persisted, then drop `undefined` entries for
+  // Prisma's InputJsonValue. Same pattern as createProduct.
+  const strippedCreateSeo =
+    data.seo !== undefined ? stripEmptySeoKeys(data.seo) : null;
+  const seoJson: Prisma.InputJsonValue | null =
+    strippedCreateSeo !== null && Object.keys(strippedCreateSeo).length > 0
+      ? (JSON.parse(
+          JSON.stringify(strippedCreateSeo),
+        ) as Prisma.InputJsonValue)
+      : null;
+
   try {
     const collection = await prisma.$transaction(async (tx) => {
       const col = await tx.productCollection.create({
         data: {
           tenantId, title: data.title, description: data.description,
           slug, imageUrl: data.imageUrl ?? null, status: data.status,
+          ...(seoJson !== null && { seo: seoJson }),
         },
       });
       if (data.productIds.length > 0) {
@@ -821,6 +834,16 @@ export async function createCollection(
       }
       return col;
     });
+
+    if (strippedCreateSeo !== null && Object.keys(strippedCreateSeo).length > 0) {
+      log("info", "seo.entity.seo_created", {
+        tenantId,
+        resourceType: "product_collection",
+        entityId: collection.id,
+        fieldsChanged: Object.keys(strippedCreateSeo).join(","),
+      });
+    }
+
     revalidatePath("/(guest)", "layout");
     return { ok: true, data: { id: collection.id, slug: collection.slug } };
   } catch (error) {
@@ -849,7 +872,7 @@ export async function updateCollection(
 
   const existing = await prisma.productCollection.findFirst({
     where: { id: collectionId, tenantId },
-    select: { id: true, slug: true, title: true, version: true },
+    select: { id: true, slug: true, title: true, version: true, seo: true },
   });
   if (!existing) return { ok: false, error: "Kategorin hittades inte" };
 
@@ -865,6 +888,19 @@ export async function updateCollection(
     slug = await resolveUniqueCollectionSlug(tenantId, titleToSlug(data.title), collectionId);
   }
 
+  // SEO: strip + shallow-merge at the boundary. Same pattern as
+  // updateProduct — empty/whitespace overrides drop out (no "" in
+  // the stored JSON), untouched fields like noindex / ogImageId
+  // carry through untouched.
+  let mergedSeoJson: Prisma.InputJsonValue | undefined;
+  let strippedUpdateSeo: ReturnType<typeof stripEmptySeoKeys> | undefined;
+  if (data.seo !== undefined) {
+    strippedUpdateSeo = stripEmptySeoKeys(data.seo);
+    const existingSeo = safeParseSeoMetadata(existing.seo) ?? {};
+    const merged = { ...existingSeo, ...strippedUpdateSeo };
+    mergedSeoJson = JSON.parse(JSON.stringify(merged)) as Prisma.InputJsonValue;
+  }
+
   try {
     const collection = await prisma.$transaction(async (tx) => {
       const col = await tx.productCollection.update({
@@ -874,6 +910,7 @@ export async function updateCollection(
           ...(data.description !== undefined && { description: data.description }),
           ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl }),
           ...(data.status !== undefined && { status: data.status }),
+          ...(mergedSeoJson !== undefined && { seo: mergedSeoJson }),
           version: { increment: 1 },
         },
       });
@@ -896,6 +933,16 @@ export async function updateCollection(
       }
       return col;
     });
+
+    if (strippedUpdateSeo !== undefined) {
+      log("info", "seo.entity.seo_updated", {
+        tenantId,
+        resourceType: "product_collection",
+        entityId: collectionId,
+        fieldsChanged: Object.keys(strippedUpdateSeo).join(","),
+      });
+    }
+
     revalidatePath("/(guest)", "layout");
     return { ok: true, data: { id: collection.id, slug: collection.slug, version: collection.version } };
   } catch (error) {

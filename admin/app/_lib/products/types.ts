@@ -271,6 +271,13 @@ export const CreateCollectionSchema = z.object({
   imageUrl: z.string().url().nullable().optional(),
   status: ProductStatusSchema.default("DRAFT"),
   productIds: z.array(z.string()).default([]),
+  /**
+   * Per-entity SEO overrides. Client sends whatever subset the UI
+   * edits today (title + description in M6.6); the server action
+   * persists the parsed object verbatim into
+   * `ProductCollection.seo` JSONB. No merge needed on create.
+   */
+  seo: SeoMetadataSchema.partial().optional(),
 });
 
 export type CreateCollectionInput = z.infer<typeof CreateCollectionSchema>;
@@ -283,6 +290,12 @@ export const UpdateCollectionSchema = z.object({
   imageUrl: z.string().url().nullable().optional(),
   status: ProductStatusSchema.optional(),
   productIds: z.array(z.string()).optional(),
+  /**
+   * Per-entity SEO overrides. Server action shallow-merges over
+   * the stored `ProductCollection.seo` JSONB so fields the UI
+   * doesn't edit yet (OG image, noindex, etc.) survive.
+   */
+  seo: SeoMetadataSchema.partial().optional(),
 });
 
 export type UpdateCollectionInput = z.infer<typeof UpdateCollectionSchema>;

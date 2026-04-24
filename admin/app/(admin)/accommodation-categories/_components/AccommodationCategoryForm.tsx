@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useTransition, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { EditorIcon } from "@/app/_components/EditorIcon";
@@ -9,6 +9,9 @@ import { MediaLibraryModal } from "@/app/(admin)/_components/MediaLibrary";
 import type { MediaLibraryResult } from "@/app/(admin)/_components/MediaLibrary";
 import { PublishBarUI } from "@/app/(admin)/_components/PublishBar/PublishBar";
 import { createAccommodationCategory, updateAccommodationCategory, updateAccommodationCategoryAddons, searchAccommodations, searchProductCollections } from "../actions";
+import { SearchListingEditor } from "@/app/(admin)/_components/SearchListingEditor";
+import type { SeoPreviewResult } from "@/app/_lib/seo/preview";
+import { stripHtml } from "@/app/_lib/seo/text";
 import {
   DndContext,
   PointerSensor,
@@ -67,12 +70,30 @@ function displayName(a: AccommodationItem): string {
 
 type AddonCollectionItem = { id: string; title: string; imageUrl?: string | null; status?: string; productCount: number };
 
+// ── /new-flow placeholder slug ───────────────────────────────
+// Mirrors NEW_ENTITY_PLACEHOLDER_SLUG.accommodation_category in the
+// preview engine.
+const NEW_CATEGORY_PLACEHOLDER_SLUG = "ny-boendekategori";
+
 export default function AccommodationCategoryForm({
   category,
   initialAddonCollections,
+  seo,
+  initialPreview,
 }: {
   category?: ExistingCategory;
   initialAddonCollections?: AddonCollectionItem[];
+  /**
+   * Current per-entity SEO overrides (parsed at the page boundary).
+   * Not stored on ExistingCategory — parse-at-boundary pattern from
+   * Batch 2/3.
+   */
+  seo?: { title: string; description: string };
+  /**
+   * SSR-prepared preview snapshot. /new passes `entityId: null`
+   * to the engine for the placeholder URL; /[id] passes real id.
+   */
+  initialPreview?: SeoPreviewResult;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -86,12 +107,30 @@ export default function AccommodationCategoryForm({
   // -- Core fields --
   const [title, setTitle] = useState(category?.title ?? "");
   const [description, setDescription] = useState(category?.description ?? "");
+  // Memoized HTML strip — piped into SearchListingEditor's
+  // composed-value fallback + auto-follow parent description.
+  const strippedDescription = useMemo(
+    () => stripHtml(description),
+    [description],
+  );
   const [imageUrl, setImageUrl] = useState(category?.imageUrl ?? "");
   const [mediaLibOpen, setMediaLibOpen] = useState(false);
   const [status, setStatus] = useState<"ACTIVE" | "INACTIVE">(category?.status === "ACTIVE" ? "ACTIVE" : "INACTIVE");
   const [statusOpen, setStatusOpen] = useState(false);
   const [visibleInSearch, setVisibleInSearch] = useState(category?.visibleInSearch ?? true);
   const statusRef = useRef<HTMLDivElement>(null);
+
+  // ── SEO overrides (title + description in M6.6). Server action
+  // shallow-merges over stored seo on update.
+  const [seoState, setSeoState] = useState<{ title: string; description: string }>(
+    () => seo ?? { title: "", description: "" },
+  );
+  const handleSeoChange = useCallback(
+    (next: { title: string; description: string }) => {
+      setSeoState(next);
+    },
+    [],
+  );
 
   // -- Accommodation picker --
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -258,7 +297,7 @@ export default function AccommodationCategoryForm({
   useEffect(() => {
     if (!readyRef.current) return;
     setDirty(true);
-  }, [title, description, imageUrl, status, addedAccommodations.length]);
+  }, [title, description, imageUrl, status, addedAccommodations.length, seoState]);
   useEffect(() => {
     const t = setTimeout(() => { readyRef.current = true; }, 300);
     return () => clearTimeout(t);
@@ -272,6 +311,10 @@ export default function AccommodationCategoryForm({
     setSaveError(null);
     startTransition(async () => {
       const accommodationIds = addedAccommodations.map((a) => a.id);
+      const seoPayload = {
+        title: seoState.title,
+        description: seoState.description,
+      };
       const result = isEdit
         ? await updateAccommodationCategory(category!.id, {
             title,
@@ -281,6 +324,7 @@ export default function AccommodationCategoryForm({
             visibleInSearch,
             accommodationIds,
             expectedVersion: category?.version,
+            seo: seoPayload,
           })
         : await createAccommodationCategory({
             title,
@@ -289,6 +333,7 @@ export default function AccommodationCategoryForm({
             status,
             visibleInSearch,
             accommodationIds,
+            seo: seoPayload,
           });
 
       setIsSaving(false);
@@ -310,7 +355,7 @@ export default function AccommodationCategoryForm({
         setTimeout(() => setSaveError(null), 5000);
       }
     });
-  }, [title, description, imageUrl, status, visibleInSearch, addedAccommodations, addonCollections, isEdit, category, router]);
+  }, [title, description, imageUrl, status, visibleInSearch, addedAccommodations, addonCollections, seoState, isEdit, category, router]);
 
   const handleDiscard = useCallback(() => {
     setIsDiscarding(true);
@@ -323,9 +368,10 @@ export default function AccommodationCategoryForm({
       (category?.items ?? []).map((i) => i.accommodation),
     );
     setAddonCollections(initialAddonCollections ?? []);
+    setSeoState(seo ?? { title: "", description: "" });
     setSaveError(null);
     setTimeout(() => { setDirty(false); setIsDiscarding(false); }, 100);
-  }, [category, initialAddonCollections]);
+  }, [category, initialAddonCollections, seo]);
 
   return (
     <div className="admin-page admin-page--no-preview products-page">
@@ -496,6 +542,29 @@ export default function AccommodationCategoryForm({
                 )}
               </div>
             </div>
+
+            {/* ── Sökmotorlistning ── */}
+            <SearchListingEditor
+              resourceType="accommodation_category"
+              entityId={isEdit && category ? category.id : null}
+              value={{
+                title: seoState.title || title,
+                description:
+                  seoState.description || strippedDescription,
+                slug:
+                  isEdit && category
+                    ? category.slug
+                    : NEW_CATEGORY_PLACEHOLDER_SLUG,
+              }}
+              override={{
+                title: seoState.title,
+                description: seoState.description,
+              }}
+              parentTitle={title}
+              parentDescription={strippedDescription}
+              onChange={handleSeoChange}
+              initialPreview={initialPreview}
+            />
           </div>
 
           {/* Right column (30%) */}

@@ -5,6 +5,12 @@ import { Prisma } from "@prisma/client";
 import { requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { revalidatePath, revalidateTag } from "next/cache";
+import { log } from "@/app/_lib/logger";
+import {
+  SeoMetadataSchema,
+  safeParseSeoMetadata,
+} from "@/app/_lib/seo/types";
+import { stripEmptySeoKeys } from "@/app/_lib/seo/strip-empty";
 
 type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -29,13 +35,37 @@ async function resolveUniqueSlug(tenantId: string, baseSlug: string, excludeId?:
 }
 
 export async function createAccommodationCategory(
-  input: { title: string; description?: string; status?: "ACTIVE" | "INACTIVE"; imageUrl?: string | null; accommodationIds?: string[]; visibleInSearch?: boolean },
+  input: { title: string; description?: string; status?: "ACTIVE" | "INACTIVE"; imageUrl?: string | null; accommodationIds?: string[]; visibleInSearch?: boolean; seo?: unknown },
 ): Promise<ActionResult<{ id: string; slug: string }>> {
   const auth = await requireAdmin();
   if (!auth.ok) return { ok: false, error: auth.error };
   const tenantData = await getCurrentTenant();
   if (!tenantData) return { ok: false, error: "Inte inloggad" };
   const tenantId = tenantData.tenant.id;
+
+  // SEO at the save boundary — validate + strip empties. Same
+  // pattern as updateAccommodation from Batch 2: inline parse
+  // rather than a named schema, since the category action doesn't
+  // use Zod for anything else today.
+  let seoJson: Prisma.InputJsonValue | null = null;
+  let seoFieldsChanged = "";
+  if (input.seo !== undefined) {
+    const parsed = SeoMetadataSchema.partial().safeParse(input.seo);
+    if (!parsed.success) {
+      log("warn", "seo.entity.seo_invalid", {
+        tenantId,
+        resourceType: "accommodation_category",
+        entityId: "pending",
+        reason: parsed.error.message,
+      });
+      return { ok: false, error: "Ogiltig SEO-data" };
+    }
+    const stripped = stripEmptySeoKeys(parsed.data);
+    if (Object.keys(stripped).length > 0) {
+      seoJson = JSON.parse(JSON.stringify(stripped)) as Prisma.InputJsonValue;
+      seoFieldsChanged = Object.keys(stripped).join(",");
+    }
+  }
 
   const slug = await resolveUniqueSlug(tenantId, titleToSlug(input.title));
 
@@ -50,6 +80,7 @@ export async function createAccommodationCategory(
           imageUrl: input.imageUrl ?? null,
           status: (input.status as "ACTIVE" | "INACTIVE") ?? "ACTIVE",
           visibleInSearch: input.visibleInSearch ?? true,
+          ...(seoJson !== null && { seo: seoJson }),
         },
       });
       if (input.accommodationIds && input.accommodationIds.length > 0) {
@@ -67,6 +98,16 @@ export async function createAccommodationCategory(
       }
       return created;
     });
+
+    if (seoFieldsChanged.length > 0) {
+      log("info", "seo.entity.seo_created", {
+        tenantId,
+        resourceType: "accommodation_category",
+        entityId: cat.id,
+        fieldsChanged: seoFieldsChanged,
+      });
+    }
+
     revalidatePath("/accommodation-categories");
     revalidateTag(`accommodation-types:${tenantId}`, { expire: 0 });
     return { ok: true, data: { id: cat.id, slug: cat.slug } };
@@ -80,7 +121,7 @@ export async function createAccommodationCategory(
 
 export async function updateAccommodationCategory(
   categoryId: string,
-  input: { title?: string; description?: string; status?: "ACTIVE" | "INACTIVE"; imageUrl?: string | null; accommodationIds?: string[]; expectedVersion?: number; visibleInSearch?: boolean },
+  input: { title?: string; description?: string; status?: "ACTIVE" | "INACTIVE"; imageUrl?: string | null; accommodationIds?: string[]; expectedVersion?: number; visibleInSearch?: boolean; seo?: unknown },
 ): Promise<ActionResult<{ id: string; slug: string; version: number }>> {
   const auth = await requireAdmin();
   if (!auth.ok) return { ok: false, error: auth.error };
@@ -90,7 +131,7 @@ export async function updateAccommodationCategory(
 
   const existing = await prisma.accommodationCategory.findFirst({
     where: { id: categoryId, tenantId },
-    select: { id: true, slug: true, title: true, version: true },
+    select: { id: true, slug: true, title: true, version: true, seo: true },
   });
   if (!existing) return { ok: false, error: "Boendetypen hittades inte" };
 
@@ -103,6 +144,29 @@ export async function updateAccommodationCategory(
     slug = await resolveUniqueSlug(tenantId, titleToSlug(input.title), categoryId);
   }
 
+  // SEO: validate + strip + shallow-merge. Same pattern as
+  // updateAccommodation from Batch 2 — inline parse (no named
+  // schema), strip empties, merge over stored.
+  let mergedSeoJson: Prisma.InputJsonValue | undefined;
+  let seoFieldsChanged = "";
+  if (input.seo !== undefined) {
+    const parsed = SeoMetadataSchema.partial().safeParse(input.seo);
+    if (!parsed.success) {
+      log("warn", "seo.entity.seo_invalid", {
+        tenantId,
+        resourceType: "accommodation_category",
+        entityId: categoryId,
+        reason: parsed.error.message,
+      });
+      return { ok: false, error: "Ogiltig SEO-data" };
+    }
+    const stripped = stripEmptySeoKeys(parsed.data);
+    const existingSeo = safeParseSeoMetadata(existing.seo) ?? {};
+    const merged = { ...existingSeo, ...stripped };
+    mergedSeoJson = JSON.parse(JSON.stringify(merged)) as Prisma.InputJsonValue;
+    seoFieldsChanged = Object.keys(stripped).join(",");
+  }
+
   try {
     const cat = await prisma.$transaction(async (tx) => {
       const updated = await tx.accommodationCategory.update({
@@ -113,6 +177,7 @@ export async function updateAccommodationCategory(
           ...(input.imageUrl !== undefined && { imageUrl: input.imageUrl }),
           ...(input.status !== undefined && { status: input.status }),
           ...(input.visibleInSearch !== undefined && { visibleInSearch: input.visibleInSearch }),
+          ...(mergedSeoJson !== undefined && { seo: mergedSeoJson }),
           version: { increment: 1 },
         },
       });
@@ -134,6 +199,16 @@ export async function updateAccommodationCategory(
       }
       return updated;
     });
+
+    if (input.seo !== undefined) {
+      log("info", "seo.entity.seo_updated", {
+        tenantId,
+        resourceType: "accommodation_category",
+        entityId: categoryId,
+        fieldsChanged: seoFieldsChanged,
+      });
+    }
+
     revalidatePath("/accommodation-categories");
     revalidatePath(`/accommodation-categories/${categoryId}`);
     revalidateTag(`accommodation-types:${tenantId}`, { expire: 0 });
