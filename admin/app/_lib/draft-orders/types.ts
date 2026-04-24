@@ -341,3 +341,75 @@ export type FreezePricesResult = {
   totals: DraftTotals;
   frozenAt: Date;
 };
+
+// ── FAS 6.5C: hold services ─────────────────────────────────────
+
+/** Source of a hold lifecycle event — surfaces in event metadata + webhooks. */
+export type HoldReleaseSource =
+  | "admin"
+  | "line_removed"
+  | "draft_cancelled"
+  | "cron";
+
+export const PlaceHoldForDraftLineInputSchema = z.object({
+  tenantId: z.string().min(1),
+  draftLineItemId: z.string().min(1),
+  actorUserId: z.string().optional(),
+  /**
+   * Override the platform default. Clamped to [10 min, 24 h] by the
+   * service per operator Q2.
+   */
+  holdDurationMs: z.number().int().positive().optional(),
+  /** "admin" (default) or "batch" (placeHoldsForDraft) for event metadata. */
+  source: z.enum(["admin", "batch"]).optional(),
+});
+
+export type PlaceHoldForDraftLineInput = z.infer<
+  typeof PlaceHoldForDraftLineInputSchema
+>;
+
+export type PlaceHoldForDraftLineResult = {
+  reservation: DraftReservation;
+  holdExternalId: string;
+  holdExpiresAt: Date;
+};
+
+export const ReleaseHoldForDraftLineInputSchema = z.object({
+  tenantId: z.string().min(1),
+  draftLineItemId: z.string().min(1),
+  actorUserId: z.string().optional(),
+  source: z
+    .enum(["admin", "line_removed", "draft_cancelled", "cron"])
+    .optional(),
+});
+
+export type ReleaseHoldForDraftLineInput = z.infer<
+  typeof ReleaseHoldForDraftLineInputSchema
+>;
+
+export type ReleaseHoldForDraftLineResult = {
+  reservation: DraftReservation;
+  /** False when the adapter call threw but DB state is now RELEASED (cron retries adapter). */
+  adapterReleaseOk: boolean;
+};
+
+export const PlaceHoldsForDraftInputSchema = z.object({
+  tenantId: z.string().min(1),
+  draftOrderId: z.string().min(1),
+  actorUserId: z.string().optional(),
+  holdDurationMs: z.number().int().positive().optional(),
+});
+
+export type PlaceHoldsForDraftInput = z.infer<
+  typeof PlaceHoldsForDraftInputSchema
+>;
+
+export type PlaceHoldsForDraftResult = {
+  placed: Array<{
+    draftLineItemId: string;
+    holdExternalId: string;
+    holdExpiresAt: Date;
+  }>;
+  failed: Array<{ draftLineItemId: string; error: string }>;
+  skipped: Array<{ draftLineItemId: string; reason: string }>;
+};

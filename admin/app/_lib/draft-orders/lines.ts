@@ -570,6 +570,50 @@ export async function updateLineItem(
     });
   }
 
+  // ── FAS 6.5C: hold-aware guard on reservation-relevant ACC patches ──
+  // When an ACC line has an active hold at Mews, editing dates/guests/
+  // ratePlan would desync our DraftReservation from what Mews has. Per
+  // operator Q4: reject. Admin must release hold, edit, then re-place.
+  //
+  // Metadata-only patches (taxable, taxCode, line discount) are allowed
+  // regardless of hold state — they don't affect the PMS reservation.
+  if (line.lineType === "ACCOMMODATION") {
+    const accPatchKeys = Object.keys(params.patch);
+    const touchesReservation = accPatchKeys.some((k) =>
+      ["checkInDate", "checkOutDate", "guestCounts", "ratePlanId"].includes(k),
+    );
+    if (touchesReservation) {
+      const reservation = await prisma.draftReservation.findFirst({
+        where: { draftLineItemId: line.id, tenantId: params.tenantId },
+        select: { holdState: true },
+      });
+      if (reservation) {
+        if (reservation.holdState === "PLACING") {
+          throw new ValidationError(
+            "Cannot modify line — hold placement is in flight",
+            { draftLineItemId: line.id },
+          );
+        }
+        if (reservation.holdState === "PLACED") {
+          throw new ValidationError(
+            "Cannot modify line — hold is active; release it first",
+            {
+              draftLineItemId: line.id,
+              code: "HOLD_ACTIVE_CANNOT_MODIFY",
+            },
+          );
+        }
+        if (reservation.holdState === "CONFIRMED") {
+          throw new ValidationError(
+            "Cannot modify line — hold is confirmed (draft already converted)",
+            { draftLineItemId: line.id },
+          );
+        }
+        // NOT_PLACED / FAILED / RELEASED → fall through; edit allowed.
+      }
+    }
+  }
+
   // Pre-tx: re-price if the patch touches pricing axes.
   const priceChanged = patchTouchesPricing(line.lineType, params.patch);
   let resolved: ResolvedLine | null = null;
@@ -916,6 +960,47 @@ export async function removeLineItem(
     });
   }
 
+  // ── FAS 6.5C: hold-aware pre-tx branch ──
+  // ACCOMMODATION lines may have an active DraftReservation. The hold
+  // state determines the pre-delete action:
+  //   NOT_PLACED / FAILED / RELEASED → safe to delete (no adapter call)
+  //   PLACED                         → release first, THEN delete
+  //   PLACING                        → reject (HOLD_IN_FLIGHT)
+  //   CONFIRMED                      → reject (hold belongs to an Order)
+  if (line.lineType === "ACCOMMODATION") {
+    const reservation = await prisma.draftReservation.findFirst({
+      where: { draftLineItemId: line.id, tenantId: draft.tenantId },
+      select: { holdState: true },
+    });
+    if (reservation) {
+      if (reservation.holdState === "PLACING") {
+        throw new ValidationError(
+          "Cannot remove line — hold placement is in flight",
+          { draftLineItemId: line.id },
+        );
+      }
+      if (reservation.holdState === "CONFIRMED") {
+        throw new ValidationError(
+          "Cannot remove line — hold is confirmed (draft already converted)",
+          { draftLineItemId: line.id },
+        );
+      }
+      if (reservation.holdState === "PLACED") {
+        // Release the hold BEFORE the removal tx. Async call cannot be
+        // inside our $transaction (Mews network latency must not hold
+        // it open). Release service manages its own tx + events.
+        const { releaseHoldForDraftLine } = await import("./holds");
+        await releaseHoldForDraftLine({
+          tenantId: draft.tenantId,
+          draftLineItemId: line.id,
+          source: "line_removed",
+          actorUserId: params.actorUserId,
+        });
+      }
+      // NOT_PLACED / FAILED / RELEASED → no-op; fall through to delete.
+    }
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     const fresh = (await tx.draftOrder.findFirst({
       where: { id: draft.id, tenantId: draft.tenantId },
@@ -927,12 +1012,9 @@ export async function removeLineItem(
     }
     assertDraftMutable(fresh);
 
-    // DraftReservation → DraftLineItem has no FK cascade; delete manually
-    // when present. In 6.5A all reservations are NOT_PLACED, so no
-    // PMS release call needed. 6.5C adds that.
+    // DraftReservation → DraftLineItem has no FK cascade; delete manually.
+    // Hold already released above (if was PLACED); safe to delete the row.
     if (line.lineType === "ACCOMMODATION") {
-      // TODO(FAS 6.5C): guard — if hold is PLACED, releaseHoldForDraftLine
-      //                 BEFORE deleting the DraftReservation row.
       await tx.draftReservation.deleteMany({
         where: { draftLineItemId: line.id, tenantId: draft.tenantId },
       });

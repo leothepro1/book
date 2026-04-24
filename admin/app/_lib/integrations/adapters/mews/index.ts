@@ -198,6 +198,15 @@ export class MewsAdapter implements PmsAdapter {
   }
 
   // ── Internal: find or create Mews customer ─────────────────
+  //
+  // TODO(tech-debt, FAS 6.5C audit): this helper is called BEFORE
+  // holdAvailability / createBooking. If the subsequent reservation
+  // call fails, the Customer row persists as an orphan at Mews with
+  // no cleanup path. Affects both Order checkout (place-hold-for-order)
+  // and Draft hold lifecycle (FAS 6.5C). Rarely impactful (customers
+  // are lightweight) but worth consolidating into a "Mews resource
+  // cleanup" phase: scan for orphan customers with no associated
+  // reservation and remove via customers/delete.
 
   private async findOrCreateCustomer(guestInfo: {
     firstName: string;

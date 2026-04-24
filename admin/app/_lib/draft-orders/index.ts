@@ -42,3 +42,12 @@ export {
   previewApplyDiscountCode,
 } from "./discount";
 export { freezePrices } from "./lifecycle";
+
+// ── Services (FAS 6.5C) ──
+export {
+  placeHoldForDraftLine,
+  releaseHoldForDraftLine,
+  placeHoldsForDraft,
+  DEFAULT_DRAFT_HOLD_DURATION_MS,
+} from "./holds";
+export { HOLD_TRANSITIONS, canHoldTransition } from "./state-machine";

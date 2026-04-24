@@ -27,10 +27,20 @@ const mockTx = {
 const mockPrisma = {
   draftOrder: { findFirst: vi.fn() },
   draftLineItem: { findFirst: vi.fn() },
+  draftReservation: { findFirst: vi.fn() },
   accommodation: { findFirst: vi.fn() },
   productVariant: { findFirst: vi.fn() },
   $transaction: vi.fn(async (cb: (tx: typeof mockTx) => unknown) => cb(mockTx)),
 };
+
+// FAS 6.5C: removeLineItem imports releaseHoldForDraftLine dynamically
+// when a PLACED hold is present. Mock the module at the import boundary.
+vi.mock("./holds", () => ({
+  releaseHoldForDraftLine: vi.fn().mockResolvedValue({
+    reservation: { holdState: "RELEASED" },
+    adapterReleaseOk: true,
+  }),
+}));
 
 vi.mock("@/app/_lib/db/prisma", () => ({ prisma: mockPrisma }));
 vi.mock("@/app/_lib/logger", () => ({ log: vi.fn() }));
@@ -156,6 +166,8 @@ beforeEach(() => {
   // Pre-tx draft read and tx re-read return the same draft by default.
   mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraft());
   mockTx.draftOrder.findFirst.mockResolvedValue(makeDraft());
+  // FAS 6.5C: default — no hold on the reservation (NOT_PLACED path).
+  mockPrisma.draftReservation.findFirst.mockResolvedValue(null);
   // Default: first findFirst call (position lookup) → null; later calls (refresh) → line row.
   let callCount = 0;
   mockTx.draftLineItem.findFirst.mockImplementation(async () => {
@@ -1114,5 +1126,287 @@ describe("removeLineItem — mutability", () => {
         lineItemId: "dli_1",
       }),
     ).rejects.toThrow(/not editable/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// FAS 6.5C — hold integration in lines.ts
+// ═══════════════════════════════════════════════════════════════
+
+async function loadHoldsMock() {
+  const mod = await import("./holds");
+  return mod as unknown as {
+    releaseHoldForDraftLine: ReturnType<typeof vi.fn>;
+  };
+}
+
+describe("removeLineItem — hold-aware (ACC line)", () => {
+  beforeEach(() => {
+    const accLine = makeLineRow({
+      id: "dli_acc",
+      lineType: "ACCOMMODATION",
+      accommodationId: "acc_1",
+      productId: null,
+    });
+    mockPrisma.draftLineItem.findFirst.mockResolvedValue(accLine);
+    mockTx.draftLineItem.delete.mockResolvedValue(accLine);
+    mockTx.draftReservation.deleteMany.mockResolvedValue({ count: 1 });
+  });
+
+  it("PLACED hold: calls releaseHoldForDraftLine BEFORE delete tx, then deletes", async () => {
+    mockPrisma.draftReservation.findFirst.mockResolvedValue({
+      holdState: "PLACED",
+    } as never);
+    const holds = await loadHoldsMock();
+
+    await removeLineItem({
+      tenantId: "tenant_1",
+      draftOrderId: "draft_1",
+      lineItemId: "dli_acc",
+      actorUserId: "user_1",
+    });
+
+    expect(holds.releaseHoldForDraftLine).toHaveBeenCalledWith({
+      tenantId: "tenant_1",
+      draftLineItemId: "dli_acc",
+      source: "line_removed",
+      actorUserId: "user_1",
+    });
+    expect(mockTx.draftLineItem.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it("PLACING hold: rejects with HOLD_IN_FLIGHT (cannot remove)", async () => {
+    mockPrisma.draftReservation.findFirst.mockResolvedValue({
+      holdState: "PLACING",
+    } as never);
+
+    await expect(
+      removeLineItem({
+        tenantId: "tenant_1",
+        draftOrderId: "draft_1",
+        lineItemId: "dli_acc",
+      }),
+    ).rejects.toThrow(/in flight/i);
+
+    expect(mockTx.draftLineItem.delete).not.toHaveBeenCalled();
+  });
+
+  it("CONFIRMED hold: rejects (hold belongs to an Order)", async () => {
+    mockPrisma.draftReservation.findFirst.mockResolvedValue({
+      holdState: "CONFIRMED",
+    } as never);
+
+    await expect(
+      removeLineItem({
+        tenantId: "tenant_1",
+        draftOrderId: "draft_1",
+        lineItemId: "dli_acc",
+      }),
+    ).rejects.toThrow(/confirmed/i);
+  });
+
+  it("NOT_PLACED hold: deletes directly (no release call)", async () => {
+    mockPrisma.draftReservation.findFirst.mockResolvedValue({
+      holdState: "NOT_PLACED",
+    } as never);
+    const holds = await loadHoldsMock();
+
+    await removeLineItem({
+      tenantId: "tenant_1",
+      draftOrderId: "draft_1",
+      lineItemId: "dli_acc",
+    });
+
+    expect(holds.releaseHoldForDraftLine).not.toHaveBeenCalled();
+    expect(mockTx.draftLineItem.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it("FAILED hold: deletes directly (no release call — no PMS state)", async () => {
+    mockPrisma.draftReservation.findFirst.mockResolvedValue({
+      holdState: "FAILED",
+    } as never);
+    const holds = await loadHoldsMock();
+
+    await removeLineItem({
+      tenantId: "tenant_1",
+      draftOrderId: "draft_1",
+      lineItemId: "dli_acc",
+    });
+
+    expect(holds.releaseHoldForDraftLine).not.toHaveBeenCalled();
+    expect(mockTx.draftLineItem.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it("RELEASED hold: deletes directly", async () => {
+    mockPrisma.draftReservation.findFirst.mockResolvedValue({
+      holdState: "RELEASED",
+    } as never);
+    const holds = await loadHoldsMock();
+
+    await removeLineItem({
+      tenantId: "tenant_1",
+      draftOrderId: "draft_1",
+      lineItemId: "dli_acc",
+    });
+
+    expect(holds.releaseHoldForDraftLine).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateLineItem — hold-aware reservation patches (ACC line)", () => {
+  function useAccLine(): void {
+    const accLine = makeLineRow({
+      id: "dli_acc",
+      lineType: "ACCOMMODATION",
+      accommodationId: "acc_1",
+      productId: null,
+      checkInDate: new Date("2026-06-01"),
+      checkOutDate: new Date("2026-06-04"),
+      guestCounts: { adults: 2, children: 0, infants: 0 },
+      ratePlanId: "rp_1",
+    });
+    mockPrisma.draftLineItem.findFirst.mockResolvedValue(accLine);
+    mockTx.draftLineItem.update.mockResolvedValue(accLine);
+    mockTx.draftReservation.updateMany.mockResolvedValue({ count: 0 });
+    mockTx.draftReservation.findFirst.mockResolvedValue(null);
+    mockTx.draftLineItem.findFirst.mockResolvedValue(accLine);
+  }
+
+  it("PLACED + date patch: rejects HOLD_ACTIVE_CANNOT_MODIFY (no PMS call)", async () => {
+    useAccLine();
+    mockPrisma.draftReservation.findFirst.mockResolvedValue({
+      holdState: "PLACED",
+    } as never);
+    mockCompAcc.mockResolvedValue({
+      unitPriceCents: BigInt(100_000),
+      nights: 3,
+      subtotalCents: BigInt(300_000),
+      currency: "SEK",
+      ratePlan: { id: "rp_1", name: "Flex", cancellationPolicy: null },
+      accommodationExternalId: "ext",
+      sourceRule: "LIVE_PMS",
+      appliedCatalogId: null,
+    });
+
+    await expect(
+      updateLineItem({
+        tenantId: "tenant_1",
+        draftOrderId: "draft_1",
+        lineItemId: "dli_acc",
+        patch: {
+          lineType: "ACCOMMODATION",
+          checkOutDate: "2026-06-05",
+        },
+      }),
+    ).rejects.toThrow(/active.*release/i);
+
+    expect(mockCompAcc).not.toHaveBeenCalled();
+    expect(mockTx.draftLineItem.update).not.toHaveBeenCalled();
+  });
+
+  it("PLACING + guestCounts patch: rejects HOLD_IN_FLIGHT", async () => {
+    useAccLine();
+    mockPrisma.draftReservation.findFirst.mockResolvedValue({
+      holdState: "PLACING",
+    } as never);
+
+    await expect(
+      updateLineItem({
+        tenantId: "tenant_1",
+        draftOrderId: "draft_1",
+        lineItemId: "dli_acc",
+        patch: {
+          lineType: "ACCOMMODATION",
+          guestCounts: { adults: 3, children: 0, infants: 0 },
+        },
+      }),
+    ).rejects.toThrow(/in flight/i);
+  });
+
+  it("PLACED + metadata-only patch (taxable): ALLOWED (not reservation-relevant)", async () => {
+    useAccLine();
+    mockPrisma.draftReservation.findFirst.mockResolvedValue({
+      holdState: "PLACED",
+    } as never);
+
+    await expect(
+      updateLineItem({
+        tenantId: "tenant_1",
+        draftOrderId: "draft_1",
+        lineItemId: "dli_acc",
+        patch: { lineType: "ACCOMMODATION", taxable: false },
+      }),
+    ).resolves.toBeDefined();
+
+    expect(mockTx.draftLineItem.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("PLACED + line-discount patch: ALLOWED", async () => {
+    useAccLine();
+    mockPrisma.draftReservation.findFirst.mockResolvedValue({
+      holdState: "PLACED",
+    } as never);
+
+    await expect(
+      updateLineItem({
+        tenantId: "tenant_1",
+        draftOrderId: "draft_1",
+        lineItemId: "dli_acc",
+        patch: {
+          lineType: "ACCOMMODATION",
+          lineDiscountCents: BigInt(500),
+        },
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("NOT_PLACED + date patch: proceeds normally (re-prices)", async () => {
+    useAccLine();
+    mockPrisma.draftReservation.findFirst.mockResolvedValue({
+      holdState: "NOT_PLACED",
+    } as never);
+    mockCompAcc.mockResolvedValue({
+      unitPriceCents: BigInt(100_000),
+      nights: 4,
+      subtotalCents: BigInt(400_000),
+      currency: "SEK",
+      ratePlan: { id: "rp_1", name: "Flex", cancellationPolicy: null },
+      accommodationExternalId: "ext",
+      sourceRule: "LIVE_PMS",
+      appliedCatalogId: null,
+    });
+    mockPrisma.accommodation.findFirst.mockResolvedValue({ name: "Deluxe" });
+
+    await updateLineItem({
+      tenantId: "tenant_1",
+      draftOrderId: "draft_1",
+      lineItemId: "dli_acc",
+      patch: {
+        lineType: "ACCOMMODATION",
+        checkOutDate: "2026-06-05",
+      },
+    });
+
+    expect(mockCompAcc).toHaveBeenCalledTimes(1);
+    expect(mockTx.draftLineItem.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("CONFIRMED + reservation-relevant patch: rejects", async () => {
+    useAccLine();
+    mockPrisma.draftReservation.findFirst.mockResolvedValue({
+      holdState: "CONFIRMED",
+    } as never);
+
+    await expect(
+      updateLineItem({
+        tenantId: "tenant_1",
+        draftOrderId: "draft_1",
+        lineItemId: "dli_acc",
+        patch: {
+          lineType: "ACCOMMODATION",
+          ratePlanId: "rp_other",
+        },
+      }),
+    ).rejects.toThrow(/confirmed/i);
   });
 });

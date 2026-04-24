@@ -5091,6 +5091,12 @@ model DraftReservation {
   holdLastAttemptAt DateTime?
   holdLastError     String?
 
+  /// FAS 6.5C: per-attempt idempotency key for the PMS holdAvailability
+  /// call. Stored so stuck-PLACING recovery (cron sweep B) can probe
+  /// `PmsIdempotencyKey` by this value to determine whether the adapter
+  /// actually succeeded. Regenerated on every placement attempt.
+  holdIdempotencyKey String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -5098,6 +5104,9 @@ model DraftReservation {
   @@index([accommodationId, checkInDate, checkOutDate])
   @@index([holdExpiresAt])
   @@index([tenantId])
+  /// Supports sweep A (expired PLACED) and sweep B (stuck PLACING) in
+  /// the release-expired-draft-holds cron (FAS 6.5C).
+  @@index([holdState, holdLastAttemptAt])
 }
 
 /// Append-only audit log for a draft. Mirrors OrderEvent / CompanyEvent
