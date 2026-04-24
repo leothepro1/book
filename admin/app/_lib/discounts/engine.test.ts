@@ -49,6 +49,7 @@ function makeDiscount(overrides: Partial<DiscountWithRelations> = {}): DiscountW
     targetType: "ORDER",
     appliesToAllProducts: true,
     appliesToAllCustomers: true,
+    appliesToCompanies: false,
     minimumAmount: null,
     minimumQuantity: null,
     status: "ACTIVE",
@@ -93,6 +94,7 @@ const baseInput = {
   productIds: ["prod_a"],
   itemCount: 2,
   guestEmail: "guest@test.com",
+  buyerKind: "GUEST" as const,
 };
 
 // ── Reset mocks ─────────────────────────────────────────────
@@ -329,5 +331,66 @@ describe("evaluateDiscountCode — minimum requirements", () => {
     mockFindDiscountCode.mockResolvedValue(makeCodeRecord(discount));
     const result = await evaluateDiscountCode(baseInput);
     expect(result.valid).toBe(true);
+  });
+});
+
+// ── evaluateDiscountCode — appliesToCompanies (B2B opt-in) ──
+
+describe("evaluateDiscountCode — appliesToCompanies (B2B opt-in)", () => {
+  it("GUEST buyer + appliesToCompanies=false → eligible (no gate for guests)", async () => {
+    const discount = makeDiscount({ appliesToCompanies: false });
+    mockFindDiscountCode.mockResolvedValue(makeCodeRecord(discount));
+    const result = await evaluateDiscountCode({ ...baseInput, buyerKind: "GUEST" });
+    expect(result.valid).toBe(true);
+  });
+
+  it("GUEST buyer + appliesToCompanies=true → eligible", async () => {
+    const discount = makeDiscount({ appliesToCompanies: true });
+    mockFindDiscountCode.mockResolvedValue(makeCodeRecord(discount));
+    const result = await evaluateDiscountCode({ ...baseInput, buyerKind: "GUEST" });
+    expect(result.valid).toBe(true);
+  });
+
+  it("COMPANY buyer + appliesToCompanies=false → NOT_ELIGIBLE_FOR_COMPANIES", async () => {
+    const discount = makeDiscount({ appliesToCompanies: false });
+    mockFindDiscountCode.mockResolvedValue(makeCodeRecord(discount));
+    const result = await evaluateDiscountCode({ ...baseInput, buyerKind: "COMPANY" });
+    expect(result).toEqual({ valid: false, error: "NOT_ELIGIBLE_FOR_COMPANIES" });
+  });
+
+  it("COMPANY buyer + appliesToCompanies=true → eligible", async () => {
+    const discount = makeDiscount({ appliesToCompanies: true });
+    mockFindDiscountCode.mockResolvedValue(makeCodeRecord(discount));
+    const result = await evaluateDiscountCode({ ...baseInput, buyerKind: "COMPANY" });
+    expect(result.valid).toBe(true);
+  });
+});
+
+// ── applyDiscountCodeInput schema — defaults ─────────────────
+
+describe("applyDiscountCodeInput schema — defaults", () => {
+  it("defaults buyerKind to GUEST when the HTTP input omits the field", async () => {
+    const { applyDiscountCodeInput } = await import("./types");
+    const parsed = applyDiscountCodeInput.parse({
+      tenantId: "tenant_1",
+      code: "SUMMER",
+      orderAmount: 100000,
+      // No buyerKind — zod default applies.
+    });
+    expect(parsed.buyerKind).toBe("GUEST");
+    expect(parsed.companyLocationId).toBeUndefined();
+  });
+
+  it("preserves explicit buyerKind: COMPANY + companyLocationId when provided", async () => {
+    const { applyDiscountCodeInput } = await import("./types");
+    const parsed = applyDiscountCodeInput.parse({
+      tenantId: "tenant_1",
+      code: "B2B10",
+      orderAmount: 100000,
+      buyerKind: "COMPANY",
+      companyLocationId: "loc_1",
+    });
+    expect(parsed.buyerKind).toBe("COMPANY");
+    expect(parsed.companyLocationId).toBe("loc_1");
   });
 });

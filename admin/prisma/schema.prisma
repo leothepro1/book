@@ -2787,6 +2787,12 @@ model Discount {
   appliesToAllProducts  Boolean @default(true)
   appliesToAllCustomers Boolean @default(true)
 
+  /// B2B opt-in flag. When false (default), COMPANY buyers are ineligible
+  /// for this discount regardless of other scoping. When true, companies
+  /// are eligible subject to the same rules as guests.
+  /// See Pass 3 Risk #5 and FAS 6.3 engine.ts header for semantics.
+  appliesToCompanies Boolean @default(false)
+
   // Minimum purchase requirement — typed fields, not EAV condition rows
   minimumAmount   Int? // in ören — null = no minimum
   minimumQuantity Int? // item count — null = no minimum

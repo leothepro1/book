@@ -164,6 +164,7 @@ export async function POST(req: Request) {
       guestEmail: body.guestInfo?.email,
       checkInDate,
       checkOutDate,
+      buyerKind: "GUEST",
     });
 
     if (!codeResult.valid) {
@@ -188,6 +189,7 @@ export async function POST(req: Request) {
       checkInDate,
       checkOutDate,
       nights,
+      buyerKind: "GUEST",
     });
 
     if (autoResult.valid) {

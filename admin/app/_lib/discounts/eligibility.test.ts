@@ -27,6 +27,7 @@ const baseCtx: ConditionContext = {
   checkOutDate: new Date("2026-06-04"),
   nights: 3,
   now: new Date("2026-04-01"),
+  buyerKind: "GUEST",
 };
 
 function ctx(overrides: Partial<ConditionContext> = {}): ConditionContext {

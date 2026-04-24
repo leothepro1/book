@@ -45,12 +45,13 @@ export type DiscountEvaluationError =
   | "CODE_INACTIVE"
   | "CONDITION_NOT_MET"
   | "ONCE_PER_CUSTOMER_VIOLATED"
-  | "TENANT_DISCOUNTS_DISABLED";
+  | "TENANT_DISCOUNTS_DISABLED"
+  | "NOT_ELIGIBLE_FOR_COMPANIES";
 
 export type DiscountEvaluationResult =
   | {
       valid: true;
-      discount: Discount;
+      discount: DiscountWithRelations;
       discountAmount: number;
       title: string;
       description: string | null;
@@ -271,6 +272,9 @@ export const applyDiscountCodeInput = z.object({
   guestEmail: z.string().email().optional(),
   checkInDate: z.coerce.date().optional(),
   checkOutDate: z.coerce.date().optional(),
+  /** Buyer classification. Defaults to GUEST so existing HTTP callers need no change. */
+  buyerKind: z.enum(["GUEST", "COMPANY"]).optional().default("GUEST"),
+  companyLocationId: z.string().optional(),
 });
 
 export type ApplyDiscountCodeInput = z.infer<typeof applyDiscountCodeInput>;

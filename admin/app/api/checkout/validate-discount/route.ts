@@ -65,6 +65,7 @@ export async function POST(req: Request) {
     guestEmail: body.guestEmail,
     checkInDate: body.checkInDate ? new Date(body.checkInDate) : undefined,
     checkOutDate: body.checkOutDate ? new Date(body.checkOutDate) : undefined,
+    buyerKind: "GUEST",
   });
 
   if (result.valid) {

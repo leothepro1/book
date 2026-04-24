@@ -5,6 +5,22 @@
  * The single entry point for discount evaluation. All discount resolution
  * flows through this file. Never call Prisma discount queries outside
  * this file (except apply.ts which writes within a transaction).
+ *
+ * ── SCOPE for FAS 6.3 ────────────────────────────────────────────
+ *   - Product scoping via `appliesToAllProducts` + targetedProducts/Collections
+ *   - Customer scoping via `appliesToAllCustomers` + targetedSegments/Customers
+ *   - B2B opt-in via `appliesToCompanies` — gates COMPANY buyers
+ *
+ * ── NOT IN SCOPE (future work) ───────────────────────────────────
+ *   - CompanyContact-level targeting (DiscountCompany table)
+ *   - CompanyLocation-level targeting (DiscountCompanyLocation table)
+ *
+ * INVARIANT: CompanyContact/CompanyLocation targeting is future work;
+ * 6.3 supports appliesToAllCustomers + appliesToCompanies only. Company
+ * buyers have no GuestAccount, so any discount with
+ * `appliesToAllCustomers=false` silently fails the customer-scope check
+ * for them — by design. To reach a COMPANY buyer in 6.3 a discount must
+ * have BOTH `appliesToAllCustomers=true` AND `appliesToCompanies=true`.
  */
 
 import { prisma } from "@/app/_lib/db/prisma";
@@ -149,6 +165,12 @@ export async function evaluateAutomaticDiscount(
       continue;
     }
 
+    // B2B opt-in gate — COMPANY buyers skip discounts that haven't opted in.
+    // Independent of customer scoping; see engine.ts header.
+    if (ctx.buyerKind === "COMPANY" && !discount.appliesToCompanies) {
+      continue;
+    }
+
     // Product scope check
     if (!discount.appliesToAllProducts) {
       const targetedProductIds = discount.targetedProducts.map((tp) => tp.productId);
@@ -275,6 +297,12 @@ export async function evaluateDiscountCode(
   const validityError = checkDiscountValidity(discount, now);
   if (validityError) return validityError;
 
+  // B2B opt-in gate — companies ineligible unless the discount opts in.
+  // Independent of customer scoping; see engine.ts header.
+  if (input.buyerKind === "COMPANY" && !discount.appliesToCompanies) {
+    return { valid: false, error: "NOT_ELIGIBLE_FOR_COMPANIES" };
+  }
+
   // Code-level usage limit
   if (
     codeRecord.usageLimit !== null &&
@@ -368,6 +396,8 @@ export async function evaluateDiscountCode(
       checkInDate: input.checkInDate,
       checkOutDate: input.checkOutDate,
       nights,
+      buyerKind: input.buyerKind,
+      companyLocationId: input.companyLocationId,
     },
     now,
   );

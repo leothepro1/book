@@ -10,6 +10,15 @@ import type { DiscountCondition } from "@prisma/client";
 
 // ── Types ──────────────────────────────────────────────────────
 
+/**
+ * Buyer classification for discount eligibility.
+ *
+ * - `GUEST` covers both D2C guests and anonymous walk-ins (DraftBuyerKind.WALK_IN
+ *   maps to GUEST at this layer — they share the same eligibility rules).
+ * - `COMPANY` buyers trigger the `appliesToCompanies` gate on Discount.
+ */
+export type BuyerKind = "GUEST" | "COMPANY";
+
 export type ConditionContext = {
   orderAmount: number;       // ören
   productIds: string[];
@@ -21,6 +30,16 @@ export type ConditionContext = {
   checkOutDate: Date | undefined;
   nights: number;            // derived: Math.ceil((checkOut - checkIn) / ms_per_day), 0 if not set
   now: Date;                 // injected for testability
+
+  /**
+   * Kind of buyer placing this order.
+   * - GUEST covers D2C guests and anonymous walk-ins.
+   * - Only COMPANY buyers trigger the `appliesToCompanies` gate on Discount.
+   */
+  buyerKind: BuyerKind;
+
+  /** Present only when buyerKind === "COMPANY". Reserved for future location-scoped targeting. */
+  companyLocationId?: string;
 };
 
 // ── Constants ──────────────────────────────────────────────────

@@ -605,6 +605,7 @@ async function handleSessionPaymentIntent(
       itemCount: 1,
       checkInDate: session.checkIn!,
       checkOutDate: session.checkOut!,
+      buyerKind: "GUEST",
     });
 
     if (!evalResult.valid) {
@@ -894,6 +895,7 @@ async function handleCartSessionPaymentIntent(
       orderAmount: totalPrice,
       productIds,
       itemCount,
+      buyerKind: "GUEST",
     });
 
     if (!evalResult.valid) {

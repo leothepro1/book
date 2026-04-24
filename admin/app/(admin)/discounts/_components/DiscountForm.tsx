@@ -342,6 +342,8 @@ export default function DiscountForm({
       // Targeting
       appliesToAllProducts: isAllProducts,
       appliesToAllCustomers: isAllCustomers,
+      // TODO(FAS 6.3.1 UI): expose appliesToCompanies toggle here — see Pass 3 Risk #5.
+      // Until then, B2B opt-in must be set via the API directly; form defaults to false.
       targetedProductIds: !isAllProducts && appliesTo === "specific_products"
         ? pickedItems.map((i) => i.id) : [],
       targetedCollectionIds: !isAllProducts && appliesTo === "specific_collections"
