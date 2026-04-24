@@ -131,6 +131,17 @@ function captureTransaction(op: "create" | "update"): () => Record<string, unkno
         },
         priceChange: { create: vi.fn() },
         inventoryChange: { create: vi.fn() },
+        // M11.2: redirect write path enters the tx when title
+        // (→ slug) changes. No-op mocks — redirect assertions
+        // live in actions.redirects.test.ts.
+        tenantLocale: {
+          findFirst: vi.fn().mockResolvedValue({ locale: "sv" }),
+        },
+        seoRedirect: {
+          updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+          deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+          upsert: vi.fn().mockResolvedValue({}),
+        },
       });
       return fakeProduct;
     },

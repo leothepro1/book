@@ -112,6 +112,18 @@ function captureTransaction(op: "create" | "update"): () => Record<string, unkno
         accommodation: {
           findMany: vi.fn().mockResolvedValue([]),
         },
+        // M11.2: redirect write path enters the tx when title
+        // (→ slug) changes. No-op mocks — this file is not the
+        // right venue for redirect assertions (see
+        // actions.redirects.test.ts for those).
+        tenantLocale: {
+          findFirst: vi.fn().mockResolvedValue({ locale: "sv" }),
+        },
+        seoRedirect: {
+          updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+          deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+          upsert: vi.fn().mockResolvedValue({}),
+        },
       });
       return fakeCategory;
     },

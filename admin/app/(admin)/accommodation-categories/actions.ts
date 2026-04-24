@@ -11,6 +11,12 @@ import {
   safeParseSeoMetadata,
 } from "@/app/_lib/seo/types";
 import { stripEmptySeoKeys } from "@/app/_lib/seo/strip-empty";
+import {
+  buildRedirectPath,
+  cleanupRedirectsForDeletedEntity,
+  collapseAndCreate,
+  getTenantDefaultLocale,
+} from "@/app/_lib/seo/redirects";
 
 type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -181,6 +187,31 @@ export async function updateAccommodationCategory(
           version: { increment: 1 },
         },
       });
+
+      // SEO redirect when slug changed — same pattern as
+      // updateProduct / updateCollection.
+      if (input.title && input.title !== existing.title && slug !== existing.slug) {
+        const oldPath = buildRedirectPath("accommodation_category", existing.slug);
+        const newPath = buildRedirectPath("accommodation_category", slug);
+        if (oldPath && newPath && oldPath !== newPath) {
+          const locale = await getTenantDefaultLocale(tenantId, tx);
+          await collapseAndCreate(tx, {
+            tenantId,
+            oldPath,
+            newPath,
+            locale,
+          });
+          log("info", "seo.redirect.created", {
+            tenantId,
+            resourceType: "accommodation_category",
+            entityId: existing.id,
+            oldPath,
+            newPath,
+            locale,
+          });
+        }
+      }
+
       if (input.accommodationIds !== undefined) {
         await tx.accommodationCategoryItem.deleteMany({ where: { categoryId } });
         if (input.accommodationIds.length > 0) {
@@ -226,16 +257,42 @@ export async function deleteAccommodationCategory(categoryId: string): Promise<A
   if (!auth.ok) return { ok: false, error: auth.error };
   const tenantData = await getCurrentTenant();
   if (!tenantData) return { ok: false, error: "Inte inloggad" };
+  const tenantId = tenantData.tenant.id;
 
   const existing = await prisma.accommodationCategory.findFirst({
-    where: { id: categoryId, tenantId: tenantData.tenant.id },
-    select: { id: true },
+    where: { id: categoryId, tenantId },
+    select: { id: true, slug: true },
   });
   if (!existing) return { ok: false, error: "Boendetypen hittades inte" };
 
-  await prisma.accommodationCategory.delete({ where: { id: categoryId } });
+  const entityPath = buildRedirectPath("accommodation_category", existing.slug);
+
+  const redirectsDeleted = await prisma.$transaction(async (tx) => {
+    let count = 0;
+    if (entityPath) {
+      const locale = await getTenantDefaultLocale(tenantId, tx);
+      count = await cleanupRedirectsForDeletedEntity(tx, {
+        tenantId,
+        entityPath,
+        locale,
+      });
+    }
+    await tx.accommodationCategory.delete({ where: { id: categoryId } });
+    return count;
+  });
+
+  if (redirectsDeleted > 0 && entityPath) {
+    log("info", "seo.redirect.cleaned_up_on_delete", {
+      tenantId,
+      resourceType: "accommodation_category",
+      entityId: categoryId,
+      path: entityPath,
+      redirectsDeleted,
+    });
+  }
+
   revalidatePath("/accommodation-categories");
-  revalidateTag(`accommodation-types:${tenantData.tenant.id}`, { expire: 0 });
+  revalidateTag(`accommodation-types:${tenantId}`, { expire: 0 });
   return { ok: true, data: undefined };
 }
 

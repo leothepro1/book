@@ -43,6 +43,12 @@ import { resolveProduct } from "./resolve";
 import { log } from "@/app/_lib/logger";
 import { safeParseSeoMetadata } from "@/app/_lib/seo/types";
 import { stripEmptySeoKeys } from "@/app/_lib/seo/strip-empty";
+import {
+  buildRedirectPath,
+  cleanupRedirectsForDeletedEntity,
+  collapseAndCreate,
+  getTenantDefaultLocale,
+} from "@/app/_lib/seo/redirects";
 
 // ── Result types ─────────────────────────────────────────────
 
@@ -399,6 +405,33 @@ export async function updateProduct(
         },
       });
 
+      // 1b. SEO redirect when slug changed (atomic with the
+      // product update — a partial apply would leave the catalog
+      // pointing at the old slug with no redirect to the new one).
+      // `titleToSlug` can collapse two different titles onto the
+      // same slug, so we also guard on `slug !== existing.slug`.
+      if (data.title && data.title !== existing.title && slug !== existing.slug) {
+        const oldPath = buildRedirectPath("product", existing.slug);
+        const newPath = buildRedirectPath("product", slug);
+        if (oldPath && newPath && oldPath !== newPath) {
+          const locale = await getTenantDefaultLocale(tenantId, tx);
+          await collapseAndCreate(tx, {
+            tenantId,
+            oldPath,
+            newPath,
+            locale,
+          });
+          log("info", "seo.redirect.created", {
+            tenantId,
+            resourceType: "product",
+            entityId: existing.id,
+            oldPath,
+            newPath,
+            locale,
+          });
+        }
+      }
+
       // Price history — log if price changed
       if (data.price !== undefined && data.price !== existing.price) {
         await tx.priceChange.create({
@@ -618,10 +651,11 @@ export async function deleteProduct(productId: string): Promise<ActionResult> {
 
   const tenantData = await getCurrentTenant();
   if (!tenantData) return { ok: false, error: "Inte inloggad" };
+  const tenantId = tenantData.tenant.id;
 
   const existing = await prisma.product.findFirst({
-    where: { id: productId, tenantId: tenantData.tenant.id },
-    select: { id: true },
+    where: { id: productId, tenantId },
+    select: { id: true, slug: true },
   });
   if (!existing) return { ok: false, error: "Produkten hittades inte" };
 
@@ -633,9 +667,37 @@ export async function deleteProduct(productId: string): Promise<ActionResult> {
     return { ok: false, error: "Produkten kan inte raderas — den har kopplingar till ordrar. Arkivera istället." };
   }
 
-  await prisma.product.delete({
-    where: { id: productId, tenantId: tenantData.tenant.id },
+  const entityPath = buildRedirectPath("product", existing.slug);
+
+  // Redirect cleanup must share the same transaction as the delete
+  // — if the delete rolls back, the redirects must stay. Leaving
+  // stale redirects that point at a live product would silently
+  // 301 traffic away on the next render.
+  const redirectsDeleted = await prisma.$transaction(async (tx) => {
+    let count = 0;
+    if (entityPath) {
+      const locale = await getTenantDefaultLocale(tenantId, tx);
+      count = await cleanupRedirectsForDeletedEntity(tx, {
+        tenantId,
+        entityPath,
+        locale,
+      });
+    }
+    await tx.product.delete({
+      where: { id: productId, tenantId },
+    });
+    return count;
   });
+
+  if (redirectsDeleted > 0 && entityPath) {
+    log("info", "seo.redirect.cleaned_up_on_delete", {
+      tenantId,
+      resourceType: "product",
+      entityId: productId,
+      path: entityPath,
+      redirectsDeleted,
+    });
+  }
 
   revalidatePath("/(admin)/products", "page");
   revalidatePath("/(guest)", "layout");
@@ -914,6 +976,31 @@ export async function updateCollection(
           version: { increment: 1 },
         },
       });
+
+      // SEO redirect when slug changed — same pattern as
+      // updateProduct above.
+      if (data.title && data.title !== existing.title && slug !== existing.slug) {
+        const oldPath = buildRedirectPath("product_collection", existing.slug);
+        const newPath = buildRedirectPath("product_collection", slug);
+        if (oldPath && newPath && oldPath !== newPath) {
+          const locale = await getTenantDefaultLocale(tenantId, tx);
+          await collapseAndCreate(tx, {
+            tenantId,
+            oldPath,
+            newPath,
+            locale,
+          });
+          log("info", "seo.redirect.created", {
+            tenantId,
+            resourceType: "product_collection",
+            entityId: existing.id,
+            oldPath,
+            newPath,
+            locale,
+          });
+        }
+      }
+
       if (data.productIds !== undefined) {
         await tx.productCollectionItem.deleteMany({ where: { collectionId } });
         if (data.productIds.length > 0) {
@@ -959,16 +1046,42 @@ export async function deleteCollection(collectionId: string): Promise<ActionResu
 
   const tenantData = await getCurrentTenant();
   if (!tenantData) return { ok: false, error: "Inte inloggad" };
+  const tenantId = tenantData.tenant.id;
 
   const existing = await prisma.productCollection.findFirst({
-    where: { id: collectionId, tenantId: tenantData.tenant.id },
-    select: { id: true },
+    where: { id: collectionId, tenantId },
+    select: { id: true, slug: true },
   });
   if (!existing) return { ok: false, error: "Kategorin hittades inte" };
 
-  await prisma.productCollection.delete({
-    where: { id: collectionId, tenantId: tenantData.tenant.id },
+  const entityPath = buildRedirectPath("product_collection", existing.slug);
+
+  const redirectsDeleted = await prisma.$transaction(async (tx) => {
+    let count = 0;
+    if (entityPath) {
+      const locale = await getTenantDefaultLocale(tenantId, tx);
+      count = await cleanupRedirectsForDeletedEntity(tx, {
+        tenantId,
+        entityPath,
+        locale,
+      });
+    }
+    await tx.productCollection.delete({
+      where: { id: collectionId, tenantId },
+    });
+    return count;
   });
+
+  if (redirectsDeleted > 0 && entityPath) {
+    log("info", "seo.redirect.cleaned_up_on_delete", {
+      tenantId,
+      resourceType: "product_collection",
+      entityId: collectionId,
+      path: entityPath,
+      redirectsDeleted,
+    });
+  }
+
   revalidatePath("/(guest)", "layout");
   return { ok: true, data: undefined };
 }

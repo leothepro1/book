@@ -458,13 +458,17 @@ describe("cleanupRedirectsForDeletedEntity", () => {
       });
     }
 
-    await cleanupRedirectsForDeletedEntity(makeTx(store), {
-      tenantId: TENANT_A,
-      entityPath: "/p/deleted",
-      locale: LOCALE,
-    });
+    const deletedCount = await cleanupRedirectsForDeletedEntity(
+      makeTx(store),
+      {
+        tenantId: TENANT_A,
+        entityPath: "/p/deleted",
+        locale: LOCALE,
+      },
+    );
 
     expect(store.rows).toHaveLength(0);
+    expect(deletedCount).toBe(3);
   });
 
   it("leaves redirects pointing elsewhere intact", async () => {
@@ -594,12 +598,16 @@ describe("cleanupRedirectsForDeletedEntity", () => {
   });
 
   it("no-op when no redirects exist for the entity", async () => {
-    await cleanupRedirectsForDeletedEntity(makeTx(store), {
-      tenantId: TENANT_A,
-      entityPath: "/p/deleted",
-      locale: LOCALE,
-    });
+    const deletedCount = await cleanupRedirectsForDeletedEntity(
+      makeTx(store),
+      {
+        tenantId: TENANT_A,
+        entityPath: "/p/deleted",
+        locale: LOCALE,
+      },
+    );
 
     expect(store.rows).toHaveLength(0);
+    expect(deletedCount).toBe(0);
   });
 });

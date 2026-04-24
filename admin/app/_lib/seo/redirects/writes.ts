@@ -171,14 +171,20 @@ export interface CleanupForDeletedEntityArgs {
 export async function cleanupRedirectsForDeletedEntity(
   tx: Prisma.TransactionClient,
   args: CleanupForDeletedEntityArgs,
-): Promise<void> {
+): Promise<number> {
   const path = normalizeRedirectPath(args.entityPath);
 
-  await tx.seoRedirect.deleteMany({
+  const result = await tx.seoRedirect.deleteMany({
     where: {
       tenantId: args.tenantId,
       toPath: path,
       locale: args.locale,
     },
   });
+
+  // Returned so the caller can emit a structured
+  // `seo.redirect.cleaned_up_on_delete` log with an accurate
+  // `redirectsDeleted` count — useful for tracking whether a
+  // deleted entity had inbound redirects worth cleaning up.
+  return result.count;
 }
