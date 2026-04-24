@@ -74,6 +74,7 @@ vi.mock("@/app/_components/RichTextEditor", () => ({
 import type { ResolvedAccommodation } from "@/app/_lib/accommodations/types";
 
 import { updateAccommodation } from "../actions";
+import { previewSeoAction } from "@/app/(admin)/_lib/seo/previewAction";
 
 import AccommodationForm from "./AccommodationForm";
 
@@ -137,6 +138,7 @@ beforeEach(() => {
     ok: true,
     data: { id: "acc_1" },
   });
+  vi.mocked(previewSeoAction).mockClear();
 });
 
 afterEach(() => {
@@ -238,5 +240,72 @@ describe("AccommodationForm — SearchListingEditor integration", () => {
       title: "Stored titel",
       description: "Stored beskrivning",
     });
+  });
+});
+
+// ── M6.4: compose-at-parent behaviour ─────────────────────────
+
+describe("AccommodationForm — compose-at-parent (M6.4)", () => {
+  it("preview reflects parent accommodation name when seoState.title is empty", async () => {
+    vi.mocked(previewSeoAction).mockResolvedValue({
+      ok: true as const,
+      preview: {
+        title: "Stuga Björk | Apelviken",
+        description: "En mysig stuga vid havet.",
+        canonicalUrl: "https://apelviken-x.rutgr.com/stays/stuga-bjork",
+        displayUrl: "apelviken-x.rutgr.com › stays › stuga-bjork",
+        ogImageUrl: null,
+        faviconUrl: null,
+      },
+    });
+
+    render(
+      <AccommodationForm
+        accommodation={accommodationStub()}
+        tenantId="tenant_t"
+        seo={{ title: "", description: "" }}
+        initialPreview={initialPreview}
+      />,
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    // Composed value.title = parent accommodation's displayName.
+    expect(previewSeoAction).toHaveBeenCalled();
+    const call = vi.mocked(previewSeoAction).mock.calls[0][0];
+    expect(call.overrides.title).toBe("Stuga Björk");
+  });
+
+  it("preview reflects SEO override when typed (override wins over parent)", async () => {
+    vi.mocked(previewSeoAction).mockResolvedValue({
+      ok: true as const,
+      preview: {
+        title: "Custom SEO title",
+        description: "",
+        canonicalUrl: "https://apelviken-x.rutgr.com/stays/stuga-bjork",
+        displayUrl: "apelviken-x.rutgr.com › stays › stuga-bjork",
+        ogImageUrl: null,
+        faviconUrl: null,
+      },
+    });
+
+    render(
+      <AccommodationForm
+        accommodation={accommodationStub()}
+        tenantId="tenant_t"
+        seo={{ title: "Custom SEO title", description: "" }}
+        initialPreview={initialPreview}
+      />,
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    expect(previewSeoAction).toHaveBeenCalled();
+    const call = vi.mocked(previewSeoAction).mock.calls[0][0];
+    expect(call.overrides.title).toBe("Custom SEO title");
   });
 });

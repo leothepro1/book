@@ -43,12 +43,65 @@ export const SEO_EDITOR_TITLE_MAX = 70;
 export const SEO_EDITOR_DESCRIPTION_MAX = 160;
 const PREVIEW_DEBOUNCE_MS = 300;
 
+// ── Per-resource static fallback labels ──────────────────────
+//
+// Shown as the input placeholder when BOTH the merchant's SEO
+// override AND the parent form's live value are empty (the
+// /new-before-typing case). Once the parent form starts feeding
+// a title/description, that takes precedence — placeholder shows
+// "what Google will see today" instead of generic copy.
+//
+// Resource types with `null` have no /new flow or no single-
+// entity parent to fall back to (homepage tenant siteName is the
+// Preferences' concern; accommodation_index/search aren't editable
+// per-entity). Those callers will never exercise this map today.
+const PARENT_FALLBACK_LABELS: Record<
+  SeoResourceType,
+  { title: string; description: string } | null
+> = {
+  product: {
+    title: "Använd produkttiteln",
+    description: "Använd produktbeskrivningen",
+  },
+  accommodation: {
+    title: "Använd boendets namn",
+    description: "Använd boendets beskrivning",
+  },
+  accommodation_category: {
+    title: "Använd kategorinamnet",
+    description: "Använd kategoribeskrivningen",
+  },
+  product_collection: {
+    title: "Använd produktseriens namn",
+    description: "Använd produktseriens beskrivning",
+  },
+  homepage: null,
+  accommodation_index: null,
+  product_index: null,
+  page: null,
+  article: null,
+  blog: null,
+  search: null,
+};
+
 // ── Props ────────────────────────────────────────────────────
 
 export interface SearchListingEditorValue {
   readonly title: string;
   readonly description: string;
   readonly slug: string;
+}
+
+/**
+ * The merchant's own SEO override payload — what gets persisted on
+ * save. Split from `value` so the input binds to exactly what the
+ * merchant has typed (not the composed fallback), and the save
+ * payload never accidentally carries the parent form's title as a
+ * "merchant override."
+ */
+export interface SearchListingEditorOverride {
+  readonly title: string;
+  readonly description: string;
 }
 
 export interface SearchListingEditorProps {
@@ -62,7 +115,19 @@ export interface SearchListingEditorProps {
    * integrations, typically the same placeholder the engine uses).
    */
   readonly entityId: string | null;
+  /**
+   * Composed values (`override.* || parent.*`) fed by the parent
+   * form. Drives preview rendering + placeholder text — the
+   * "what Google will see right now" view.
+   */
   readonly value: SearchListingEditorValue;
+  /**
+   * Raw merchant-typed overrides. Drives input binding, character
+   * counters, and the save-path onChange payload. Empty string = "no
+   * override" (the resolver's falsy-check + the save-boundary
+   * `stripEmptySeoKeys` helper both honor this semantic).
+   */
+  readonly override: SearchListingEditorOverride;
   readonly onChange: (next: {
     readonly title: string;
     readonly description: string;
@@ -87,6 +152,7 @@ export function SearchListingEditor({
   resourceType,
   entityId,
   value,
+  override,
   onChange,
   price,
   initialPreview,
@@ -109,18 +175,26 @@ export function SearchListingEditor({
         },
   );
 
-  const titleCounter = useSeoCharCounter(value.title, SEO_EDITOR_TITLE_MAX);
+  // Counters measure the merchant's override content, not the
+  // composed fallback — merchants shouldn't see red "too long"
+  // warnings just because their product title is long when the
+  // SEO override is blank.
+  const titleCounter = useSeoCharCounter(
+    override.title,
+    SEO_EDITOR_TITLE_MAX,
+  );
   const descCounter = useSeoCharCounter(
-    value.description,
+    override.description,
     SEO_EDITOR_DESCRIPTION_MAX,
   );
 
   // ── Debounced preview refresh ──
   //
-  // Every `value` change schedules a single server-action call
-  // 300ms after the last change. In-flight requests do not block
-  // the UI; we keep showing `latestPreview` until the next
-  // response arrives.
+  // Depends on `value.*` (composed) — when the parent form's title
+  // or description changes, the composed `value` changes and we
+  // refresh. This is how the live preview mirrors what Google
+  // would see as the merchant types in the entity's main title
+  // field, not just the SEO override.
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (timerRef.current !== null) clearTimeout(timerRef.current);
@@ -128,6 +202,8 @@ export function SearchListingEditor({
       void refreshPreview({
         resourceType,
         entityId,
+        // The preview reflects the composed value — same shape
+        // Google will see once the entity is saved.
         overrides: {
           title: value.title,
           description: value.description,
@@ -149,15 +225,25 @@ export function SearchListingEditor({
     };
   }, [resourceType, entityId, value.title, value.description]);
 
+  // onChange emits the override field (what the merchant typed),
+  // never the composed value. The save payload carries only
+  // merchant-owned data.
   const handleTitleChange = useCallback(
-    (next: string) => onChange({ title: next, description: value.description }),
-    [onChange, value.description],
+    (next: string) =>
+      onChange({ title: next, description: override.description }),
+    [onChange, override.description],
   );
 
   const handleDescriptionChange = useCallback(
-    (next: string) => onChange({ title: value.title, description: next }),
-    [onChange, value.title],
+    (next: string) => onChange({ title: override.title, description: next }),
+    [onChange, override.title],
   );
+
+  const fallbackLabels = PARENT_FALLBACK_LABELS[resourceType];
+  const titlePlaceholder =
+    value.title || fallbackLabels?.title || "";
+  const descriptionPlaceholder =
+    value.description || fallbackLabels?.description || "";
 
   const fullUrl = latestPreview.displayUrl
     ? `https://${latestPreview.displayUrl.replace(/ › /g, "/")}`
@@ -199,7 +285,8 @@ export function SearchListingEditor({
               id="sle-title"
               type="text"
               className="sle__input"
-              value={value.title}
+              value={override.title}
+              placeholder={titlePlaceholder}
               onChange={(e) => handleTitleChange(e.target.value)}
             />
             <div
@@ -217,7 +304,8 @@ export function SearchListingEditor({
             <textarea
               id="sle-description"
               className="sle__input sle__textarea"
-              value={value.description}
+              value={override.description}
+              placeholder={descriptionPlaceholder}
               onChange={(e) => handleDescriptionChange(e.target.value)}
               rows={3}
             />

@@ -79,6 +79,7 @@ vi.mock("@/app/_components/RichTextEditor", () => ({
 }));
 
 import { createProduct, updateProduct } from "@/app/_lib/products";
+import { previewSeoAction } from "@/app/(admin)/_lib/seo/previewAction";
 
 import ProductForm from "./ProductForm";
 
@@ -131,6 +132,10 @@ beforeEach(() => {
     ok: true,
     data: { id: "prod_1", slug: "frukost-buffe", version: 2 },
   });
+  // Clear call history between tests; the module-level vi.mock
+  // installs a default implementation but leaves `.mock.calls`
+  // intact across runs otherwise.
+  vi.mocked(previewSeoAction).mockClear();
 });
 
 afterEach(() => {
@@ -289,6 +294,82 @@ describe("ProductForm — /new create path", () => {
     expect(payload.seo).toEqual({
       title: "SEO-titel för ny produkt",
       description: "",
+    });
+  });
+});
+
+// ── M6.4: compose-at-parent behaviour ─────────────────────────
+
+describe("ProductForm — compose-at-parent (M6.4)", () => {
+  it("preview reflects parent title when seoState.title is empty (/edit)", async () => {
+    // With no SEO override, the editor's composed `value.title`
+    // should be the parent product's title — and that drives the
+    // debounced refresh.
+    vi.mocked(previewSeoAction).mockResolvedValue({
+      ok: true as const,
+      preview: {
+        title: "Frukost-buffé | Apelviken",
+        description: "Morgonens vackraste ritual.",
+        canonicalUrl:
+          "https://apelviken-x.rutgr.com/shop/products/frukost-buffe",
+        displayUrl:
+          "apelviken-x.rutgr.com › shop › products › frukost-buffe",
+        ogImageUrl: null,
+        faviconUrl: null,
+      },
+    });
+
+    render(
+      <ProductForm
+        product={productStub()}
+        seo={{ title: "", description: "" }}
+        initialPreview={initialPreview}
+      />,
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    // previewSeoAction was called with the composed value —
+    // override.title is empty, so value.title = parent title.
+    expect(previewSeoAction).toHaveBeenCalled();
+    const call = vi.mocked(previewSeoAction).mock.calls[0][0];
+    expect(call.overrides).toEqual({
+      title: "Frukost-buffé", // parent product title
+      description: "Morgonens vackraste ritual.",
+    });
+  });
+
+  it("preview reflects SEO override when typed (override wins over parent)", async () => {
+    vi.mocked(previewSeoAction).mockResolvedValue({
+      ok: true as const,
+      preview: {
+        title: "Custom SEO title",
+        description: "",
+        canonicalUrl: "https://apelviken-x.rutgr.com/shop/products/frukost-buffe",
+        displayUrl: "apelviken-x.rutgr.com › shop › products › frukost-buffe",
+        ogImageUrl: null,
+        faviconUrl: null,
+      },
+    });
+
+    render(
+      <ProductForm
+        product={productStub()}
+        seo={{ title: "Custom SEO title", description: "" }}
+        initialPreview={initialPreview}
+      />,
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    expect(previewSeoAction).toHaveBeenCalled();
+    const call = vi.mocked(previewSeoAction).mock.calls[0][0];
+    expect(call.overrides).toMatchObject({
+      title: "Custom SEO title",
     });
   });
 });

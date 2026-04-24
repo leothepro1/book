@@ -16,6 +16,7 @@ import {
   SeoMetadataSchema,
   safeParseSeoMetadata,
 } from "@/app/_lib/seo/types";
+import { stripEmptySeoKeys } from "@/app/_lib/seo/strip-empty";
 
 type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -99,8 +100,12 @@ export async function updateAccommodation(
       });
       return { ok: false, error: "Ogiltig SEO-data" };
     }
+    // Strip empty-string values BEFORE merging — a merchant who
+    // cleared the title override shouldn't clobber the stored
+    // entity.seo.title with `""`. "No override" = key absent.
+    const stripped = stripEmptySeoKeys(parsed.data);
     const existingSeo = safeParseSeoMetadata(existing.seo) ?? {};
-    const merged = { ...existingSeo, ...parsed.data };
+    const merged = { ...existingSeo, ...stripped };
     // Round-trip through JSON to strip any `undefined` values
     // Prisma's InputJsonValue rejects. The parse+spread above
     // guarantees shape validity (rule: cast accompanied by
@@ -111,7 +116,7 @@ export async function updateAccommodation(
       tenantId,
       resourceType: "accommodation",
       entityId: id,
-      fieldsChanged: Object.keys(parsed.data).join(","),
+      fieldsChanged: Object.keys(stripped).join(","),
     });
   }
 

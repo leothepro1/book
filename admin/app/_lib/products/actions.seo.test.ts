@@ -472,4 +472,123 @@ describe("updateProduct — SEO branch", () => {
       expect.anything(),
     );
   });
+
+  it("(M6.4) strips empty-string overrides from the seo_updated log payload", async () => {
+    // The merchant cleared both fields — post-strip, `fieldsChanged`
+    // must NOT list them. The resolver's defaults (noindex, nofollow)
+    // will still appear in the merged stored value (Zod `.partial()`
+    // fires the defaults), but that's a Batch-5 concern when the
+    // noindex UI ships.
+    primeAuth();
+    vi.mocked(prisma.product.findFirst as FindFirstMock).mockResolvedValue({
+      id: "prod_1",
+      slug: "frukost-buffe",
+      title: "Old",
+      version: 1,
+      price: 10000,
+      currency: "SEK",
+      productType: "STANDARD",
+      seo: { title: "Previous SEO title" },
+      options: [],
+    } as unknown as Awaited<ReturnType<FindFirstMock>>);
+    captureTransaction("update");
+
+    await updateProduct("prod_1", {
+      seo: { title: "", description: "   " },
+    });
+
+    // The log emits the post-strip keys. Both title ("") and
+    // description ("   ") get stripped — log's fieldsChanged must
+    // not mention either, even though the default booleans fill
+    // the merged output.
+    const calls = vi.mocked(log).mock.calls.filter(
+      (c) => c[1] === "seo.entity.seo_updated",
+    );
+    expect(calls).toHaveLength(1);
+    const fieldsChanged = (
+      calls[0][2] as { fieldsChanged?: string } | undefined
+    )?.fieldsChanged;
+    expect(fieldsChanged).not.toContain("title");
+    expect(fieldsChanged).not.toContain("description");
+  });
+
+  it("(M6.4) strips empty-string overrides before merging — cleared title keeps stored", async () => {
+    primeAuth();
+    vi.mocked(prisma.product.findFirst as FindFirstMock).mockResolvedValue({
+      id: "prod_1",
+      slug: "frukost-buffe",
+      title: "Old",
+      version: 1,
+      price: 10000,
+      currency: "SEK",
+      productType: "STANDARD",
+      seo: { title: "Previous SEO title", description: "Prev desc" },
+      options: [],
+    } as unknown as Awaited<ReturnType<FindFirstMock>>);
+    const read = captureTransaction("update");
+
+    await updateProduct("prod_1", {
+      // Merchant cleared both title AND description — must be treated
+      // as "no override" for both, not "override to empty string."
+      seo: { title: "", description: "   " },
+    });
+
+    const captured = read();
+    const merged = (captured as { seo?: Record<string, unknown> })?.seo;
+    // Both empties stripped; stored values survive untouched.
+    expect(merged).toMatchObject({
+      title: "Previous SEO title",
+      description: "Prev desc",
+    });
+    expect(JSON.stringify(merged)).not.toContain("\"title\":\"\"");
+    expect(JSON.stringify(merged)).not.toContain("\"description\":\"\"");
+  });
+});
+
+// ── M6.4: createProduct strip-empty ──────────────────────────
+
+describe("createProduct — M6.4 strip-empty", () => {
+  it("does NOT surface empty-string title in the seo_created log fieldsChanged", async () => {
+    // The form always carries `seo: { title: "", description: "" }`
+    // even when the merchant didn't touch the panel. The strip-empty
+    // helper guarantees the log's `fieldsChanged` mentions neither
+    // field — a clean audit trail. (The stored JSON will still
+    // contain the Zod-defaulted `noindex`/`nofollow` booleans
+    // because `.partial()` fires those defaults; see the Batch 5
+    // noindex UI work for the eventual cleanup.)
+    primeAuth();
+    captureTransaction("create");
+
+    await createProduct({
+      title: "Ny produkt",
+      description: "",
+      status: "DRAFT",
+      price: 0,
+      currency: "SEK",
+      taxable: true,
+      trackInventory: false,
+      inventoryQuantity: 0,
+      continueSellingWhenOutOfStock: false,
+      media: [],
+      options: [],
+      variants: [],
+      collectionIds: [],
+      tags: [],
+      seo: { title: "", description: "" },
+    });
+
+    // seo_created log either fires with the non-empty booleans or
+    // doesn't fire at all — either way, merchant-visible fields
+    // (title/description) must not appear.
+    const calls = vi.mocked(log).mock.calls.filter(
+      (c) => c[1] === "seo.entity.seo_created",
+    );
+    for (const call of calls) {
+      const fieldsChanged = (
+        call[2] as { fieldsChanged?: string } | undefined
+      )?.fieldsChanged;
+      expect(fieldsChanged).not.toContain("title");
+      expect(fieldsChanged).not.toContain("description");
+    }
+  });
 });

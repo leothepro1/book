@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useTransition, useRef, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { EditorIcon } from "@/app/_components/EditorIcon";
@@ -33,6 +33,7 @@ import type { ResolvedAccommodation } from "@/app/_lib/accommodations/types";
 import type { AccommodationStatus, FacilityType, BedType } from "@prisma/client";
 import { SearchListingEditor } from "@/app/(admin)/_components/SearchListingEditor";
 import type { SeoPreviewResult } from "@/app/_lib/seo/preview";
+import { stripHtml } from "@/app/_lib/seo/text";
 import "../../products/_components/product-form.css";
 import "../accommodations.css";
 
@@ -297,6 +298,15 @@ export default function AccommodationForm({
     [markDirty],
   );
 
+  // Memoize the HTML-stripped accommodation description — piped into
+  // SearchListingEditor's `value.description` fallback so merchants
+  // see the resolver's description source mirrored live in the
+  // preview without re-stripping on every keystroke.
+  const strippedAccommodationDescription = useMemo(
+    () => stripHtml(descInput),
+    [descInput],
+  );
+
   // ── Facilities (read-only display for V1) ──
   const facilityGroups = groupFacilitiesByCategory(accommodation.facilities);
 
@@ -528,14 +538,25 @@ export default function AccommodationForm({
               </button>
             </div>
 
-            {/* ── Sökmotorlistning ── */}
+            {/* ── Sökmotorlistning ──
+                Compose-at-parent: `value.*` reflects the live
+                resolver view (override wins; falls back to the
+                accommodation's editable name/description). The
+                raw `override.*` drives input binding + save
+                payload. */}
             <SearchListingEditor
               resourceType="accommodation"
               entityId={accommodation.id}
               value={{
+                title: seoState.title || nameInput,
+                description:
+                  seoState.description ||
+                  strippedAccommodationDescription,
+                slug: accommodation.slug,
+              }}
+              override={{
                 title: seoState.title,
                 description: seoState.description,
-                slug: accommodation.slug,
               }}
               onChange={handleSeoChange}
               initialPreview={initialPreview}

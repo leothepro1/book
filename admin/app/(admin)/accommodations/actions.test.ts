@@ -316,4 +316,58 @@ describe("updateAccommodation — SEO merge semantics", () => {
     const stringified = JSON.stringify(seoValue);
     expect(stringified).not.toContain("undefined");
   });
+
+  it("(M6.4) strips empty-string overrides before persisting — cleared title doesn't clobber stored", async () => {
+    // Merchant typed a title, saved, then typed the override blank
+    // and saved again. The second save must NOT persist
+    // `title: ""` — instead it should leave the stored title
+    // untouched (present in existing seo).
+    primeAuth();
+    vi.mocked(prisma.accommodation.findFirst as FindFirstMock).mockResolvedValue(
+      {
+        id: "acc_1",
+        seo: {
+          title: "Previous title",
+          description: "Previous desc",
+        },
+      } as unknown as Awaited<ReturnType<FindFirstMock>>,
+    );
+
+    let capturedData: Record<string, unknown> | null = null;
+    vi.mocked(prisma.$transaction as TransactionMock).mockImplementationOnce(
+      async (callback: unknown) => {
+        const fn = callback as (tx: unknown) => Promise<unknown>;
+        await fn({
+          accommodation: {
+            update: vi.fn(async (args: unknown) => {
+              capturedData = (args as { data: Record<string, unknown> }).data;
+              return null;
+            }),
+          },
+          accommodationFacility: { deleteMany: vi.fn(), updateMany: vi.fn(), createMany: vi.fn() },
+          bedConfiguration: { deleteMany: vi.fn(), createMany: vi.fn() },
+          accommodationMedia: { deleteMany: vi.fn(), createMany: vi.fn() },
+          accommodationHighlight: { deleteMany: vi.fn(), createMany: vi.fn() },
+          accommodationCategoryItem: { deleteMany: vi.fn(), createMany: vi.fn() },
+          accommodationCategory: { findMany: vi.fn().mockResolvedValue([]) },
+        });
+        return null;
+      },
+    );
+
+    await updateAccommodation("acc_1", {
+      // "Cleared" override — merchant deleted the title field.
+      seo: { title: "", description: "New description" },
+    });
+
+    expect(capturedData).not.toBeNull();
+    const merged = (capturedData as { seo?: Record<string, unknown> })?.seo;
+    // "" is stripped; stored title ("Previous title") survives;
+    // the non-empty description override wins.
+    expect(merged).toMatchObject({
+      title: "Previous title",
+      description: "New description",
+    });
+    expect(JSON.stringify(merged)).not.toContain("\"title\":\"\"");
+  });
 });

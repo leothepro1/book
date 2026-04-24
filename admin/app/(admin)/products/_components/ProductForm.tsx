@@ -14,7 +14,7 @@
  *       (future: status, collections, tax, etc.)
  */
 
-import { useState, useCallback, useRef, useTransition, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { EditorIcon } from "@/app/_components/EditorIcon";
@@ -27,6 +27,7 @@ import { listProductTemplates } from "@/app/_lib/products/template-actions";
 import type { ProductMediaInput, ProductOptionInput, ProductVariantInput } from "@/app/_lib/products";
 import { SearchListingEditor } from "@/app/(admin)/_components/SearchListingEditor";
 import type { SeoPreviewResult } from "@/app/_lib/seo/preview";
+import { stripHtml } from "@/app/_lib/seo/text";
 import {
   DndContext,
   PointerSensor,
@@ -147,6 +148,14 @@ export default function ProductForm({
   // ── Core fields (pre-populated from product when editing) ──
   const [title, setTitle] = useState(product?.title ?? "");
   const [description, setDescription] = useState(product?.description ?? "");
+  // Memoize the stripped description — `stripHtml` runs once per
+  // description keystroke otherwise, and rich-text editor output can
+  // be hundreds of chars. The SearchListingEditor consumes this as
+  // the composed-value fallback.
+  const strippedDescription = useMemo(
+    () => stripHtml(description),
+    [description],
+  );
   // Display in kronor (DB stores öre — divide by 100 for display, multiply by 100 for save)
   const [price, setPrice] = useState<number>(Math.round((product?.price ?? 0) / 100));
   const [compareAtPrice, setCompareAtPrice] = useState<number>(Math.round((product?.compareAtPrice ?? 0) / 100));
@@ -870,17 +879,27 @@ export default function ProductForm({
               )}
             </div>
 
-            {/* ── Sökmotorlistning ── */}
+            {/* ── Sökmotorlistning ──
+                Compose-at-parent: `value.*` shows what Google
+                would render right now (override wins; fallback
+                to live parent form state). `override.*` is the
+                raw merchant-typed payload that will persist on
+                save. */}
             <SearchListingEditor
               resourceType="product"
               entityId={isEdit && product ? product.id : null}
               value={{
-                title: seoState.title,
-                description: seoState.description,
+                title: seoState.title || title,
+                description:
+                  seoState.description || strippedDescription,
                 slug:
                   isEdit && product
                     ? product.slug
                     : NEW_PRODUCT_PLACEHOLDER_SLUG,
+              }}
+              override={{
+                title: seoState.title,
+                description: seoState.description,
               }}
               onChange={handleSeoChange}
               initialPreview={initialPreview}

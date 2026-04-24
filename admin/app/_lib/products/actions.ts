@@ -42,6 +42,7 @@ import type { ResolvedProduct } from "./types";
 import { resolveProduct } from "./resolve";
 import { log } from "@/app/_lib/logger";
 import { safeParseSeoMetadata } from "@/app/_lib/seo/types";
+import { stripEmptySeoKeys } from "@/app/_lib/seo/strip-empty";
 
 // ── Result types ─────────────────────────────────────────────
 
@@ -116,15 +117,21 @@ export async function createProduct(
 
   const slug = await resolveUniqueSlug(tenantId, titleToSlug(data.title));
 
-  // ── SEO (optional) — strip `undefined` for Prisma's InputJsonValue.
+  // ── SEO (optional) — strip empties + `undefined` for Prisma.
   //
-  // Zod `.partial()` surfaces every missing key as `undefined`;
-  // Prisma rejects those inside object JSON values. JSON-stringify +
-  // re-parse drops them, and the parse we just ran guarantees the
-  // resulting shape satisfies `SeoMetadataSchema.partial()`.
+  // `stripEmptySeoKeys` normalises the merchant payload at the save
+  // boundary: `""`/whitespace-only strings get dropped so the
+  // stored row never carries `{ title: "" }`. The JSON round-trip
+  // then removes any residual `undefined` values Prisma's
+  // InputJsonValue rejects. Both passes are defensive: Zod already
+  // validated the shape, but we want the stored JSON canonical.
+  const strippedCreateSeo =
+    data.seo !== undefined ? stripEmptySeoKeys(data.seo) : null;
   const seoJson: Prisma.InputJsonValue | null =
-    data.seo !== undefined
-      ? (JSON.parse(JSON.stringify(data.seo)) as Prisma.InputJsonValue)
+    strippedCreateSeo !== null && Object.keys(strippedCreateSeo).length > 0
+      ? (JSON.parse(
+          JSON.stringify(strippedCreateSeo),
+        ) as Prisma.InputJsonValue)
       : null;
 
   try {
@@ -275,12 +282,14 @@ export async function createProduct(
       return product;
     });
 
-    if (data.seo !== undefined) {
+    if (strippedCreateSeo !== null && Object.keys(strippedCreateSeo).length > 0) {
       log("info", "seo.entity.seo_created", {
         tenantId,
         resourceType: "product",
         entityId: product.id,
-        fieldsChanged: Object.keys(data.seo).join(","),
+        // Log the post-strip keys so a merchant who typed + cleared
+        // never shows as "created with empty title."
+        fieldsChanged: Object.keys(strippedCreateSeo).join(","),
       });
     }
 
@@ -324,18 +333,20 @@ export async function updateProduct(
   });
   if (!existing) return { ok: false, error: "Produkten hittades inte" };
 
-  // ── SEO: parse + shallow-merge at the boundary ──
+  // ── SEO: strip + shallow-merge at the boundary ──
   //
-  // Overrides from the form win over stored entity.seo; fields the
-  // UI doesn't edit yet (noindex, ogImageId, ogImageAlt, etc.) carry
-  // through unchanged. Mirrors the Batch 2 accommodations merge —
-  // `SeoMetadataSchema.partial()` inside UpdateProductSchema already
-  // validated the inbound shape, so we only need to strip
-  // `undefined` for Prisma's InputJsonValue.
+  // `stripEmptySeoKeys` drops `""`/whitespace title/description
+  // entries BEFORE the merge. A merchant who cleared the override
+  // shouldn't clobber the stored value with an empty string —
+  // absence is the semantic for "no override." Fields the UI
+  // doesn't edit yet (noindex, ogImageId, etc.) still carry
+  // through unchanged via the shallow merge.
   let mergedSeoJson: Prisma.InputJsonValue | undefined;
+  let strippedUpdateSeo: ReturnType<typeof stripEmptySeoKeys> | undefined;
   if (data.seo !== undefined) {
+    strippedUpdateSeo = stripEmptySeoKeys(data.seo);
     const existingSeo = safeParseSeoMetadata(existing.seo) ?? {};
-    const merged = { ...existingSeo, ...data.seo };
+    const merged = { ...existingSeo, ...strippedUpdateSeo };
     mergedSeoJson = JSON.parse(JSON.stringify(merged)) as Prisma.InputJsonValue;
   }
 
@@ -524,12 +535,14 @@ export async function updateProduct(
       return product;
     });
 
-    if (data.seo !== undefined) {
+    if (strippedUpdateSeo !== undefined) {
       log("info", "seo.entity.seo_updated", {
         tenantId,
         resourceType: "product",
         entityId: productId,
-        fieldsChanged: Object.keys(data.seo).join(","),
+        // Log post-strip keys so a cleared-override save never
+        // shows as "updated title to empty string".
+        fieldsChanged: Object.keys(strippedUpdateSeo).join(","),
       });
     }
 
