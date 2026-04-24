@@ -77,6 +77,34 @@ function isPreviewable(
   );
 }
 
+// ── /new-flow placeholder slugs ───────────────────────────────
+//
+// When the admin's SearchListingEditor renders on a create route
+// (`/products/new`, `/collections/new`, `/accommodations/new`,
+// `/accommodation-categories/new`) there's no entity row yet — no
+// slug, no id. The preview still needs to show a believable URL.
+//
+// The placeholder fills the slug segment of the canonical URL so
+// the merchant sees the route structure their product will land
+// at, with a Swedish "ny-*" marker instead of a real slug.
+//
+// Homepage has no /new flow (one homepage per tenant), and the
+// synthetic pages — accommodation_index / search — have no admin
+// edit route at all. They are intentionally absent from the map;
+// callers that pass `entityId=null` for those types trigger a
+// descriptive throw rather than a misleading preview.
+//
+// TODO(i18n): move to a locale-aware resolver when the admin UI
+// supports multi-language merchant operators.
+const NEW_ENTITY_PLACEHOLDER_SLUG: Partial<
+  Record<SeoResourceType, string>
+> = {
+  product: "ny-produkt",
+  product_collection: "ny-produktserie",
+  accommodation: "ny-boendetyp",
+  accommodation_category: "ny-boendekategori",
+};
+
 // ── Engine singletons ─────────────────────────────────────────
 //
 // Same pattern as `request-cache.ts` — one resolver per Node process
@@ -110,7 +138,12 @@ export interface SeoPreviewResult {
 export async function previewSeoForEntity(args: {
   tenantId: string;
   resourceType: SeoResourceType;
-  entityId: string;
+  /**
+   * `null` = "previewing an entity being created" (/new flow).
+   * The engine synthesizes a preview from tenant defaults +
+   * overrides + the resource-type-specific placeholder slug.
+   */
+  entityId: string | null;
   overrides: Partial<SeoMetadata>;
   locale: string;
 }): Promise<SeoPreviewResult> {
@@ -119,6 +152,22 @@ export async function previewSeoForEntity(args: {
   if (!isPreviewable(resourceType)) {
     throw new Error(
       `previewSeoForEntity does not support resourceType ${resourceType}`,
+    );
+  }
+
+  // /new-flow gate — entityId=null only makes sense for resource
+  // types with a placeholder slug in the map (product, collection,
+  // accommodation, accommodation_category). Homepage has no /new
+  // flow; every other non-mapped type either has no create route
+  // (search, accommodation_index) or isn't wired as previewable at
+  // all. Fail loudly with a caller-facing message so developers
+  // landing on this error know the widening isn't free-for-all.
+  if (
+    entityId === null &&
+    NEW_ENTITY_PLACEHOLDER_SLUG[resourceType] === undefined
+  ) {
+    throw new Error(
+      `previewSeoForEntity does not support resourceType ${resourceType} with entityId=null`,
     );
   }
 
@@ -133,6 +182,20 @@ export async function previewSeoForEntity(args: {
 
   if (resourceType === "homepage") {
     return previewHomepage(tenantCtx, overrides, locale, faviconUrl);
+  }
+
+  // /new flow — skip the entity fetch entirely and route straight
+  // to the placeholder preview. The resource type is guaranteed to
+  // be in the map by the gate above.
+  if (entityId === null) {
+    return fallbackPreview(
+      tenantCtx,
+      resourceType,
+      null,
+      overrides,
+      locale,
+      faviconUrl,
+    );
   }
 
   const entity = await fetchEntityForPreview(
@@ -408,16 +471,26 @@ async function previewHomepage(
 async function fallbackPreview(
   tenantCtx: SeoTenantContext,
   resourceType: PreviewableResourceType,
-  entityId: string,
+  entityId: string | null,
   overrides: Partial<SeoMetadata>,
   locale: string,
   faviconUrl: string | null,
 ): Promise<SeoPreviewResult> {
-  // Minimal fallback: use tenant siteName + override fields so the
-  // admin keeps seeing a coherent preview. The URL is the route
-  // prefix with the (likely-stale) entityId as slug — good enough
-  // for the merchant to see what the structure would look like.
-  const path = routePrefixFor(resourceType, entityId);
+  // Two call sites:
+  //   - entity missing (stale id / archived row): use the passed
+  //     entityId as the slug so the merchant at least sees the
+  //     URL shape they would have reached.
+  //   - /new flow (entityId=null): substitute the resource-type
+  //     placeholder slug so the URL reads "…/shop/products/ny-
+  //     produkt" while the form is still being filled.
+  //
+  // The caller (`previewSeoForEntity`) has already verified that
+  // a placeholder slug exists for `resourceType` when `entityId`
+  // is null — the `?? ""` below is defense-in-depth and would
+  // surface a typed empty-path for a future bypass bug.
+  const slug =
+    entityId ?? NEW_ENTITY_PLACEHOLDER_SLUG[resourceType] ?? "";
+  const path = routePrefixFor(resourceType, slug);
   const canonicalUrl = buildAbsoluteUrl(tenantCtx, locale, path);
 
   const title = overrides.title?.trim() || tenantCtx.siteName;

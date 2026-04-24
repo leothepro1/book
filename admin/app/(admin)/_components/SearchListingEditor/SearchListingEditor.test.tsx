@@ -300,3 +300,38 @@ describe("SearchListingEditor — debounced preview refresh", () => {
     expect(call.overrides).toEqual({ title: "Titel4", description: "" });
   });
 });
+
+describe("SearchListingEditor — entityId=null (/new flow)", () => {
+  it("renders without error and forwards entityId=null to previewSeoAction", async () => {
+    render(
+      <SearchListingEditor
+        resourceType="product"
+        entityId={null}
+        value={{ title: "", description: "", slug: "ny-produkt" }}
+        onChange={() => {}}
+        initialPreview={{
+          title: "Ny produkt | Apelviken",
+          description: "",
+          displayUrl: "apelviken-x.rutgr.com › shop › products › ny-produkt",
+          faviconUrl: null,
+        }}
+      />,
+    );
+
+    // Component renders cleanly with the placeholder preview.
+    expect(screen.getByText("Sökmotorlistning")).not.toBeNull();
+    expect(screen.getByText("Ny produkt | Apelviken")).not.toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    // Debounced refresh fired with entityId=null intact — the
+    // widening flows all the way from props → refreshPreview →
+    // previewSeoAction.
+    expect(previewSeoAction).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(previewSeoAction).mock.calls[0][0];
+    expect(call.entityId).toBeNull();
+    expect(call.resourceType).toBe("product");
+  });
+});

@@ -53,7 +53,15 @@ export interface SearchListingEditorValue {
 
 export interface SearchListingEditorProps {
   readonly resourceType: SeoResourceType;
-  readonly entityId: string;
+  /**
+   * `null` = `/new` flow — the entity row hasn't been created yet.
+   * The editor still renders the preview; the engine swaps in a
+   * per-resource-type placeholder slug for the canonical URL. The
+   * editor stays stateless about slug semantics — the parent form
+   * passes whatever slug should display in the URL input (for /new
+   * integrations, typically the same placeholder the engine uses).
+   */
+  readonly entityId: string | null;
   readonly value: SearchListingEditorValue;
   readonly onChange: (next: {
     readonly title: string;
@@ -256,7 +264,7 @@ interface PreviewShape {
 
 async function refreshPreview(args: {
   resourceType: SeoResourceType;
-  entityId: string;
+  entityId: string | null;
   overrides: { title: string; description: string };
 }): Promise<PreviewShape | null> {
   const result = await previewSeoAction({

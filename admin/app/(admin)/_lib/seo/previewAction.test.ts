@@ -264,4 +264,31 @@ describe("previewSeoAction", () => {
     expect(callArgs.locale).toBe("en");
     expect(callArgs.tenantId).toBe("tenant_t");
   });
+
+  it("accepts entityId=null and passes it through to previewSeoForEntity (/new flow)", async () => {
+    // The widened boundary schema allows `entityId: null`. The
+    // action must not reject it as "Ogiltig begäran" and must
+    // forward the null through to the engine unchanged — the engine
+    // is the one that validates whether the resource type has a
+    // /new flow.
+    vi.mocked(requireAdmin).mockResolvedValue({ ok: true });
+    vi.mocked(getCurrentTenant).mockResolvedValue({
+      tenant: tenantRow(),
+      clerkUserId: "u_1",
+      clerkOrgId: "org_1",
+    });
+    vi.mocked(prisma.tenantLocale.findMany).mockResolvedValue([localeRow()]);
+    vi.mocked(previewSeoForEntity).mockResolvedValue(previewStub());
+
+    const result = await previewSeoAction({
+      resourceType: "product",
+      entityId: null,
+      overrides: { title: "Min nya produkt" },
+    });
+
+    expect(result.ok).toBe(true);
+    const callArgs = vi.mocked(previewSeoForEntity).mock.calls[0][0];
+    expect(callArgs.entityId).toBeNull();
+    expect(callArgs.resourceType).toBe("product");
+  });
 });

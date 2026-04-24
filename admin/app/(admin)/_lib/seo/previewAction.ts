@@ -21,6 +21,8 @@
  * always render in `tenant.defaultLocale`.
  */
 
+import { z } from "zod";
+
 import { getCurrentTenant } from "../tenant/getCurrentTenant";
 import { requireAdmin } from "../auth/devAuth";
 import { log } from "../../../_lib/logger";
@@ -32,6 +34,7 @@ import { tenantToSeoContext } from "../../../_lib/tenant/seo-context";
 import { prisma } from "../../../_lib/db/prisma";
 import {
   SeoMetadataSchema,
+  SeoResourceTypes,
   type SeoResourceType,
 } from "../../../_lib/seo/types";
 
@@ -41,9 +44,25 @@ export type PreviewSeoActionResult =
 
 export interface PreviewSeoActionArgs {
   readonly resourceType: SeoResourceType;
-  readonly entityId: string;
+  /**
+   * `null` = "/new flow" (no entity row yet). The engine swaps in
+   * the resource-type-specific placeholder slug so the preview
+   * URL reads coherently while the merchant is still typing.
+   */
+  readonly entityId: string | null;
   readonly overrides: unknown;
 }
+
+// Boundary-level validation of the full args object. `overrides` is
+// re-validated against `SeoMetadataSchema.partial()` below because
+// z.unknown() lets anything through at this level — the UI contract
+// matters for resourceType + entityId; the override payload
+// shape is the SEO engine's contract.
+const PreviewSeoActionArgsSchema = z.object({
+  resourceType: z.enum(SeoResourceTypes),
+  entityId: z.string().nullable(),
+  overrides: z.unknown(),
+});
 
 export async function previewSeoAction(
   args: PreviewSeoActionArgs,
@@ -56,7 +75,14 @@ export async function previewSeoAction(
     return { ok: false, error: "Inte inloggad" };
   }
 
-  const parsed = SeoMetadataSchema.partial().safeParse(args.overrides);
+  const argsParsed = PreviewSeoActionArgsSchema.safeParse(args);
+  if (!argsParsed.success) {
+    return { ok: false, error: "Ogiltig begäran" };
+  }
+
+  const parsed = SeoMetadataSchema.partial().safeParse(
+    argsParsed.data.overrides,
+  );
   if (!parsed.success) {
     return { ok: false, error: "Ogiltig indata" };
   }
@@ -75,8 +101,8 @@ export async function previewSeoAction(
   try {
     const preview = await previewSeoForEntity({
       tenantId: tenantData.tenant.id,
-      resourceType: args.resourceType,
-      entityId: args.entityId,
+      resourceType: argsParsed.data.resourceType,
+      entityId: argsParsed.data.entityId,
       overrides: parsed.data,
       locale: tenantCtx.defaultLocale,
     });
@@ -84,8 +110,8 @@ export async function previewSeoAction(
   } catch (error) {
     log("error", "seo.preview.failed", {
       tenantId: tenantData.tenant.id,
-      resourceType: args.resourceType,
-      entityId: args.entityId,
+      resourceType: argsParsed.data.resourceType,
+      entityId: argsParsed.data.entityId,
       error: error instanceof Error ? error.message : String(error),
     });
     return {

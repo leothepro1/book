@@ -614,3 +614,116 @@ describe("previewSeoForEntity — favicon resolution", () => {
     });
   });
 });
+
+// ── /new-flow placeholder previews (entityId=null) ───────────
+//
+// These tests exercise the `M6.3-prep` widening. Each /new-capable
+// resource type must render a preview URL using its Swedish
+// placeholder slug, and must NOT trigger any entity fetch.
+
+describe("previewSeoForEntity — entityId=null (/new flow)", () => {
+  it("product: returns /shop/products/ny-produkt as the canonical slug", async () => {
+    primeTenant();
+
+    const result = await previewSeoForEntity({
+      tenantId: "tenant_t",
+      resourceType: "product",
+      entityId: null,
+      overrides: { title: "Min nya produkt" },
+      locale: "sv",
+    });
+
+    expect(result.canonicalUrl).toBe(
+      "https://apelviken-x.rutgr.com/shop/products/ny-produkt",
+    );
+    expect(result.displayUrl).toBe(
+      "apelviken-x.rutgr.com › shop › products › ny-produkt",
+    );
+    // No entity fetch should have happened on the /new path.
+    expect(prisma.product.findFirst).not.toHaveBeenCalled();
+    // Merchant-typed title surfaces on the preview without a resolver run.
+    expect(result.title).toBe("Min nya produkt");
+  });
+
+  it("product_collection: returns /shop/collections/ny-produktserie", async () => {
+    primeTenant();
+
+    const result = await previewSeoForEntity({
+      tenantId: "tenant_t",
+      resourceType: "product_collection",
+      entityId: null,
+      overrides: {},
+      locale: "sv",
+    });
+
+    expect(result.canonicalUrl).toBe(
+      "https://apelviken-x.rutgr.com/shop/collections/ny-produktserie",
+    );
+    expect(prisma.productCollection.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("accommodation: returns /stays/ny-boendetyp", async () => {
+    primeTenant();
+
+    const result = await previewSeoForEntity({
+      tenantId: "tenant_t",
+      resourceType: "accommodation",
+      entityId: null,
+      overrides: {},
+      locale: "sv",
+    });
+
+    expect(result.canonicalUrl).toBe(
+      "https://apelviken-x.rutgr.com/stays/ny-boendetyp",
+    );
+    expect(prisma.accommodation.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("accommodation_category: returns /stays/categories/ny-boendekategori", async () => {
+    primeTenant();
+
+    const result = await previewSeoForEntity({
+      tenantId: "tenant_t",
+      resourceType: "accommodation_category",
+      entityId: null,
+      overrides: {},
+      locale: "sv",
+    });
+
+    expect(result.canonicalUrl).toBe(
+      "https://apelviken-x.rutgr.com/stays/categories/ny-boendekategori",
+    );
+    expect(prisma.accommodationCategory.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("throws for homepage — no /new flow (one homepage per tenant)", async () => {
+    await expect(
+      previewSeoForEntity({
+        tenantId: "tenant_t",
+        resourceType: "homepage",
+        entityId: null,
+        overrides: {},
+        locale: "sv",
+      }),
+    ).rejects.toThrow(
+      /does not support resourceType homepage with entityId=null/,
+    );
+  });
+
+  it("throws for search — always-noindex resource, no placeholder in the map", async () => {
+    // `search` already throws (not previewable), but the caller-
+    // facing error when both unsupported AND entityId=null falls
+    // through the /new gate — the existing isPreviewable check
+    // wins. Assert the /new error surfaces only for the more
+    // specific case and search keeps its existing message.
+    await expect(
+      previewSeoForEntity({
+        tenantId: "tenant_t",
+        resourceType: "search",
+        entityId: null,
+        overrides: {},
+        locale: "sv",
+      }),
+    ).rejects.toThrow(/does not support resourceType search/);
+  });
+});
