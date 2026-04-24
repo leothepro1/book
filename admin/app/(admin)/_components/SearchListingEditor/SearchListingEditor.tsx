@@ -22,6 +22,28 @@
  *   - URL input is read-only in M6.1 — URL-editing ships when M11
  *     delivers the SeoRedirect middleware. Parent's `value.slug`
  *     flows through unchanged.
+ *
+ * ── Auto-follow (M6.5) ──────────────────────────────────────────
+ * Each field (title + description) tracks a local `"auto" | "user"`
+ * mode:
+ *   - AUTO: input's `value={parentTitle}` — as the merchant edits
+ *     the entity's main title field, the SEO input updates in real
+ *     time. Mirrors Shopify's "Page title" behaviour.
+ *   - USER: input's `value={titleDraft}` — the merchant has focused
+ *     the field and is authoring an explicit SEO override. Their
+ *     typing is preserved across parent re-renders.
+ *
+ * Transitions:
+ *   AUTO → USER: merchant focuses the field. Draft seeds from the
+ *     current parent value so the input doesn't flicker.
+ *   USER → AUTO: merchant blurs with an empty/whitespace-only
+ *     draft. onChange emits "" so the parent's seoState reflects
+ *     "no override"; the save-path `stripEmptySeoKeys` helper
+ *     converts that to `undefined` in the persisted JSONB.
+ *   Parent prop re-sync: when `override.title` (from the parent
+ *     after a save/reload/form-reset) differs from the current
+ *     draft, local state resets — prefers a user session still
+ *     in flight over parent mutation during unrelated re-renders.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -117,17 +139,28 @@ export interface SearchListingEditorProps {
   readonly entityId: string | null;
   /**
    * Composed values (`override.* || parent.*`) fed by the parent
-   * form. Drives preview rendering + placeholder text — the
+   * form. Drives preview rendering + debounced engine refresh — the
    * "what Google will see right now" view.
    */
   readonly value: SearchListingEditorValue;
   /**
-   * Raw merchant-typed overrides. Drives input binding, character
-   * counters, and the save-path onChange payload. Empty string = "no
-   * override" (the resolver's falsy-check + the save-boundary
+   * Raw merchant-typed overrides. Drives save-path onChange payload
+   * and the initial auto/user mode decision on mount. Empty string =
+   * "no override" (the resolver's falsy check and the save-boundary
    * `stripEmptySeoKeys` helper both honor this semantic).
    */
   readonly override: SearchListingEditorOverride;
+  /**
+   * Raw parent-form title. Rendered directly inside the title
+   * input when the field is in AUTO mode — as the merchant types
+   * in the entity's main title field, the SEO input mirrors it.
+   */
+  readonly parentTitle: string;
+  /**
+   * Raw parent-form description, already HTML-stripped by the parent
+   * (`stripHtml(...)`). Same AUTO-mode behaviour as parentTitle.
+   */
+  readonly parentDescription: string;
   readonly onChange: (next: {
     readonly title: string;
     readonly description: string;
@@ -153,6 +186,8 @@ export function SearchListingEditor({
   entityId,
   value,
   override,
+  parentTitle,
+  parentDescription,
   onChange,
   price,
   initialPreview,
@@ -175,26 +210,79 @@ export function SearchListingEditor({
         },
   );
 
-  // Counters measure the merchant's override content, not the
-  // composed fallback — merchants shouldn't see red "too long"
-  // warnings just because their product title is long when the
-  // SEO override is blank.
-  const titleCounter = useSeoCharCounter(
-    override.title,
-    SEO_EDITOR_TITLE_MAX,
+  // ── Auto-follow state (M6.5) ──
+  //
+  // `titleMode` distinguishes "input mirrors parent" (AUTO) from
+  // "input shows merchant's draft" (USER). The mount-time value
+  // reads from `override.title`: non-empty = existing override
+  // → USER mode; empty = no override → AUTO mode.
+  //
+  // `titleDraft` holds the in-flight user input while in USER mode.
+  // In AUTO mode it's unused (the input reads from parentTitle
+  // directly). We still keep it initialized to `override.title`
+  // so the first AUTO→USER transition has something to seed from.
+  const [titleMode, setTitleMode] = useState<"auto" | "user">(() =>
+    override.title ? "user" : "auto",
   );
-  const descCounter = useSeoCharCounter(
+  const [titleDraft, setTitleDraft] = useState(override.title);
+
+  const [descriptionMode, setDescriptionMode] = useState<"auto" | "user">(() =>
+    override.description ? "user" : "auto",
+  );
+  const [descriptionDraft, setDescriptionDraft] = useState(
     override.description,
+  );
+
+  // Re-sync on external override prop changes (save/reload/form
+  // reset). The equality guards prevent this from fighting the
+  // merchant's in-flight typing — `onChange` updates the parent's
+  // seoState → `override` prop comes back with the same value →
+  // draft already matches → useEffect no-ops.
+  useEffect(() => {
+    if (override.title !== titleDraft) {
+      if (override.title) {
+        setTitleMode("user");
+        setTitleDraft(override.title);
+      } else {
+        setTitleMode("auto");
+        setTitleDraft("");
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [override.title]);
+
+  useEffect(() => {
+    if (override.description !== descriptionDraft) {
+      if (override.description) {
+        setDescriptionMode("user");
+        setDescriptionDraft(override.description);
+      } else {
+        setDescriptionMode("auto");
+        setDescriptionDraft("");
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [override.description]);
+
+  // Counters measure the VISIBLE value — what Google will actually
+  // render. In AUTO mode that's the parent value; in USER mode
+  // that's the draft. Matches Shopify.
+  const displayedTitle = titleMode === "user" ? titleDraft : parentTitle;
+  const displayedDescription =
+    descriptionMode === "user" ? descriptionDraft : parentDescription;
+
+  const titleCounter = useSeoCharCounter(displayedTitle, SEO_EDITOR_TITLE_MAX);
+  const descCounter = useSeoCharCounter(
+    displayedDescription,
     SEO_EDITOR_DESCRIPTION_MAX,
   );
 
   // ── Debounced preview refresh ──
   //
-  // Depends on `value.*` (composed) — when the parent form's title
-  // or description changes, the composed `value` changes and we
-  // refresh. This is how the live preview mirrors what Google
-  // would see as the merchant types in the entity's main title
-  // field, not just the SEO override.
+  // Depends on `value.*` (composed by the parent). When the parent
+  // form's title or description changes the composed `value` changes
+  // and we refresh — that's how the live preview mirrors what
+  // Google would see as the merchant types in the main title field.
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (timerRef.current !== null) clearTimeout(timerRef.current);
@@ -214,8 +302,7 @@ export function SearchListingEditor({
         })
         .catch((error: unknown) => {
           // Non-fatal: keep last preview, console-log for
-          // developer visibility. User-visible errors arrive in
-          // Batch 2+ once the save path exists.
+          // developer visibility.
           console.warn("[SearchListingEditor] preview refresh failed", error);
         });
     }, PREVIEW_DEBOUNCE_MS);
@@ -225,29 +312,84 @@ export function SearchListingEditor({
     };
   }, [resourceType, entityId, value.title, value.description]);
 
-  // onChange emits the override field (what the merchant typed),
-  // never the composed value. The save payload carries only
-  // merchant-owned data.
+  // ── Field handlers ──
+
+  const handleTitleFocus = useCallback(() => {
+    if (titleMode === "auto") {
+      // Seed the draft from what the merchant currently sees, so
+      // they can edit starting from the parent value without a
+      // flicker to empty.
+      setTitleDraft(parentTitle);
+      setTitleMode("user");
+    }
+  }, [titleMode, parentTitle]);
+
   const handleTitleChange = useCallback(
-    (next: string) =>
-      onChange({ title: next, description: override.description }),
+    (next: string) => {
+      setTitleDraft(next);
+      onChange({ title: next, description: override.description });
+    },
     [onChange, override.description],
   );
 
+  const handleTitleBlur = useCallback(() => {
+    if (titleMode === "user" && titleDraft.trim() === "") {
+      // Merchant cleared the field + navigated away → return to
+      // AUTO. onChange("") signals the parent that no override is
+      // active; `stripEmptySeoKeys` at save time converts this to
+      // a missing key in the DB row.
+      setTitleMode("auto");
+      setTitleDraft("");
+      onChange({ title: "", description: override.description });
+    }
+  }, [titleMode, titleDraft, onChange, override.description]);
+
+  const handleDescriptionFocus = useCallback(() => {
+    if (descriptionMode === "auto") {
+      setDescriptionDraft(parentDescription);
+      setDescriptionMode("user");
+    }
+  }, [descriptionMode, parentDescription]);
+
   const handleDescriptionChange = useCallback(
-    (next: string) => onChange({ title: override.title, description: next }),
+    (next: string) => {
+      setDescriptionDraft(next);
+      onChange({ title: override.title, description: next });
+    },
     [onChange, override.title],
   );
 
+  const handleDescriptionBlur = useCallback(() => {
+    if (descriptionMode === "user" && descriptionDraft.trim() === "") {
+      setDescriptionMode("auto");
+      setDescriptionDraft("");
+      onChange({ title: override.title, description: "" });
+    }
+  }, [descriptionMode, descriptionDraft, onChange, override.title]);
+
+  // ── Placeholder + URL derivations ──
+
   const fallbackLabels = PARENT_FALLBACK_LABELS[resourceType];
+  // AUTO mode: no placeholder — the field already displays the
+  // parent value. USER mode: only show the static fallback when
+  // both draft and parent are empty (the /new-empty case).
   const titlePlaceholder =
-    value.title || fallbackLabels?.title || "";
+    titleMode === "user" && !titleDraft && !parentTitle
+      ? fallbackLabels?.title ?? ""
+      : "";
   const descriptionPlaceholder =
-    value.description || fallbackLabels?.description || "";
+    descriptionMode === "user" && !descriptionDraft && !parentDescription
+      ? fallbackLabels?.description ?? ""
+      : "";
 
   const fullUrl = latestPreview.displayUrl
     ? `https://${latestPreview.displayUrl.replace(/ › /g, "/")}`
     : "";
+
+  // Input-bound values: AUTO reads parent directly; USER reads draft.
+  const titleInputValue = titleMode === "user" ? titleDraft : parentTitle;
+  const descriptionInputValue =
+    descriptionMode === "user" ? descriptionDraft : parentDescription;
 
   return (
     <div className="sle">
@@ -285,9 +427,11 @@ export function SearchListingEditor({
               id="sle-title"
               type="text"
               className="sle__input"
-              value={override.title}
+              value={titleInputValue}
               placeholder={titlePlaceholder}
+              onFocus={handleTitleFocus}
               onChange={(e) => handleTitleChange(e.target.value)}
+              onBlur={handleTitleBlur}
             />
             <div
               className="sle__counter"
@@ -304,9 +448,11 @@ export function SearchListingEditor({
             <textarea
               id="sle-description"
               className="sle__input sle__textarea"
-              value={override.description}
+              value={descriptionInputValue}
               placeholder={descriptionPlaceholder}
+              onFocus={handleDescriptionFocus}
               onChange={(e) => handleDescriptionChange(e.target.value)}
+              onBlur={handleDescriptionBlur}
               rows={3}
             />
             <div

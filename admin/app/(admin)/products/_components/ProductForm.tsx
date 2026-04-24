@@ -901,6 +901,8 @@ export default function ProductForm({
                 title: seoState.title,
                 description: seoState.description,
               }}
+              parentTitle={title}
+              parentDescription={strippedDescription}
               onChange={handleSeoChange}
               initialPreview={initialPreview}
             />

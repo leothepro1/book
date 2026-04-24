@@ -275,7 +275,8 @@ describe("AccommodationForm — compose-at-parent (M6.4)", () => {
     // Composed value.title = parent accommodation's displayName.
     expect(previewSeoAction).toHaveBeenCalled();
     const call = vi.mocked(previewSeoAction).mock.calls[0][0];
-    expect(call.overrides.title).toBe("Stuga Björk");
+    const overrides = call.overrides as { title: string };
+    expect(overrides.title).toBe("Stuga Björk");
   });
 
   it("preview reflects SEO override when typed (override wins over parent)", async () => {
@@ -306,6 +307,7 @@ describe("AccommodationForm — compose-at-parent (M6.4)", () => {
 
     expect(previewSeoAction).toHaveBeenCalled();
     const call = vi.mocked(previewSeoAction).mock.calls[0][0];
-    expect(call.overrides.title).toBe("Custom SEO title");
+    const overrides = call.overrides as { title: string };
+    expect(overrides.title).toBe("Custom SEO title");
   });
 });

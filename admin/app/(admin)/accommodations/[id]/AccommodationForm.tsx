@@ -27,7 +27,11 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { groupFacilitiesByCategory, FACILITY_MAP, FACILITY_CATEGORY_LABELS } from "@/app/_lib/accommodations/facility-map";
 import type { FacilityCategory } from "@/app/_lib/accommodations/facility-map";
-import { updateAccommodation } from "../actions";
+import {
+  archiveAccommodation,
+  deleteAccommodation,
+  updateAccommodation,
+} from "../actions";
 import { listAccommodationCategories } from "@/app/(admin)/accommodation-categories/actions";
 import type { ResolvedAccommodation } from "@/app/_lib/accommodations/types";
 import type { AccommodationStatus, FacilityType, BedType } from "@prisma/client";
@@ -105,6 +109,12 @@ export default function AccommodationForm({
   const [dirty, setDirty] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Header "Fler åtgärder" dropdown — mirrors ProductForm's actionsRef
+  // pattern (same outside-click behaviour, same `.pf-actions-dropdown`
+  // CSS classes from product-form.css).
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
+
   // ── Editable fields ──
   const [nameInput, setNameInput] = useState(accommodation.displayName ?? "");
   const [descInput, setDescInput] = useState(accommodation.displayDescription ?? "");
@@ -132,6 +142,16 @@ export default function AccommodationForm({
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
   }, [statusOpen]);
+
+  // Close header "Fler åtgärder" dropdown on outside click
+  useEffect(() => {
+    if (!actionsOpen) return;
+    const handle = (e: MouseEvent) => {
+      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) setActionsOpen(false);
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [actionsOpen]);
 
   // ── Media (same pattern as ProductForm) ──
   const [media, setMedia] = useState<MediaItem[]>(
@@ -383,7 +403,7 @@ export default function AccommodationForm({
   return (
     <div className="admin-page admin-page--no-preview accommodations-page">
       <div className="admin-editor">
-        {/* ── Header (breadcrumb) ── */}
+        {/* ── Header (breadcrumb + actions — mirrors ProductForm) ── */}
         <div className="admin-header pf-header">
           <h1 className="admin-title" style={{ display: "flex", alignItems: "center", gap: 0 }}>
             <button
@@ -397,6 +417,52 @@ export default function AccommodationForm({
             <EditorIcon name="chevron_right" size={16} style={{ color: "var(--admin-text-tertiary)", flexShrink: 0 }} />
             <span style={{ marginLeft: 3 }}>{accommodation.displayName}</span>
           </h1>
+          <div className="pf-header__actions">
+            <button className="settings-btn--muted" disabled>Duplicera</button>
+            <button className="settings-btn--muted" disabled>Förhandsgranska</button>
+            <div style={{ position: "relative" }} ref={actionsRef}>
+              <button className="settings-btn--muted" onClick={() => setActionsOpen(!actionsOpen)}>
+                Fler åtgärder
+                <EditorIcon name="expand_more" size={16} />
+              </button>
+              {actionsOpen && (
+                <div className="pf-actions-dropdown">
+                  <button
+                    className="pf-actions-dropdown__item"
+                    onClick={async () => {
+                      setActionsOpen(false);
+                      if (!confirm("Vill du arkivera detta boende? Det kan återställas senare.")) return;
+                      const result = await archiveAccommodation(accommodation.id);
+                      if (result.ok) {
+                        router.push("/accommodations");
+                      } else {
+                        alert(result.error);
+                      }
+                    }}
+                  >
+                    <EditorIcon name="archive" size={18} />
+                    Arkivera boende
+                  </button>
+                  <button
+                    className="pf-actions-dropdown__item pf-actions-dropdown__item--danger"
+                    onClick={async () => {
+                      setActionsOpen(false);
+                      if (!confirm("Vill du permanent radera detta boende? Detta kan inte ångras.")) return;
+                      const result = await deleteAccommodation(accommodation.id);
+                      if (result.ok) {
+                        router.push("/accommodations");
+                      } else {
+                        alert(result.error);
+                      }
+                    }}
+                  >
+                    <EditorIcon name="delete" size={18} />
+                    Radera boende
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* ── Body: two-column ── */}
@@ -558,6 +624,8 @@ export default function AccommodationForm({
                 title: seoState.title,
                 description: seoState.description,
               }}
+              parentTitle={nameInput}
+              parentDescription={strippedAccommodationDescription}
               onChange={handleSeoChange}
               initialPreview={initialPreview}
             />
