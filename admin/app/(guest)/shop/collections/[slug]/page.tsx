@@ -1,13 +1,46 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { getRequestLocale } from "@/app/(guest)/_lib/locale/getRequestLocale";
 import { applyTranslations, applyTranslationsBatch } from "@/app/_lib/translations/apply-db-translations";
 import { ProductCard } from "@/app/(guest)/_components/cards/ProductCard";
+import { toNextMetadata } from "@/app/_lib/seo/next-metadata";
+import { resolveSeoForRequest } from "@/app/_lib/seo/request-cache";
 import "./collection-page.css";
 
 export const revalidate = 60;
 export const dynamicParams = true;
+
+// ── SEO metadata ──────────────────────────────────────────────
+//
+// Runs before the page body. Not-found tenants/collections return
+// a noindex stub — never throw from generateMetadata (Next would
+// 500 the whole request).
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const tenant = await resolveTenantFromHost();
+  if (!tenant) {
+    return { title: "Not found", robots: { index: false } };
+  }
+
+  const locale = await getRequestLocale();
+  const resolved = await resolveSeoForRequest(
+    tenant.id,
+    slug,
+    locale,
+    "product_collection",
+  );
+  if (!resolved) {
+    return { title: "Not found", robots: { index: false } };
+  }
+
+  return toNextMetadata(resolved);
+}
 
 export default async function CollectionPage({
   params,

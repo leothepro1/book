@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProductBySlug, isAccommodationSlug } from "@/app/_lib/products/actions";
 import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
@@ -8,9 +9,52 @@ import GuestPageShell from "@/app/(guest)/_components/GuestPageShell";
 import { ShopProductProvider } from "@/app/(guest)/_lib/product-context/ShopProductProvider";
 import { ShopProductLayout } from "./ShopProductLayout";
 import type { StandardProductContext } from "@/app/(guest)/_lib/product-context/ProductContext";
+import { toNextMetadata } from "@/app/_lib/seo/next-metadata";
+import { resolveSeoForRequest } from "@/app/_lib/seo/request-cache";
 
 export const revalidate = 60;
 export const dynamicParams = true;
+
+// ── SEO metadata ──────────────────────────────────────────────
+//
+// Runs before the page body. Not-found tenants/products return a
+// noindex stub — never throw from generateMetadata (Next would
+// 500 the whole request).
+//
+// Accommodation-slug collision: when the slug belongs to an
+// Accommodation the page body redirects to `/stays/[slug]`.
+// Metadata is never rendered for a redirected request, but we
+// still return a noindex stub defensively so Google can't index
+// `/shop/products/{accommodation-slug}` if the redirect is ever
+// removed.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const tenant = await resolveTenantFromHost();
+  if (!tenant) {
+    return { title: "Not found", robots: { index: false } };
+  }
+
+  if (await isAccommodationSlug(slug)) {
+    return { title: "Not found", robots: { index: false } };
+  }
+
+  const locale = await getRequestLocale();
+  const resolved = await resolveSeoForRequest(
+    tenant.id,
+    slug,
+    locale,
+    "product",
+  );
+  if (!resolved) {
+    return { title: "Not found", robots: { index: false } };
+  }
+
+  return toNextMetadata(resolved);
+}
 
 export default async function ProductPage({
   params,

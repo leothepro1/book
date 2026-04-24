@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/app/_lib/db/prisma";
@@ -8,9 +9,44 @@ import type { AccommodationWithRelations } from "@/app/_lib/accommodations/types
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { getRequestLocale } from "@/app/(guest)/_lib/locale/getRequestLocale";
 import { applyTranslations, applyTranslationsBatch } from "@/app/_lib/translations/apply-db-translations";
+import { toNextMetadata } from "@/app/_lib/seo/next-metadata";
+import { resolveSeoForRequest } from "@/app/_lib/seo/request-cache";
 
 export const revalidate = 60;
 export const dynamicParams = true;
+
+// ── SEO metadata ──────────────────────────────────────────────
+//
+// Runs before the page body. Not-found tenants/categories return
+// a noindex stub — never throw from generateMetadata (Next would
+// 500 the whole request). Empty categories (zero indexable
+// members) surface through the adapter's isIndexable=false, which
+// drives resolved.noindex=true — title/description still render
+// but robots meta tells crawlers to stay away.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const tenant = await resolveTenantFromHost();
+  if (!tenant) {
+    return { title: "Not found", robots: { index: false } };
+  }
+
+  const locale = await getRequestLocale();
+  const resolved = await resolveSeoForRequest(
+    tenant.id,
+    slug,
+    locale,
+    "accommodation_category",
+  );
+  if (!resolved) {
+    return { title: "Not found", robots: { index: false } };
+  }
+
+  return toNextMetadata(resolved);
+}
 
 export default async function AccommodationCategoryPage({
   params,
