@@ -31,6 +31,8 @@ import { updateAccommodation } from "../actions";
 import { listAccommodationCategories } from "@/app/(admin)/accommodation-categories/actions";
 import type { ResolvedAccommodation } from "@/app/_lib/accommodations/types";
 import type { AccommodationStatus, FacilityType, BedType } from "@prisma/client";
+import { SearchListingEditor } from "@/app/(admin)/_components/SearchListingEditor";
+import type { SeoPreviewResult } from "@/app/_lib/seo/preview";
 import "../../products/_components/product-form.css";
 import "../accommodations.css";
 
@@ -74,9 +76,25 @@ function formatDate(d: string | Date | null): string {
 export default function AccommodationForm({
   accommodation,
   tenantId,
+  seo,
+  initialPreview,
 }: {
   accommodation: ResolvedAccommodation;
   tenantId: string;
+  /**
+   * Current per-entity SEO overrides (parsed at the page boundary
+   * via `safeParseSeoMetadata`). `resolveAccommodation()` doesn't
+   * propagate the raw `seo` JSONB, so the parent page passes it
+   * separately.
+   */
+  seo: { title: string; description: string };
+  /**
+   * SSR-prepared preview snapshot for the first render. When
+   * `previewSeoForEntity` fails during page load the parent passes
+   * undefined and `SearchListingEditor` falls back to its own
+   * loading shell until the first debounced client refresh settles.
+   */
+  initialPreview?: SeoPreviewResult;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -93,6 +111,16 @@ export default function AccommodationForm({
   const [statusOpen, setStatusOpen] = useState(false);
   const statusRef = useRef<HTMLDivElement>(null);
   const [externalCode, setExternalCode] = useState(accommodation.externalCode ?? "");
+
+  // ── SEO overrides (title + description in Batch 2; OG image +
+  // noindex land in later batches). Submitted inside the save
+  // payload — the server action shallow-merges with stored seo so
+  // future fields carry through unchanged. `handleSeoChange` lives
+  // further down, once `markDirty` is declared.
+  const [seoState, setSeoState] = useState<{ title: string; description: string }>({
+    title: seo.title,
+    description: seo.description,
+  });
 
   // Close status dropdown on outside click
   useEffect(() => {
@@ -261,6 +289,14 @@ export default function AccommodationForm({
 
   const markDirty = useCallback(() => setDirty(true), []);
 
+  const handleSeoChange = useCallback(
+    (next: { title: string; description: string }) => {
+      setSeoState(next);
+      markDirty();
+    },
+    [markDirty],
+  );
+
   // ── Facilities (read-only display for V1) ──
   const facilityGroups = groupFacilitiesByCategory(accommodation.facilities);
 
@@ -289,6 +325,10 @@ export default function AccommodationForm({
         roomSizeSqm: capRoomSize || null,
         bedrooms: capBedrooms || null,
         bathrooms: capBathrooms || null,
+        seo: {
+          title: seoState.title,
+          description: seoState.description,
+        },
       });
 
       setIsSaving(false);
@@ -302,7 +342,7 @@ export default function AccommodationForm({
         setTimeout(() => setSaveError(null), 5000);
       }
     });
-  }, [nameInput, descInput, status, externalCode, media, highlights, bedConfigs, selectedFacilities, selectedCategoryIds, capMaxGuests, capMinGuests, capExtraBeds, capRoomSize, capBedrooms, capBathrooms, accommodation.id, router]);
+  }, [nameInput, descInput, status, externalCode, media, highlights, bedConfigs, selectedFacilities, selectedCategoryIds, capMaxGuests, capMinGuests, capExtraBeds, capRoomSize, capBedrooms, capBathrooms, seoState, accommodation.id, router]);
 
   const handleDiscard = useCallback(() => {
     setIsDiscarding(true);
@@ -321,13 +361,14 @@ export default function AccommodationForm({
     setCapBedrooms(accommodation.bedrooms ?? 0);
     setCapBathrooms(accommodation.bathrooms ?? 0);
     setSelectedCategoryIds(new Set(accommodation.categoryIds));
+    setSeoState({ title: seo.title, description: seo.description });
     setTags([]);
     setTagInput("");
     setTimeout(() => {
       setDirty(false);
       setIsDiscarding(false);
     }, 100);
-  }, [accommodation]);
+  }, [accommodation, seo]);
 
   return (
     <div className="admin-page admin-page--no-preview accommodations-page">
@@ -486,6 +527,19 @@ export default function AccommodationForm({
                 <span>Lägg till höjdpunkt</span>
               </button>
             </div>
+
+            {/* ── Sökmotorlistning ── */}
+            <SearchListingEditor
+              resourceType="accommodation"
+              entityId={accommodation.id}
+              value={{
+                title: seoState.title,
+                description: seoState.description,
+                slug: accommodation.slug,
+              }}
+              onChange={handleSeoChange}
+              initialPreview={initialPreview}
+            />
 
           </div>
 

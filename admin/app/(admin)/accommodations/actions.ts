@@ -4,7 +4,18 @@ import { prisma } from "@/app/_lib/db/prisma";
 import { requireAdmin } from "@/app/(admin)/_lib/auth/devAuth";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { revalidatePath } from "next/cache";
-import type { AccommodationStatus, FacilityType, BedType, FacilitySource } from "@prisma/client";
+import type {
+  AccommodationStatus,
+  FacilityType,
+  BedType,
+  FacilitySource,
+  Prisma,
+} from "@prisma/client";
+import { log } from "@/app/_lib/logger";
+import {
+  SeoMetadataSchema,
+  safeParseSeoMetadata,
+} from "@/app/_lib/seo/types";
 
 type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -42,6 +53,13 @@ export type AccommodationUpdateInput = {
     description: string;
     sortOrder: number;
   }>;
+  /**
+   * Per-entity SEO overrides. Shape validated at the server boundary
+   * via `SeoMetadataSchema.partial()` — clients can send any subset.
+   * Empty strings clear a field (merchant typed then deleted);
+   * absent keys are untouched in the stored JSONB.
+   */
+  seo?: unknown;
 };
 
 export async function updateAccommodation(
@@ -55,15 +73,50 @@ export async function updateAccommodation(
   if (!tenantData) return { ok: false, error: "Inte inloggad" };
   const tenantId = tenantData.tenant.id;
 
-  // Verify ownership
+  // Verify ownership + fetch current seo for the shallow-merge.
+  // Keeping seo in the same query avoids a second round-trip.
   const existing = await prisma.accommodation.findFirst({
     where: { id, tenantId },
-    select: { id: true },
+    select: { id: true, seo: true },
   });
   if (!existing) return { ok: false, error: "Boendet hittades inte" };
 
+  // ── SEO: parse + merge at the save boundary ──
+  //
+  // Never trust client JSON — run through the same schema that
+  // `/store/preferences` uses. Overrides win over stored entity.seo;
+  // untouched fields (e.g. future `noindex` set by a later batch,
+  // not yet editable in the current UI) carry through unchanged.
+  let mergedSeoJson: Prisma.InputJsonValue | undefined;
+  if (data.seo !== undefined) {
+    const parsed = SeoMetadataSchema.partial().safeParse(data.seo);
+    if (!parsed.success) {
+      log("warn", "seo.entity.seo_invalid", {
+        tenantId,
+        resourceType: "accommodation",
+        entityId: id,
+        reason: parsed.error.message,
+      });
+      return { ok: false, error: "Ogiltig SEO-data" };
+    }
+    const existingSeo = safeParseSeoMetadata(existing.seo) ?? {};
+    const merged = { ...existingSeo, ...parsed.data };
+    // Round-trip through JSON to strip any `undefined` values
+    // Prisma's InputJsonValue rejects. The parse+spread above
+    // guarantees shape validity (rule: cast accompanied by
+    // boundary parse).
+    mergedSeoJson = JSON.parse(JSON.stringify(merged)) as Prisma.InputJsonValue;
+
+    log("info", "seo.entity.seo_updated", {
+      tenantId,
+      resourceType: "accommodation",
+      entityId: id,
+      fieldsChanged: Object.keys(parsed.data).join(","),
+    });
+  }
+
   await prisma.$transaction(async (tx) => {
-    // Update overridable fields + capacity
+    // Update overridable fields + capacity + seo.
     await tx.accommodation.update({
       where: { id },
       data: {
@@ -77,6 +130,7 @@ export async function updateAccommodation(
         ...(data.roomSizeSqm !== undefined && { roomSizeSqm: data.roomSizeSqm }),
         ...(data.bedrooms !== undefined && { bedrooms: data.bedrooms }),
         ...(data.bathrooms !== undefined && { bathrooms: data.bathrooms }),
+        ...(mergedSeoJson !== undefined && { seo: mergedSeoJson }),
       },
     });
 
