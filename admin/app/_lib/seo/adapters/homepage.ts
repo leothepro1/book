@@ -113,10 +113,16 @@ export const homepageSeoAdapter: SeoAdapter<HomepageEntity> = {
     tenant: SeoTenantContext,
     locales: readonly string[],
   ): SitemapEntry[] {
-    return locales.map((locale) => ({
+    // TODO(m8): emit entries for all activeLocales once the hreflang
+    // pipeline + locale-prefix route segments land. Until then we
+    // restrict to defaultLocale to avoid advertising 404-returning
+    // /{locale}/... URLs in the sitemap.
+    void locales;
+    const sitemapLocales = [tenant.defaultLocale];
+    return sitemapLocales.map((locale) => ({
       url: buildAbsoluteUrl(tenant, locale, "/"),
       lastmod: tenant.contentUpdatedAt,
-      alternates: locales.map((l) => ({
+      alternates: sitemapLocales.map((l) => ({
         hreflang: l,
         url: buildAbsoluteUrl(tenant, l, "/"),
       })),

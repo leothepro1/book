@@ -173,16 +173,17 @@ beforeEach(() => {
 // ──────────────────────────────────────────────────────────────
 
 describe("fetchAccommodationsForSitemap — happy path & contract", () => {
-  it("returns one BuiltShardEntry per (row × locale)", async () => {
+  it("(M8 defer) returns one BuiltShardEntry per row — defaultLocale only until hreflang ships", async () => {
     mockFindManyAccommodation([accommodationRow()]);
+    // Tenant has 2 active locales, but sitemap emission is capped at
+    // defaultLocale until M8 lands locale-prefix routes + hreflang.
     const tenant = makeTenant({ activeLocales: ["sv", "en"] });
     const entries = await fetchAccommodationsForSitemap({
       tenant,
       limit: 50_000,
       offset: 0,
     });
-    // 1 row × 2 locales.
-    expect(entries).toHaveLength(2);
+    expect(entries).toHaveLength(1);
   });
 
   it("returns absolute URLs (https://…)", async () => {
@@ -360,7 +361,7 @@ describe("fetchAccommodationsForSitemap — isIndexable alignment", () => {
 // ──────────────────────────────────────────────────────────────
 
 describe("fetchAccommodationCategoriesForSitemap — happy path & contract", () => {
-  it("returns one BuiltShardEntry per (indexable category × locale)", async () => {
+  it("(M8 defer) returns one BuiltShardEntry per indexable category — defaultLocale only until hreflang ships", async () => {
     mockFindManyAccommodationCategory([categoryRow()]);
     const tenant = makeTenant({ activeLocales: ["sv", "en"] });
     const entries = await fetchAccommodationCategoriesForSitemap({
@@ -368,7 +369,7 @@ describe("fetchAccommodationCategoriesForSitemap — happy path & contract", () 
       limit: 50_000,
       offset: 0,
     });
-    expect(entries).toHaveLength(2);
+    expect(entries).toHaveLength(1);
     for (const e of entries) expect(e.url).toContain("/stays/categories/");
   });
 

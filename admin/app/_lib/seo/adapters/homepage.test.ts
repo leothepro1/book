@@ -159,42 +159,20 @@ describe("homepageSeoAdapter.isIndexable", () => {
 // ── getSitemapEntries ─────────────────────────────────────────
 
 describe("homepageSeoAdapter.getSitemapEntries", () => {
-  it("emits one entry per active locale", () => {
+  it("(M8 defer) restricts output to defaultLocale even when multiple locales are passed", () => {
+    // Until the hreflang pipeline + locale-prefix route segments ship
+    // (M8), the adapter only emits the default-locale entry to avoid
+    // advertising /{locale}/... URLs that 404.
     const entries = homepageSeoAdapter.getSitemapEntries(
       {},
       makeTenant(),
       ["sv", "en", "de"],
     );
-    expect(entries).toHaveLength(3);
-  });
-
-  it("default-locale entry uses bare '/' path", () => {
-    const entries = homepageSeoAdapter.getSitemapEntries(
-      {},
-      makeTenant(),
-      ["sv", "en"],
-    );
+    expect(entries).toHaveLength(1);
     expect(entries[0].url).toBe("https://apelviken-x.rutgr.com/");
-  });
-
-  it("non-default-locale entry is prefixed with /locale/", () => {
-    const entries = homepageSeoAdapter.getSitemapEntries(
-      {},
-      makeTenant(),
-      ["sv", "en"],
-    );
-    expect(entries[1].url).toBe("https://apelviken-x.rutgr.com/en/");
-  });
-
-  it("each entry has hreflang alternates covering every locale", () => {
-    const entries = homepageSeoAdapter.getSitemapEntries(
-      {},
-      makeTenant(),
-      ["sv", "en", "de"],
-    );
-    for (const entry of entries) {
-      expect(entry.alternates).toHaveLength(3);
-    }
+    expect(entries[0].alternates).toEqual([
+      { hreflang: "sv", url: "https://apelviken-x.rutgr.com/" },
+    ]);
   });
 });
 

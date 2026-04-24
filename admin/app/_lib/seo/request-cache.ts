@@ -4,11 +4,11 @@
  *
  * The boundary between the SEO engine and the Next.js App Router.
  *
- * Every accommodation route (currently only `/stays/[slug]`) calls
- * `resolveSeoForRequest` from BOTH `generateMetadata` and the page
- * body. React's `cache()` guarantees a single actual resolution per
- * request — the second call returns the memoized result instead of
- * re-running the engine or re-querying Prisma.
+ * Every seoable route calls `resolveSeoForRequest` from BOTH
+ * `generateMetadata` and the page body. React's `cache()` guarantees
+ * a single actual resolution per request — the second call returns
+ * the memoized result instead of re-running the engine or re-querying
+ * Prisma.
  *
  * Key contract: `cache()` memoization is keyed by SameValue of
  * positional arguments. That's why `resolveSeoForRequest` takes
@@ -30,6 +30,16 @@ import { ACCOMMODATION_SELECT } from "../accommodations/types";
 import { tenantToSeoContext } from "../tenant/seo-context";
 
 import type { AccommodationWithMedia } from "./adapters/accommodation";
+import {
+  type AccommodationCategoryWithItems,
+  categorySeoInclude,
+} from "./adapters/accommodation-category";
+import type { ProductWithMedia } from "./adapters/product";
+import {
+  type ProductCollectionWithItems,
+  collectionSeoInclude,
+} from "./adapters/product-collection";
+import type { SearchSeoInput } from "./adapters/search";
 import { ensureSeoBootstrapped } from "./bootstrap";
 import { createCloudinaryImageService } from "./image-service-impl";
 import { createPageTypeSeoDefaultRepository } from "./page-type-defaults-impl";
@@ -94,6 +104,96 @@ export const getAccommodationForSeo = cache(
 );
 
 /**
+ * Fetch the product row for SEO purposes, tenant-scoped, in the
+ * shape the `productSeoAdapter` expects: raw Prisma `Product` with
+ * `media` + `variants` relations.
+ *
+ * Deliberately distinct from `getProductBySlug` in
+ * `app/_lib/products/actions.ts` — that helper runs the product
+ * through `resolveProduct()` into a `ResolvedProduct`, which strips
+ * fields the SEO adapter needs (seo JSONB, variants shape). The SEO
+ * engine queries the raw row directly.
+ *
+ * Filters applied at the DB layer (mirror `productSeoAdapter.isIndexable`):
+ *   - `status: "ACTIVE"`
+ *   - `archivedAt: null`
+ *   - `productType: "STANDARD"` (GIFT_CARD has its own adapter later)
+ *
+ * Caller-facing `seoOverrides.noindex` is NOT filtered here — the
+ * resolver consumes it via the adapter and emits the appropriate
+ * robots meta tag.
+ */
+export const getProductForSeo = cache(
+  async (
+    tenantId: string,
+    slug: string,
+  ): Promise<ProductWithMedia | null> => {
+    const row = await prisma.product.findFirst({
+      where: {
+        tenantId,
+        slug,
+        status: "ACTIVE",
+        archivedAt: null,
+        productType: "STANDARD",
+      },
+      include: {
+        media: { orderBy: { sortOrder: "asc" } },
+        variants: { orderBy: { sortOrder: "asc" } },
+      },
+    });
+    return row;
+  },
+);
+
+/**
+ * Fetch the product collection row for SEO purposes, tenant-scoped,
+ * in the shape `productCollectionSeoAdapter` expects. Uses
+ * `collectionSeoInclude(tenantId)` so the inner items are pre-filtered
+ * to ACTIVE STANDARD members and capped at `MAX_ITEMLIST_MEMBERS` at
+ * the DB layer.
+ *
+ * Returns null for DRAFT collections — the caller emits a noindex
+ * stub. The adapter's own `isIndexable` handles `seo.noindex`
+ * overrides on indexable-by-status collections.
+ */
+export const getCollectionForSeo = cache(
+  async (
+    tenantId: string,
+    slug: string,
+  ): Promise<ProductCollectionWithItems | null> => {
+    const row = await prisma.productCollection.findFirst({
+      where: { tenantId, slug, status: "ACTIVE" },
+      include: collectionSeoInclude(tenantId),
+    });
+    return row as ProductCollectionWithItems | null;
+  },
+);
+
+/**
+ * Fetch the accommodation category row for SEO purposes,
+ * tenant-scoped, in the shape `accommodationCategorySeoAdapter`
+ * expects. Uses `categorySeoInclude(tenantId)` so inner items are
+ * pre-filtered to ACTIVE, non-archived accommodations and capped at
+ * `MAX_ITEMLIST_MEMBERS` at the DB layer.
+ *
+ * Returns null for non-ACTIVE categories. The adapter's own
+ * `isIndexable` handles the empty-items case (category with zero
+ * members is treated as thin content and emits noindex).
+ */
+export const getCategoryForSeo = cache(
+  async (
+    tenantId: string,
+    slug: string,
+  ): Promise<AccommodationCategoryWithItems | null> => {
+    const row = await prisma.accommodationCategory.findFirst({
+      where: { tenantId, slug, status: "ACTIVE" },
+      include: categorySeoInclude(tenantId),
+    });
+    return row as AccommodationCategoryWithItems | null;
+  },
+);
+
+/**
  * Fetch the tenant + its locale rows and convert to SeoTenantContext.
  * Dedupes across multiple resolves for the same tenant in one request.
  */
@@ -121,9 +221,9 @@ const getSeoTenantContextCached = cache(
  *
  * **Note on `slug`:** `slug` is a positional primitive so the React
  * `cache()` key is a string-tuple. Some resource types don't have
- * a slug — notably `"homepage"`, where the tenant IS the resource.
- * For those, callers pass `slug: ""` and the dispatched fetcher
- * ignores it.
+ * a slug — notably `"homepage"` and `"search"`, where the tenant IS
+ * the resource. For those, callers pass `slug: ""` and the
+ * dispatched fetcher ignores it.
  *
  * @throws Only if `resourceType` isn't wired up here yet. That's a
  *   programmer-error path — never a runtime 500 for a merchant's
@@ -146,6 +246,14 @@ export const resolveSeoForRequest = cache(
         return fetchAndResolveHomepage(tenantId, locale);
       case "accommodation":
         return fetchAndResolveAccommodation(tenantId, slug, locale);
+      case "product":
+        return fetchAndResolveProduct(tenantId, slug, locale);
+      case "product_collection":
+        return fetchAndResolveProductCollection(tenantId, slug, locale);
+      case "accommodation_category":
+        return fetchAndResolveAccommodationCategory(tenantId, slug, locale);
+      case "search":
+        return fetchAndResolveSearch(tenantId, locale);
       default:
         throw new Error(
           `resourceType ${resourceType} not wired in request-cache yet`,
@@ -203,6 +311,96 @@ async function fetchAndResolveAccommodation(
     tenant: tenantContext,
     resourceType: "accommodation",
     entity: accommodation,
+    locale,
+    requestId: newRequestId(),
+  });
+}
+
+async function fetchAndResolveProduct(
+  tenantId: string,
+  slug: string,
+  locale: string,
+): Promise<ResolvedSeo | null> {
+  const [tenantContext, product] = await Promise.all([
+    getSeoTenantContextCached(tenantId),
+    getProductForSeo(tenantId, slug),
+  ]);
+  if (!tenantContext) return null;
+  if (!product) return null;
+
+  return resolver.resolve({
+    tenant: tenantContext,
+    resourceType: "product",
+    entity: product,
+    locale,
+    requestId: newRequestId(),
+  });
+}
+
+async function fetchAndResolveProductCollection(
+  tenantId: string,
+  slug: string,
+  locale: string,
+): Promise<ResolvedSeo | null> {
+  const [tenantContext, collection] = await Promise.all([
+    getSeoTenantContextCached(tenantId),
+    getCollectionForSeo(tenantId, slug),
+  ]);
+  if (!tenantContext) return null;
+  if (!collection) return null;
+
+  return resolver.resolve({
+    tenant: tenantContext,
+    resourceType: "product_collection",
+    entity: collection,
+    locale,
+    requestId: newRequestId(),
+  });
+}
+
+async function fetchAndResolveAccommodationCategory(
+  tenantId: string,
+  slug: string,
+  locale: string,
+): Promise<ResolvedSeo | null> {
+  const [tenantContext, category] = await Promise.all([
+    getSeoTenantContextCached(tenantId),
+    getCategoryForSeo(tenantId, slug),
+  ]);
+  if (!tenantContext) return null;
+  if (!category) return null;
+
+  return resolver.resolve({
+    tenant: tenantContext,
+    resourceType: "accommodation_category",
+    entity: category,
+    locale,
+    requestId: newRequestId(),
+  });
+}
+
+async function fetchAndResolveSearch(
+  tenantId: string,
+  locale: string,
+): Promise<ResolvedSeo | null> {
+  // Search has no Prisma entity — synthesize `SearchSeoInput` from
+  // tenant context. `activeLocales` is restricted to defaultLocale
+  // for symmetry with the sitemap locale defer (M8 will restore the
+  // full list when locale-prefix routes land). The search adapter
+  // emits zero sitemap entries regardless, so the value is
+  // cosmetic today.
+  const tenantContext = await getSeoTenantContextCached(tenantId);
+  if (!tenantContext) return null;
+
+  const searchInput: SearchSeoInput = {
+    tenantId,
+    activeLocales: [tenantContext.defaultLocale],
+  };
+
+  return resolver.resolve({
+    tenant: tenantContext,
+    resourceType: "search",
+    entity: searchInput,
     locale,
     requestId: newRequestId(),
   });

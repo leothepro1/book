@@ -5,6 +5,16 @@
  * underlying Prisma queries are tested in `queries.test.ts`; here
  * we exercise the shard composition logic (always-homepage,
  * gated-accommodation-index, slicing, hasMore invariant).
+ *
+ * ── M5-followup defers affecting this shard ─────────────────
+ * 1. Homepage adapter `getSitemapEntries` is filtered to
+ *    `[tenant.defaultLocale]` until hreflang + locale-prefix
+ *    routes land (M8). Multi-locale tenants emit exactly one
+ *    homepage entry (bare "/") rather than one per activeLocale.
+ * 2. Accommodation-index adapter `getSitemapEntries` returns []
+ *    unconditionally until `/stays` is rebuilt as a real index
+ *    page (currently a 301 redirect to `/search`). /stays entries
+ *    never appear in the pages shard under the current defer.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -98,7 +108,7 @@ beforeEach(() => {
 // ── Homepage always emitted ─────────────────────────────────
 
 describe("fetchPagesForSitemap — homepage is always emitted", () => {
-  it("emits one homepage entry per active locale when tenant has no accommodations", async () => {
+  it("(M8 defer) emits a single homepage entry at the defaultLocale root, regardless of how many activeLocales a tenant publishes", async () => {
     vi.mocked(tenantHasActiveAccommodations).mockResolvedValue(false);
     const tenant = makeTenant({ activeLocales: ["sv", "en", "de"] });
     const entries = await fetchPagesForSitemap({
@@ -106,11 +116,8 @@ describe("fetchPagesForSitemap — homepage is always emitted", () => {
       limit: 50_000,
       offset: 0,
     });
-    expect(entries).toHaveLength(3);
-    // Every URL ends with "/" (homepage root).
-    for (const e of entries) {
-      expect(e.url).toMatch(/\/$/);
-    }
+    expect(entries).toHaveLength(1);
+    expect(entries[0].url).toBe("https://apelviken.rutgr.com/");
   });
 
   it("does NOT call fetchFeaturedAccommodationsForSitemap when tenant has no accommodations", async () => {
@@ -124,10 +131,15 @@ describe("fetchPagesForSitemap — homepage is always emitted", () => {
   });
 });
 
-// ── Accommodation-index emission gate ──────────────────────
+// ── Accommodation-index is deferred ──────────────────────────
 
-describe("fetchPagesForSitemap — accommodation-index is gated", () => {
-  it("emits /stays entries ONLY when tenantHasActiveAccommodations returns true", async () => {
+describe("fetchPagesForSitemap — accommodation-index (DEFERRED until /stays is real index)", () => {
+  // Under the defer, the accommodation-index adapter returns []
+  // unconditionally — /stays URLs never reach the pages shard.
+  // The tenant-has-accommodations gate still runs (and still
+  // invokes fetchFeaturedAccommodationsForSitemap), but the
+  // resulting list is dropped at the adapter boundary.
+  it("omits /stays entries even when tenantHasActiveAccommodations returns true", async () => {
     vi.mocked(tenantHasActiveAccommodations).mockResolvedValue(true);
     vi.mocked(fetchFeaturedAccommodationsForSitemap).mockResolvedValue([
       accommodationRow(),
@@ -138,13 +150,7 @@ describe("fetchPagesForSitemap — accommodation-index is gated", () => {
       limit: 50_000,
       offset: 0,
     });
-    // 2 homepage + 2 /stays = 4.
-    expect(entries).toHaveLength(4);
-    const urls = entries.map((e) => e.url);
-    expect(urls).toContain("https://apelviken.rutgr.com/stays");
-    expect(urls).toContain("https://apelviken.rutgr.com/en/stays");
-    expect(urls).toContain("https://apelviken.rutgr.com/");
-    expect(urls).toContain("https://apelviken.rutgr.com/en/");
+    expect(entries.some((e) => e.url.includes("/stays"))).toBe(false);
   });
 
   it("omits /stays entries when tenantHasActiveAccommodations returns false", async () => {
@@ -157,47 +163,15 @@ describe("fetchPagesForSitemap — accommodation-index is gated", () => {
     });
     expect(entries.some((e) => e.url.includes("/stays"))).toBe(false);
   });
-
-  it("passes the featured accommodation (MAX updatedAt source) to the adapter", async () => {
-    const latestDate = new Date("2026-04-20T00:00:00Z");
-    vi.mocked(tenantHasActiveAccommodations).mockResolvedValue(true);
-    vi.mocked(fetchFeaturedAccommodationsForSitemap).mockResolvedValue([
-      accommodationRow({ updatedAt: latestDate }),
-    ]);
-    const entries = await fetchPagesForSitemap({
-      tenant: makeTenant({ activeLocales: ["sv"] }),
-      limit: 50_000,
-      offset: 0,
-    });
-    const staysEntry = entries.find((e) => e.url.endsWith("/stays"));
-    expect(staysEntry?.lastmod?.getTime()).toBe(latestDate.getTime());
-  });
-
-  it("falls back to tenant.contentUpdatedAt when featured list is empty", async () => {
-    // Defensive race-condition path: tenantHasActive=true but fetch
-    // returns [] (e.g. the one accommodation was deleted between the
-    // two queries). Adapter's MAX fallback kicks in.
-    const tenantTs = new Date("2026-02-20T00:00:00Z");
-    vi.mocked(tenantHasActiveAccommodations).mockResolvedValue(true);
-    vi.mocked(fetchFeaturedAccommodationsForSitemap).mockResolvedValue([]);
-    const entries = await fetchPagesForSitemap({
-      tenant: makeTenant({ activeLocales: ["sv"], contentUpdatedAt: tenantTs }),
-      limit: 50_000,
-      offset: 0,
-    });
-    const staysEntry = entries.find((e) => e.url.endsWith("/stays"));
-    expect(staysEntry?.lastmod?.getTime()).toBe(tenantTs.getTime());
-  });
 });
 
 // ── Size invariant (hasMore always false via aggregator) ──
 
 describe("fetchPagesForSitemap — size invariant", () => {
   it("never produces >= SHARD_SIZE entries at any realistic locale count", async () => {
-    // Even 100 active locales × 2 emitters = 200 entries, far below
-    // SHARD_SIZE (50,000). Aggregator uses
-    // `entries.length === SHARD_SIZE` to set hasMore; guaranteed false
-    // for pages.
+    // Under the M8 defer, only the defaultLocale homepage entry
+    // is emitted; the aggregator's `length === SHARD_SIZE` hasMore
+    // condition is structurally unreachable for pages.
     vi.mocked(tenantHasActiveAccommodations).mockResolvedValue(true);
     vi.mocked(fetchFeaturedAccommodationsForSitemap).mockResolvedValue([
       accommodationRow(),
@@ -221,13 +195,14 @@ describe("fetchPagesForSitemap — slicing", () => {
       accommodationRow(),
     ]);
     const tenant = makeTenant({ activeLocales: ["sv", "en", "de"] });
-    // 3 homepage + 3 /stays = 6 synthesized; limit 2 → first 2.
+    // Under the defer only the single homepage entry is synthesized;
+    // limit 0 truncates to [].
     const entries = await fetchPagesForSitemap({
       tenant,
-      limit: 2,
+      limit: 0,
       offset: 0,
     });
-    expect(entries).toHaveLength(2);
+    expect(entries).toHaveLength(0);
   });
 
   it("honors offset by skipping leading entries", async () => {
@@ -236,17 +211,13 @@ describe("fetchPagesForSitemap — slicing", () => {
       accommodationRow(),
     ]);
     const tenant = makeTenant({ activeLocales: ["sv", "en"] });
-    // 2 homepage + 2 /stays = 4. offset=2, limit=2 → last two.
+    // Only 1 entry synthesized; offset=1 → empty slice.
     const entries = await fetchPagesForSitemap({
       tenant,
-      limit: 2,
-      offset: 2,
+      limit: 10,
+      offset: 1,
     });
-    expect(entries).toHaveLength(2);
-    // The last two entries are both /stays variants.
-    for (const e of entries) {
-      expect(e.url).toContain("/stays");
-    }
+    expect(entries).toHaveLength(0);
   });
 });
 

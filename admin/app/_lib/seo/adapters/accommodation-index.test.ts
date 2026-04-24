@@ -456,48 +456,54 @@ describe("accommodationIndexSeoAdapter.toStructuredData", () => {
 
 // ── getSitemapEntries ────────────────────────────────────────
 
-describe("accommodationIndexSeoAdapter.getSitemapEntries", () => {
-  it("emits one bare /stays entry per locale with alternates", () => {
+describe("accommodationIndexSeoAdapter.getSitemapEntries (DEFERRED until /stays is real index)", () => {
+  // `/stays` is currently a 301 redirect to `/search` (which is
+  // noindex). Emitting /stays in the sitemap would advertise a URL
+  // that redirects to a noindex destination — Google treats this
+  // as drift and eventually drops the redirect source from its
+  // index entirely.
+  //
+  // The adapter stays registered (toSeoable + toStructuredData +
+  // isIndexable remain intact) so the contract is preserved for
+  // when `/stays` is rebuilt as a real accommodation index page.
+  // Until then, getSitemapEntries returns [] unconditionally.
+  it("returns [] regardless of featured accommodations or locales", () => {
     const entries = accommodationIndexSeoAdapter.getSitemapEntries(
       makeInput(),
       makeTenant(),
       ["sv", "en"],
     );
-    expect(entries).toHaveLength(2);
-    expect(entries[0].url).toBe("https://apelviken.rutgr.com/stays");
-    expect(entries[1].url).toBe("https://apelviken.rutgr.com/en/stays");
-    for (const e of entries) {
-      expect(e.alternates).toHaveLength(2);
-    }
+    expect(entries).toEqual([]);
   });
 
-  it("never embeds pagination or query strings in sitemap URLs", () => {
+  it("returns [] when featuredAccommodations list is empty", () => {
     const entries = accommodationIndexSeoAdapter.getSitemapEntries(
-      makeInput(),
+      makeInput({ featuredAccommodations: [] }),
       makeTenant(),
       ["sv"],
     );
-    for (const entry of entries) {
-      expect(entry.url).not.toContain("?");
-      expect(entry.url).not.toMatch(/page/i);
-    }
+    expect(entries).toEqual([]);
   });
 });
 
 // ── Lastmod stability (M7 prep) ───────────────────────────────
 //
 // Pre-M7 the adapter emitted `new Date()` for every Seoable
-// updatedAt/publishedAt and every sitemap lastmod. That churned
-// per render, broke deterministic caching, and gave crawlers a
-// fresh-on-every-crawl signal regardless of actual change.
+// updatedAt/publishedAt. That churned per render, broke
+// deterministic caching, and gave crawlers a fresh-on-every-crawl
+// signal regardless of actual change.
 //
-// The fixed semantics:
+// Sitemap lastmod stability tests were dropped when
+// getSitemapEntries was deferred to [] (see the DEFERRED describe
+// block above). The toSeoable lastmod semantics below remain live
+// — they drive `ResolvedSeo.updatedAt` which flows through the
+// resolver even though /stays is a redirect today.
+//
+// Semantics:
 //   - toSeoable.updatedAt/publishedAt = MAX(featured.updatedAt)
 //     ?? tenant.contentUpdatedAt
-//   - getSitemapEntries.lastmod = MAX(featured.updatedAt)
-//     ?? tenant.contentUpdatedAt
-// Both are always a real Date (tenant.contentUpdatedAt is Date,
-// not nullable), so the adapter never emits null lastmod.
+// tenant.contentUpdatedAt is a real Date (Prisma @updatedAt)
+// — never null. No epoch-0 or `new Date()` path.
 
 describe("accommodationIndexSeoAdapter — lastmod stability", () => {
   it("toSeoable uses MAX(updatedAt) across featured accommodations", () => {
@@ -524,8 +530,6 @@ describe("accommodationIndexSeoAdapter — lastmod stability", () => {
   });
 
   it("toSeoable falls back to tenant.contentUpdatedAt when featured list is empty", () => {
-    // Empty tenant. contentUpdatedAt is a real Date (Prisma
-    // @updatedAt) — never null. No epoch-0 or `new Date()` path.
     const tenantTs = new Date("2026-02-20T12:34:56Z");
     const seoable = accommodationIndexSeoAdapter.toSeoable(
       makeInput({ featuredAccommodations: [] }),
@@ -544,57 +548,5 @@ describe("accommodationIndexSeoAdapter — lastmod stability", () => {
     const b = accommodationIndexSeoAdapter.toSeoable(input, tenant);
     expect(a.updatedAt.getTime()).toBe(b.updatedAt.getTime());
     expect(a.publishedAt?.getTime()).toBe(b.publishedAt?.getTime());
-  });
-
-  it("getSitemapEntries lastmod uses MAX(updatedAt) across featured", () => {
-    const older = makeAccommodation({
-      id: "a_old",
-      slug: "a-old",
-      updatedAt: new Date("2026-03-01T00:00:00Z"),
-    });
-    const newer = makeAccommodation({
-      id: "a_new",
-      slug: "a-new",
-      updatedAt: new Date("2026-04-15T00:00:00Z"),
-    });
-    const entries = accommodationIndexSeoAdapter.getSitemapEntries(
-      makeInput({ featuredAccommodations: [older, newer] }),
-      makeTenant(),
-      ["sv", "en"],
-    );
-    for (const e of entries) {
-      expect(e.lastmod?.getTime()).toBe(
-        new Date("2026-04-15T00:00:00Z").getTime(),
-      );
-    }
-  });
-
-  it("getSitemapEntries lastmod falls back to tenant.contentUpdatedAt when featured list is empty", () => {
-    const tenantTs = new Date("2026-02-20T12:34:56Z");
-    const entries = accommodationIndexSeoAdapter.getSitemapEntries(
-      makeInput({ featuredAccommodations: [] }),
-      makeTenant({ contentUpdatedAt: tenantTs }),
-      ["sv"],
-    );
-    expect(entries).toHaveLength(1);
-    expect(entries[0].lastmod?.getTime()).toBe(tenantTs.getTime());
-  });
-
-  it("getSitemapEntries is deterministic across two calls with identical input", () => {
-    const input = makeInput({
-      featuredAccommodations: [makeAccommodation()],
-    });
-    const tenant = makeTenant();
-    const a = accommodationIndexSeoAdapter.getSitemapEntries(
-      input,
-      tenant,
-      ["sv"],
-    );
-    const b = accommodationIndexSeoAdapter.getSitemapEntries(
-      input,
-      tenant,
-      ["sv"],
-    );
-    expect(a[0].lastmod?.getTime()).toBe(b[0].lastmod?.getTime());
   });
 });

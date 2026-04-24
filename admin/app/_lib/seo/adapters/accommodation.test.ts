@@ -366,22 +366,24 @@ describe("accommodationSeoAdapter.toStructuredData", () => {
 // ── getSitemapEntries ────────────────────────────────────────
 
 describe("accommodationSeoAdapter.getSitemapEntries", () => {
-  it("emits one entry per locale with alternates covering all locales", () => {
+  it("(M8 defer) restricts output to defaultLocale even when multiple locales are passed", () => {
+    // Until the hreflang pipeline + locale-prefix route segments ship
+    // (M8), the adapter only emits the default-locale entry to avoid
+    // advertising /{locale}/... URLs that 404.
     const entries = accommodationSeoAdapter.getSitemapEntries(
       makeAccommodation(),
       makeTenant(),
-      ["sv", "en"],
+      ["sv", "en", "de"],
     );
-    expect(entries).toHaveLength(2);
+    expect(entries).toHaveLength(1);
     expect(entries[0].url).toBe(
       "https://apelviken.rutgr.com/stays/stuga-bjork",
     );
-    expect(entries[1].url).toBe(
-      "https://apelviken.rutgr.com/en/stays/stuga-bjork",
-    );
-    // Every entry's alternates list contains both locales.
-    for (const entry of entries) {
-      expect(entry.alternates).toHaveLength(2);
-    }
+    expect(entries[0].alternates).toEqual([
+      {
+        hreflang: "sv",
+        url: "https://apelviken.rutgr.com/stays/stuga-bjork",
+      },
+    ]);
   });
 });

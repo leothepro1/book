@@ -270,11 +270,17 @@ export const accommodationCategorySeoAdapter: SeoAdapter<AccommodationCategoryWi
      */
     getSitemapEntries(entity, tenant, locales) {
       if (!isCategoryIndexable(entity)) return [];
+      // TODO(m8): emit entries for all activeLocales once the hreflang
+      // pipeline + locale-prefix route segments land. Until then we
+      // restrict to defaultLocale to avoid advertising 404-returning
+      // /{locale}/... URLs in the sitemap.
+      void locales;
+      const sitemapLocales = [tenant.defaultLocale];
       const basePath = `${CATEGORY_ROUTE_PREFIX}/${entity.slug}`;
-      return locales.map((locale): SitemapEntry => ({
+      return sitemapLocales.map((locale): SitemapEntry => ({
         url: buildAbsoluteUrl(tenant, locale, basePath),
         lastmod: entity.updatedAt,
-        alternates: locales.map((l) => ({
+        alternates: sitemapLocales.map((l) => ({
           hreflang: l,
           url: buildAbsoluteUrl(tenant, l, basePath),
         })),

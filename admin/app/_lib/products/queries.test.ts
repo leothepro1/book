@@ -127,7 +127,7 @@ beforeEach(() => {
 // ──────────────────────────────────────────────────────────────
 
 describe("fetchProductsForSitemap — happy path & contract", () => {
-  it("returns one BuiltShardEntry per (row × locale) with absolute URLs", async () => {
+  it("(M8 defer) returns one BuiltShardEntry per row with absolute URLs — defaultLocale only until hreflang ships", async () => {
     mockFindManyProduct([productRow()]);
     const tenant = makeTenant({ activeLocales: ["sv", "en"] });
     const entries = await fetchProductsForSitemap({
@@ -135,7 +135,7 @@ describe("fetchProductsForSitemap — happy path & contract", () => {
       limit: 50_000,
       offset: 0,
     });
-    expect(entries).toHaveLength(2);
+    expect(entries).toHaveLength(1);
     for (const e of entries) {
       expect(e.url).toMatch(/^https:\/\//);
       expect(e.url).toContain("/shop/products/");
@@ -282,7 +282,7 @@ describe("fetchProductsForSitemap — isIndexable alignment", () => {
 // ──────────────────────────────────────────────────────────────
 
 describe("fetchProductCollectionsForSitemap — happy path & contract", () => {
-  it("returns one BuiltShardEntry per (row × locale) with absolute URLs", async () => {
+  it("(M8 defer) returns one BuiltShardEntry per row with absolute URLs — defaultLocale only until hreflang ships", async () => {
     mockFindManyProductCollection([collectionRow()]);
     const tenant = makeTenant({ activeLocales: ["sv", "en"] });
     const entries = await fetchProductCollectionsForSitemap({
@@ -290,7 +290,7 @@ describe("fetchProductCollectionsForSitemap — happy path & contract", () => {
       limit: 50_000,
       offset: 0,
     });
-    expect(entries).toHaveLength(2);
+    expect(entries).toHaveLength(1);
     for (const e of entries) {
       expect(e.url).toMatch(/^https:\/\//);
       expect(e.url).toContain("/shop/collections/");

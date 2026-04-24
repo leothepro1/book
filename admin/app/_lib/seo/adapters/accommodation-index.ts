@@ -201,27 +201,22 @@ export const accommodationIndexSeoAdapter: SeoAdapter<AccommodationIndexSeoInput
     },
 
     /**
-     * One entry per active locale plus per-entry alternates. No
-     * priority/changefreq — SitemapEntry doesn't carry those today
-     * (TODO(m5-followup): extend the sitemap type if ops request
-     * explicit priorities).
+     * TODO(future-milestone): restore per-locale sitemap entries
+     * when `/stays` is rebuilt as a real index page instead of a
+     * 301 redirect to `/search`. Current behavior emits [] to
+     * prevent the sitemap from advertising URLs that redirect to
+     * `/search` (which is noindex). See the M5-followup audit.
      *
-     * `lastmod` is deterministic: MAX(updatedAt) across the featured
-     * accommodations, or `tenant.contentUpdatedAt` when the list is
-     * empty. The M7 XML serializer emits the tag unconditionally for
-     * this adapter because either source is always a real Date.
+     * The adapter remains registered + fully implemented for
+     * `toSeoable` / `toStructuredData` / `isIndexable` so the
+     * contract is preserved for when the real index ships — only
+     * the sitemap surface is temporarily silenced.
      */
-    getSitemapEntries(entity, tenant, locales) {
-      const lastmod =
-        maxUpdatedAt(entity.featuredAccommodations) ?? tenant.contentUpdatedAt;
-      return locales.map((locale): SitemapEntry => ({
-        url: indexUrl(tenant, locale),
-        lastmod,
-        alternates: locales.map((l) => ({
-          hreflang: l,
-          url: indexUrl(tenant, l),
-        })),
-      }));
+    getSitemapEntries(entity, tenant, locales): SitemapEntry[] {
+      void entity;
+      void tenant;
+      void locales;
+      return [];
     },
 
     /**

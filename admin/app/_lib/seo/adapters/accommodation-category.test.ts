@@ -621,19 +621,25 @@ describe("accommodationCategorySeoAdapter.toStructuredData", () => {
 // ── getSitemapEntries ────────────────────────────────────────
 
 describe("accommodationCategorySeoAdapter.getSitemapEntries", () => {
-  it("emits entries per locale when category is indexable", () => {
+  it("(M8 defer) restricts output to defaultLocale when category is indexable", () => {
+    // Until the hreflang pipeline + locale-prefix route segments ship
+    // (M8), the adapter only emits the default-locale entry to avoid
+    // advertising /{locale}/... URLs that 404.
     const entries = accommodationCategorySeoAdapter.getSitemapEntries(
       makeCategory({ items: [makeItem()] }),
       makeTenant(),
-      ["sv", "en"],
+      ["sv", "en", "de"],
     );
-    expect(entries).toHaveLength(2);
+    expect(entries).toHaveLength(1);
     expect(entries[0].url).toBe(
       "https://apelviken.rutgr.com/stays/categories/stugor",
     );
-    expect(entries[1].url).toBe(
-      "https://apelviken.rutgr.com/en/stays/categories/stugor",
-    );
+    expect(entries[0].alternates).toEqual([
+      {
+        hreflang: "sv",
+        url: "https://apelviken.rutgr.com/stays/categories/stugor",
+      },
+    ]);
   });
 
   it("returns no entries when category is non-indexable (empty)", () => {
