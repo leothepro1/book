@@ -331,10 +331,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       select: { name: true, portalSlug: true },
     });
 
-    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
-    const portalBase = tenant?.portalSlug
-      ? `https://${tenant.portalSlug}.${baseDomain}`
-      : null;
+    const { getTenantUrl } = await import("@/app/_lib/tenant/tenant-url");
+    const orderStatusUrl =
+      order.statusToken && tenant?.portalSlug
+        ? getTenantUrl(tenant, { path: `/order-status/${order.statusToken}` })
+        : "";
+    const portalUrl = tenant?.portalSlug
+      ? getTenantUrl(tenant, { path: "/login" })
+      : "";
 
     await sendEmailEvent(
       order.tenantId,
@@ -346,10 +350,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         orderTotal: `${formatPriceDisplay(order.totalAmount, order.currency)} kr`,
         currency: order.currency,
         tenantName: tenant?.name ?? "",
-        orderStatusUrl: order.statusToken && portalBase
-          ? `${portalBase}/order-status/${order.statusToken}`
-          : "",
-        portalUrl: portalBase ? `${portalBase}/login` : "",
+        orderStatusUrl,
+        portalUrl,
       },
     );
 
@@ -751,8 +753,10 @@ async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
         where: { id: order.tenantId },
         select: { name: true, portalSlug: true },
       });
-      const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
-      const portalBase = tenant?.portalSlug ? `https://${tenant.portalSlug}.${baseDomain}` : "";
+      const { getTenantUrl } = await import("@/app/_lib/tenant/tenant-url");
+      const retryUrl = tenant?.portalSlug
+        ? getTenantUrl(tenant, { path: `/checkout?retry=${order.id}` })
+        : "";
       const { sendEmailEvent: sendPaymentFailedEmail } = await import("@/app/_lib/email/send");
       await sendPaymentFailedEmail(
         order.tenantId,
@@ -763,7 +767,7 @@ async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
           hotelName: tenant?.name ?? "",
           orderNumber: String(order.orderNumber),
           failureReason: mapDeclineCodeToSwedish(pi.last_payment_error?.decline_code),
-          retryUrl: `${portalBase}/checkout?retry=${order.id}`,
+          retryUrl,
         },
       );
     } catch (err) {

@@ -218,10 +218,15 @@ export async function handlePaymentWebhook(
       });
 
       if (order.guestEmail) {
-        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
-        const portalBase = tenant?.portalSlug
-          ? `https://${tenant.portalSlug}.${baseDomain}`
-          : null;
+        const { getTenantUrl } = await import("@/app/_lib/tenant/tenant-url");
+        const statusToken = (order as { statusToken?: string | null }).statusToken;
+        const orderStatusUrl =
+          statusToken && tenant?.portalSlug
+            ? getTenantUrl(tenant, { path: `/order-status/${statusToken}` })
+            : "";
+        const portalUrl = tenant?.portalSlug
+          ? getTenantUrl(tenant, { path: "/login" })
+          : "";
 
         await sendEmailEvent(
           order.tenantId,
@@ -233,10 +238,8 @@ export async function handlePaymentWebhook(
             orderTotal: `${formatPriceDisplay(order.totalAmount, order.currency)} kr`,
             currency: order.currency,
             tenantName: tenant?.name ?? "",
-            orderStatusUrl: (order as { statusToken?: string | null }).statusToken && portalBase
-              ? `${portalBase}/order-status/${(order as { statusToken?: string | null }).statusToken}`
-              : "",
-            portalUrl: portalBase ? `${portalBase}/login` : "",
+            orderStatusUrl,
+            portalUrl,
           },
         );
       }
@@ -321,8 +324,10 @@ export async function handlePaymentWebhook(
           where: { id: order.tenantId },
           select: { name: true, portalSlug: true },
         });
-        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
-        const portalBase = tenant?.portalSlug ? `https://${tenant.portalSlug}.${baseDomain}` : "";
+        const { getTenantUrl } = await import("@/app/_lib/tenant/tenant-url");
+        const retryUrl = tenant?.portalSlug
+          ? getTenantUrl(tenant, { path: `/checkout?retry=${order.id}` })
+          : "";
         await sendFailedEmail(
           order.tenantId,
           "PAYMENT_FAILED" as Parameters<typeof sendFailedEmail>[1],
@@ -332,7 +337,7 @@ export async function handlePaymentWebhook(
             hotelName: tenant?.name ?? "",
             orderNumber: String(order.orderNumber),
             failureReason: outcome.reason ?? "Betalningen kunde inte genomföras",
-            retryUrl: `${portalBase}/checkout?retry=${order.id}`,
+            retryUrl,
           },
         );
       } catch (err) {
