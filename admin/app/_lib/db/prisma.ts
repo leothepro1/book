@@ -8,23 +8,26 @@ function isPooledUrl(url: string): boolean {
 }
 
 function getDatabaseUrl(): string {
-  const url = process.env.DATABASE_URL;
+  // In dev, prefer DIRECT_URL (no PgBouncer). Pooler in dev gains nothing
+  // and surfaces "Server has closed the connection" when Neon cycles
+  // compute. Production still uses the pooled URL with pgbouncer=true.
+  const url =
+    process.env.NODE_ENV === "development"
+      ? process.env.DIRECT_URL ?? process.env.DATABASE_URL
+      : process.env.DATABASE_URL;
+
   if (!url) {
     throw new Error("[db] DATABASE_URL is required but not set.");
   }
 
-  if (process.env.NODE_ENV === "development") return url;
-
-  // Append pool/timeout params for production & preview environments
   const separator = url.includes("?") ? "&" : "?";
   const params: string[] = [];
 
   if (isPooledUrl(url)) {
-    // Neon pooled URL — pooler manages connection_limit and pool_timeout
     if (!url.includes("pgbouncer")) params.push("pgbouncer=true");
+    if (!url.includes("connect_timeout")) params.push("connect_timeout=10");
     if (!url.includes("statement_timeout")) params.push("statement_timeout=30000");
-  } else {
-    // Direct connection (Render direct or Neon direct)
+  } else if (process.env.NODE_ENV !== "development") {
     if (!url.includes("connection_limit")) params.push("connection_limit=10");
     if (!url.includes("pool_timeout")) params.push("pool_timeout=20");
     if (!url.includes("statement_timeout")) params.push("statement_timeout=30000");
