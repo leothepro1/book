@@ -12,7 +12,7 @@ import { z } from "zod";
 import { prisma } from "@/app/_lib/db/prisma";
 import { verifyOtp } from "@/app/_lib/guest-auth/otp";
 import { setGuestSession } from "@/app/_lib/magic-link/session";
-import { resolveGuestTenant } from "@/app/_lib/guest-auth/resolve-tenant";
+import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const tenantId = await resolveGuestTenant(req);
+  const tenant = await resolveTenantFromHost();
+  const tenantId = tenant?.id ?? null;
   if (!tenantId) {
     return NextResponse.json(
       { error: "invalid_request" },

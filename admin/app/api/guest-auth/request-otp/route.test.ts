@@ -4,15 +4,17 @@ vi.mock("@/app/_lib/guest-auth/send-otp", () => ({
   sendOtp: vi.fn(),
 }));
 
-vi.mock("@/app/_lib/guest-auth/resolve-tenant", () => ({
-  resolveGuestTenant: vi.fn(),
+vi.mock("@/app/(guest)/_lib/tenant/resolveTenantFromHost", () => ({
+  resolveTenantFromHost: vi.fn(),
 }));
 
 const { POST } = await import("./route");
 const { sendOtp } = await import("@/app/_lib/guest-auth/send-otp");
-const { resolveGuestTenant } = await import("@/app/_lib/guest-auth/resolve-tenant");
+const { resolveTenantFromHost } = await import(
+  "@/app/(guest)/_lib/tenant/resolveTenantFromHost"
+);
 const mockSendOtp = sendOtp as ReturnType<typeof vi.fn>;
-const mockResolveTenant = resolveGuestTenant as ReturnType<typeof vi.fn>;
+const mockResolveTenant = resolveTenantFromHost as ReturnType<typeof vi.fn>;
 
 function makeRequest(body: unknown, host = "hotel.rutgr.com") {
   return new Request("http://localhost:3000/api/guest-auth/request-otp", {
@@ -25,7 +27,7 @@ function makeRequest(body: unknown, host = "hotel.rutgr.com") {
 describe("POST /api/guest-auth/request-otp", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mockResolveTenant.mockResolvedValue("t1");
+    mockResolveTenant.mockResolvedValue({ id: "t1" });
   });
 
   it("returns 200 + { sent: true } when OTP sent successfully", async () => {
@@ -90,7 +92,7 @@ describe("POST /api/guest-auth/request-otp", () => {
   });
 
   it("returns 400 when body is invalid JSON", async () => {
-    mockResolveTenant.mockResolvedValue("t1");
+    mockResolveTenant.mockResolvedValue({ id: "t1" });
     const req = new Request("http://localhost:3000/api/guest-auth/request-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json", host: "hotel.rutgr.com" },
