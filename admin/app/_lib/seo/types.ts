@@ -153,6 +153,18 @@ export const SeoDefaultsSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * Storefront-wide "discourage search engines" (M6.6b). When true,
+     * the resolver emits `<meta name="robots" content="noindex">` for
+     * every entity unless the entity itself opts back in. Mirrors
+     * Shopify's "Password protect your storefront" privacy switch.
+     *
+     * Precedence in `resolveNoindex()`:
+     *   1. entity `seoOverrides.noindex === true` wins (always)
+     *   2. tenant-wide `seoDefaults.noindex === true` (this field)
+     *   3. adapter's `isIndexable()` (publication-state aware)
+     */
+    noindex: z.boolean().default(false),
   })
   .strict();
 

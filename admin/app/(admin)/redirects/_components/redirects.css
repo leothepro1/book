@@ -1,0 +1,113 @@
+/* ── URL redirects list ─────────────────────────────────────────
+ *
+ * Sits on top of products.css. We reuse `.products-page`,
+ * `.products-row`, `.files-column-headers`, and `.products-empty`
+ * verbatim, then layer the redirects-specific column widths and the
+ * monospace path styling on top via the `.redirects-*` BEM family.
+ */
+
+.redirects-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--admin-border);
+  font-size: 13px;
+  color: var(--admin-text);
+}
+
+.redirects-row:last-child {
+  border-bottom: none;
+}
+
+.redirects-row:not(.redirects-row--header):hover {
+  background: #f7f7f7;
+}
+
+.redirects-row--header {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303030;
+  background: #f7f7f7;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 43px;
+  padding: 10px 16px;
+}
+
+/* ── Columns ────────────────────────────────────────────────── */
+
+.redirects-col {
+  min-width: 0;
+}
+
+.redirects-col--from,
+.redirects-col--to {
+  flex: 1;
+}
+
+.redirects-col--date {
+  width: 14%;
+  flex-shrink: 0;
+  color: var(--admin-text-secondary);
+}
+
+.redirects-col--hits {
+  width: 18%;
+  flex-shrink: 0;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Path display ───────────────────────────────────────────── */
+
+.redirects-path {
+  display: block;
+  font-family: var(--sf-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--admin-text);
+}
+
+/* ── Hits cell ──────────────────────────────────────────────── */
+
+.redirects-hits__count {
+  font-weight: 500;
+}
+
+.redirects-hits__last {
+  font-size: 12px;
+  color: var(--admin-text-tertiary);
+  margin-top: 1px;
+}
+
+/* ── Toolbar (search) ───────────────────────────────────────── */
+
+.redirects-toolbar {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--admin-border);
+  background: #fff;
+}
+
+.redirects-search {
+  width: 100%;
+  max-width: 360px;
+  height: 32px;
+  padding: 6px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-md, 8px);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--admin-text);
+  background: #fff;
+  outline: none;
+  transition: border-color var(--duration-fast, 120ms) var(--ease-default, ease);
+}
+
+.redirects-search:focus {
+  border-color: var(--admin-input-focus, #2783de);
+  box-shadow: var(--admin-input-focus-ring, 0 0 0 3px rgba(39, 131, 222, 0.1));
+}

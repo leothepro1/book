@@ -49,8 +49,12 @@ export default async function AccommodationDetailPage({
 
   const serialized = JSON.parse(JSON.stringify(accommodation));
   const serializedSeo = seoOverrides
-    ? { title: seoOverrides.title ?? "", description: seoOverrides.description ?? "" }
-    : { title: "", description: "" };
+    ? {
+        title: seoOverrides.title ?? "",
+        description: seoOverrides.description ?? "",
+        noindex: seoOverrides.noindex ?? false,
+      }
+    : { title: "", description: "", noindex: false };
 
   const initialPreview = await safePreview({
     tenantId,

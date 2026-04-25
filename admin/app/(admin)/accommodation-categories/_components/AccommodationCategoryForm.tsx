@@ -88,7 +88,7 @@ export default function AccommodationCategoryForm({
    * Not stored on ExistingCategory — parse-at-boundary pattern from
    * Batch 2/3.
    */
-  seo?: { title: string; description: string };
+  seo?: { title: string; description: string; noindex?: boolean };
   /**
    * SSR-prepared preview snapshot. /new passes `entityId: null`
    * to the engine for the placeholder URL; /[id] passes real id.
@@ -120,17 +120,36 @@ export default function AccommodationCategoryForm({
   const [visibleInSearch, setVisibleInSearch] = useState(category?.visibleInSearch ?? true);
   const statusRef = useRef<HTMLDivElement>(null);
 
-  // ── SEO overrides (title + description in M6.6). Server action
-  // shallow-merges over stored seo on update.
-  const [seoState, setSeoState] = useState<{ title: string; description: string }>(
-    () => seo ?? { title: "", description: "" },
-  );
+  // ── SEO overrides (title + description + noindex from M6.6c).
+  // Server action shallow-merges over stored seo on update. `noindex`
+  // is controlled by the Synlighet sidebar card (separate from the
+  // SearchListingEditor — same separation as ProductForm).
+  const [seoState, setSeoState] = useState<{
+    title: string;
+    description: string;
+    noindex: boolean;
+  }>(() => ({
+    title: seo?.title ?? "",
+    description: seo?.description ?? "",
+    noindex: seo?.noindex ?? false,
+  }));
   const handleSeoChange = useCallback(
     (next: { title: string; description: string }) => {
-      setSeoState(next);
+      // SLE only owns title + description. Functional setState
+      // preserves the merchant's noindex choice across re-renders.
+      setSeoState((prev) => ({
+        ...prev,
+        title: next.title,
+        description: next.description,
+      }));
     },
     [],
   );
+  // Kept for the next noindex UI surface — see ProductForm comment.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleNoindexChange = useCallback((noindex: boolean) => {
+    setSeoState((prev) => ({ ...prev, noindex }));
+  }, []);
 
   // -- Accommodation picker --
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -314,6 +333,7 @@ export default function AccommodationCategoryForm({
       const seoPayload = {
         title: seoState.title,
         description: seoState.description,
+        noindex: seoState.noindex,
       };
       const result = isEdit
         ? await updateAccommodationCategory(category!.id, {
@@ -368,7 +388,11 @@ export default function AccommodationCategoryForm({
       (category?.items ?? []).map((i) => i.accommodation),
     );
     setAddonCollections(initialAddonCollections ?? []);
-    setSeoState(seo ?? { title: "", description: "" });
+    setSeoState({
+      title: seo?.title ?? "",
+      description: seo?.description ?? "",
+      noindex: seo?.noindex ?? false,
+    });
     setSaveError(null);
     setTimeout(() => { setDirty(false); setIsDiscarding(false); }, 100);
   }, [category, initialAddonCollections, seo]);
@@ -608,6 +632,8 @@ export default function AccommodationCategoryForm({
                 )}
               </div>
             </div>
+
+            {/* Synlighet UI removed — noindex state + save wiring kept. */}
 
             <div style={CARD}>
               <div className="pf-card-header" style={{ marginBottom: 12 }}>

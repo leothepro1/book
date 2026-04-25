@@ -8,7 +8,7 @@ const tenant: SeoTenantContext = {
   siteName: "Apelviken",
   primaryDomain: "apelviken-test.rutgr.com",
   defaultLocale: "sv",
-  seoDefaults: { titleTemplate: "x" },
+  seoDefaults: { titleTemplate: "x", noindex: false },
   activeLocales: ["sv", "en", "de"],
   contentUpdatedAt: new Date("2026-04-01T00:00:00Z"),
 };

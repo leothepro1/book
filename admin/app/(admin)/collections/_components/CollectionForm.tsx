@@ -65,7 +65,7 @@ export default function CollectionForm({
    * to avoid widening that type with an untyped JSON field — parse-
    * at-boundary pattern from Batch 2/3.
    */
-  seo?: { title: string; description: string };
+  seo?: { title: string; description: string; noindex?: boolean };
   /**
    * SSR-prepared preview snapshot. Both /new and /[id] compute this
    * server-side — /new passes `entityId: null` to get the placeholder
@@ -97,18 +97,34 @@ export default function CollectionForm({
   const [statusOpen, setStatusOpen] = useState(false);
   const statusRef = useRef<HTMLDivElement>(null);
 
-  // ── SEO overrides (title + description in M6.6; OG image +
-  // noindex ship later). Server action shallow-merges over stored
-  // seo so future fields carry through unchanged.
-  const [seoState, setSeoState] = useState<{ title: string; description: string }>(
-    () => seo ?? { title: "", description: "" },
-  );
+  // ── SEO overrides (title + description + noindex from M6.6c; OG
+  // image ships later). Server action shallow-merges over stored seo
+  // so future fields carry through unchanged. `noindex` is controlled
+  // by the Synlighet sidebar card (separate from SearchListingEditor).
+  const [seoState, setSeoState] = useState<{
+    title: string;
+    description: string;
+    noindex: boolean;
+  }>(() => ({
+    title: seo?.title ?? "",
+    description: seo?.description ?? "",
+    noindex: seo?.noindex ?? false,
+  }));
   const handleSeoChange = useCallback(
     (next: { title: string; description: string }) => {
-      setSeoState(next);
+      setSeoState((prev) => ({
+        ...prev,
+        title: next.title,
+        description: next.description,
+      }));
     },
     [],
   );
+  // Kept for the next noindex UI surface — see ProductForm comment.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleNoindexChange = useCallback((noindex: boolean) => {
+    setSeoState((prev) => ({ ...prev, noindex }));
+  }, []);
 
   // ── Product picker ──
   type ProductItem = { id: string; title: string; status: string; price: number; currency: string; media: Array<{ url: string }> };
@@ -245,6 +261,7 @@ export default function CollectionForm({
       const seoPayload = {
         title: seoState.title,
         description: seoState.description,
+        noindex: seoState.noindex,
       };
       const result = isEdit
         ? await updateCollection(collection!.id, { title, description, imageUrl: imageUrl || null, status, productIds, seo: seoPayload })
@@ -279,7 +296,11 @@ export default function CollectionForm({
         price: 0, currency: "SEK", media: i.product.media,
       })),
     );
-    setSeoState(seo ?? { title: "", description: "" });
+    setSeoState({
+      title: seo?.title ?? "",
+      description: seo?.description ?? "",
+      noindex: seo?.noindex ?? false,
+    });
     setSaveError(null);
     setTimeout(() => { setDirty(false); setIsDiscarding(false); }, 100);
   }, [collection, seo]);
@@ -464,6 +485,8 @@ export default function CollectionForm({
                 )}
               </div>
             </div>
+
+            {/* Synlighet UI removed — noindex state + save wiring kept. */}
 
             <div style={CARD}>
               <div className="pf-card-header" style={{ marginBottom: 12 }}>

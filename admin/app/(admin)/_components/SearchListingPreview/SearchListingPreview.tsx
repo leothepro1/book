@@ -9,10 +9,7 @@
  * (product PDPs). No state, no fetching, no side effects — callers
  * feed resolved strings straight from `previewSeoForEntity`.
  *
- * This is the Shopify-grade sibling of the older `SerpPreview`
- * component (`_components/SerpPreview/`), which is retained for
- * backward compatibility but has no live consumers. This component
- * adds:
+ * Features:
  *   - favicon slot (merchant-uploaded via tenant.seoDefaults.faviconId
  *     or inline platform default)
  *   - breadcrumb " › " separator rendering for nested URLs

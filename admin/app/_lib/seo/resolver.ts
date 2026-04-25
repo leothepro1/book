@@ -305,8 +305,13 @@ export class SeoResolver {
    * Resolve the effective `noindex` flag.
    *
    * Precedence:
-   *   1. Entity override (`seoOverrides.noindex === true`) wins.
-   *   2. Otherwise defers to the adapter's `isIndexable(entity)` —
+   *   1. Entity override (`seoOverrides.noindex === true`) wins —
+   *      a merchant who pinned a single product to noindex keeps that
+   *      decision regardless of the storefront-wide switch.
+   *   2. Tenant-wide default (`tenant.seoDefaults.noindex === true`) —
+   *      the "discourage search engines" Preferences toggle (M6.6b).
+   *      Applies to every entity unless overridden per-entity above.
+   *   3. Otherwise defers to the adapter's `isIndexable(entity)` —
    *      the adapter knows the entity's publication state
    *      (status, archivedAt, etc.) that the resolver doesn't.
    *
@@ -318,6 +323,7 @@ export class SeoResolver {
     ctx: SeoResolutionContext,
   ): boolean {
     if (seoable.seoOverrides?.noindex === true) return true;
+    if (ctx.tenant.seoDefaults.noindex === true) return true;
     return !adapter.isIndexable(ctx.entity);
   }
 

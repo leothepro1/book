@@ -92,7 +92,7 @@ export default function AccommodationForm({
    * propagate the raw `seo` JSONB, so the parent page passes it
    * separately.
    */
-  seo: { title: string; description: string };
+  seo: { title: string; description: string; noindex?: boolean };
   /**
    * SSR-prepared preview snapshot for the first render. When
    * `previewSeoForEntity` fails during page load the parent passes
@@ -123,14 +123,21 @@ export default function AccommodationForm({
   const statusRef = useRef<HTMLDivElement>(null);
   const [externalCode, setExternalCode] = useState(accommodation.externalCode ?? "");
 
-  // ── SEO overrides (title + description in Batch 2; OG image +
-  // noindex land in later batches). Submitted inside the save
-  // payload — the server action shallow-merges with stored seo so
-  // future fields carry through unchanged. `handleSeoChange` lives
-  // further down, once `markDirty` is declared.
-  const [seoState, setSeoState] = useState<{ title: string; description: string }>({
+  // ── SEO overrides (title + description + noindex; OG image lands
+  // later). Submitted inside the save payload — the server action
+  // shallow-merges with stored seo so future fields carry through
+  // unchanged. `noindex` is controlled by the Synlighet sidebar card,
+  // NOT the SearchListingEditor — same separation-of-concerns as
+  // ProductForm (M6.6a). `handleSeoChange` lives further down, once
+  // `markDirty` is declared.
+  const [seoState, setSeoState] = useState<{
+    title: string;
+    description: string;
+    noindex: boolean;
+  }>({
     title: seo.title,
     description: seo.description,
+    noindex: seo.noindex ?? false,
   });
 
   // Close status dropdown on outside click
@@ -312,7 +319,23 @@ export default function AccommodationForm({
 
   const handleSeoChange = useCallback(
     (next: { title: string; description: string }) => {
-      setSeoState(next);
+      // SLE only owns title + description. Functional setState
+      // preserves the merchant's noindex choice across re-renders.
+      setSeoState((prev) => ({
+        ...prev,
+        title: next.title,
+        description: next.description,
+      }));
+      markDirty();
+    },
+    [markDirty],
+  );
+
+  // Kept for the next noindex UI surface — see ProductForm comment.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleNoindexChange = useCallback(
+    (noindex: boolean) => {
+      setSeoState((prev) => ({ ...prev, noindex }));
       markDirty();
     },
     [markDirty],
@@ -358,6 +381,7 @@ export default function AccommodationForm({
         seo: {
           title: seoState.title,
           description: seoState.description,
+          noindex: seoState.noindex,
         },
       });
 
@@ -391,7 +415,11 @@ export default function AccommodationForm({
     setCapBedrooms(accommodation.bedrooms ?? 0);
     setCapBathrooms(accommodation.bathrooms ?? 0);
     setSelectedCategoryIds(new Set(accommodation.categoryIds));
-    setSeoState({ title: seo.title, description: seo.description });
+    setSeoState({
+      title: seo.title,
+      description: seo.description,
+      noindex: seo.noindex ?? false,
+    });
     setTags([]);
     setTagInput("");
     setTimeout(() => {
@@ -674,6 +702,8 @@ export default function AccommodationForm({
                 )}
               </div>
             </div>
+
+            {/* Synlighet UI removed — noindex state + save wiring kept. */}
 
             {/* Kapacitet */}
             <div style={CARD}>

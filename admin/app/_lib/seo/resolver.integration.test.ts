@@ -86,6 +86,7 @@ function makeTenant(
     defaultLocale: "sv",
     seoDefaults: {
       titleTemplate: "{entityTitle} | {siteName}",
+      noindex: false,
       twitterSite: "@apelviken",
     },
     activeLocales: ["sv", "en", "de"],
@@ -394,6 +395,7 @@ describe("SeoResolver.resolve — Accommodation (integration)", () => {
     const tenant = makeTenant({
       seoDefaults: {
         titleTemplate: "{entityTitle} | {siteName}",
+        noindex: false,
         organizationSchema: {
           "@context": "https://schema.org",
           "@type": "Organization",
@@ -478,6 +480,7 @@ describe("SeoResolver.resolve — Homepage (integration, M5)", () => {
     const tenant = makeTenant({
       seoDefaults: {
         titleTemplate: "{entityTitle} | {siteName}",
+        noindex: false,
         homepage: { title: "Discover the cabins", noindex: false },
       },
     });
@@ -495,6 +498,7 @@ describe("SeoResolver.resolve — Homepage (integration, M5)", () => {
     const tenant = makeTenant({
       seoDefaults: {
         titleTemplate: "x",
+        noindex: false,
         homepage: { description: "Cosy cabins by the sea.", noindex: false },
       },
     });
@@ -512,6 +516,7 @@ describe("SeoResolver.resolve — Homepage (integration, M5)", () => {
     const tenant = makeTenant({
       seoDefaults: {
         titleTemplate: "x",
+        noindex: false,
         homepage: { noindex: true },
       },
     });
@@ -567,6 +572,7 @@ describe("SeoResolver.resolve — Homepage (integration, M5)", () => {
     const tenant = makeTenant({
       seoDefaults: {
         titleTemplate: "x",
+        noindex: false,
         organizationSchema: {
           "@context": "https://schema.org",
           "@type": "Organization",

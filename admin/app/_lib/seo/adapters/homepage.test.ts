@@ -13,7 +13,7 @@ function makeTenant(
     siteName: "Apelviken",
     primaryDomain: "apelviken-x.rutgr.com",
     defaultLocale: "sv",
-    seoDefaults: { titleTemplate: "{entityTitle} | {siteName}" },
+    seoDefaults: { titleTemplate: "{entityTitle} | {siteName}", noindex: false },
     activeLocales: ["sv", "en"],
     contentUpdatedAt: new Date("2026-04-01T00:00:00Z"),
     ...overrides,
@@ -74,6 +74,7 @@ describe("homepageSeoAdapter.toSeoable — with merchant homepage config", () =>
       makeTenant({
         seoDefaults: {
           titleTemplate: "{entityTitle} | {siteName}",
+          noindex: false,
           homepage: { title: "Custom Homepage Title", noindex: false },
         },
       }),
@@ -87,6 +88,7 @@ describe("homepageSeoAdapter.toSeoable — with merchant homepage config", () =>
       makeTenant({
         seoDefaults: {
           titleTemplate: "x",
+          noindex: false,
           homepage: { description: "Cosy cabins by the sea", noindex: false },
         },
       }),
@@ -100,6 +102,7 @@ describe("homepageSeoAdapter.toSeoable — with merchant homepage config", () =>
       makeTenant({
         seoDefaults: {
           titleTemplate: "x",
+          noindex: false,
           homepage: { ogImageId: "media_123", noindex: false },
         },
       }),
@@ -113,6 +116,7 @@ describe("homepageSeoAdapter.toSeoable — with merchant homepage config", () =>
       makeTenant({
         seoDefaults: {
           titleTemplate: "x",
+          noindex: false,
           homepage: { noindex: true },
         },
       }),

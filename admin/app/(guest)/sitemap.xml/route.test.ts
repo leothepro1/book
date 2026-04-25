@@ -73,7 +73,7 @@ function makeTenantContext(
     siteName: "Apelviken",
     primaryDomain: "apelviken.rutgr.com",
     defaultLocale: "sv",
-    seoDefaults: { titleTemplate: "{entityTitle} | {siteName}" },
+    seoDefaults: { titleTemplate: "{entityTitle} | {siteName}", noindex: false },
     activeLocales: ["sv"],
     contentUpdatedAt: new Date("2026-04-01T00:00:00Z"),
     ...overrides,

@@ -41,7 +41,7 @@ import {
 export interface HomepagePreferencesSnapshot {
   readonly title: string;
   readonly description: string;
-  /** Display-only, for SerpPreview. */
+  /** Display-only, for SearchListingPreview. */
   readonly siteName: string;
   readonly primaryDomain: string;
   /** Null when no image has been set. */
@@ -50,6 +50,11 @@ export interface HomepagePreferencesSnapshot {
     readonly publicId: string;
     readonly url: string;
   } | null;
+  /**
+   * Storefront-wide "discourage search engines" toggle (M6.6b).
+   * When true the SEO resolver emits `noindex` for every entity.
+   */
+  readonly noindex: boolean;
 }
 
 export type HomepagePreferencesSaveInput = {
@@ -62,6 +67,8 @@ export type HomepagePreferencesSaveInput = {
    * is rejected rather than silently dropping the value.
    */
   ogImagePublicId: string | null;
+  /** Storefront-wide noindex toggle (M6.6b). */
+  noindex: boolean;
 };
 
 export type SaveResult =
@@ -84,6 +91,7 @@ const HomepagePreferencesSaveInputSchema = z
       .string()
       .max(SEO_HOMEPAGE_DESCRIPTION_MAX, "Beskrivning är för lång"),
     ogImagePublicId: z.string().nullable(),
+    noindex: z.boolean(),
   })
   .strict();
 
@@ -126,6 +134,7 @@ export async function getHomepagePreferences(): Promise<HomepagePreferencesSnaps
     siteName: tenant.name,
     primaryDomain,
     ogImage,
+    noindex: defaults.noindex,
   };
 }
 
@@ -145,7 +154,7 @@ export async function saveHomepagePreferences(
   if (!parsed.success) {
     return { ok: false, error: "Ogiltig indata" };
   }
-  const { title, description, ogImagePublicId } = parsed.data;
+  const { title, description, ogImagePublicId, noindex } = parsed.data;
 
   // ── Resolve publicId → MediaAsset.id (tenant-scoped) ──
   //
@@ -211,9 +220,13 @@ export async function saveHomepagePreferences(
   };
 
   // ── Merge at the top level — preserve titleTemplate, orgSchema, etc. ──
+  // Root-level `noindex` is the storefront-wide "discourage search
+  // engines" toggle (M6.6b). Authoritative for this form session: an
+  // unchecked checkbox writes `false`, not "absent".
   const nextDefaults = {
     ...current,
     homepage: mergedHomepage,
+    noindex,
   };
 
   // Round-trip through the schema: catches any drift and applies

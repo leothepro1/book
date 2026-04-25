@@ -149,6 +149,7 @@ describe("saveHomepagePreferences — merge behavior", () => {
       title: "New Homepage Title",
       description: "New description",
       ogImagePublicId: null,
+      noindex: false,
     });
 
     expect(result.ok).toBe(true);
@@ -194,6 +195,7 @@ describe("saveHomepagePreferences — merge behavior", () => {
       title: "New Title",
       description: "",
       ogImagePublicId: null,
+      noindex: false,
     });
     expect(result.ok).toBe(true);
     const call = vi.mocked(prisma.tenant.update as UpdateTenant).mock.calls[0][0];
@@ -220,6 +222,7 @@ describe("saveHomepagePreferences — merge behavior", () => {
       title: "Home",
       description: "",
       ogImagePublicId: "cloudinary/public/id",
+      noindex: false,
     });
 
     expect(result.ok).toBe(true);
@@ -256,6 +259,7 @@ describe("saveHomepagePreferences — rejection paths", () => {
       title: "Home",
       description: "",
       ogImagePublicId: "someone-elses-public-id",
+      noindex: false,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -270,6 +274,7 @@ describe("saveHomepagePreferences — rejection paths", () => {
       title: "x".repeat(SEO_HOMEPAGE_TITLE_MAX + 1),
       description: "",
       ogImagePublicId: null,
+      noindex: false,
     });
     expect(result.ok).toBe(false);
     expect(prisma.tenant.update).not.toHaveBeenCalled();
@@ -280,6 +285,7 @@ describe("saveHomepagePreferences — rejection paths", () => {
       title: "Home",
       description: "x".repeat(SEO_HOMEPAGE_DESCRIPTION_MAX + 1),
       ogImagePublicId: null,
+      noindex: false,
     });
     expect(result.ok).toBe(false);
     expect(prisma.tenant.update).not.toHaveBeenCalled();
@@ -294,6 +300,7 @@ describe("saveHomepagePreferences — rejection paths", () => {
       title: "Home",
       description: "",
       ogImagePublicId: null,
+      noindex: false,
     });
     expect(result.ok).toBe(false);
     expect(prisma.tenant.update).not.toHaveBeenCalled();
@@ -305,6 +312,7 @@ describe("saveHomepagePreferences — rejection paths", () => {
       title: "Home",
       description: "",
       ogImagePublicId: null,
+      noindex: false,
     });
     expect(result.ok).toBe(false);
     expect(prisma.tenant.update).not.toHaveBeenCalled();
@@ -315,6 +323,7 @@ describe("saveHomepagePreferences — rejection paths", () => {
       title: "    ",
       description: "",
       ogImagePublicId: null,
+      noindex: false,
     });
     expect(result.ok).toBe(true);
     const call = vi.mocked(prisma.tenant.update as UpdateTenant).mock.calls[0][0];

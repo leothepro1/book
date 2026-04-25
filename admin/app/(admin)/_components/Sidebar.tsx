@@ -43,6 +43,7 @@ const CONTENT_ITEMS = [
   { href: '/files', label: 'Filer' },
   { href: '/maps', label: 'Kartor' },
   { href: '/menus', label: 'Menyer' },
+  { href: '/redirects', label: 'URL-omdirigeringar' },
 ];
 
 // Webbshop (sales channel) sub-items. Preferences lives here —

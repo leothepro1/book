@@ -28,7 +28,7 @@ function makeTenant(
     siteName: "Apelviken",
     primaryDomain: "apelviken-test.rutgr.com",
     defaultLocale: "sv",
-    seoDefaults: { titleTemplate: "{entityTitle} | {siteName}" },
+    seoDefaults: { titleTemplate: "{entityTitle} | {siteName}", noindex: false },
     activeLocales: ["sv"],
     contentUpdatedAt: new Date("2026-04-01T00:00:00Z"),
     ...overrides,
@@ -225,6 +225,7 @@ describe("SeoResolver.resolveDescription", () => {
     const tenant = makeTenant({
       seoDefaults: {
         titleTemplate: "x",
+        noindex: false,
         descriptionDefault: "Tenant default",
       },
     });
@@ -236,7 +237,7 @@ describe("SeoResolver.resolveDescription", () => {
 
   it("returns null when every fallback is empty", () => {
     const resolver = newResolver();
-    const tenant = makeTenant({ seoDefaults: { titleTemplate: "x" } });
+    const tenant = makeTenant({ seoDefaults: { titleTemplate: "x", noindex: false } });
     const seoable = makeSeoable({ description: null });
     expect(
       resolver.resolveDescription(seoable, null, makeCtx({ tenant })),
@@ -453,6 +454,7 @@ describe("SeoResolver.resolveOgImage (fallback chain)", () => {
     const tenant = makeTenant({
       seoDefaults: {
         titleTemplate: "{entityTitle} | {siteName}",
+        noindex: false,
         ogImageId: "tenant-default",
       },
     });
@@ -569,6 +571,7 @@ describe("SeoResolver.mergeStructuredData", () => {
     const tenant = makeTenant({
       seoDefaults: {
         titleTemplate: "x",
+        noindex: false,
         organizationSchema: {
           "@context": "https://schema.org",
           "@type": "Organization",
@@ -591,6 +594,7 @@ describe("SeoResolver.mergeStructuredData", () => {
     const tenant = makeTenant({
       seoDefaults: {
         titleTemplate: "x",
+        noindex: false,
         organizationSchema: {
           "@context": "https://schema.org",
           "@type": "Organization",
@@ -612,6 +616,7 @@ describe("SeoResolver.mergeStructuredData", () => {
     const tenant = makeTenant({
       seoDefaults: {
         titleTemplate: "x",
+        noindex: false,
         organizationSchema: {
           "@context": "https://schema.org",
           "@type": "Organization",
@@ -633,6 +638,7 @@ describe("SeoResolver.mergeStructuredData", () => {
     const tenant = makeTenant({
       seoDefaults: {
         titleTemplate: "x",
+        noindex: false,
         localBusinessSchema: {
           "@context": "https://schema.org",
           "@type": "LocalBusiness",
@@ -655,6 +661,7 @@ describe("SeoResolver.mergeStructuredData", () => {
     const tenant = makeTenant({
       seoDefaults: {
         titleTemplate: "x",
+        noindex: false,
         localBusinessSchema: {
           "@context": "https://schema.org",
           "@type": "LocalBusiness",

@@ -110,7 +110,7 @@ export default function ProductForm({
    * avoid widening that type with an untyped JSON field — the
    * parse-at-boundary pattern matches Batch 2's AccommodationForm.
    */
-  seo?: { title: string; description: string };
+  seo?: { title: string; description: string; noindex?: boolean };
   /**
    * SSR-prepared preview snapshot for the first render. Both /new
    * and /[id] compute this server-side — /new passes entityId=null
@@ -129,22 +129,77 @@ export default function ProductForm({
   // Mark dirty on any change
   const markDirty = useCallback(() => setDirty(true), []);
 
-  // ── SEO overrides (title + description in Batch 3; OG image +
-  // noindex land later). Server action shallow-merges incoming with
-  // stored seo so fields this form doesn't edit survive every save.
-  const [seoState, setSeoState] = useState<{ title: string; description: string }>(
-    () => seo ?? { title: "", description: "" },
-  );
+  // ── SEO overrides (title + description + noindex; OG image lands
+  // later). Server action shallow-merges incoming with stored seo so
+  // fields this form doesn't edit survive every save. `noindex` is
+  // controlled by the Synlighet sidebar card, NOT the SearchListingEditor
+  // (Shopify pattern: "what Google shows" and "should Google index"
+  // are separate concerns).
+  const [seoState, setSeoState] = useState<{
+    title: string;
+    description: string;
+    noindex: boolean;
+  }>(() => ({
+    title: seo?.title ?? "",
+    description: seo?.description ?? "",
+    noindex: seo?.noindex ?? false,
+  }));
 
   const handleSeoChange = useCallback(
     (next: { title: string; description: string }) => {
-      setSeoState(next);
+      // SLE only owns title + description. Functional setState
+      // preserves the merchant's noindex choice across re-renders.
+      setSeoState((prev) => ({
+        ...prev,
+        title: next.title,
+        description: next.description,
+      }));
+      markDirty();
+    },
+    [markDirty],
+  );
+
+  // Kept for the next noindex UI surface (the previous Synlighet card
+  // was removed — see PreferencesContent comment for the same pattern).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleNoindexChange = useCallback(
+    (noindex: boolean) => {
+      setSeoState((prev) => ({ ...prev, noindex }));
       markDirty();
     },
     [markDirty],
   );
 
   const isEdit = !!product;
+  // ── Slug state (M11.3) ──
+  //
+  // The SearchListingEditor's slug input is now editable. We track the
+  // current slug + validity here so handleSave can: (a) refuse to save
+  // while the slug fails the regex, and (b) intercept with a redirect-
+  // warning modal when an existing entity's slug actually changed.
+  // Initial value mirrors what flowed into SLE pre-M11.3 — saved slug
+  // for existing products, /new placeholder otherwise.
+  const initialSlug = isEdit && product
+    ? product.slug
+    : NEW_PRODUCT_PLACEHOLDER_SLUG;
+  const [slugState, setSlugState] = useState(initialSlug);
+  const [slugIsValid, setSlugIsValid] = useState(true);
+  const [showSlugWarning, setShowSlugWarning] = useState(false);
+
+  const handleSlugChange = useCallback(
+    (next: { slug: string; isValid: boolean }) => {
+      setSlugState(next.slug);
+      setSlugIsValid(next.isValid);
+      // Don't mark the form dirty just because AUTO mode bubbled the
+      // title-derived slug back up — the title field already drove
+      // markDirty when it changed. Only USER edits that actually
+      // diverge from the persisted slug should signal "unsaved".
+      if (isEdit && product && next.slug !== product.slug) {
+        markDirty();
+      }
+    },
+    [isEdit, product, markDirty],
+  );
   // ── Core fields (pre-populated from product when editing) ──
   const [title, setTitle] = useState(product?.title ?? "");
   const [description, setDescription] = useState(product?.description ?? "");
@@ -431,7 +486,15 @@ export default function ProductForm({
   const [variantMediaIndex, setVariantMediaIndex] = useState<number | null>(null);
 
   // ── Save ──
-  const handleSave = useCallback(() => {
+  //
+  // Two-step flow:
+  //   handleSave()  — gates on slug validity, then either intercepts
+  //                   with the redirect-warning modal (existing entity
+  //                   + slug actually changed) or runs executeSave()
+  //                   directly.
+  //   executeSave() — the actual server-action call. Closing the
+  //                   warning modal and confirming both end here.
+  const executeSave = useCallback(() => {
     setIsSaving(true);
     setSaveError(null);
     startTransition(async () => {
@@ -458,6 +521,7 @@ export default function ProductForm({
             seo: {
               title: seoState.title,
               description: seoState.description,
+              noindex: seoState.noindex,
             },
           };
 
@@ -484,6 +548,28 @@ export default function ProductForm({
       }
     });
   }, [title, description, price, compareAtPrice, taxable, status, media, options, variants, selectedCollectionIds, tags, seoState, router, isEdit, product, basePath]);
+
+  const handleSave = useCallback(() => {
+    if (!slugIsValid) {
+      setSaveError("URL-användarnamnet är ogiltigt. Korrigera fältet innan du sparar.");
+      setTimeout(() => setSaveError(null), 5000);
+      return;
+    }
+    // Redirect warning fires only when editing an existing product
+    // AND the merchant's slug differs from what's persisted. The /new
+    // flow has no old URL to redirect from, and unchanged slugs need
+    // no warning.
+    if (isEdit && product && slugState !== product.slug) {
+      setShowSlugWarning(true);
+      return;
+    }
+    executeSave();
+  }, [slugIsValid, isEdit, product, slugState, executeSave]);
+
+  const handleConfirmSlugChange = useCallback(() => {
+    setShowSlugWarning(false);
+    executeSave();
+  }, [executeSave]);
 
   const handleDiscard = useCallback(() => {
     setIsDiscarding(true);
@@ -513,12 +599,18 @@ export default function ProductForm({
     setSelectedCollectionIds(new Set((product?.collectionItems ?? []).map((ci) => ci.collection.id)));
     setTags((product?.tags ?? []).map((t) => t.tag.name));
     setTagInput("");
-    setSeoState(seo ?? { title: "", description: "" });
+    setSeoState({
+      title: seo?.title ?? "",
+      description: seo?.description ?? "",
+      noindex: seo?.noindex ?? false,
+    });
+    setSlugState(initialSlug);
+    setSlugIsValid(true);
     setTimeout(() => {
       setDirty(false);
       setIsDiscarding(false);
     }, 100);
-  }, [product, seo]);
+  }, [product, seo, initialSlug]);
 
   return (
     <div className="admin-page admin-page--no-preview products-page">
@@ -892,10 +984,7 @@ export default function ProductForm({
                 title: seoState.title || title,
                 description:
                   seoState.description || strippedDescription,
-                slug:
-                  isEdit && product
-                    ? product.slug
-                    : NEW_PRODUCT_PLACEHOLDER_SLUG,
+                slug: slugState,
               }}
               override={{
                 title: seoState.title,
@@ -904,6 +993,7 @@ export default function ProductForm({
               parentTitle={title}
               parentDescription={strippedDescription}
               onChange={handleSeoChange}
+              onSlugChange={handleSlugChange}
               initialPreview={initialPreview}
             />
           </div>
@@ -949,6 +1039,10 @@ export default function ProductForm({
                 )}
               </div>
             </div>
+
+            {/* Sidebar: Synlighet (M6.6) — search-engine indexing
+                control. UI removed — `seoState.noindex` + handler +
+                save/discard wiring kept for a future surface. */}
 
             {/* Sidebar: Sales analytics */}
             <div style={CARD}>
@@ -1172,6 +1266,52 @@ export default function ProductForm({
         uploadFolder="products/variants"
         accept="image"
       />
+
+      {/* Slug-change warning — fires when an existing product's URL is
+          edited. Mirrors the createPortal pattern used by the product
+          picker + collection delete confirmations. Confirm proceeds
+          with the same executeSave path as a normal save. */}
+      {showSlugWarning && createPortal(
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setShowSlugWarning(false)}
+        >
+          <div style={{ position: "absolute", inset: 0, background: "var(--admin-overlay)", animation: "settings-modal-fade-in 0.15s ease" }} />
+          <div
+            style={{
+              position: "relative", zIndex: 1, background: "var(--admin-surface)",
+              borderRadius: 16, width: 460, padding: 24,
+              display: "flex", flexDirection: "column", gap: 16,
+              animation: "settings-modal-scale-in 0.2s cubic-bezier(0.32, 0.72, 0, 1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: 17, fontWeight: 600, margin: 0 }}>Ändra webbadress?</h3>
+            <p style={{ fontSize: 14, lineHeight: 1.5, color: "var(--admin-text-secondary)", margin: 0 }}>
+              Om du ändrar webbadressen skapas en automatisk 301-omdirigering från den gamla adressen. Befintliga länkar kommer fortsätta fungera.
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="settings-btn--outline"
+                onClick={() => setShowSlugWarning(false)}
+                disabled={isPending}
+              >
+                Avbryt
+              </button>
+              <button
+                type="button"
+                className="settings-btn--connect"
+                onClick={handleConfirmSlugChange}
+                disabled={isPending}
+              >
+                Spara och omdirigera
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

@@ -230,7 +230,15 @@
       "Bash(sed -n '88,95p' app/_lib/seo/adapters/product.ts)",
       "Bash(sed -n '133,138p' app/_lib/seo/adapters/product-collection.ts)",
       "Bash(awk *)",
-      "Bash(DEV_ORG_ID=\"\" npm run build)"
+      "Bash(DEV_ORG_ID=\"\" npm run build)",
+      "Bash(mkdir -p /tmp/fas-7.0-rescue)",
+      "Bash(cp /workspaces/book/admin/app/\\\\\\(admin\\\\\\)/store/preferences/PreferencesContent.tsx /tmp/fas-7.0-rescue/PreferencesContent.tsx.newer)",
+      "Bash(cp /workspaces/book/admin/app/\\\\\\(admin\\\\\\)/store/preferences/preferences.css /tmp/fas-7.0-rescue/preferences.css.newer)",
+      "Read(//tmp/**)",
+      "Bash(mkdir -p /tmp/fas-7.0-rescue/redirects)",
+      "Bash(cp /workspaces/book/.claude/settings.local.json /tmp/fas-7.0-rescue/settings.local.json.newer)",
+      "Bash(cp /workspaces/book/.claude/scheduled_tasks.lock /tmp/fas-7.0-rescue/scheduled_tasks.lock.newer)",
+      "Bash(cp -r /workspaces/book/admin/app/\\\\\\(admin\\\\\\)/redirects/* /tmp/fas-7.0-rescue/redirects/)"
     ]
   }
 }

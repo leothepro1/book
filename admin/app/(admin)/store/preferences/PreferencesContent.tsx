@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { EditorIcon } from "@/app/_components/EditorIcon";
 import { ImageUpload } from "../../_components/ImageUpload";
 import { PublishBarUI } from "../../_components/PublishBar/PublishBar";
 import {
@@ -17,6 +18,17 @@ import {
   saveHomepagePreferences,
   type HomepagePreferencesSnapshot,
 } from "./actions";
+
+// Reuse the .email-nav row layout (icon + label + desc, optional
+// trailing element) from /settings/email. Generic styles, no email-
+// specific selectors — picked here for the new toggle row above
+// "Startsidetitel och metabeskrivning". Cross-feature CSS imports
+// load globally in Next.js, so this just brings the classnames into
+// scope without duplication.
+import "../../settings/email/email.css";
+// Preferences-page-local overrides (e.g. .pf-static-row neutralising
+// the email-nav hover highlight on non-clickable rows).
+import "./preferences.css";
 
 // ── Shared card surface ──────────────────────────────────────
 //
@@ -37,6 +49,8 @@ interface Draft {
   description: string;
   ogImagePublicId: string | null;
   ogImageUrl: string | null;
+  /** Storefront-wide "discourage search engines" toggle (M6.6b). */
+  noindex: boolean;
 }
 
 function snapshotToDraft(snap: HomepagePreferencesSnapshot): Draft {
@@ -45,6 +59,7 @@ function snapshotToDraft(snap: HomepagePreferencesSnapshot): Draft {
     description: snap.description,
     ogImagePublicId: snap.ogImage?.publicId ?? null,
     ogImageUrl: snap.ogImage?.url ?? null,
+    noindex: snap.noindex,
   };
 }
 
@@ -52,9 +67,21 @@ function draftsEqual(a: Draft, b: Draft): boolean {
   return (
     a.title === b.title &&
     a.description === b.description &&
-    a.ogImagePublicId === b.ogImagePublicId
+    a.ogImagePublicId === b.ogImagePublicId &&
+    a.noindex === b.noindex
   );
 }
+
+// Hard limits for the Butiksåtkomst inputs. Same warn-threshold logic
+// as the SEO counters above; chosen to match the merchant-facing copy
+// ("x av 100", "0 av 5 000").
+const ACCESS_PASSWORD_MAX = 100;
+const ACCESS_MESSAGE_MAX = 5000;
+
+// Swedish locale grouping renders 5000 as "5 000". Lazy-instantiate
+// once at module level since the formatter is reused on every keystroke
+// of the message textarea.
+const ACCESS_MESSAGE_FORMATTER = new Intl.NumberFormat("sv-SE");
 
 type CounterState = "normal" | "warn" | "error";
 
@@ -64,15 +91,34 @@ function counterState(length: number, max: number): CounterState {
   return "normal";
 }
 
-function counterColor(state: CounterState): string {
-  switch (state) {
-    case "error":
-      return "var(--admin-danger)";
-    case "warn":
-      return "#c2410c"; // amber — no existing admin token for "warn"
-    case "normal":
-      return "var(--admin-text-tertiary)";
-  }
+// Mirrors the Toggle helper in app/(admin)/home/HomeClient.tsx:376.
+// Inlined rather than cross-imported between client components so each
+// feature owns its own surface; the .admin-toggle CSS in base.css is
+// the single source of truth for the visual.
+function Toggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      className={"admin-toggle" + (checked ? " admin-toggle-on" : "")}
+    >
+      <span className="admin-toggle-icon admin-toggle-icon--check material-symbols-rounded">
+        check
+      </span>
+      <span className="admin-toggle-icon admin-toggle-icon--remove material-symbols-rounded">
+        remove
+      </span>
+      <span className="admin-toggle-thumb" />
+    </button>
+  );
 }
 
 export function PreferencesContent() {
@@ -85,6 +131,14 @@ export function PreferencesContent() {
   );
   const [saved, setSaved] = useState<Draft | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+
+  // Placeholder state for the Butiksåtkomst card (above "Startsidetitel
+  // och metabeskrivning"). Not yet wired to any persisted setting —
+  // local-only for now; the parent will get a real binding once the
+  // backend shape is decided.
+  const [togglePlaceholder, setTogglePlaceholder] = useState(false);
+  const [accessPassword, setAccessPassword] = useState("");
+  const [accessMessage, setAccessMessage] = useState("");
 
   useEffect(() => {
     getHomepagePreferences().then((snap) => {
@@ -118,6 +172,7 @@ export function PreferencesContent() {
       title: draft.title,
       description: draft.description,
       ogImagePublicId: draft.ogImagePublicId,
+      noindex: draft.noindex,
     });
     setSaving(false);
     if (result.ok) {
@@ -176,6 +231,109 @@ export function PreferencesContent() {
     <>
       <div className="pf-body">
         <div className="pf-main">
+          {/* ── Butiksåtkomst card (UI scaffold — toggle not wired yet).
+              Mirrors the Container 2 / .email-nav pattern from the
+              /settings/email page: outer CARD surface + inner .email-nav
+              row. Swaps: chevron → iOS toggle (base.css), and
+              .pf-static-row neutralises the email-nav hover background
+              since only the toggle is interactive here. */}
+          <div style={CARD}>
+            <div className="pf-card-header" style={{ marginBottom: 12 }}>
+              <span className="pf-card-title">Butiksåtkomst</span>
+            </div>
+            <div className="email-nav">
+              <div className="email-nav__item pf-static-row">
+                <EditorIcon
+                  name="lock"
+                  size={20}
+                  style={{
+                    color: "var(--admin-text-secondary)",
+                    flexShrink: 0,
+                  }}
+                />
+                <div className="email-nav__text">
+                  <div className="email-nav__label">Lösenordsskydd</div>
+                  <div className="email-nav__desc">
+                    Begränsa åtkomst för besökare med lösenordet
+                  </div>
+                </div>
+                <Toggle
+                  checked={togglePlaceholder}
+                  onChange={() => setTogglePlaceholder((v) => !v)}
+                />
+              </div>
+
+              {/* Fold-down panel — animates open when the toggle is on.
+                  The grid-template-rows trick (preferences.css) lets the
+                  natural content height drive the transition. Inputs +
+                  counters reuse the same .email-sender__input + .admin-label
+                  + counterColor pattern as the "Startsidetitel" card. */}
+              <div
+                className={
+                  "pf-collapse" +
+                  (togglePlaceholder ? " pf-collapse--open" : "")
+                }
+                aria-hidden={!togglePlaceholder}
+              >
+                <div className="pf-collapse__inner">
+                  <div className="pf-collapse__panel">
+                    {/* Lösenord */}
+                    <div>
+                      <label
+                        className="admin-label"
+                        htmlFor="pf-access-password"
+                        style={{ display: "block", marginBottom: 6 }}
+                      >
+                        Lösenord
+                      </label>
+                      <input
+                        id="pf-access-password"
+                        type="text"
+                        className="email-sender__input"
+                        value={accessPassword}
+                        onChange={(e) => setAccessPassword(e.target.value)}
+                        style={{ width: "100%" }}
+                        disabled={!togglePlaceholder}
+                      />
+                      <div className="pf-counter">
+                        {accessPassword.length} av {ACCESS_PASSWORD_MAX} tecken använda
+                      </div>
+                    </div>
+
+                    {/* Meddelande till dina besökare */}
+                    <div>
+                      <label
+                        className="admin-label"
+                        htmlFor="pf-access-message"
+                        style={{ display: "block", marginBottom: 6 }}
+                      >
+                        Meddelande till dina besökare
+                      </label>
+                      <textarea
+                        id="pf-access-message"
+                        className="email-sender__input"
+                        value={accessMessage}
+                        onChange={(e) => setAccessMessage(e.target.value)}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          minHeight: 180,
+                          padding: "10px 12px",
+                          resize: "vertical",
+                        }}
+                        disabled={!togglePlaceholder}
+                      />
+                      <div className="pf-counter">
+                        {ACCESS_MESSAGE_FORMATTER.format(accessMessage.length)} av{" "}
+                        {ACCESS_MESSAGE_FORMATTER.format(ACCESS_MESSAGE_MAX)} tecken använda
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* ── One card: title + description + combined preview ── */}
           <div style={CARD}>
             <div className="pf-card-header" style={{ marginBottom: 12 }}>
@@ -183,31 +341,20 @@ export function PreferencesContent() {
                 Startsidetitel och metabeskrivning
               </span>
             </div>
-            <p
-              className="admin-desc"
-              style={{
-                marginBottom: 16,
-                fontSize: 13,
-                lineHeight: 1.45,
-                color: "var(--admin-text-secondary)",
-              }}
-            >
-              Lämna titeln tom för att använda organisationsnamnet
-              ({snapshot.siteName}). Beskrivningen visas i sökresultat
-              och sociala delningar.
-            </p>
-
             <div style={{ display: "flex", gap: 35, alignItems: "flex-start" }}>
-              {/* ── LEFT: combined social-share preview (30% width) ── */}
+              {/* ── LEFT: combined social-share preview (36% width) ──
+                  pf-share-preview scopes the image-slot overrides
+                  (height/min-height/border) to this surface only. */}
               <div
+                className="pf-share-preview"
                 style={{
-                  width: "30%",
+                  width: "36%",
                   flexShrink: 0,
                   display: "flex",
                   flexDirection: "column",
                   gap: 0,
-                  border: "1px solid var(--admin-border)",
-                  borderRadius: "var(--radius-md)",
+                  border: "1px solid #EBEBEB",
+                  borderRadius: "0.75rem",
                   overflow: "hidden",
                   background: "#fff",
                 }}
@@ -227,7 +374,6 @@ export function PreferencesContent() {
                   placeholder="Välj bild..."
                   overlayLabel="Ändra bild"
                   showFilename={false}
-                  height={140}
                 />
 
                 {/* Bottom half: social-share meta — URL caps,
@@ -318,16 +464,8 @@ export function PreferencesContent() {
                     placeholder={snapshot.siteName}
                     style={{ width: "100%" }}
                   />
-                  <div
-                    style={{
-                      fontSize: 12,
-                      marginTop: 4,
-                      textAlign: "right",
-                      color: counterColor(titleCounter),
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {titleLen} / {SEO_HOMEPAGE_TITLE_MAX}
+                  <div className="pf-counter">
+                    {titleLen} av {SEO_HOMEPAGE_TITLE_MAX} tecken använda
                   </div>
                 </div>
 
@@ -348,24 +486,24 @@ export function PreferencesContent() {
                         d === null ? d : { ...d, description: e.target.value },
                       )
                     }
-                    rows={3}
-                    style={{ width: "100%", resize: "vertical" }}
-                  />
-                  <div
                     style={{
-                      fontSize: 12,
-                      marginTop: 4,
-                      textAlign: "right",
-                      color: counterColor(descCounter),
-                      fontVariantNumeric: "tabular-nums",
+                      display: "block",
+                      width: "100%",
+                      minHeight: 180,
+                      padding: "10px 12px",
+                      resize: "vertical",
                     }}
-                  >
-                    {descLen} / {SEO_HOMEPAGE_DESCRIPTION_MAX}
+                  />
+                  <div className="pf-counter">
+                    {descLen} av {SEO_HOMEPAGE_DESCRIPTION_MAX} tecken använda
                   </div>
                 </div>
               </div>
             </div>
           </div>
+
+          {/* Sökmotorsynlighet UI removed — `draft.noindex` and the
+              save-path persistence remain in place for a future surface. */}
 
           {error && (
             <div style={CARD}>

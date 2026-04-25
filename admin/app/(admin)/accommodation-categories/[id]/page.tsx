@@ -76,8 +76,9 @@ export default async function EditAccommodationCategoryPage({
     ? {
         title: storedSeo.title ?? "",
         description: storedSeo.description ?? "",
+        noindex: storedSeo.noindex ?? false,
       }
-    : { title: "", description: "" };
+    : { title: "", description: "", noindex: false };
 
   const initialPreview = await safeInitialPreview({
     tenantId: tenantData.tenant.id,

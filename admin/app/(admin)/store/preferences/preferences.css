@@ -1,0 +1,79 @@
+/* Preferences-page-local overrides on top of reused styles.
+ *
+ * The Butiksåtkomst row reuses .email-nav / .email-nav__item from
+ * /settings/email/email.css, where the row is a clickable nav item
+ * with a hover background. On Preferences only the trailing toggle
+ * is interactive — the row itself isn't clickable — so the hover
+ * highlight would mislead. This rule neutralises it scoped to the
+ * .pf-static-row modifier class.
+ */
+/* Compound selector (.email-nav__item.pf-static-row) raises specificity
+ * above the email.css `.email-nav__item:hover` rule (both are class +
+ * :hover otherwise — Next.js doesn't guarantee chunk order). The double
+ * class wins (0,3,0 vs 0,2,0) regardless of which CSS loads last. */
+.email-nav__item.pf-static-row,
+.email-nav__item.pf-static-row:hover {
+  background: transparent;
+  cursor: default;
+}
+
+/* Smooth fold-down panel — grid-template-rows trick lets the content
+ * animate from 0 → its natural height without measuring it in JS.
+ * The inner element handles `overflow: hidden` so the clipped content
+ * doesn't leak during the transition. */
+.pf-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--duration-normal, 200ms)
+    var(--ease-default, ease);
+}
+
+.pf-collapse--open {
+  grid-template-rows: 1fr;
+}
+
+.pf-collapse__inner {
+  overflow: hidden;
+}
+
+/* Padded interior of the fold-down — inset grey panel inside the
+ * email-nav surface, separated by margin (no border) so it visually
+ * floats below the trigger row. */
+.pf-collapse__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 16px;
+  margin: 0px 16px 16px;
+  background: #f7f7f7;
+  border-radius: 0.75rem;
+  border-top: none;
+}
+
+/* Image slot inside the social-share preview — flat top edge with no
+ * border (the outer .pf-share-preview card owns the rounded corner +
+ * border) and a fixed height. Default ImageUpload chrome (16:10 ratio,
+ * 8px radius, 1.5px border) reset here so the image reads as part of
+ * the preview card, not a separate widget. Both the populated state
+ * (.img-upload-result) and the empty state (.img-upload-empty) get
+ * the same overrides so the box doesn't change shape between states. */
+.pf-share-preview .img-upload-result,
+.pf-share-preview .img-upload-empty {
+  height: 140px;
+  min-height: 150px;
+  aspect-ratio: auto;
+  border: none;
+  border-radius: 0;
+}
+
+/* Char-counter caption used under every x-av-max input on this page
+ * (SEO title, meta description, Butiksåtkomst lösenord + meddelande).
+ * Flat colour — no warn/error tint — and proportional digits per the
+ * latest spec. */
+.pf-counter {
+  font-size: 12px;
+  margin-top: 4px;
+  text-align: left;
+  color: #303030;
+  font-variant-numeric: normal;
+}

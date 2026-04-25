@@ -54,6 +54,16 @@ import { useSeoCharCounter } from "../../_lib/seo/useSeoCharCounter";
 import { previewSeoAction } from "../../_lib/seo/previewAction";
 import type { SeoPreviewResult } from "@/app/_lib/seo/preview";
 import type { SeoResourceType } from "@/app/_lib/seo/types";
+import { titleToSlug } from "@/app/_lib/products/types";
+
+// ── Slug validation ─────────────────────────────────────────────
+//
+// Mirrors the server-side normalizer (`titleToSlug` in
+// app/_lib/products/types.ts) — same regex, lowercase a–z 0–9 plus
+// hyphens, no leading/trailing hyphens. The merchant can type freely
+// but a save-blocking error appears until the value matches. Empty
+// is NOT an error (empty draft transitions back to AUTO mode).
+const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 import { SearchListingPreview } from "../SearchListingPreview/SearchListingPreview";
 
@@ -165,6 +175,18 @@ export interface SearchListingEditorProps {
     readonly title: string;
     readonly description: string;
   }) => void;
+  /**
+   * Slug edits bubble up here. `isValid` is `false` whenever the
+   * merchant has typed something that doesn't match the slug regex —
+   * the parent form should refuse to save while invalid. Empty draft
+   * is treated as valid (it triggers AUTO mode, not an error). When
+   * omitted the slug input falls back to read-only behaviour, which
+   * is how callers that haven't migrated yet keep working.
+   */
+  readonly onSlugChange?: (next: {
+    readonly slug: string;
+    readonly isValid: boolean;
+  }) => void;
   readonly price?: string | null;
   /**
    * SSR-prepared preview snapshot. When omitted, the component
@@ -189,6 +211,7 @@ export function SearchListingEditor({
   parentTitle,
   parentDescription,
   onChange,
+  onSlugChange,
   price,
   initialPreview,
 }: SearchListingEditorProps) {
@@ -263,6 +286,33 @@ export function SearchListingEditor({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [override.description]);
+
+  // ── Slug auto-follow state ──
+  //
+  // Mirrors the title machine: AUTO derives the slug from `parentTitle`
+  // via `titleToSlug`, USER shows whatever the merchant typed. Mount
+  // mode = "user" only when the persisted slug diverges from what the
+  // current title would produce (i.e. the merchant previously took
+  // manual control). For /new and freshly-created entities the slug
+  // matches its title-derived form and we start in AUTO.
+  const [slugMode, setSlugMode] = useState<"auto" | "user">(() =>
+    value.slug && value.slug !== titleToSlug(parentTitle) ? "user" : "auto",
+  );
+  const [slugDraft, setSlugDraft] = useState(value.slug);
+
+  // Re-sync slug from external value prop changes (parent reload after
+  // save). Same equality-guard pattern as title — protects the
+  // merchant's in-flight typing from being clobbered by re-renders that
+  // simply replay the current draft back through `value.slug`.
+  useEffect(() => {
+    if (value.slug !== slugDraft) {
+      setSlugDraft(value.slug);
+      setSlugMode(
+        value.slug && value.slug !== titleToSlug(parentTitle) ? "user" : "auto",
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value.slug]);
 
   // Counters measure the VISIBLE value — what Google will actually
   // render. In AUTO mode that's the parent value; in USER mode
@@ -367,6 +417,60 @@ export function SearchListingEditor({
     }
   }, [descriptionMode, descriptionDraft, onChange, override.title]);
 
+  // ── Slug field handlers ──
+  //
+  // Resolved values: AUTO reads `titleToSlug(parentTitle)` directly so
+  // the visible slug tracks the merchant's main title field as they
+  // type; USER reads the draft. The auto-derived value also bubbles up
+  // when in AUTO mode so the parent's slugState stays in sync — that
+  // lets the parent compare slugState against `product.slug` to decide
+  // whether to fire the redirect-warning modal on save.
+  const autoSlug = titleToSlug(parentTitle);
+  const slugInputValue = slugMode === "user" ? slugDraft : autoSlug;
+  const slugInvalid =
+    slugMode === "user" && slugDraft !== "" && !SLUG_REGEX.test(slugDraft);
+
+  const handleSlugFocus = useCallback(() => {
+    if (slugMode === "auto") {
+      setSlugDraft(autoSlug);
+      setSlugMode("user");
+    }
+  }, [slugMode, autoSlug]);
+
+  const handleSlugChange = useCallback(
+    (next: string) => {
+      setSlugDraft(next);
+      if (onSlugChange) {
+        const isValid = next === "" || SLUG_REGEX.test(next);
+        onSlugChange({ slug: next, isValid });
+      }
+    },
+    [onSlugChange],
+  );
+
+  const handleSlugBlur = useCallback(() => {
+    if (slugMode === "user" && slugDraft.trim() === "") {
+      // Empty draft → return to AUTO. The bubbled-up slug becomes the
+      // title-derived value, which is always valid by construction.
+      setSlugMode("auto");
+      setSlugDraft("");
+      if (onSlugChange) {
+        onSlugChange({ slug: autoSlug, isValid: true });
+      }
+    }
+  }, [slugMode, slugDraft, onSlugChange, autoSlug]);
+
+  // Keep parent's slugState aligned with the auto-derived slug while
+  // the merchant edits the main title field in AUTO mode. Without this,
+  // the parent would compare a stale slug against `product.slug` and
+  // either miss a redirect-worthy change or fire a false warning.
+  useEffect(() => {
+    if (slugMode === "auto" && onSlugChange) {
+      onSlugChange({ slug: autoSlug, isValid: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSlug, slugMode]);
+
   // ── Placeholder + URL derivations ──
 
   const fallbackLabels = PARENT_FALLBACK_LABELS[resourceType];
@@ -467,14 +571,33 @@ export function SearchListingEditor({
             <label className="sle__label" htmlFor="sle-slug">
               URL-användarnamn
             </label>
-            <input
-              id="sle-slug"
-              type="text"
-              className="sle__input sle__input--readonly"
-              value={value.slug}
-              readOnly
-              title="URL-redigering kommer i framtida version."
-            />
+            {onSlugChange ? (
+              <input
+                id="sle-slug"
+                type="text"
+                className={`sle__input${slugInvalid ? " sle__input--invalid" : ""}`}
+                value={slugInputValue}
+                aria-invalid={slugInvalid || undefined}
+                aria-describedby={slugInvalid ? "sle-slug-error" : undefined}
+                onFocus={handleSlugFocus}
+                onChange={(e) => handleSlugChange(e.target.value)}
+                onBlur={handleSlugBlur}
+              />
+            ) : (
+              <input
+                id="sle-slug"
+                type="text"
+                className="sle__input sle__input--readonly"
+                value={value.slug}
+                readOnly
+                title="URL-redigering kommer i framtida version."
+              />
+            )}
+            {slugInvalid ? (
+              <div id="sle-slug-error" className="sle__error" role="alert">
+                Endast små bokstäver (a–z), siffror och bindestreck. Inga blanksteg eller specialtecken.
+              </div>
+            ) : null}
             {fullUrl ? (
               <div className="sle__url-subtext" title={fullUrl}>
                 {fullUrl}

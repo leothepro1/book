@@ -61,8 +61,8 @@
 }
 
 .sle__preview {
-  /* The SerpPreview child already sets its own typography + line
-     height. We just give it some padding space. */
+  /* The SearchListingPreview child already sets its own typography +
+     line height. We just give it some padding space. */
   padding: 4px 0 2px;
 }
 
@@ -119,6 +119,18 @@
   background: var(--admin-surface-raised, #f7f7f7);
   color: var(--admin-text-secondary, #4d5156);
   cursor: not-allowed;
+}
+
+.sle__input--invalid,
+.sle__input--invalid:focus {
+  border-color: var(--admin-danger, #d72c0d);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--admin-danger, #d72c0d) 12%, transparent);
+}
+
+.sle__error {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--admin-danger, #d72c0d);
 }
 
 .sle__counter {
