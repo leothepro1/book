@@ -155,10 +155,15 @@ type ResolvedCustom = {
 type ResolvedLine = ResolvedAcc | ResolvedProduct | ResolvedCustom;
 
 /**
+ * @internal
+ * Used by addLineItem and createDraftWithLines for shared PMS-pricing
+ * resolution and Prisma create-data construction. NOT part of public
+ * draft-orders API. Do not import outside _lib/draft-orders/.
+ *
  * Resolve a line input to its fully-priced snapshot shape. Runs BEFORE
  * the $transaction — PMS/B2B calls must not hold an open tx.
  */
-async function resolveLineForAdd(
+export async function resolveLineForAdd(
   draft: DraftOrder,
   line: AddLineItemInput["line"],
 ): Promise<ResolvedLine> {
@@ -266,11 +271,16 @@ async function resolveLineForAdd(
 }
 
 /**
+ * @internal
+ * Used by addLineItem and createDraftWithLines for shared PMS-pricing
+ * resolution and Prisma create-data construction. NOT part of public
+ * draft-orders API. Do not import outside _lib/draft-orders/.
+ *
  * Build the `data` for `tx.draftLineItem.create`. Pure — composes the
  * resolved pricing shape with the input's lineType-specific metadata +
  * shared fields (taxable, line-discount shape).
  */
-function buildLineItemCreateData(
+export function buildLineItemCreateData(
   draft: DraftOrder,
   resolved: ResolvedLine,
   line: AddLineItemInput["line"],
