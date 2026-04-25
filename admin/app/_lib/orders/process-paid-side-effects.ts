@@ -200,10 +200,14 @@ export async function processOrderPaidSideEffects(
         select: { name: true, portalSlug: true },
       });
 
-      const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
-      const portalBase = tenant?.portalSlug
-        ? `https://${tenant.portalSlug}.${baseDomain}`
-        : null;
+      const { getTenantUrl } = await import("@/app/_lib/tenant/tenant-url");
+      const orderStatusUrl =
+        order.statusToken && tenant?.portalSlug
+          ? getTenantUrl(tenant, { path: `/order-status/${order.statusToken}` })
+          : "";
+      const portalUrl = tenant?.portalSlug
+        ? getTenantUrl(tenant, { path: "/login" })
+        : "";
 
       await sendEmailEvent(
         order.tenantId,
@@ -215,10 +219,8 @@ export async function processOrderPaidSideEffects(
           orderTotal: `${formatPriceDisplay(order.totalAmount, order.currency)} kr`,
           currency: order.currency,
           tenantName: tenant?.name ?? "",
-          orderStatusUrl: order.statusToken && portalBase
-            ? `${portalBase}/order-status/${order.statusToken}`
-            : "",
-          portalUrl: portalBase ? `${portalBase}/login` : "",
+          orderStatusUrl,
+          portalUrl,
         },
       );
 
