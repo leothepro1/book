@@ -55,3 +55,7 @@ export { HOLD_TRANSITIONS, canHoldTransition } from "./state-machine";
 // ── Services (FAS 6.5D) ──
 export { sendInvoice, cancelDraft } from "./lifecycle";
 export { convertDraftToOrder } from "./convert";
+
+// ── Services (FAS 6.5E) ──
+export { sweepExpiredDrafts } from "./expire";
+export type { SweepResult, SweepExpiredDraftsOptions } from "./expire";
