@@ -1,0 +1,173 @@
+/**
+ * Read-side service for draft-orders admin UI.
+ * Returns Result<T,E> shape — matches existing orders/* read pattern.
+ * Mutations in lifecycle.ts throw ServiceError — different convention by design.
+ *
+ * `updateDraftMeta` is the exception in this file: it IS a mutation,
+ * but its caller surface is the admin UI form-action layer, which
+ * expects Result-style returns (matching `updateCustomerNote`,
+ * `updateOrderTags` in `(admin)/orders/actions.ts`). The throw-style
+ * lifecycle services (cancelDraft, sendInvoice, …) are called by code
+ * paths that already wrap errors at a different boundary.
+ */
+
+import { z } from "zod";
+import type { DraftOrder, DraftOrderStatus, Prisma } from "@prisma/client";
+import { prisma } from "@/app/_lib/db/prisma";
+import { createDraftOrderEventInTx } from "./events";
+import { DRAFT_ERRORS } from "./errors";
+
+// ── Types ──────────────────────────────────────────────────────
+
+export type DraftMetaPatch = {
+  expiresAt?: Date;
+  internalNote?: string | null;
+  /** Replaces (not merges) the tag array. */
+  tags?: string[];
+};
+
+export const DraftMetaPatchSchema = z.object({
+  expiresAt: z.date().optional(),
+  internalNote: z.string().nullable().optional(),
+  tags: z.array(z.string().min(1).max(64)).max(50).optional(),
+});
+
+export type UpdateDraftMetaActor = {
+  userId?: string;
+  source: "admin_ui" | "cron";
+};
+
+export type UpdateDraftMetaResult =
+  | { ok: true; draft: DraftOrder }
+  | { ok: false; error: string };
+
+// ── updateDraftMeta ────────────────────────────────────────────
+
+const EDITABLE_STATUSES: DraftOrderStatus[] = [
+  "OPEN",
+  "PENDING_APPROVAL",
+  "APPROVED",
+];
+
+type Diff = {
+  expiresAt?: { from: string | null; to: string };
+  internalNote?: { from: string | null; to: string | null };
+  tags?: { from: string[]; to: string[] };
+};
+
+function buildDiff(prev: DraftOrder, patch: DraftMetaPatch): Diff {
+  const diff: Diff = {};
+  if (
+    patch.expiresAt !== undefined &&
+    patch.expiresAt.getTime() !== prev.expiresAt.getTime()
+  ) {
+    diff.expiresAt = {
+      from: prev.expiresAt.toISOString(),
+      to: patch.expiresAt.toISOString(),
+    };
+  }
+  if (
+    patch.internalNote !== undefined &&
+    (patch.internalNote ?? null) !== (prev.internalNote ?? null)
+  ) {
+    diff.internalNote = {
+      from: prev.internalNote ?? null,
+      to: patch.internalNote ?? null,
+    };
+  }
+  if (patch.tags !== undefined) {
+    const prevTags = prev.tags ?? [];
+    const sortedPrev = [...prevTags].sort();
+    const sortedNext = [...patch.tags].sort();
+    if (
+      sortedPrev.length !== sortedNext.length ||
+      sortedPrev.some((t, i) => t !== sortedNext[i])
+    ) {
+      diff.tags = { from: prevTags, to: patch.tags };
+    }
+  }
+  return diff;
+}
+
+export async function updateDraftMeta(
+  draftId: string,
+  tenantId: string,
+  rawPatch: DraftMetaPatch,
+  actor: UpdateDraftMetaActor,
+): Promise<UpdateDraftMetaResult> {
+  const patch = DraftMetaPatchSchema.parse(rawPatch);
+
+  // Pre-tx: load current state. Cross-tenant access surfaces here as
+  // null (same response as not-found — never leak existence).
+  const current = (await prisma.draftOrder.findFirst({
+    where: { id: draftId, tenantId },
+  })) as DraftOrder | null;
+  if (!current) {
+    return { ok: false, error: DRAFT_ERRORS.NOT_FOUND };
+  }
+
+  if (!EDITABLE_STATUSES.includes(current.status)) {
+    return {
+      ok: false,
+      error: DRAFT_ERRORS.TERMINAL_STATUS(current.status),
+    };
+  }
+
+  const diff = buildDiff(current, patch);
+
+  // No-op patch — early return without DB roundtrip / event noise.
+  if (Object.keys(diff).length === 0) {
+    return { ok: true, draft: current };
+  }
+
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      const data: Prisma.DraftOrderUpdateInput = {
+        version: { increment: 1 },
+      };
+      if (patch.expiresAt !== undefined) data.expiresAt = patch.expiresAt;
+      if (patch.internalNote !== undefined) data.internalNote = patch.internalNote;
+      if (patch.tags !== undefined) data.tags = { set: patch.tags };
+
+      // Re-validate inside tx (defensive against concurrent transitions).
+      const fresh = await tx.draftOrder.findFirst({
+        where: { id: draftId, tenantId },
+        select: { status: true },
+      });
+      if (!fresh) {
+        throw new Error("__VANISHED__");
+      }
+      if (!EDITABLE_STATUSES.includes(fresh.status)) {
+        throw new Error(`__TERMINAL__:${fresh.status}`);
+      }
+
+      const result = (await tx.draftOrder.update({
+        where: { id: draftId },
+        data,
+      })) as DraftOrder;
+
+      await createDraftOrderEventInTx(tx, {
+        tenantId,
+        draftOrderId: draftId,
+        type: "META_UPDATED",
+        metadata: { diff } as Prisma.InputJsonValue,
+        actorUserId: actor.userId ?? null,
+        actorSource: actor.source,
+      });
+
+      return result;
+    });
+
+    return { ok: true, draft: updated };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "__VANISHED__") {
+      return { ok: false, error: DRAFT_ERRORS.NOT_FOUND };
+    }
+    if (msg.startsWith("__TERMINAL__:")) {
+      const status = msg.slice("__TERMINAL__:".length);
+      return { ok: false, error: DRAFT_ERRORS.TERMINAL_STATUS(status) };
+    }
+    throw err;
+  }
+}
