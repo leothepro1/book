@@ -3,7 +3,7 @@
  * ════════════════
  *
  * Per-tenant sitemap index. Routes on the guest host (e.g.
- * `apelviken-x.rutgr.com`), resolves the tenant from the request
+ * `apelviken-x.{platform-base-domain}`), resolves the tenant from the request
  * host header, walks PRODUCTION_SHARD_REGISTRY via
  * `buildSitemapIndexForTenant`, and serializes the result via
  * `sitemapIndexToXml`.

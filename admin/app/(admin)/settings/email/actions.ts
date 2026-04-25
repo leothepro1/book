@@ -8,6 +8,8 @@ import { renderDefaultTemplate } from "@/app/_lib/email/templates";
 import { sendEmailEvent } from "@/app/_lib/email";
 import type { EmailEventType } from "@/app/_lib/email";
 import type { EmailBranding } from "@/app/_lib/email/branding";
+import { tenantDefaultEmailFrom } from "@/app/_lib/tenant/portal-slug";
+import { getPlatformBaseDomain } from "@/app/_lib/platform/constants";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -75,6 +77,8 @@ export type TenantSenderInfo = {
   pendingEmailFrom: string | null;
   emailVerificationSentTo: string | null;
   emailVerificationExpiry: string | null;
+  /** Computed default — `noreply@{slug}.{baseDomain}` or `noreply@{baseDomain}`. */
+  defaultEmailFrom: string;
 };
 
 export async function getTenantSenderInfo(): Promise<TenantSenderInfo | null> {
@@ -87,6 +91,9 @@ export async function getTenantSenderInfo(): Promise<TenantSenderInfo | null> {
     pendingEmailFrom: t.pendingEmailFrom,
     emailVerificationSentTo: t.emailVerificationSentTo,
     emailVerificationExpiry: t.emailVerificationExpiry?.toISOString() ?? null,
+    defaultEmailFrom: t.portalSlug
+      ? tenantDefaultEmailFrom(t.portalSlug)
+      : `noreply@${getPlatformBaseDomain()}`,
   };
 }
 

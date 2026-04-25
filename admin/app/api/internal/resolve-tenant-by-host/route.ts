@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
  *
  * Host resolution mirrors the guest-side `resolveTenantFromHost`:
  *
- *   Production: `{portalSlug}.rutgr.com` → split on first `.`,
- *   lookup by `portalSlug`.
+ *   Production: `{portalSlug}.{platform-base-domain}` → split on
+ *   first `.`, lookup by `portalSlug`.
  *
  *   Development: localhost / 127.0.0.1 / *.app.github.dev → fall
  *   back to the DEV_ORG_ID → clerkOrgId lookup. Without this,
