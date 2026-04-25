@@ -95,3 +95,6 @@ export type {
 } from "./update-meta";
 
 export { DRAFT_ERRORS } from "./errors";
+
+// ── UI helpers (FAS 7.1) ──
+export { DRAFT_LABELS, getDraftBucket } from "./badge";
