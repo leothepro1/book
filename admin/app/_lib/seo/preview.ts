@@ -51,6 +51,7 @@ import {
 } from "./request-cache";
 import { ensureSeoBootstrapped } from "./bootstrap";
 import { createCloudinaryImageService } from "./image-service-impl";
+import { interpolate } from "./interpolation";
 import { createPageTypeSeoDefaultRepository } from "./page-type-defaults-impl";
 import { SeoResolver } from "./resolver";
 import { buildAbsoluteUrl } from "./paths";
@@ -145,9 +146,27 @@ export async function previewSeoForEntity(args: {
    */
   entityId: string | null;
   overrides: Partial<SeoMetadata>;
+  /**
+   * In-flight entity field values from the admin form. Distinct from
+   * `overrides`: these are NOT explicit SEO overrides — they're the
+   * merchant's live edits to the entity's main title/description
+   * fields, used to drive the resolver's `titleTemplate` composition
+   * (`{entityTitle} {siteName}` etc.) without persisting yet. When
+   * absent, the entity's stored title/description are used.
+   *
+   * Without this, the SearchListingEditor would have to choose:
+   * either send the live entity title as a fake override (skipping
+   * composition — observed bug: "Buffé Apelvikens camping" → "Buffé"
+   * post-debounce) or only refresh after save.
+   */
+  entityFields?: {
+    title?: string;
+    description?: string;
+  };
   locale: string;
 }): Promise<SeoPreviewResult> {
-  const { tenantId, resourceType, entityId, overrides, locale } = args;
+  const { tenantId, resourceType, entityId, overrides, entityFields, locale } =
+    args;
 
   if (!isPreviewable(resourceType)) {
     throw new Error(
@@ -193,6 +212,7 @@ export async function previewSeoForEntity(args: {
       resourceType,
       null,
       overrides,
+      entityFields,
       locale,
       faviconUrl,
     );
@@ -209,6 +229,7 @@ export async function previewSeoForEntity(args: {
       resourceType,
       entityId,
       overrides,
+      entityFields,
       locale,
       faviconUrl,
     );
@@ -219,6 +240,7 @@ export async function previewSeoForEntity(args: {
     resourceType,
     entity,
     overrides,
+    entityFields,
     locale,
     faviconUrl,
   );
@@ -392,6 +414,7 @@ async function runResolverPreview(
   resourceType: Exclude<PreviewableResourceType, "homepage">,
   entity: unknown,
   overrides: Partial<SeoMetadata>,
+  entityFields: { title?: string; description?: string } | undefined,
   locale: string,
   faviconUrl: string | null,
 ): Promise<SeoPreviewResult> {
@@ -399,7 +422,13 @@ async function runResolverPreview(
   // shallow over the stored seo. The resolver reads entity.seo via
   // the adapter's toSeoable — so the merged object IS what drives
   // the preview.
-  const synthetic = mergeOverridesIntoEntity(entity, overrides);
+  const merged = mergeOverridesIntoEntity(entity, overrides);
+  // Then overlay live entity-field edits (title/description) on the
+  // top-level row so the resolver's `titleTemplate` composition uses
+  // the merchant's in-flight values instead of the persisted ones.
+  // Override path is unaffected — when seo.title is set, the resolver
+  // short-circuits before the template runs.
+  const synthetic = applyInFlightEntityFields(merged, entityFields);
 
   const resolved = await resolver.resolve({
     tenant: tenantCtx,
@@ -473,6 +502,7 @@ async function fallbackPreview(
   resourceType: PreviewableResourceType,
   entityId: string | null,
   overrides: Partial<SeoMetadata>,
+  entityFields: { title?: string; description?: string } | undefined,
   locale: string,
   faviconUrl: string | null,
 ): Promise<SeoPreviewResult> {
@@ -493,8 +523,25 @@ async function fallbackPreview(
   const path = routePrefixFor(resourceType, slug);
   const canonicalUrl = buildAbsoluteUrl(tenantCtx, locale, path);
 
-  const title = overrides.title?.trim() || tenantCtx.siteName;
-  const description = overrides.description ?? "";
+  // Title fallback chain mirrors the resolver: explicit override wins,
+  // else interpolate the tenant titleTemplate using the in-flight
+  // parent title (or empty), else the bare siteName.
+  const overrideTitle = overrides.title?.trim();
+  const inFlightTitle = entityFields?.title?.trim();
+  let title: string;
+  if (overrideTitle) {
+    title = overrideTitle;
+  } else if (inFlightTitle) {
+    title = interpolate(
+      tenantCtx.seoDefaults.titleTemplate,
+      { entityTitle: inFlightTitle, siteName: tenantCtx.siteName },
+      { tenantId: tenantCtx.id, requestId: newRequestId() },
+    );
+  } else {
+    title = tenantCtx.siteName;
+  }
+  const description =
+    overrides.description ?? entityFields?.description ?? "";
 
   return {
     title,
@@ -543,6 +590,32 @@ function mergeOverridesIntoEntity(
   const existingSeo = safeSeoRecord(entityRecord.seo);
   const mergedSeo: Record<string, unknown> = { ...existingSeo, ...overrides };
   return { ...entityRecord, seo: mergedSeo };
+}
+
+/**
+ * Overlay the merchant's in-flight entity title/description from the
+ * admin form onto the entity's top-level row. The resolver's
+ * `titleTemplate` interpolation reads `seoable.title` — which the
+ * adapters derive from `entity.title` — so swapping that field in
+ * makes the live preview track parent-title typing without faking a
+ * SEO override (which would short-circuit composition).
+ *
+ * Empty-string entityFields entries are intentionally applied: an
+ * empty title is the merchant's transient state while editing, and
+ * the resolver tolerates it (composes against an empty entityTitle).
+ */
+function applyInFlightEntityFields(
+  entity: unknown,
+  entityFields: { title?: string; description?: string } | undefined,
+): unknown {
+  if (!entityFields) return entity;
+  if (typeof entity !== "object" || entity === null) return entity;
+  const next = { ...(entity as Record<string, unknown>) };
+  if (entityFields.title !== undefined) next.title = entityFields.title;
+  if (entityFields.description !== undefined) {
+    next.description = entityFields.description;
+  }
+  return next;
 }
 
 function safeSeoRecord(value: unknown): Record<string, unknown> {

@@ -51,6 +51,17 @@ export interface PreviewSeoActionArgs {
    */
   readonly entityId: string | null;
   readonly overrides: unknown;
+  /**
+   * Live entity-form values for title/description. Drives the
+   * resolver's `titleTemplate` composition without persisting —
+   * mirrors what the merchant sees in their main title input.
+   * Distinct from `overrides`, which represents explicit SEO
+   * overrides that short-circuit composition.
+   */
+  readonly entityFields?: {
+    readonly title?: string;
+    readonly description?: string;
+  };
 }
 
 // Boundary-level validation of the full args object. `overrides` is
@@ -58,10 +69,18 @@ export interface PreviewSeoActionArgs {
 // z.unknown() lets anything through at this level — the UI contract
 // matters for resourceType + entityId; the override payload
 // shape is the SEO engine's contract.
+const EntityFieldsSchema = z
+  .object({
+    title: z.string().max(255).optional(),
+    description: z.string().max(5000).optional(),
+  })
+  .optional();
+
 const PreviewSeoActionArgsSchema = z.object({
   resourceType: z.enum(SeoResourceTypes),
   entityId: z.string().nullable(),
   overrides: z.unknown(),
+  entityFields: EntityFieldsSchema,
 });
 
 export async function previewSeoAction(
@@ -104,6 +123,7 @@ export async function previewSeoAction(
       resourceType: argsParsed.data.resourceType,
       entityId: argsParsed.data.entityId,
       overrides: parsed.data,
+      entityFields: argsParsed.data.entityFields,
       locale: tenantCtx.defaultLocale,
     });
     return { ok: true, preview };

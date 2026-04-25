@@ -329,10 +329,19 @@ export function SearchListingEditor({
 
   // ── Debounced preview refresh ──
   //
-  // Depends on `value.*` (composed by the parent). When the parent
-  // form's title or description changes the composed `value` changes
-  // and we refresh — that's how the live preview mirrors what
-  // Google would see as the merchant types in the main title field.
+  // Two distinct payloads to the preview engine:
+  //   - `overrides` carries ONLY the merchant's explicit SEO override
+  //     (rå `override.*`, not the composed `value.*`). When empty,
+  //     the resolver falls through to the tenant titleTemplate.
+  //   - `entityFields` carries the parent form's live title +
+  //     description so the titleTemplate composition (`{entityTitle}
+  //     {siteName}`) reflects in-flight typing without persisting.
+  //
+  // Sending `value.*` (= override || parentTitle) as override was a
+  // bug: empty override + non-empty parentTitle made the engine
+  // treat the entity title as an explicit override and skip
+  // composition. Visible symptom: "Buffé Apelvikens camping" → "Buffé"
+  // flicker post-debounce on every entity-edit page.
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (timerRef.current !== null) clearTimeout(timerRef.current);
@@ -340,11 +349,13 @@ export function SearchListingEditor({
       void refreshPreview({
         resourceType,
         entityId,
-        // The preview reflects the composed value — same shape
-        // Google will see once the entity is saved.
         overrides: {
-          title: value.title,
-          description: value.description,
+          title: override.title,
+          description: override.description,
+        },
+        entityFields: {
+          title: parentTitle,
+          description: parentDescription,
         },
       })
         .then((preview) => {
@@ -360,7 +371,14 @@ export function SearchListingEditor({
     return () => {
       if (timerRef.current !== null) clearTimeout(timerRef.current);
     };
-  }, [resourceType, entityId, value.title, value.description]);
+  }, [
+    resourceType,
+    entityId,
+    override.title,
+    override.description,
+    parentTitle,
+    parentDescription,
+  ]);
 
   // ── Field handlers ──
 
@@ -623,11 +641,13 @@ async function refreshPreview(args: {
   resourceType: SeoResourceType;
   entityId: string | null;
   overrides: { title: string; description: string };
+  entityFields: { title: string; description: string };
 }): Promise<PreviewShape | null> {
   const result = await previewSeoAction({
     resourceType: args.resourceType,
     entityId: args.entityId,
     overrides: args.overrides,
+    entityFields: args.entityFields,
   });
   if (!result.ok) return null;
   return previewShape(result.preview);
