@@ -84,10 +84,8 @@ async function getResolvedTemplate(
   const subject = override?.subject ?? def.defaultSubject;
   const previewText = override?.previewText ?? def.defaultPreviewText;
 
-  // Resolve from address — priority:
-  // 1. Custom emailFrom (tenant verified their own domain)
-  // 2. portalSlug-based: noreply@{slug}.rutgr.com
-  // 3. Fallback: noreply@rutgr.com (no portalSlug)
+  // Resolve from address — priority chain handled by getTenantEmailFrom
+  // via tenantFromAddress: custom emailFrom > portalSlug-based > fallback.
   const from = tenantFromAddress(
     tenant.name,
     tenant.portalSlug,
