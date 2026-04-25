@@ -29,6 +29,7 @@
 import { prisma } from "@/app/_lib/db/prisma";
 import { log } from "@/app/_lib/logger";
 import { setSentryTenantContext } from "@/app/_lib/observability/sentry";
+import { getPlatformBaseDomain } from "@/app/_lib/platform/constants";
 import { resolveAdapter } from "../resolve";
 import type { HoldParams } from "../types";
 
@@ -145,7 +146,9 @@ export async function placeHoldForOrder(
   const guestInfo: HoldParams["guestInfo"] = {
     firstName: booking.firstName || "Gäst",
     lastName: booking.lastName || "",
-    email: booking.guestEmail || `pending-${booking.id}@placeholder.rutgr.com`,
+    email:
+      booking.guestEmail ||
+      `pending-${booking.id}@placeholder.${getPlatformBaseDomain()}`,
     phone: booking.phone ?? null,
   };
 
