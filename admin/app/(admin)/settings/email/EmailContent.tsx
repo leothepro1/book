@@ -574,9 +574,7 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
       setSenderInfo(info);
       setSenderLoaded(true);
       if (info) {
-        const display = info.pendingEmailFrom
-          ?? info.emailFrom
-          ?? (info.portalSlug ? `noreply@${info.portalSlug}.rutgr.com` : "noreply@rutgr.com");
+        const display = info.pendingEmailFrom ?? info.emailFrom ?? info.defaultEmailFrom;
         setSenderEmail(display);
       }
     });
@@ -621,7 +619,7 @@ export function EmailContent({ onSubTitleChange, onHeaderExtraChange }: EmailCon
 
   // Email validation
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const currentAddress = senderInfo?.emailFrom ?? (senderInfo?.portalSlug ? `noreply@${senderInfo.portalSlug}.rutgr.com` : "noreply@rutgr.com");
+  const currentAddress = senderInfo?.emailFrom ?? senderInfo?.defaultEmailFrom ?? "";
   const senderIsValid = emailRegex.test(senderEmail);
   const senderHasChanged = senderEmail !== currentAddress;
   const showSenderError = senderTouched && senderDirty && !senderIsValid && senderEmail.length > 0;

@@ -4,7 +4,7 @@
  * Secured with CRON_SECRET — same pattern as cron endpoints.
  *
  * Usage:
- *   curl -X POST https://rutgr.com/api/admin/backfill-email-from \
+ *   curl -X POST https://{platform-host}/api/admin/backfill-email-from \
  *     -H "x-cron-secret: YOUR_CRON_SECRET"
  */
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { getPlatformBaseDomain } from "@/app/_lib/platform/constants";
 import { usePreview } from "./PreviewContext";
 import { usePublishBar } from "../PublishBar";
 import type { GuestPreviewProps } from "./types";
@@ -34,8 +35,8 @@ const ROUTE_TO_SLUG: Readonly<Record<string, string>> = {
 } as const;
 
 // Share URL uses the app's base URL for now. Once tenant context is
-// available in PreviewContext, this should use portalSlugToUrl(tenant.portalSlug).
-const SHARE_URL = `${process.env.NEXT_PUBLIC_APP_URL || "https://rutgr.com"}/p/test`;
+// available in PreviewContext, this should use getTenantUrl(tenant).
+const SHARE_URL = `${process.env.NEXT_PUBLIC_APP_URL || `https://${getPlatformBaseDomain()}`}/p/test`;
 const COPY_FEEDBACK_MS = 2000;
 
 function GuestPreviewFrame({

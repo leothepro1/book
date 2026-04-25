@@ -194,7 +194,7 @@ export function OrganisationContent({ onSubTitleChange }: OrganisationContentPro
         </div>
 
         {/* Portaladress */}
-        {data.tenant.portalSlug && (
+        {data.tenant.portalUrl && data.tenant.portalHost && (
           <div style={{ marginBottom: 4 }}>
             <h4 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4, color: "var(--admin-text)" }}>
               Portaladress
@@ -203,7 +203,7 @@ export function OrganisationContent({ onSubTitleChange }: OrganisationContentPro
               Gästerna når portalen på denna adress.
             </p>
             <a
-              href={`https://${data.tenant.portalSlug}.rutgr.com`}
+              href={data.tenant.portalUrl}
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -212,7 +212,7 @@ export function OrganisationContent({ onSubTitleChange }: OrganisationContentPro
                 textDecoration: "none",
               }}
             >
-              {data.tenant.portalSlug}.rutgr.com
+              {data.tenant.portalHost}
               <EditorIcon name="open_in_new" size={14} style={{ opacity: 0.7 }} />
             </a>
           </div>
