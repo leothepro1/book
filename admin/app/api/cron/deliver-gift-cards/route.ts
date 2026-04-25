@@ -20,7 +20,7 @@ import { env } from "@/app/_lib/env";
 import { prisma } from "@/app/_lib/db/prisma";
 import { log } from "@/app/_lib/logger";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
-import { portalSlugToUrl } from "@/app/_lib/tenant/portal-slug";
+import { getTenantUrl } from "@/app/_lib/tenant/tenant-url";
 
 export async function GET(req: Request) {
   const auth = req.headers.get("authorization");
@@ -63,7 +63,7 @@ export async function GET(req: Request) {
       const { sendEmailEvent } = await import("@/app/_lib/email/send");
 
       const portalUrl = card.tenant.portalSlug
-        ? portalSlugToUrl(card.tenant.portalSlug)
+        ? getTenantUrl(card.tenant)
         : card.tenant.name;
 
       const result = await sendEmailEvent(

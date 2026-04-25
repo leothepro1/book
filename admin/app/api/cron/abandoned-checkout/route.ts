@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/app/_lib/db/prisma";
 import { env } from "@/app/_lib/env";
 import { log } from "@/app/_lib/logger";
+import { getTenantUrl } from "@/app/_lib/tenant/tenant-url";
 
 export async function GET(req: Request) {
   const auth = req.headers.get("authorization");
@@ -44,9 +45,8 @@ export async function GET(req: Request) {
     if (alreadySent) continue;
 
     const meta = (order.metadata ?? {}) as Record<string, unknown>;
-    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
-    const portalBase = order.tenant.portalSlug
-      ? `https://${order.tenant.portalSlug}.${baseDomain}`
+    const resumeUrl = order.tenant.portalSlug
+      ? getTenantUrl(order.tenant, { path: "/stays" })
       : "";
 
     try {
@@ -61,7 +61,7 @@ export async function GET(req: Request) {
           checkIn: (meta.checkIn as string) ?? "",
           checkOut: (meta.checkOut as string) ?? "",
           roomType: (meta.roomType as string) ?? "",
-          resumeUrl: `${portalBase}/stays`,
+          resumeUrl,
         },
       );
 
