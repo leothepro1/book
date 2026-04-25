@@ -66,6 +66,23 @@
   border-radius: 0;
 }
 
+/* Bumps card titles to 14px on the preferences page only, without
+ * touching the global .pf-card-title rule in product-form.css that
+ * other admin forms (collections, accommodation-categories, etc.)
+ * depend on. .pf-prefs-page is set on the page wrapper. */
+.pf-prefs-page .pf-card-title {
+  font-size: 14px;
+}
+
+/* Divider between stacked .email-nav__item rows. Inset 16px on each
+ * side to align with the row's internal padding (email.css line 471)
+ * so the rule visually starts where the row content starts. */
+.pf-row-divider {
+  height: 1px;
+  margin: 0 16px;
+  background: var(--admin-border);
+}
+
 /* Char-counter caption used under every x-av-max input on this page
  * (SEO title, meta description, Butiksåtkomst lösenord + meddelande).
  * Flat colour — no warn/error tint — and proportional digits per the

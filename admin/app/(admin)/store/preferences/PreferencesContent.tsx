@@ -140,6 +140,11 @@ export function PreferencesContent() {
   const [accessPassword, setAccessPassword] = useState("");
   const [accessMessage, setAccessMessage] = useState("");
 
+  // Toggles for the "Automatisk omdirigering" card. Local-only until
+  // backend shape is decided.
+  const [autoRedirectCountry, setAutoRedirectCountry] = useState(false);
+  const [autoRedirectLanguage, setAutoRedirectLanguage] = useState(false);
+
   useEffect(() => {
     getHomepagePreferences().then((snap) => {
       if (snap) {
@@ -206,7 +211,7 @@ export function PreferencesContent() {
 
   if (loading || !draft || !snapshot) {
     return (
-      <div className="pf-body">
+      <div className="pf-body pf-prefs-page">
         <div className="pf-main">
           <div style={CARD}>
             <div
@@ -229,7 +234,7 @@ export function PreferencesContent() {
 
   return (
     <>
-      <div className="pf-body">
+      <div className="pf-body pf-prefs-page">
         <div className="pf-main">
           {/* ── Butiksåtkomst card (UI scaffold — toggle not wired yet).
               Mirrors the Container 2 / .email-nav pattern from the
@@ -381,8 +386,8 @@ export function PreferencesContent() {
                 <div
                   style={{
                     padding: 12,
-                    borderTop: "1px solid var(--admin-border)",
-                    background: "var(--admin-surface-muted, #f7f7f7)",
+                    borderTop: "none",
+                    background: "#fff",
                     display: "flex",
                     flexDirection: "column",
                     gap: 4,
@@ -393,8 +398,8 @@ export function PreferencesContent() {
                     style={{
                       fontSize: 11,
                       textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                      color: "var(--admin-text-tertiary)",
+                      letterSpacing: 0,
+                      color: "#616161",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -489,7 +494,7 @@ export function PreferencesContent() {
                     style={{
                       display: "block",
                       width: "100%",
-                      minHeight: 180,
+                      minHeight: 110,
                       padding: "10px 12px",
                       resize: "vertical",
                     }}
@@ -498,6 +503,61 @@ export function PreferencesContent() {
                     {descLen} av {SEO_HOMEPAGE_DESCRIPTION_MAX} tecken använda
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Placeholder card with two stacked toggle rows ──
+              Same CARD surface + .email-nav container as Butiksåtkomst.
+              Two .email-nav__item.pf-static-row rows share the container
+              so they "sit ihop" with the email-nav row separator. */}
+          <div style={CARD}>
+            <div className="pf-card-header" style={{ marginBottom: 12 }}>
+              <span className="pf-card-title">Automatisk omdirigering</span>
+            </div>
+            <div className="email-nav">
+              <div className="email-nav__item pf-static-row">
+                <EditorIcon
+                  name="globe"
+                  size={20}
+                  style={{
+                    color: "var(--admin-text-secondary)",
+                    flexShrink: 0,
+                  }}
+                />
+                <div className="email-nav__text">
+                  <div className="email-nav__label">Land/region</div>
+                  <div className="email-nav__desc">
+                    Visar det digitala skyltfönster som matchar en besökares plats
+                  </div>
+                </div>
+                <Toggle
+                  checked={autoRedirectCountry}
+                  onChange={() => setAutoRedirectCountry((v) => !v)}
+                />
+              </div>
+
+              <div className="pf-row-divider" role="presentation" />
+
+              <div className="email-nav__item pf-static-row">
+                <EditorIcon
+                  name="translate"
+                  size={20}
+                  style={{
+                    color: "var(--admin-text-secondary)",
+                    flexShrink: 0,
+                  }}
+                />
+                <div className="email-nav__text">
+                  <div className="email-nav__label">Språk</div>
+                  <div className="email-nav__desc">
+                    Visar det språk som matchar en besökares webbläsare, när det är tillgängligt
+                  </div>
+                </div>
+                <Toggle
+                  checked={autoRedirectLanguage}
+                  onChange={() => setAutoRedirectLanguage((v) => !v)}
+                />
               </div>
             </div>
           </div>
@@ -528,7 +588,7 @@ export function PreferencesContent() {
       </div>
 
       <PublishBarUI
-        hasUnsavedChanges={canSave || (isDirty && saving)}
+        hasUnsavedChanges={isDirty}
         isPublishing={saving}
         isDiscarding={false}
         isLingeringAfterPublish={lingering}
