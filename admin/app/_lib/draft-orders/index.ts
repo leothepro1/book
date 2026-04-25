@@ -98,3 +98,21 @@ export { DRAFT_ERRORS } from "./errors";
 
 // ── UI helpers (FAS 7.1) ──
 export { DRAFT_LABELS, getDraftBucket } from "./badge";
+
+// ── Service-fas /draft-orders/new (FAS 7.2a) ──
+export { checkAvailability } from "./check-availability";
+export type { AvailabilityResult } from "./check-availability";
+
+export { previewDraftTotals } from "./preview-totals";
+export type {
+  PreviewInput,
+  PreviewLineInput,
+  PreviewResult,
+  PreviewLineBreakdown,
+} from "./preview-totals";
+
+export { createDraftWithLines } from "./create-with-lines";
+export type {
+  CreateDraftWithLinesInput,
+  CreateDraftWithLinesResult,
+} from "./create-with-lines";
