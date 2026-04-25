@@ -30,6 +30,7 @@
 import { getResendClient } from "@/app/_lib/email/client";
 import { env } from "@/app/_lib/env";
 import { log } from "@/app/_lib/logger";
+import { getPlatformBaseDomain } from "@/app/_lib/platform/constants";
 
 export interface OperatorAlertArgs {
   /** Short subject line — will be prefixed with "[PMS ALERT]". */
@@ -72,7 +73,7 @@ export async function sendOperatorAlert(args: OperatorAlertArgs): Promise<void> 
   // using a domain we verify.
   const from =
     process.env.OPERATOR_ALERT_FROM ??
-    "PMS Reliability <noreply@rutgr.com>";
+    `PMS Reliability <noreply@${getPlatformBaseDomain()}>`;
 
   try {
     const resend = getResendClient();
