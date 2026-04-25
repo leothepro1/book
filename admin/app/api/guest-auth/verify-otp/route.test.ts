@@ -16,22 +16,24 @@ vi.mock("@/app/_lib/magic-link/session", () => ({
   setGuestSession: vi.fn(),
 }));
 
-vi.mock("@/app/_lib/guest-auth/resolve-tenant", () => ({
-  resolveGuestTenant: vi.fn(),
+vi.mock("@/app/(guest)/_lib/tenant/resolveTenantFromHost", () => ({
+  resolveTenantFromHost: vi.fn(),
 }));
 
 const { POST } = await import("./route");
 const { prisma } = await import("@/app/_lib/db/prisma");
 const { verifyOtp } = await import("@/app/_lib/guest-auth/otp");
 const { setGuestSession } = await import("@/app/_lib/magic-link/session");
-const { resolveGuestTenant } = await import("@/app/_lib/guest-auth/resolve-tenant");
+const { resolveTenantFromHost } = await import(
+  "@/app/(guest)/_lib/tenant/resolveTenantFromHost"
+);
 
 const mockPrisma = prisma as unknown as {
   guestAccount: { findUnique: ReturnType<typeof vi.fn> };
 };
 const mockVerifyOtp = verifyOtp as ReturnType<typeof vi.fn>;
 const mockSetSession = setGuestSession as ReturnType<typeof vi.fn>;
-const mockResolveTenant = resolveGuestTenant as ReturnType<typeof vi.fn>;
+const mockResolveTenant = resolveTenantFromHost as ReturnType<typeof vi.fn>;
 
 function makeRequest(body: unknown, host = "hotel.rutgr.com") {
   return new Request("http://localhost:3000/api/guest-auth/verify-otp", {
@@ -44,7 +46,7 @@ function makeRequest(body: unknown, host = "hotel.rutgr.com") {
 describe("POST /api/guest-auth/verify-otp", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mockResolveTenant.mockResolvedValue("t1");
+    mockResolveTenant.mockResolvedValue({ id: "t1" });
   });
 
   it("returns 200 + redirectTo /home on correct code", async () => {

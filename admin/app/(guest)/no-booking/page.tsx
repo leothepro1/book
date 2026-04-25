@@ -1,21 +1,15 @@
 import "../login/login-otp.css";
 import { notFound } from "next/navigation";
-import { prisma } from "@/app/_lib/db/prisma";
-import { resolveGuestTenantFromHeaders } from "@/app/_lib/guest-auth/resolve-tenant";
+import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 import { getTenantConfig } from "../_lib/tenant/getTenantConfig";
 import { DEFAULT_TOKENS } from "@/app/_lib/color-schemes/constants";
 
 export const dynamic = "force-dynamic";
 
 export default async function NoBookingPage() {
-  const tenantId = await resolveGuestTenantFromHeaders();
-  if (!tenantId) notFound();
-
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { name: true },
-  });
+  const tenant = await resolveTenantFromHost();
   if (!tenant) notFound();
+  const tenantId = tenant.id;
 
   const config = await getTenantConfig(tenantId);
   const primaryScheme = config.colorSchemes?.[0];

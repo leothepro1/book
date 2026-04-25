@@ -16,7 +16,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { upsertGuestAccount } from "@/app/_lib/guest-auth/account";
 import { sendOtp } from "@/app/_lib/guest-auth/send-otp";
-import { resolveGuestTenant } from "@/app/_lib/guest-auth/resolve-tenant";
+import { resolveTenantFromHost } from "@/app/(guest)/_lib/tenant/resolveTenantFromHost";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const tenantId = await resolveGuestTenant(req);
+  const tenant = await resolveTenantFromHost();
+  const tenantId = tenant?.id ?? null;
   if (!tenantId) {
     return NextResponse.json(
       { error: "invalid_request" },
