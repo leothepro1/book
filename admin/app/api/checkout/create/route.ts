@@ -23,6 +23,7 @@ import { verifyChargesEnabled } from "@/app/_lib/stripe/verify-account";
 import { findDiscountCode } from "@/app/_lib/discounts/codes";
 import { applyDiscountInTx } from "@/app/_lib/discounts/apply";
 import type { DiscountEvaluationResult } from "@/app/_lib/discounts/types";
+import { getTenantUrl } from "@/app/_lib/tenant/tenant-url";
 
 const checkoutInputSchema = z.object({
   items: z.array(
@@ -308,10 +309,9 @@ export async function POST(req: Request) {
   // Build URLs from request host
   const host = req.headers.get("host") ?? "localhost:3000";
   const isDev = host.startsWith("localhost") || host.startsWith("127.0.0.1");
-  const protocol = isDev ? "http" : "https";
   const baseUrl = isDev
-    ? `${protocol}://${host}`
-    : `${protocol}://${tenant.portalSlug}.rutgr.com`;
+    ? `http://${host}`
+    : getTenantUrl(tenant);
 
   // Initiate payment via adapter — checkoutMode: "session" triggers redirect mode
   try {
