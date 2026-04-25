@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/app/_lib/db/prisma";
 import { sendEmailEvent } from "@/app/_lib/email";
 import { generateToken, getExpiryDate, EXPIRY_HUMAN } from "./tokens";
-import { portalSlugToUrl } from "@/app/_lib/tenant/portal-slug";
+import { getTenantUrl } from "@/app/_lib/tenant/tenant-url";
 
 const emailSchema = z.string().email();
 
@@ -77,8 +77,7 @@ export async function requestMagicLink(
     // 7. Build magic link URL — points to tenant subdomain login page
     let magicLink: string;
     if (tenant.portalSlug) {
-      const portalBase = portalSlugToUrl(tenant.portalSlug);
-      magicLink = `${portalBase}/login?ml=${token}`;
+      magicLink = getTenantUrl(tenant, { path: `/login?ml=${token}` });
     } else {
       // Dev fallback: no portalSlug yet — use legacy URL
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
