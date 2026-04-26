@@ -1,0 +1,120 @@
+/* /draft-orders/new — local additions on top of product-form.css + .am-* modal classes. */
+
+.ndr-line-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.ndr-line-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface);
+}
+
+.ndr-line-row--problem {
+  border-color: #FED1D7;
+  background: #FEF8F9;
+}
+
+.ndr-line-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ndr-line-row__title {
+  font-weight: 500;
+  color: var(--admin-text);
+}
+
+.ndr-line-row__meta {
+  font-size: 13px;
+  color: var(--admin-text-muted);
+}
+
+.ndr-line-row__status {
+  font-size: 12px;
+  color: var(--admin-text-muted);
+  font-style: italic;
+}
+
+.ndr-line-row__reason {
+  font-size: 12px;
+  color: #8E0B21;
+  margin-top: 4px;
+}
+
+.ndr-line-row__badge {
+  margin-top: 4px;
+  align-self: flex-start;
+}
+
+.ndr-empty {
+  padding: 16px;
+  color: var(--admin-text-muted);
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.ndr-acc-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+  margin-top: 12px;
+}
+
+.ndr-acc-results__status {
+  padding: 12px;
+  color: var(--admin-text-muted);
+  text-align: center;
+  font-size: 13px;
+}
+
+.ndr-acc-result-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  background: var(--admin-surface);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ndr-acc-result-row:hover {
+  background: var(--admin-surface-hover);
+}
+
+.ndr-acc-result-row__name {
+  font-weight: 500;
+  color: var(--admin-text);
+}
+
+.ndr-acc-result-row__meta {
+  font-size: 12px;
+  color: var(--admin-text-muted);
+}
+
+.ndr-field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--admin-text);
+  margin-bottom: 6px;
+}
