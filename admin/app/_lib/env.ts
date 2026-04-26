@@ -63,10 +63,6 @@ const envSchema = z.object({
    *  calls in dev mode where the session user is mocked as "dev_user".
    *  Must NOT be set in production. */
   DEV_OWNER_USER_ID: z.string().optional(),
-
-  /** Portal slug for guest auth testing on localhost (no subdomain routing).
-   *  Must NOT be set in production. */
-  DEV_GUEST_PORTAL_SLUG: z.string().optional(),
 });
 
 // ── Validation ─────────────────────────────────────────────────
@@ -96,12 +92,6 @@ function validateEnv() {
       "[env] DEV_OWNER_USER_ID is set in production — this is a security risk. Remove it from the production environment.",
     );
   }
-  if (process.env.NODE_ENV === "production" && parsed.DEV_GUEST_PORTAL_SLUG) {
-    throw new Error(
-      "[env] DEV_GUEST_PORTAL_SLUG is set in production — this is a security risk. Remove it from the production environment.",
-    );
-  }
-
   // Guard: DEV_* vars must be set in development
   if (process.env.NODE_ENV === "development" && !parsed.DEV_ORG_ID) {
     throw new Error(

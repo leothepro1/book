@@ -29,6 +29,7 @@ import { getCurrentTenant } from "../../_lib/tenant/getCurrentTenant";
 import { requireAdmin } from "../../_lib/auth/devAuth";
 import { prisma } from "../../../_lib/db/prisma";
 import { log } from "../../../_lib/logger";
+import { getPlatformBaseDomain } from "../../../_lib/platform/constants";
 import {
   SEO_HOMEPAGE_DESCRIPTION_MAX,
   SEO_HOMEPAGE_TITLE_MAX,
@@ -124,9 +125,10 @@ export async function getHomepagePreferences(): Promise<HomepagePreferencesSnaps
     }
   }
 
+  const baseDomain = getPlatformBaseDomain();
   const primaryDomain = tenant.portalSlug
-    ? `${tenant.portalSlug}.rutgr.com`
-    : "rutgr.com";
+    ? `${tenant.portalSlug}.${baseDomain}`
+    : baseDomain;
 
   return {
     title: homepage?.title ?? "",

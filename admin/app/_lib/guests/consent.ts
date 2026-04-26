@@ -73,9 +73,14 @@ export async function updateEmailConsent(
         select: { name: true, portalSlug: true },
       });
       if (guest && tenant) {
-        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
-        const portalBase = tenant.portalSlug ? `https://${tenant.portalSlug}.${baseDomain}` : "";
+        const { getTenantUrl } = await import("@/app/_lib/tenant/tenant-url");
         const { sendEmailEvent } = await import("@/app/_lib/email/send");
+        const confirmUrl = tenant.portalSlug
+          ? getTenantUrl(tenant, { path: "/portal/account" })
+          : "";
+        const unsubscribeUrl = tenant.portalSlug
+          ? getTenantUrl(tenant, { path: "/unsubscribe" })
+          : "";
         await sendEmailEvent(
           tenantId,
           "MARKETING_OPT_IN_CONFIRM" as Parameters<typeof sendEmailEvent>[1],
@@ -83,8 +88,8 @@ export async function updateEmailConsent(
           {
             guestName: guest.firstName ?? guest.email,
             hotelName: tenant.name,
-            confirmUrl: `${portalBase}/portal/account`,
-            unsubscribeUrl: `${portalBase}/unsubscribe`,
+            confirmUrl,
+            unsubscribeUrl,
           },
         );
       }

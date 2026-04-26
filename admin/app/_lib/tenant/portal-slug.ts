@@ -2,17 +2,25 @@
  * Portal Slug Generation
  * ══════════════════════
  *
- * Every tenant gets a unique subdomain: {slug}.rutgr.com
+ * Every tenant gets a unique subdomain: {slug}.{baseDomain}
  * Generated once on creation, immutable after that.
  *
  * Format: "{name-base}-{random6}"
  * Example: "grand-hotel-stockholm-x4k9mq"
  *
  * Same pattern as Shopify's myshopify.com URLs.
+ *
+ * URL composition is delegated to getTenantUrl / getTenantEmailFrom in
+ * tenant-url.ts — this module owns slug GENERATION only.
  */
 
 import { customAlphabet } from "nanoid";
 import { prisma } from "@/app/_lib/db/prisma";
+import { getPlatformBaseDomain } from "@/app/_lib/platform/constants";
+import {
+  getTenantEmailFrom,
+  getTenantUrl,
+} from "./tenant-url";
 
 // URL-safe alphabet — no ambiguous characters (0, O, l, 1)
 const nanoid = customAlphabet("abcdefghjkmnpqrstuvwxyz23456789", 6);
@@ -58,24 +66,28 @@ export async function generatePortalSlug(tenantName: string): Promise<string> {
 
 /**
  * Returns the full subdomain URL for a tenant.
+ * Thin wrapper over getTenantUrl — kept for callers that have only the slug.
  */
 export function portalSlugToUrl(slug: string): string {
-  return `https://${slug}.rutgr.com`;
+  return getTenantUrl({ portalSlug: slug });
 }
 
 /**
  * Returns the default noreply address for a tenant.
- * Uses their portalSlug subdomain — same as Shopify's pattern.
+ * Uses the tenant's portalSlug subdomain — same as Shopify's pattern.
  * Example: "noreply@grandhotel-x4k9mq.rutgr.com"
  */
 export function tenantDefaultEmailFrom(portalSlug: string): string {
-  return `noreply@${portalSlug}.rutgr.com`;
+  return `noreply@${portalSlug}.${getPlatformBaseDomain()}`;
 }
 
 /**
  * Returns the formatted from address for use in emails.
  * Priority: custom emailFrom > portalSlug-based > fallback.
  * Example: "Grand Hotel <noreply@grandhotel-x4k9mq.rutgr.com>"
+ *
+ * Thin wrapper over getTenantEmailFrom — kept for callers that pass
+ * loose fields rather than a full Tenant row.
  */
 export function tenantFromAddress(
   tenantName: string,
@@ -83,7 +95,10 @@ export function tenantFromAddress(
   customEmailFrom?: string | null,
   customEmailFromName?: string | null,
 ): string {
-  const email = customEmailFrom || (portalSlug ? tenantDefaultEmailFrom(portalSlug) : "noreply@rutgr.com");
-  const name = customEmailFromName || tenantName;
-  return `${name} <${email}>`;
+  return getTenantEmailFrom({
+    name: tenantName,
+    portalSlug,
+    emailFrom: customEmailFrom ?? null,
+    emailFromName: customEmailFromName ?? null,
+  });
 }

@@ -3,6 +3,8 @@
 import { prisma } from "@/app/_lib/db/prisma";
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { requireAdmin, resolveActingUserId } from "@/app/(admin)/_lib/auth/devAuth";
+import { getPlatformBaseDomain } from "@/app/_lib/platform/constants";
+import { getTenantUrl } from "@/app/_lib/tenant/tenant-url";
 import { OrganisationFormSchema } from "./validation";
 import type { OrganisationFormData } from "./validation";
 
@@ -28,6 +30,10 @@ export type TenantOrgData = {
   organizationNumber: string | null;
   vatNumber: string | null;
   portalSlug: string | null;
+  /** Pre-composed via getTenantUrl. Null when portalSlug is null. */
+  portalUrl: string | null;
+  /** Bare host for display (e.g. "hotel-x.rutgr.com"). Null when portalSlug is null. */
+  portalHost: string | null;
 };
 
 export type OrgMember = {
@@ -121,6 +127,10 @@ export async function getOrganisationData(): Promise<OrganisationDataResponse> {
     organizationNumber: tenant.organizationNumber,
     vatNumber: tenant.vatNumber,
     portalSlug: tenant.portalSlug,
+    portalUrl: tenant.portalSlug ? getTenantUrl(tenant) : null,
+    portalHost: tenant.portalSlug
+      ? `${tenant.portalSlug}.${getPlatformBaseDomain()}`
+      : null,
   };
 
   return { clerk, tenant: tenantOrg, members };

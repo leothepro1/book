@@ -2,6 +2,7 @@
 
 import { prisma } from "@/app/_lib/db/prisma";
 import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
+import { getTenantUrl } from "@/app/_lib/tenant/tenant-url";
 
 export type StoreThemeData = {
   tenantId: string;
@@ -67,8 +68,6 @@ export async function getStoreThemeData(): Promise<StoreThemeData | null> {
     }
   }
 
-  const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
-
   return {
     tenantId: tenant.id,
     tenantName: tenant.name,
@@ -80,7 +79,7 @@ export async function getStoreThemeData(): Promise<StoreThemeData | null> {
     draftUpdatedAt: tenant.draftUpdatedAt?.toISOString() ?? null,
     draftUpdatedBy: tenant.draftUpdatedBy,
     portalSlug: tenant.portalSlug,
-    portalUrl: tenant.portalSlug ? `https://${tenant.portalSlug}.${baseDomain}` : null,
+    portalUrl: tenant.portalSlug ? getTenantUrl(tenant) : null,
     screenshot: {
       desktopUrl: tenant.screenshotDesktopUrl,
       mobileUrl: tenant.screenshotMobileUrl,

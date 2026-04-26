@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/app/_lib/db/prisma";
 import { env } from "@/app/_lib/env";
 import { log } from "@/app/_lib/logger";
+import { getTenantUrl } from "@/app/_lib/tenant/tenant-url";
 
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -70,9 +71,8 @@ export async function GET(req: Request) {
     const property = (settings.property ?? {}) as Record<string, unknown>;
     const checkInTime = (property.checkInTime as string) ?? "14:00";
 
-    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
-    const portalBase = booking.tenant.portalSlug
-      ? `https://${booking.tenant.portalSlug}.${baseDomain}`
+    const portalUrl = booking.tenant.portalSlug
+      ? getTenantUrl(booking.tenant, { path: "/portal/home" })
       : "";
 
     try {
@@ -88,7 +88,7 @@ export async function GET(req: Request) {
           checkOut: booking.departure.toISOString().slice(0, 10),
           roomType: booking.unit,
           checkInTime,
-          portalUrl: `${portalBase}/portal/home`,
+          portalUrl,
           daysUntilArrival: String(daysUntilArrival),
         },
       );

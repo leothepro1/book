@@ -36,6 +36,7 @@ import { Prisma, type DraftHoldState } from "@prisma/client";
 import { prisma } from "@/app/_lib/db/prisma";
 import { log } from "@/app/_lib/logger";
 import { emitPlatformEvent } from "@/app/_lib/apps/webhooks";
+import { getPlatformBaseDomain } from "@/app/_lib/platform/constants";
 import {
   ConflictError,
   NotFoundError,
@@ -292,7 +293,7 @@ export async function placeHoldForDraftLine(
   const guestInfo = {
     firstName: "Gäst",
     lastName: "",
-    email: `draft-${line.id}@placeholder.rutgr.com`,
+    email: `draft-${line.id}@placeholder.${getPlatformBaseDomain()}`,
     phone: null,
   };
 

@@ -14,18 +14,12 @@
 
 import type { Tenant, TenantLocale } from "@prisma/client";
 
+import { getPlatformBaseDomain } from "../platform/constants";
 import {
   safeParseSeoDefaults,
   type SeoTenantContext,
 } from "../seo/types";
 import { PRIMARY_LOCALE } from "../translations/locales";
-
-/**
- * Fallback domain used only when a tenant has no `portalSlug` yet —
- * should not happen in steady state (backfill has run), but we emit
- * a useable URL rather than crashing.
- */
-const FALLBACK_DOMAIN = "rutgr.com";
 
 /**
  * Convert a Prisma `Tenant` plus its locale rows into the SEO engine's
@@ -45,8 +39,10 @@ const FALLBACK_DOMAIN = "rutgr.com";
  *   - `activeLocales` = rows with `published: true`. If the primary isn't
  *     itself published (edge case: admin unpublished primary by mistake),
  *     it's prepended so hreflang still emits a valid entry for the default.
- *   - `primaryDomain` = `{portalSlug}.rutgr.com`, or `rutgr.com` if the
- *     tenant has no portalSlug (pre-backfill).
+ *   - `primaryDomain` = `{portalSlug}.{platformBaseDomain}`, or just
+ *     `{platformBaseDomain}` if the tenant has no portalSlug (pre-backfill —
+ *     should not happen in steady state, but we emit a usable URL rather
+ *     than crashing).
  *   - `seoDefaults` is parsed through `safeParseSeoDefaults` — malformed
  *     JSONB degrades to schema defaults.
  */
@@ -69,9 +65,10 @@ export function tenantToSeoContext(args: {
     ? publishedLocales
     : [defaultLocale, ...publishedLocales];
 
+  const baseDomain = getPlatformBaseDomain();
   const primaryDomain = tenant.portalSlug
-    ? `${tenant.portalSlug}.rutgr.com`
-    : FALLBACK_DOMAIN;
+    ? `${tenant.portalSlug}.${baseDomain}`
+    : baseDomain;
 
   return {
     id: tenant.id,

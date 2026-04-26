@@ -35,6 +35,7 @@ import type {
 import { prisma } from "@/app/_lib/db/prisma";
 import { log } from "@/app/_lib/logger";
 import { emitPlatformEvent } from "@/app/_lib/apps/webhooks";
+import { getTenantUrl } from "@/app/_lib/tenant/tenant-url";
 import {
   ConflictError,
   NotFoundError,
@@ -477,8 +478,7 @@ function generateShareLinkToken(): string {
 }
 
 function buildInvoiceUrl(portalSlug: string, token: string): string {
-  const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? "rutgr.com";
-  return `https://${portalSlug}.${baseDomain}/invoice/${token}`;
+  return getTenantUrl({ portalSlug }, { path: `/invoice/${token}` });
 }
 
 function mergeMetafields(

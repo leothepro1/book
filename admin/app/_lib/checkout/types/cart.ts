@@ -12,6 +12,7 @@ import { headers } from "next/headers";
 import { validateCart } from "@/app/_lib/cart/validate";
 import { reserveInventoryForTenant } from "@/app/_lib/products/inventory";
 import { guestInfoSchema } from "@/app/_lib/orders/types";
+import { getTenantUrl } from "@/app/_lib/tenant/tenant-url";
 import { CheckoutError } from "../errors";
 import type {
   CheckoutType,
@@ -156,10 +157,9 @@ export const cartCheckout: CheckoutType<CartInput> = {
     const h = await headers();
     const host = h.get("host") ?? "localhost:3000";
     const isDev = host.startsWith("localhost") || host.startsWith("127.0.0.1");
-    const protocol = isDev ? "http" : "https";
     const baseUrl = isDev
-      ? `${protocol}://${host}`
-      : `${protocol}://${ctx.tenant.portalSlug}.rutgr.com`;
+      ? `http://${host}`
+      : getTenantUrl(ctx.tenant);
 
     const validation = ctx.cache.get(VALIDATION_KEY) as {
       validatedItems: Array<{
