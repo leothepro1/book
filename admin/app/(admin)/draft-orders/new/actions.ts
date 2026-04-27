@@ -6,11 +6,18 @@ import {
   searchAccommodations,
   checkAvailability,
   createDraftWithLines,
+  searchCustomers,
+  previewDraftTotals,
   type AccommodationSearchResult,
   type AvailabilityResult,
   type CreateDraftWithLinesInput,
   type CreateDraftWithLinesResult,
+  type CustomerSearchResult,
+  type PreviewInput,
+  type PreviewResult,
 } from "@/app/_lib/draft-orders";
+
+export type PreviewDraftTotalsActionInput = Omit<PreviewInput, "tenantId">;
 
 async function getTenantId(): Promise<string | null> {
   const { orgId } = await getAuth();
@@ -46,4 +53,20 @@ export async function createDraftWithLinesAction(
   const tenantId = await getTenantId();
   if (!tenantId) return { ok: false, error: "Ingen tenant" };
   return createDraftWithLines({ ...input, tenantId });
+}
+
+export async function searchCustomersAction(
+  query: string,
+): Promise<CustomerSearchResult[]> {
+  const tenantId = await getTenantId();
+  if (!tenantId) return [];
+  return searchCustomers(tenantId, query);
+}
+
+export async function previewDraftTotalsAction(
+  input: PreviewDraftTotalsActionInput,
+): Promise<PreviewResult | null> {
+  const tenantId = await getTenantId();
+  if (!tenantId) return null;
+  return previewDraftTotals({ ...input, tenantId });
 }

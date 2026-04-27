@@ -14,6 +14,8 @@ vi.mock("@/app/_lib/draft-orders", () => ({
   searchAccommodations: vi.fn(),
   checkAvailability: vi.fn(),
   createDraftWithLines: vi.fn(),
+  searchCustomers: vi.fn(),
+  previewDraftTotals: vi.fn(),
 }));
 
 import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
@@ -22,11 +24,15 @@ import {
   searchAccommodations,
   checkAvailability,
   createDraftWithLines,
+  searchCustomers,
+  previewDraftTotals,
 } from "@/app/_lib/draft-orders";
 import {
   searchAccommodationsAction,
   checkAvailabilityAction,
   createDraftWithLinesAction,
+  searchCustomersAction,
+  previewDraftTotalsAction,
 } from "./actions";
 
 type Mock = ReturnType<typeof vi.fn>;
@@ -36,6 +42,8 @@ const findUniqueMock = prisma.tenant.findUnique as unknown as Mock;
 const searchMock = searchAccommodations as unknown as Mock;
 const checkMock = checkAvailability as unknown as Mock;
 const createMock = createDraftWithLines as unknown as Mock;
+const searchCustomersMock = searchCustomers as unknown as Mock;
+const previewMock = previewDraftTotals as unknown as Mock;
 
 beforeEach(() => {
   getAuthMock.mockReset();
@@ -43,6 +51,8 @@ beforeEach(() => {
   searchMock.mockReset();
   checkMock.mockReset();
   createMock.mockReset();
+  searchCustomersMock.mockReset();
+  previewMock.mockReset();
   getAuthMock.mockResolvedValue({
     orgId: "org_1",
     userId: "u",
@@ -148,5 +158,129 @@ describe("createDraftWithLinesAction", () => {
     const callArg = createMock.mock.calls[0][0];
     expect(callArg.tenantId).toBe("tenant_t");
     expect(callArg.tenantId).not.toBe("tenant_OTHER");
+  });
+});
+
+describe("searchCustomersAction", () => {
+  it("T9 — missing orgId returns []", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: null,
+      userId: null,
+      orgRole: null,
+    });
+    const result = await searchCustomersAction("anna");
+    expect(result).toEqual([]);
+    expect(searchCustomersMock).not.toHaveBeenCalled();
+  });
+
+  it("T10 — missing tenant returns []", async () => {
+    findUniqueMock.mockResolvedValueOnce(null);
+    const result = await searchCustomersAction("anna");
+    expect(result).toEqual([]);
+    expect(searchCustomersMock).not.toHaveBeenCalled();
+  });
+
+  it("T11 — happy path passes tenantId + query (no opts override)", async () => {
+    const customer = {
+      id: "g1",
+      email: "anna@example.se",
+      name: "Anna Andersson",
+      phone: null,
+      draftOrderCount: 0,
+      orderCount: 3,
+    };
+    searchCustomersMock.mockResolvedValueOnce([customer]);
+    const result = await searchCustomersAction("anna");
+    expect(searchCustomersMock).toHaveBeenCalledWith("tenant_t", "anna");
+    expect(result).toEqual([customer]);
+  });
+});
+
+describe("previewDraftTotalsAction", () => {
+  it("T12 — missing orgId returns null", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: null,
+      userId: null,
+      orgRole: null,
+    });
+    const result = await previewDraftTotalsAction({ lines: [] });
+    expect(result).toBeNull();
+    expect(previewMock).not.toHaveBeenCalled();
+  });
+
+  it("T13 — missing tenant returns null", async () => {
+    findUniqueMock.mockResolvedValueOnce(null);
+    const result = await previewDraftTotalsAction({ lines: [] });
+    expect(result).toBeNull();
+    expect(previewMock).not.toHaveBeenCalled();
+  });
+
+  it("T14 — happy path forwards input with tenantId injected", async () => {
+    const previewResult = {
+      subtotal: BigInt(125000),
+      discountAmount: BigInt(0),
+      taxAmount: BigInt(15000),
+      total: BigInt(140000),
+      currency: "SEK",
+      lineBreakdown: [],
+      discountApplicable: false,
+    };
+    previewMock.mockResolvedValueOnce(previewResult);
+    const lines = [
+      {
+        accommodationId: "a1",
+        fromDate: new Date("2026-05-01"),
+        toDate: new Date("2026-05-03"),
+        guestCount: 2,
+      },
+    ];
+    const result = await previewDraftTotalsAction({ lines });
+    expect(previewMock).toHaveBeenCalledWith({ lines, tenantId: "tenant_t" });
+    expect(result).toEqual(previewResult);
+  });
+
+  it("T15 — tenantId from input is OVERRIDDEN by server-resolved tenantId (security)", async () => {
+    previewMock.mockResolvedValueOnce({
+      subtotal: BigInt(0),
+      discountAmount: BigInt(0),
+      taxAmount: BigInt(0),
+      total: BigInt(0),
+      currency: "SEK",
+      lineBreakdown: [],
+      discountApplicable: false,
+    });
+    const malicious = {
+      lines: [],
+      tenantId: "tenant_OTHER",
+    } as unknown as Parameters<typeof previewDraftTotalsAction>[0];
+    await previewDraftTotalsAction(malicious);
+    const callArg = previewMock.mock.calls[0][0];
+    expect(callArg.tenantId).toBe("tenant_t");
+    expect(callArg.tenantId).not.toBe("tenant_OTHER");
+  });
+
+  it("T16 — discountCode passed through unchanged", async () => {
+    previewMock.mockResolvedValueOnce({
+      subtotal: BigInt(125000),
+      discountAmount: BigInt(12500),
+      taxAmount: BigInt(15000),
+      total: BigInt(127500),
+      currency: "SEK",
+      lineBreakdown: [],
+      discountApplicable: true,
+    });
+    await previewDraftTotalsAction({
+      lines: [
+        {
+          accommodationId: "a1",
+          fromDate: new Date("2026-05-01"),
+          toDate: new Date("2026-05-03"),
+          guestCount: 2,
+        },
+      ],
+      discountCode: "SOMMAR2026",
+    });
+    const callArg = previewMock.mock.calls[0][0];
+    expect(callArg.discountCode).toBe("SOMMAR2026");
   });
 });
