@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import "../../products/_components/product-form.css";
 import "../../gift-cards/gift-cards.css";
 import "./new-draft-order.css";
+import { EditorIcon } from "@/app/_components/EditorIcon";
 import { LineItemsCard } from "./_components/LineItemsCard";
 import { SaveBar } from "./_components/SaveBar";
 import { CustomerCard } from "./_components/CustomerCard";
@@ -146,7 +147,30 @@ export function NewDraftOrderClient() {
     <div className="admin-page admin-page--no-preview products-page">
       <div className="admin-editor">
         <div className="admin-header pf-header">
-          <h1 className="admin-title">Ny utkastorder</h1>
+          <h1
+            className="admin-title"
+            style={{ display: "flex", alignItems: "center", gap: 0 }}
+          >
+            <button
+              type="button"
+              className="menus-breadcrumb__icon"
+              onClick={() => router.push("/draft-orders")}
+              aria-label="Tillbaka till utkastorders"
+            >
+              <span
+                className="material-symbols-rounded"
+                style={{ fontSize: 22 }}
+              >
+                receipt_long
+              </span>
+            </button>
+            <EditorIcon
+              name="chevron_right"
+              size={16}
+              style={{ color: "var(--admin-text-tertiary)", flexShrink: 0 }}
+            />
+            <span style={{ marginLeft: 3 }}>Ny utkastorder</span>
+          </h1>
         </div>
 
         {saveError && <div className="pf-error-banner">{saveError}</div>}

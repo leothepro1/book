@@ -197,7 +197,19 @@ afterEach(() => {
 describe("NewDraftOrderClient", () => {
   it("C1 — renders the page header 'Ny utkastorder'", () => {
     render(<NewDraftOrderClient />);
-    expect(screen.getByRole("heading", { name: "Ny utkastorder" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: /Ny utkastorder/ }),
+    ).toBeTruthy();
+  });
+
+  it("C1b — header contains back-button to /draft-orders", () => {
+    render(<NewDraftOrderClient />);
+    const backBtn = screen.getByRole("button", {
+      name: "Tillbaka till utkastorders",
+    });
+    expect(backBtn).toBeTruthy();
+    fireEvent.click(backBtn);
+    expect(pushMock).toHaveBeenCalledWith("/draft-orders");
   });
 
   it("C2 — line-count starts at 0 (empty state delegated to LineItemsCard)", () => {
