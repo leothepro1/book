@@ -21,6 +21,8 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("./actions", () => ({
   createDraftWithLinesAction: vi.fn(),
+  previewDraftTotalsAction: vi.fn(),
+  searchCustomersAction: vi.fn(),
 }));
 
 // Replace LineItemsCard with a controllable harness that exposes setLines via a hidden button.
@@ -128,17 +130,65 @@ vi.mock("./_components/SaveBar", () => ({
   ),
 }));
 
-import { createDraftWithLinesAction } from "./actions";
+import {
+  createDraftWithLinesAction,
+  previewDraftTotalsAction,
+  searchCustomersAction,
+} from "./actions";
 import { NewDraftOrderClient } from "./NewDraftOrderClient";
 
 const createMock = createDraftWithLinesAction as unknown as ReturnType<
   typeof vi.fn
 >;
+const previewMock = previewDraftTotalsAction as unknown as ReturnType<
+  typeof vi.fn
+>;
+const searchCustomersMock = searchCustomersAction as unknown as ReturnType<
+  typeof vi.fn
+>;
+
+const PREVIEW_2_LINES = {
+  subtotal: BigInt(250000),
+  discountAmount: BigInt(0),
+  taxAmount: BigInt(30000),
+  total: BigInt(280000),
+  currency: "SEK",
+  lineBreakdown: [
+    {
+      lineIndex: 0,
+      accommodationId: "a1",
+      nights: 2,
+      pricePerNight: BigInt(62500),
+      lineSubtotal: BigInt(125000),
+      addonsTotal: BigInt(0),
+    },
+    {
+      lineIndex: 1,
+      accommodationId: "a2",
+      nights: 2,
+      pricePerNight: BigInt(62500),
+      lineSubtotal: BigInt(125000),
+      addonsTotal: BigInt(0),
+    },
+  ],
+  discountApplicable: false,
+};
 
 beforeEach(() => {
   pushMock.mockReset();
   createMock.mockReset();
+  previewMock.mockReset();
+  searchCustomersMock.mockReset();
+  previewMock.mockResolvedValue(PREVIEW_2_LINES);
+  searchCustomersMock.mockResolvedValue([]);
 });
+
+async function flushAsync() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -228,5 +278,238 @@ describe("NewDraftOrderClient", () => {
       fireEvent.click(screen.getByTestId("save-btn"));
     });
     expect(screen.getByTestId("conflict-ids").textContent).toBe("tmp_1,tmp_2");
+  });
+});
+
+describe("NewDraftOrderClient — preview + customer + discount integration", () => {
+  it("C9 — adding lines triggers preview after 500ms debounce", async () => {
+    vi.useFakeTimers();
+    render(<NewDraftOrderClient />);
+    expect(previewMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("seed-lines"));
+    // Before debounce window completes, no fetch.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(previewMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
+    await flushAsync();
+    expect(previewMock).toHaveBeenCalledTimes(1);
+    const callArg = previewMock.mock.calls[0][0];
+    expect(callArg.lines).toHaveLength(2);
+    expect(callArg.lines[0]).toMatchObject({
+      accommodationId: "a1",
+      guestCount: 2,
+    });
+    expect(callArg.discountCode).toBeUndefined();
+
+    // Pricing summary renders the resolved totals.
+    expect(screen.getByText("Delsumma")).toBeTruthy();
+    expect(screen.getByText("2 500 kr")).toBeTruthy(); // subtotal
+    expect(screen.getByText("2 800 kr")).toBeTruthy(); // total
+  });
+
+  it("C10 — preview not called while lines.length === 0", async () => {
+    vi.useFakeTimers();
+    render(<NewDraftOrderClient />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(previewMock).not.toHaveBeenCalled();
+  });
+
+  it("C11 — selecting a customer renders CustomerCard with name + email + orders", async () => {
+    vi.useFakeTimers();
+    searchCustomersMock.mockResolvedValue([
+      {
+        id: "g1",
+        email: "anna@example.se",
+        name: "Anna Andersson",
+        phone: null,
+        draftOrderCount: 0,
+        orderCount: 3,
+      },
+    ]);
+    render(<NewDraftOrderClient />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "+ Lägg till kund" }),
+    );
+    const input = screen.getByPlaceholderText(
+      "Sök på namn eller e-post",
+    ) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "anna" } });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    await flushAsync();
+
+    fireEvent.click(screen.getByText("Anna Andersson"));
+
+    // Card now shows the selected customer; no more "Lägg till kund" button.
+    expect(
+      screen.queryByRole("button", { name: "+ Lägg till kund" }),
+    ).toBeNull();
+    expect(screen.getByText("Anna Andersson")).toBeTruthy();
+    expect(screen.getByText("anna@example.se · 3 ordrar")).toBeTruthy();
+  });
+
+  it("C12 — clearing customer via X-button returns to empty card state", async () => {
+    vi.useFakeTimers();
+    searchCustomersMock.mockResolvedValue([
+      {
+        id: "g1",
+        email: "anna@example.se",
+        name: "Anna Andersson",
+        phone: null,
+        draftOrderCount: 0,
+        orderCount: 3,
+      },
+    ]);
+    render(<NewDraftOrderClient />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "+ Lägg till kund" }),
+    );
+    fireEvent.change(
+      screen.getByPlaceholderText("Sök på namn eller e-post"),
+      { target: { value: "anna" } },
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    await flushAsync();
+    fireEvent.click(screen.getByText("Anna Andersson"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Ta bort kund" }));
+    expect(
+      screen.getByRole("button", { name: "+ Lägg till kund" }),
+    ).toBeTruthy();
+    expect(screen.queryByText("Anna Andersson")).toBeNull();
+  });
+
+  it("C13 — applying a discount triggers preview re-fetch with discountCode", async () => {
+    vi.useFakeTimers();
+    previewMock.mockResolvedValue({
+      ...PREVIEW_2_LINES,
+      discountAmount: BigInt(50000),
+      total: BigInt(230000),
+      discountApplicable: true,
+    });
+    render(<NewDraftOrderClient />);
+    fireEvent.click(screen.getByTestId("seed-lines"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    await flushAsync();
+    expect(previewMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByPlaceholderText("Rabattkod"), {
+      target: { value: "sommar2026" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Tillämpa" }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    await flushAsync();
+
+    expect(previewMock).toHaveBeenCalledTimes(2);
+    const lastCall = previewMock.mock.calls[1][0];
+    expect(lastCall.discountCode).toBe("SOMMAR2026");
+
+    // Discount pill rendered with formatted amount.
+    expect(screen.getByText("SOMMAR2026")).toBeTruthy();
+    // The amount appears in two places — the pill and the pricing summary.
+    expect(screen.getAllByText("−500 kr").length).toBeGreaterThan(0);
+  });
+
+  it("C14 — invalid discount soft-fails: error text shown, pricing has no discount row", async () => {
+    vi.useFakeTimers();
+    // First fetch: no discount, OK preview.
+    previewMock.mockResolvedValueOnce(PREVIEW_2_LINES);
+    // Second fetch (after applying invalid code): server returns soft-fail.
+    previewMock.mockResolvedValueOnce({
+      ...PREVIEW_2_LINES,
+      discountAmount: BigInt(0),
+      discountApplicable: false,
+      discountError: "Koden är inte längre giltig",
+    });
+
+    render(<NewDraftOrderClient />);
+    fireEvent.click(screen.getByTestId("seed-lines"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    await flushAsync();
+
+    fireEvent.change(screen.getByPlaceholderText("Rabattkod"), {
+      target: { value: "expired" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Tillämpa" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    await flushAsync();
+
+    // Pill stays applied (invalid modifier), error shown via role=alert.
+    expect(screen.getByText("EXPIRED")).toBeTruthy();
+    expect(
+      screen.getByRole("alert").textContent,
+    ).toBe("Koden är inte längre giltig");
+    // "Rabatt" appears as the DiscountCard title, but NOT as a pricing-summary
+    // row label — there's exactly one occurrence (the title), not two.
+    expect(screen.getAllByText("Rabatt")).toHaveLength(1);
+  });
+
+  it("C15 — stale-response guard: only the latest response is rendered", async () => {
+    vi.useFakeTimers();
+
+    // First call: resolves slow with stale data.
+    let resolveStale: ((v: typeof PREVIEW_2_LINES) => void) | null = null;
+    previewMock.mockImplementationOnce(
+      () =>
+        new Promise<typeof PREVIEW_2_LINES>((resolve) => {
+          resolveStale = resolve;
+        }),
+    );
+    // Second call: resolves immediately with fresh data.
+    const FRESH = {
+      ...PREVIEW_2_LINES,
+      subtotal: BigInt(999900),
+      total: BigInt(999900),
+      taxAmount: BigInt(0),
+    };
+    previewMock.mockResolvedValueOnce(FRESH);
+
+    render(<NewDraftOrderClient />);
+    fireEvent.click(screen.getByTestId("seed-lines"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    // First fetch is in-flight (not resolved). Apply discount → re-fetch.
+    fireEvent.change(screen.getByPlaceholderText("Rabattkod"), {
+      target: { value: "x" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Tillämpa" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    await flushAsync();
+
+    // Now resolve the stale first call — it should be discarded.
+    await act(async () => {
+      resolveStale?.(PREVIEW_2_LINES);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Pricing should reflect FRESH values, not stale.
+    expect(screen.getAllByText("9 999 kr").length).toBeGreaterThan(0); // 999900 ören
+    expect(screen.queryByText("2 500 kr")).toBeNull();
   });
 });

@@ -118,3 +118,225 @@
   color: var(--admin-text);
   margin-bottom: 6px;
 }
+
+/* ── Customer card ─────────────────────────────────────────────── */
+
+.ndr-customer-card__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.ndr-customer-card__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ndr-customer-card__name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--admin-text);
+}
+
+.ndr-customer-card__meta {
+  font-size: 13px;
+  color: var(--admin-text-muted);
+  margin-top: 2px;
+}
+
+.ndr-customer-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.ndr-customer-card__change-link {
+  background: none;
+  border: none;
+  color: var(--admin-accent);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-family: inherit;
+}
+
+.ndr-customer-card__change-link:hover {
+  text-decoration: underline;
+}
+
+.ndr-customer-card__remove {
+  background: none;
+  border: none;
+  color: var(--admin-text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-family: inherit;
+}
+
+.ndr-customer-card__remove:hover {
+  color: var(--admin-text);
+}
+
+/* ── Customer picker results ───────────────────────────────────── */
+
+.ndr-customer-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+  margin-top: 12px;
+}
+
+.ndr-customer-results__hint {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--admin-text-muted);
+}
+
+.ndr-customer-result-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  background: var(--admin-surface);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ndr-customer-result-row:hover {
+  background: var(--admin-surface-hover);
+}
+
+.ndr-customer-result-row__name {
+  font-weight: 500;
+  color: var(--admin-text);
+}
+
+.ndr-customer-result-row__meta {
+  font-size: 12px;
+  color: var(--admin-text-muted);
+}
+
+/* ── Discount card ─────────────────────────────────────────────── */
+
+.ndr-discount-card__form {
+  display: flex;
+  gap: 8px;
+}
+
+.ndr-discount-card__input {
+  flex: 1;
+  text-transform: uppercase;
+}
+
+.ndr-discount-card__input::placeholder {
+  text-transform: none;
+}
+
+.ndr-discount-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--admin-surface-muted);
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.ndr-discount-pill--invalid {
+  border-color: var(--admin-danger);
+  background: var(--admin-danger-tint);
+}
+
+.ndr-discount-pill__code {
+  font-weight: 500;
+  color: var(--admin-text);
+}
+
+.ndr-discount-pill__amount {
+  color: var(--admin-text);
+}
+
+.ndr-discount-pill__remove {
+  background: none;
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  color: var(--admin-text-muted);
+  font-family: inherit;
+}
+
+.ndr-discount-pill__remove:hover {
+  color: var(--admin-text);
+}
+
+.ndr-discount-error {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--admin-danger);
+}
+
+/* ── Pricing summary card ──────────────────────────────────────── */
+
+.ndr-pricing {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: opacity 150ms ease-out;
+}
+
+.ndr-pricing--loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.ndr-pricing__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.ndr-pricing__row--total {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ndr-pricing__label {
+  color: var(--admin-text-muted);
+}
+
+.ndr-pricing__row--total .ndr-pricing__label {
+  color: var(--admin-text);
+}
+
+.ndr-pricing__amount {
+  color: var(--admin-text);
+}
+
+.ndr-pricing__divider {
+  height: 1px;
+  background: var(--admin-border);
+  margin: 4px 0;
+}
+
+.ndr-pricing__placeholder {
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--admin-text-muted);
+}

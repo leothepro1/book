@@ -1,14 +1,25 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import "../../products/_components/product-form.css";
 import "../../gift-cards/gift-cards.css";
 import "./new-draft-order.css";
 import { LineItemsCard } from "./_components/LineItemsCard";
 import { SaveBar } from "./_components/SaveBar";
+import { CustomerCard } from "./_components/CustomerCard";
+import { CustomerPickerModal } from "./_components/CustomerPickerModal";
+import { DiscountCard } from "./_components/DiscountCard";
+import { PricingSummaryCard } from "./_components/PricingSummaryCard";
 import type { LocalLineItem } from "./_components/types";
-import { createDraftWithLinesAction } from "./actions";
+import type {
+  CustomerSearchResult,
+  PreviewResult,
+} from "@/app/_lib/draft-orders";
+import {
+  createDraftWithLinesAction,
+  previewDraftTotalsAction,
+} from "./actions";
 
 export function NewDraftOrderClient() {
   const router = useRouter();
@@ -18,6 +29,85 @@ export function NewDraftOrderClient() {
     string[]
   >([]);
   const [isSaving, startSaveTransition] = useTransition();
+  const [customer, setCustomer] = useState<CustomerSearchResult | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [appliedDiscountCode, setAppliedDiscountCode] = useState<string | null>(
+    null,
+  );
+  const [preview, setPreview] = useState<PreviewResult | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+
+  // Stable serialization of the line payload — referential equality on `lines`
+  // would re-fire the effect on every state update; we only want to re-fetch
+  // when the payload actually changes.
+  const linesKey = lines
+    .map(
+      (l) =>
+        `${l.accommodation.id}|${l.fromDate.getTime()}|${l.toDate.getTime()}|${l.guestCount}`,
+    )
+    .join(",");
+
+  // Live preview: 500ms debounced fetch with stale-response guard.
+  // customer is intentionally NOT in deps — PreviewInput has no customerId
+  // field today; preview totals are independent of who the buyer is.
+  useEffect(() => {
+    if (lines.length === 0) {
+      setPreview(null);
+      setIsPreviewing(false);
+      setPreviewError(null);
+      return;
+    }
+    const reqId = ++requestIdRef.current;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setIsPreviewing(true);
+      setPreviewError(null);
+      try {
+        const result = await previewDraftTotalsAction({
+          lines: lines.map((l) => ({
+            accommodationId: l.accommodation.id,
+            fromDate: l.fromDate,
+            toDate: l.toDate,
+            guestCount: l.guestCount,
+          })),
+          discountCode: appliedDiscountCode ?? undefined,
+        });
+        if (!cancelled && reqId === requestIdRef.current) {
+          setPreview(result);
+          setIsPreviewing(false);
+        }
+      } catch (err) {
+        if (!cancelled && reqId === requestIdRef.current) {
+          setPreviewError(
+            err instanceof Error ? err.message : "Kunde inte beräkna totaler",
+          );
+          setIsPreviewing(false);
+        }
+      }
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // linesKey captures the relevant subset of `lines`; ESLint cannot see that
+    // the dep is sufficient and would force re-fires on every reference change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linesKey, appliedDiscountCode]);
+
+  // Discount-error visibility: only when (a) we have lines, (b) preview has
+  // returned, and (c) service explicitly set discountError. discountApplicable
+  // alone is overloaded (also false for empty/cross-tenant results).
+  const showDiscountError =
+    lines.length > 0 &&
+    preview !== null &&
+    !preview.discountApplicable &&
+    typeof preview.discountError === "string";
+  const discountErrorForCard = showDiscountError
+    ? (preview?.discountError ?? null)
+    : null;
+  const discountIsApplicable = !showDiscountError;
 
   const canSave =
     lines.length > 0 &&
@@ -69,9 +159,36 @@ export function NewDraftOrderClient() {
               conflictingLineTempIds={conflictingLineTempIds}
             />
           </div>
-          <div className="pf-sidebar">{/* 7.2b.2/.3 territory */}</div>
+          <div className="pf-sidebar">
+            <CustomerCard
+              customer={customer}
+              onChangeClick={() => setPickerOpen(true)}
+              onClear={() => setCustomer(null)}
+            />
+            <DiscountCard
+              appliedCode={appliedDiscountCode}
+              onApply={(code) => setAppliedDiscountCode(code)}
+              onRemove={() => setAppliedDiscountCode(null)}
+              discountAmount={preview?.discountAmount ?? null}
+              discountError={discountErrorForCard}
+              isApplicable={discountIsApplicable}
+            />
+            <PricingSummaryCard
+              preview={preview}
+              isLoading={isPreviewing}
+              hasLines={lines.length > 0}
+              error={previewError}
+            />
+          </div>
         </div>
       </div>
+
+      {pickerOpen && (
+        <CustomerPickerModal
+          onClose={() => setPickerOpen(false)}
+          onSelect={(c) => setCustomer(c)}
+        />
+      )}
 
       <SaveBar canSave={canSave} isSaving={isSaving} onSave={handleSave} />
     </div>
