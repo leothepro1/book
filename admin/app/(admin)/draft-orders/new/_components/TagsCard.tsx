@@ -138,13 +138,23 @@ export function TagsCard({ value, onChange }: TagsCardProps) {
   const inputId = useId();
   const listboxId = useId();
   const [inputValue, setInputValue] = useState("");
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [fetchedSuggestions, setFetchedSuggestions] = useState<string[]>([]);
   const [liveMessage, setLiveMessage] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
 
   const atMax = value.length >= MAX_TAGS;
+  const trimmedInput = inputValue.trim();
+
+  // Derived view: filter fetched suggestions against current value
+  // (case-insensitive) and gate visibility on non-empty trimmed input.
+  // Computing at render avoids storing showSuggestions/suggestions in state.
+  const lowerValueSet = new Set(value.map((t) => t.toLowerCase()));
+  const visibleSuggestions =
+    trimmedInput.length > 0
+      ? fetchedSuggestions.filter((s) => !lowerValueSet.has(s.toLowerCase()))
+      : [];
+  const showSuggestions = visibleSuggestions.length > 0;
 
   const addTag = (raw: string) => {
     const trimmed = raw.trim();
@@ -154,12 +164,10 @@ export function TagsCard({ value, onChange }: TagsCardProps) {
     const next = dedupCaseInsensitive([...value, trimmed]);
     if (next.length === value.length) {
       setInputValue("");
-      setShowSuggestions(false);
       return;
     }
     onChange(next);
     setInputValue("");
-    setShowSuggestions(false);
     setLiveMessage(`Tagg ${trimmed} tillagd`);
   };
 
@@ -168,27 +176,20 @@ export function TagsCard({ value, onChange }: TagsCardProps) {
     setLiveMessage(`Tagg ${tag} borttagen`);
   };
 
+  // Debounced fetch. When input is empty, the effect cleans up the timer
+  // and exits without touching state — visibleSuggestions derives from
+  // trimmedInput at render-time, so there's nothing to clear.
   useEffect(() => {
-    const trimmed = inputValue.trim();
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
-    if (trimmed.length === 0) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
+    if (trimmedInput.length === 0) return;
     const reqId = ++requestIdRef.current;
     debounceRef.current = setTimeout(async () => {
-      const results = await searchDraftTagsAction(trimmed);
+      const results = await searchDraftTagsAction(trimmedInput);
       if (reqId !== requestIdRef.current) return;
-      const lowerValue = new Set(value.map((t) => t.toLowerCase()));
-      const filtered = results.filter(
-        (r) => !lowerValue.has(r.toLowerCase()),
-      );
-      setSuggestions(filtered);
-      setShowSuggestions(filtered.length > 0);
+      setFetchedSuggestions(results);
     }, DEBOUNCE_MS);
     return () => {
       if (debounceRef.current) {
@@ -196,7 +197,7 @@ export function TagsCard({ value, onChange }: TagsCardProps) {
         debounceRef.current = null;
       }
     };
-  }, [inputValue, value]);
+  }, [trimmedInput]);
 
   return (
     <div style={CARD}>
@@ -251,9 +252,9 @@ export function TagsCard({ value, onChange }: TagsCardProps) {
       </div>
 
       <div style={SUGGESTIONS_WRAP}>
-        {showSuggestions && suggestions.length > 0 && (
+        {showSuggestions && (
           <ul id={listboxId} role="listbox" style={SUGGESTIONS_LIST}>
-            {suggestions.map((s) => (
+            {visibleSuggestions.map((s) => (
               <li key={s} role="option" aria-selected={false}>
                 <button
                   type="button"
