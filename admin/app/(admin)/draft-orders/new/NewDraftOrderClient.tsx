@@ -12,6 +12,9 @@ import { CustomerCard } from "./_components/CustomerCard";
 import { CustomerPickerModal } from "./_components/CustomerPickerModal";
 import { DiscountCard } from "./_components/DiscountCard";
 import { PricingSummaryCard } from "./_components/PricingSummaryCard";
+import { NotesCard } from "./_components/NotesCard";
+import { TagsCard } from "./_components/TagsCard";
+import { ExpiresAtCard } from "./_components/ExpiresAtCard";
 import type { LocalLineItem } from "./_components/types";
 import type {
   CustomerSearchResult,
@@ -38,6 +41,14 @@ export function NewDraftOrderClient() {
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [internalNote, setInternalNote] = useState<string>("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [expiresAt, setExpiresAt] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
   const requestIdRef = useRef(0);
 
   // Stable serialization of the line payload — referential equality on `lines`
@@ -127,7 +138,15 @@ export function NewDraftOrderClient() {
         guestCount: l.guestCount,
       }));
 
-      const result = await createDraftWithLinesAction({ lines: serviceLines });
+      const trimmedNote = internalNote.trim();
+      const result = await createDraftWithLinesAction({
+        lines: serviceLines,
+        customerId: customer?.id,
+        discountCode: appliedDiscountCode ?? undefined,
+        internalNote: trimmedNote.length > 0 ? trimmedNote : undefined,
+        tags: tags.length > 0 ? tags : undefined,
+        expiresAt,
+      });
 
       if (result.ok) {
         router.push(`/draft-orders/${result.draft.id}/konfigurera`);
@@ -182,6 +201,7 @@ export function NewDraftOrderClient() {
               setLines={setLines}
               conflictingLineTempIds={conflictingLineTempIds}
             />
+            <NotesCard value={internalNote} onChange={setInternalNote} />
           </div>
           <div className="pf-sidebar">
             <CustomerCard
@@ -197,6 +217,8 @@ export function NewDraftOrderClient() {
               discountError={discountErrorForCard}
               isApplicable={discountIsApplicable}
             />
+            <TagsCard value={tags} onChange={setTags} />
+            <ExpiresAtCard value={expiresAt} onChange={setExpiresAt} />
             <PricingSummaryCard
               preview={preview}
               isLoading={isPreviewing}
