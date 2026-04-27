@@ -7,6 +7,7 @@ vi.mock("@/app/(admin)/_lib/auth/devAuth", () => ({
 vi.mock("@/app/_lib/db/prisma", () => ({
   prisma: {
     tenant: { findUnique: vi.fn() },
+    $queryRaw: vi.fn(),
   },
 }));
 
@@ -33,12 +34,14 @@ import {
   createDraftWithLinesAction,
   searchCustomersAction,
   previewDraftTotalsAction,
+  searchDraftTagsAction,
 } from "./actions";
 
 type Mock = ReturnType<typeof vi.fn>;
 
 const getAuthMock = getAuth as unknown as Mock;
 const findUniqueMock = prisma.tenant.findUnique as unknown as Mock;
+const queryRawMock = (prisma as unknown as { $queryRaw: Mock }).$queryRaw;
 const searchMock = searchAccommodations as unknown as Mock;
 const checkMock = checkAvailability as unknown as Mock;
 const createMock = createDraftWithLines as unknown as Mock;
@@ -48,6 +51,7 @@ const previewMock = previewDraftTotals as unknown as Mock;
 beforeEach(() => {
   getAuthMock.mockReset();
   findUniqueMock.mockReset();
+  queryRawMock.mockReset();
   searchMock.mockReset();
   checkMock.mockReset();
   createMock.mockReset();
@@ -282,5 +286,71 @@ describe("previewDraftTotalsAction", () => {
     });
     const callArg = previewMock.mock.calls[0][0];
     expect(callArg.discountCode).toBe("SOMMAR2026");
+  });
+});
+
+describe("searchDraftTagsAction", () => {
+  it("T17 — missing orgId returns []", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: null,
+      userId: null,
+      orgRole: null,
+    });
+    const result = await searchDraftTagsAction("vip");
+    expect(result).toEqual([]);
+    expect(queryRawMock).not.toHaveBeenCalled();
+  });
+
+  it("T18 — missing tenant returns []", async () => {
+    findUniqueMock.mockResolvedValueOnce(null);
+    const result = await searchDraftTagsAction("vip");
+    expect(result).toEqual([]);
+    expect(queryRawMock).not.toHaveBeenCalled();
+  });
+
+  it("T19 — empty query returns [] without DB hit", async () => {
+    const result = await searchDraftTagsAction("");
+    expect(result).toEqual([]);
+    expect(queryRawMock).not.toHaveBeenCalled();
+  });
+
+  it("T20 — whitespace-only query returns [] without DB hit", async () => {
+    const result = await searchDraftTagsAction("   ");
+    expect(result).toEqual([]);
+    expect(queryRawMock).not.toHaveBeenCalled();
+  });
+
+  it("T21 — happy path returns tag strings unchanged from DB rows", async () => {
+    queryRawMock.mockResolvedValueOnce([
+      { tag: "vip" },
+      { tag: "VIP-Gold" },
+      { tag: "vipps" },
+    ]);
+    const result = await searchDraftTagsAction("vi");
+    expect(result).toEqual(["vip", "VIP-Gold", "vipps"]);
+    expect(queryRawMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("T22 — query is bound as a parameter (tenant-scoped via tenantId binding)", async () => {
+    queryRawMock.mockResolvedValueOnce([]);
+    await searchDraftTagsAction("foo");
+    // $queryRaw template tag is invoked with (strings, ...values).
+    const args = queryRawMock.mock.calls[0];
+    // Values include tenantId and the LIKE pattern. Tenant must be present.
+    expect(args.slice(1)).toContain("tenant_t");
+    // Pattern is "<escaped>%" — verify our trimmed query made it in.
+    expect(args.slice(1).some((v: unknown) => typeof v === "string" && v.includes("foo"))).toBe(true);
+  });
+
+  it("T23 — LIKE wildcards in input are escaped so they match literally", async () => {
+    queryRawMock.mockResolvedValueOnce([]);
+    await searchDraftTagsAction("50%off");
+    const args = queryRawMock.mock.calls[0];
+    const pattern = args.slice(1).find(
+      (v: unknown) => typeof v === "string" && v.includes("off"),
+    );
+    // The literal % in user input should be escaped to "\%", and the
+    // trailing prefix-match "%" remains unescaped at the end.
+    expect(pattern).toBe("50\\%off%");
   });
 });

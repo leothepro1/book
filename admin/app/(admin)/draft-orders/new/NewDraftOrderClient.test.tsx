@@ -23,6 +23,7 @@ vi.mock("./actions", () => ({
   createDraftWithLinesAction: vi.fn(),
   previewDraftTotalsAction: vi.fn(),
   searchCustomersAction: vi.fn(),
+  searchDraftTagsAction: vi.fn().mockResolvedValue([]),
 }));
 
 // Replace LineItemsCard with a controllable harness that exposes setLines via a hidden button.
@@ -197,7 +198,19 @@ afterEach(() => {
 describe("NewDraftOrderClient", () => {
   it("C1 — renders the page header 'Ny utkastorder'", () => {
     render(<NewDraftOrderClient />);
-    expect(screen.getByRole("heading", { name: "Ny utkastorder" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: /Ny utkastorder/ }),
+    ).toBeTruthy();
+  });
+
+  it("C1b — header contains back-button to /draft-orders", () => {
+    render(<NewDraftOrderClient />);
+    const backBtn = screen.getByRole("button", {
+      name: "Tillbaka till utkastorders",
+    });
+    expect(backBtn).toBeTruthy();
+    fireEvent.click(backBtn);
+    expect(pushMock).toHaveBeenCalledWith("/draft-orders");
   });
 
   it("C2 — line-count starts at 0 (empty state delegated to LineItemsCard)", () => {
@@ -511,5 +524,167 @@ describe("NewDraftOrderClient — preview + customer + discount integration", ()
     // Pricing should reflect FRESH values, not stale.
     expect(screen.getAllByText("9 999 kr").length).toBeGreaterThan(0); // 999900 ören
     expect(screen.queryByText("2 500 kr")).toBeNull();
+  });
+});
+
+describe("NewDraftOrderClient — save payload wiring", () => {
+  it("C16 — handleSave omits internalNote when empty/whitespace and tags when []", async () => {
+    createMock.mockResolvedValue({ ok: true, draft: { id: "d_x", lines: [] } });
+    render(<NewDraftOrderClient />);
+    fireEvent.click(screen.getByTestId("seed-lines"));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("save-btn"));
+    });
+    const arg = createMock.mock.calls[0][0];
+    expect(arg.internalNote).toBeUndefined();
+    expect(arg.tags).toBeUndefined();
+  });
+
+  it("C17 — handleSave always passes expiresAt as a Date (NOT NULL contract)", async () => {
+    createMock.mockResolvedValue({ ok: true, draft: { id: "d_x", lines: [] } });
+    render(<NewDraftOrderClient />);
+    fireEvent.click(screen.getByTestId("seed-lines"));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("save-btn"));
+    });
+    const arg = createMock.mock.calls[0][0];
+    expect(arg.expiresAt).toBeInstanceOf(Date);
+  });
+
+  it("C18 — default expiresAt is ~today + 7 days at local midnight", async () => {
+    createMock.mockResolvedValue({ ok: true, draft: { id: "d_x", lines: [] } });
+    render(<NewDraftOrderClient />);
+    fireEvent.click(screen.getByTestId("seed-lines"));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("save-btn"));
+    });
+    const arg = createMock.mock.calls[0][0];
+    const sentAt = arg.expiresAt as Date;
+    const expected = new Date();
+    expected.setDate(expected.getDate() + 7);
+    expected.setHours(0, 0, 0, 0);
+    expect(sentAt.getFullYear()).toBe(expected.getFullYear());
+    expect(sentAt.getMonth()).toBe(expected.getMonth());
+    expect(sentAt.getDate()).toBe(expected.getDate());
+    expect(sentAt.getHours()).toBe(0);
+    expect(sentAt.getMinutes()).toBe(0);
+    expect(sentAt.getSeconds()).toBe(0);
+  });
+
+  it("C19 — handleSave includes customerId when a customer is selected", async () => {
+    vi.useFakeTimers();
+    searchCustomersMock.mockResolvedValue([
+      {
+        id: "g_anna",
+        email: "anna@example.se",
+        name: "Anna",
+        phone: null,
+        draftOrderCount: 0,
+        orderCount: 1,
+      },
+    ]);
+    createMock.mockResolvedValue({ ok: true, draft: { id: "d_x", lines: [] } });
+    render(<NewDraftOrderClient />);
+    fireEvent.click(screen.getByTestId("seed-lines"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "+ Lägg till kund" }),
+    );
+    fireEvent.change(
+      screen.getByPlaceholderText("Sök på namn eller e-post"),
+      { target: { value: "anna" } },
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    await flushAsync();
+    fireEvent.click(screen.getByText("Anna"));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("save-btn"));
+    });
+    const arg = createMock.mock.calls[0][0];
+    expect(arg.customerId).toBe("g_anna");
+  });
+
+  it("C20 — handleSave includes discountCode when a code is applied", async () => {
+    vi.useFakeTimers();
+    createMock.mockResolvedValue({ ok: true, draft: { id: "d_x", lines: [] } });
+    render(<NewDraftOrderClient />);
+    fireEvent.click(screen.getByTestId("seed-lines"));
+    fireEvent.change(screen.getByPlaceholderText("Rabattkod"), {
+      target: { value: "sommar2026" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Tillämpa" }));
+    // drain preview re-fetch debounce so save isn't blocked by transitions
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    await flushAsync();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("save-btn"));
+    });
+    const arg = createMock.mock.calls[0][0];
+    expect(arg.discountCode).toBe("SOMMAR2026");
+  });
+
+  it("C21 — handleSave includes trimmed internalNote when note is entered", async () => {
+    createMock.mockResolvedValue({ ok: true, draft: { id: "d_x", lines: [] } });
+    render(<NewDraftOrderClient />);
+    fireEvent.click(screen.getByTestId("seed-lines"));
+    const textarea = screen.getByLabelText("Anteckning") as HTMLTextAreaElement;
+    fireEvent.change(textarea, {
+      target: { value: "  Hold suite for VIP guest  " },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("save-btn"));
+    });
+    const arg = createMock.mock.calls[0][0];
+    expect(arg.internalNote).toBe("Hold suite for VIP guest");
+  });
+
+  it("C22 — handleSave omits internalNote when value is whitespace-only", async () => {
+    createMock.mockResolvedValue({ ok: true, draft: { id: "d_x", lines: [] } });
+    render(<NewDraftOrderClient />);
+    fireEvent.click(screen.getByTestId("seed-lines"));
+    const textarea = screen.getByLabelText("Anteckning") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "    " } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("save-btn"));
+    });
+    const arg = createMock.mock.calls[0][0];
+    expect(arg.internalNote).toBeUndefined();
+  });
+
+  it("C23 — handleSave includes tags when at least one tag is added", async () => {
+    createMock.mockResolvedValue({ ok: true, draft: { id: "d_x", lines: [] } });
+    render(<NewDraftOrderClient />);
+    fireEvent.click(screen.getByTestId("seed-lines"));
+    const tagInput = screen.getByPlaceholderText(
+      "Lägg till tagg",
+    ) as HTMLInputElement;
+    fireEvent.change(tagInput, { target: { value: "VIP" } });
+    fireEvent.keyDown(tagInput, { key: "Enter" });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("save-btn"));
+    });
+    const arg = createMock.mock.calls[0][0];
+    expect(arg.tags).toEqual(["VIP"]);
+  });
+
+  it("C24 — ExpiresAtCard updates flow into save payload", async () => {
+    createMock.mockResolvedValue({ ok: true, draft: { id: "d_x", lines: [] } });
+    render(<NewDraftOrderClient />);
+    fireEvent.click(screen.getByTestId("seed-lines"));
+    const dateInput = screen.getByLabelText("Utgångsdatum") as HTMLInputElement;
+    fireEvent.change(dateInput, { target: { value: "2030-12-31" } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("save-btn"));
+    });
+    const arg = createMock.mock.calls[0][0];
+    const sent = arg.expiresAt as Date;
+    expect(sent.getFullYear()).toBe(2030);
+    expect(sent.getMonth()).toBe(11);
+    expect(sent.getDate()).toBe(31);
   });
 });

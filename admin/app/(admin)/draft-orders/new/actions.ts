@@ -70,3 +70,25 @@ export async function previewDraftTotalsAction(
   if (!tenantId) return null;
   return previewDraftTotals({ ...input, tenantId });
 }
+
+// Pool-from-existing tag autocomplete. Reads distinct tag values across this
+// tenant's existing DraftOrder.tags arrays — there is no central tag pool.
+// Escapes LIKE wildcards in user input so a literal "%" types as "%", not as
+// a match-anything operator.
+export async function searchDraftTagsAction(query: string): Promise<string[]> {
+  const tenantId = await getTenantId();
+  if (!tenantId) return [];
+  const trimmed = query.trim();
+  if (trimmed.length === 0) return [];
+  const escaped = trimmed.replace(/[\\%_]/g, (c) => `\\${c}`);
+  const pattern = `${escaped}%`;
+  const rows = await prisma.$queryRaw<Array<{ tag: string }>>`
+    SELECT DISTINCT t.tag
+    FROM "DraftOrder" d, unnest(d."tags") AS t(tag)
+    WHERE d."tenantId" = ${tenantId}
+      AND t.tag ILIKE ${pattern} ESCAPE '\'
+    ORDER BY t.tag ASC
+    LIMIT 10
+  `;
+  return rows.map((r) => r.tag);
+}

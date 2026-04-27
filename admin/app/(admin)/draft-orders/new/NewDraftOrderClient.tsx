@@ -5,12 +5,16 @@ import { useRouter } from "next/navigation";
 import "../../products/_components/product-form.css";
 import "../../gift-cards/gift-cards.css";
 import "./new-draft-order.css";
+import { EditorIcon } from "@/app/_components/EditorIcon";
 import { LineItemsCard } from "./_components/LineItemsCard";
 import { SaveBar } from "./_components/SaveBar";
 import { CustomerCard } from "./_components/CustomerCard";
 import { CustomerPickerModal } from "./_components/CustomerPickerModal";
 import { DiscountCard } from "./_components/DiscountCard";
 import { PricingSummaryCard } from "./_components/PricingSummaryCard";
+import { NotesCard } from "./_components/NotesCard";
+import { TagsCard } from "./_components/TagsCard";
+import { ExpiresAtCard } from "./_components/ExpiresAtCard";
 import type { LocalLineItem } from "./_components/types";
 import type {
   CustomerSearchResult,
@@ -37,6 +41,14 @@ export function NewDraftOrderClient() {
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [internalNote, setInternalNote] = useState<string>("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [expiresAt, setExpiresAt] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
   const requestIdRef = useRef(0);
 
   // Stable serialization of the line payload — referential equality on `lines`
@@ -126,7 +138,15 @@ export function NewDraftOrderClient() {
         guestCount: l.guestCount,
       }));
 
-      const result = await createDraftWithLinesAction({ lines: serviceLines });
+      const trimmedNote = internalNote.trim();
+      const result = await createDraftWithLinesAction({
+        lines: serviceLines,
+        customerId: customer?.id,
+        discountCode: appliedDiscountCode ?? undefined,
+        internalNote: trimmedNote.length > 0 ? trimmedNote : undefined,
+        tags: tags.length > 0 ? tags : undefined,
+        expiresAt,
+      });
 
       if (result.ok) {
         router.push(`/draft-orders/${result.draft.id}/konfigurera`);
@@ -146,7 +166,30 @@ export function NewDraftOrderClient() {
     <div className="admin-page admin-page--no-preview products-page">
       <div className="admin-editor">
         <div className="admin-header pf-header">
-          <h1 className="admin-title">Ny utkastorder</h1>
+          <h1
+            className="admin-title"
+            style={{ display: "flex", alignItems: "center", gap: 0 }}
+          >
+            <button
+              type="button"
+              className="menus-breadcrumb__icon"
+              onClick={() => router.push("/draft-orders")}
+              aria-label="Tillbaka till utkastorders"
+            >
+              <span
+                className="material-symbols-rounded"
+                style={{ fontSize: 22 }}
+              >
+                receipt_long
+              </span>
+            </button>
+            <EditorIcon
+              name="chevron_right"
+              size={16}
+              style={{ color: "var(--admin-text-tertiary)", flexShrink: 0 }}
+            />
+            <span style={{ marginLeft: 3 }}>Ny utkastorder</span>
+          </h1>
         </div>
 
         {saveError && <div className="pf-error-banner">{saveError}</div>}
@@ -158,6 +201,7 @@ export function NewDraftOrderClient() {
               setLines={setLines}
               conflictingLineTempIds={conflictingLineTempIds}
             />
+            <NotesCard value={internalNote} onChange={setInternalNote} />
           </div>
           <div className="pf-sidebar">
             <CustomerCard
@@ -173,6 +217,8 @@ export function NewDraftOrderClient() {
               discountError={discountErrorForCard}
               isApplicable={discountIsApplicable}
             />
+            <TagsCard value={tags} onChange={setTags} />
+            <ExpiresAtCard value={expiresAt} onChange={setExpiresAt} />
             <PricingSummaryCard
               preview={preview}
               isLoading={isPreviewing}
