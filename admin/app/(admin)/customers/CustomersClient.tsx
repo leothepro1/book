@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { EditorIcon } from "@/app/_components/EditorIcon";
+import { SearchIcon } from "@/app/_components/SearchIcon";
 import { getCustomers, type CustomerListItem, type CustomerSortField, type CustomerSortDirection, type CustomerTab } from "./actions";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 
@@ -283,7 +284,7 @@ export function CustomersClient() {
     <>
       <div className="cst-filter-bar">
         <div className="cst-search">
-          <span className="material-symbols-rounded cst-search__icon">search</span>
+          <SearchIcon size={20} className="cst-search__icon" />
           <input
             type="text"
             className="cst-search__input"

@@ -15,7 +15,7 @@ import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { getApp } from "./registry";
 import { getSetupStatus } from "./setup";
 import { startWizard } from "./wizard";
-import type { InstallResult, AppStatus } from "./types";
+import type { InstallResult, AppStatus, AppCategory, AppPage } from "./types";
 import { log } from "@/app/_lib/logger";
 
 // Import all app definitions
@@ -47,6 +47,7 @@ export type SidebarApp = {
   name: string;
   icon: string;
   iconUrl?: string;
+  category: AppCategory;
   isSalesChannel: boolean;
   channelHandle?: string;
   /**
@@ -54,6 +55,13 @@ export type SidebarApp = {
    * entry. Empty or undefined → flat link (current default).
    */
   subItems?: SidebarAppSubItem[];
+  /**
+   * Pages declared by the app (mirrors `AppDefinition.pages`). When
+   * length ≥ 2 the app becomes a sidebar drill-in section: clicking
+   * the row navigates to the first page AND opens a sub-nav listing
+   * each declared page.
+   */
+  pages?: AppPage[];
 };
 
 /**
@@ -79,8 +87,10 @@ export async function getActiveAppsForSidebar(): Promise<SidebarApp[]> {
       name: def.name,
       icon: def.icon,
       iconUrl: def.iconUrl,
+      category: def.category,
       isSalesChannel: !!def.salesChannel,
       channelHandle: def.salesChannel?.handle,
+      pages: def.pages,
     });
   }
   return result;

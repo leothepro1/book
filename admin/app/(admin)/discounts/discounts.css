@@ -39,7 +39,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px;
-  background: #F3F3F4;
+  background: #FAFAFA;
   border-bottom: 1px solid var(--admin-border);
 }
 
@@ -65,7 +65,7 @@
 }
 
 .am-modal__close:hover {
-  background: #e3e3e3;
+  background: #EBEBEB;
 }
 
 .am-modal__body {

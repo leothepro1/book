@@ -284,7 +284,7 @@
 }
 
 .tx-sidebar__item:hover {
-  background: #f7f7f7;
+  background: #FAFAFA;
 }
 
 .tx-sidebar__item--active {
@@ -358,7 +358,7 @@
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--admin-border);
-  background: #f7f7f7;
+  background: #FAFAFA;
 }
 
 .tx-field__column-header-type {

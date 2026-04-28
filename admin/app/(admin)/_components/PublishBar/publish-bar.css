@@ -45,7 +45,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #e3e3e3;
+  color: #EBEBEB;
   flex-shrink: 0;
 }
 
@@ -77,7 +77,7 @@
   border: none;
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.13);
-  color: #e3e3e3;
+  color: #EBEBEB;
   font-family: var(--admin-font);
   font-size: 13px;
   font-weight: 500;

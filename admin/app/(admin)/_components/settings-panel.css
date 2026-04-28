@@ -1,302 +1,18 @@
 /* ══════════════════════════════════════════════════════════
-   Settings Panel — iOS-style sheet presentation
-
-   Main content scales down and pushes back.
-   Panel slides up from bottom with spring easing.
+   Settings drill-in body — renders inside the admin content area
+   when the user is in the settings section. The sidebar and section
+   navigation are owned by SidebarNav + SettingsSidebar; this file
+   only carries the breadcrumb header, content cards, and shared
+   button / dropdown / skeleton vocabulary used by tab content.
    ══════════════════════════════════════════════════════════ */
 
-/* ── Backdrop wrapper (the push-back target) ── */
-
-.admin-shell {
-  transition:
-    transform 0.3s var(--ease-spring),
-    border-radius 0.3s var(--ease-spring),
-    filter 0.3s var(--ease-spring);
-  transform-origin: center top;
-  will-change: transform, border-radius;
-}
-
-.admin-shell--pushed {
-  transform: scale(0.98) translateY(12px);
-  border-radius: var(--radius-2xl);
-  overflow: hidden;
-  filter: brightness(0.82);
-  pointer-events: none;
-}
-
-/* ── Settings panel (fixed overlay) ── */
-
-.settings-panel {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  pointer-events: none;
-}
-
-.settings-panel--open {
-  pointer-events: auto;
-}
-
-/* ── Overlay ── */
-
-.settings-panel__overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(18, 18, 18, 0);
-  transition: background 0.18s ease-out;
-  z-index: 0;
-}
-
-.settings-panel--open .settings-panel__overlay {
-  background: rgba(18, 18, 18, 0.5);
-  transition: background 0.22s ease-in;
-}
-
-/* ── Panel content (the rising sheet) ── */
-
-.settings-panel__content {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: #F3F3F4;
+.settings-body {
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-
-  transform: translateY(100%);
-  opacity: 0;
-  /* Close transition: pure fade, no movement */
-  transition:
-    transform 0s 0.15s,
-    opacity 0.15s ease-out;
-  will-change: transform, opacity;
-}
-
-.settings-panel--open .settings-panel__content {
-  transform: translateY(0);
-  opacity: 1;
-  /* Open transition: original crisp slide up */
-  transition:
-    transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-    opacity 0.1s ease-in;
-}
-
-/* ── Close button (top-right, absolute) ── */
-
-.settings-panel__close {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: #E5E5E5;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  color: #404040;
-  transition: background var(--duration-normal), color var(--duration-normal), transform 0.2s;
-}
-
-.settings-panel__close:hover {
-  background: #dadada;
-  color: var(--admin-text);
-}
-
-.settings-panel__close:active {
-  transform: scale(0.92);
-}
-
-
-/* ══════════════════════════════════════════════════════════
-   Two-column layout
-   ══════════════════════════════════════════════════════════ */
-
-.settings-layout {
-  display: flex;
-  flex: 1;
-  max-width: 1130px;
-  margin: 0 auto;
-  width: 100%;
   min-height: 0;
-  padding: 44px 0;
-  gap: 34px;
-}
-
-
-/* ── Left nav (281px) ── */
-
-.settings-nav {
-  width: 261px;
-  flex-shrink: 0;
-  border-right: none;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  gap: 10px;
-  overflow-y: auto;
-  background: #fff;
-  height: max-content;
-  border-radius: 0.75rem;
-  box-shadow:
-    0 0.3125rem 0.3125rem -0.15625rem #00000008,
-    0 0.1875rem 0.1875rem -0.09375rem #00000005,
-    0 0.125rem 0.125rem -0.0625rem #00000005,
-    0 0.0625rem 0.0625rem -0.03125rem #00000008,
-    0 0.03125rem 0.03125rem #0000000a,
-    0 0 0 0.0625rem #0000000f;
-}
-
-/* Org header */
-
-.settings-nav__org {
-    background: #f7f7f7;
-    border-bottom: 1px solid #ebebeb;
-    align-items: center;
-    gap: 10px;
-    padding: 16px 16px 10px 16px;
-    display: flex;
-}
-
-.settings-nav__org-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-lg);
-  flex-shrink: 0;
-  object-fit: cover;
-}
-
-.settings-nav__org-avatar--fallback {
-  background: var(--admin-accent);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--font-lg);
-  font-weight: var(--font-weight-semibold);
-}
-
-.settings-nav__org-info {
-  min-width: 0;
-}
-
-.settings-nav__org-name {
-  font-size: var(--font-md);
-  font-weight: var(--font-weight-semibold);
-  color: var(--admin-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.settings-nav__org-label {
-  font-size: var(--font-xs);
-  font-weight: var(--font-weight-normal);
-  color: var(--admin-text-secondary);
-  margin-top: 1px;
-}
-
-/* Search */
-
-.settings-nav__search-wrap {
-  position: relative;
-  margin: 0 16px;
-}
-
-.settings-nav__search-icon {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--admin-text-tertiary);
-  pointer-events: none;
-}
-
-.settings-nav__search {
+  max-width: 850px;
   width: 100%;
-  height: 34px;
-  padding: 0 10px 0 32px;
-  border: 1px solid #ebebeb;
-  border-radius: var(--radius-md);
-  background: #fff;
-  font-size: var(--font-md);
-  font-weight: var(--font-weight-normal);
-  color: var(--admin-text);
-  outline: none;
-  transition: border-color var(--duration-normal);
-  place-content: center;
-  line-height: 1em;
-}
-
-.settings-nav__search::placeholder {
-  color: #616161;
-}
-
-.settings-nav__search:focus {
-  border-color: var(--admin-border-focus);
-}
-
-/* Nav list */
-
-.settings-nav__list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 0 9px 9px;
-}
-
-.settings-nav__item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
-  border: none;
-  background: none;
-  border-radius: var(--radius-md);
-  font-size: var(--font-md);
-  font-weight: var(--font-weight-medium);
-  color: #303030;
-  cursor: pointer;
-  text-align: left;
-}
-
-.settings-nav__item:hover {
-  background: var(--admin-surface-hover);
-  color: var(--admin-text);
-}
-
-.settings-nav__item--active {
-  background: #F3F3F4;
-  color: var(--admin-text);
-  font-weight: var(--font-weight-semibold);
-}
-
-.settings-nav__item--active .material-symbols-rounded {
-  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24 !important;
-}
-
-.settings-nav__item--active:hover {
-  background: #F3F3F4;
-  color: var(--admin-text);
-  font-weight: var(--font-weight-semibold);
-}
-.settings-nav__divider {
-  height: 1px;
-  background: var(--admin-border);
-  margin: 8px 4px;
-}
-
-
-/* ── Right content ── */
-
-.settings-main {
-  flex: 1;
-  min-width: 0;
-  overflow: visible;
+  margin: 0 auto;
 }
 
 /* ── Breadcrumb header ── */
@@ -304,8 +20,8 @@
 .settings-main__header {
   display: flex;
   align-items: center;
-  gap: 0px;
-  padding: 10px 0 12px;
+  gap: 0;
+  padding: 21px 0 12px;
 }
 
 #settings-content {
@@ -350,7 +66,7 @@
 }
 
 .settings-main__header-chevron {
-  color: var(--admin-text-tertiary);
+  color: #676767;
   flex-shrink: 0;
 }
 
@@ -563,21 +279,21 @@ button.settings-main__header-crumb:hover {
     font-family: var(--admin-font);
     cursor: pointer;
     color: #303030;
-    background: #E3E3E3;
+    background: #fff;
     border-radius: var(--radius-md);
     justify-content: center;
     align-items: center;
     gap: 3px;
-    padding: 5px 12px;
+    padding: 6px 14px;
     font-size: 13px;
     font-weight: var(--font-weight-medium);
     transition: background var(--duration-normal);
     display: inline-flex;
-    border: none;
+    border: 1px solid #EBEBEB;
 }
 
 .settings-btn--muted:hover:not(:disabled) {
-  background: #ebebeb;
+  background: #EBEBEB;
 }
 
 .settings-btn--muted:disabled {
@@ -741,16 +457,16 @@ button.settings-main__header-crumb:hover {
 }
 
 .sf-dropdown__item:hover {
-  background: #F3F3F4;
+  background: #FAFAFA;
 }
 
 .sf-dropdown__item--active {
-  background: #ebebeb;
+  background: #EBEBEB;
   color: #1a1a1a;
 }
 
 .sf-dropdown__item--active:hover {
-  background: #ebebeb;
+  background: #EBEBEB;
 }
 
 .sf-dropdown__check {

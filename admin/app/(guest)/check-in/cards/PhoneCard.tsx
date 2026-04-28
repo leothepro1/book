@@ -7,6 +7,7 @@ import { registerCardComponent } from "./registry";
 import { ErrorSlide } from "./ErrorSlide";
 import { useDropdownPosition } from "./useDropdownPosition";
 import { COUNTRIES, type Country } from "./countries";
+import { SearchIcon } from "@/app/_components/SearchIcon";
 
 function PhoneCard({ value, onChange, onValidChange, disabled, optional, showError }: CheckinCardComponentProps) {
   const [country, setCountry] = useState<Country>(
@@ -188,7 +189,7 @@ function CountryDropdown({
       }}
     >
       <div className="phone-dropdown__search">
-        <span className="material-symbols-rounded phone-dropdown__search-icon">search</span>
+        <SearchIcon size={20} className="phone-dropdown__search-icon" />
         <input
           ref={searchRef}
           type="text"

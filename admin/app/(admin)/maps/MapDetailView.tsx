@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import type { MapConfig } from "./maps-constants";
 import { STYLE_OPTIONS, MAPBOX_TOKEN } from "./maps-constants";
 import { MarkersSection } from "./MarkersSection";
+import { SearchIcon } from "@/app/_components/SearchIcon";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // ── Address Search (Mapbox Geocoding) ───────────────────────
@@ -67,7 +68,7 @@ function AddressSearch({
   return (
     <div className="maps-address" ref={containerRef}>
       <div className="maps-address__input-wrap">
-        <span className="maps-address__icon material-symbols-rounded">search</span>
+        <SearchIcon size={20} className="maps-address__icon" />
         <input
           type="text"
           className="maps-input maps-address__input"
@@ -154,7 +155,7 @@ export function MarkerAddressSearch({
   return (
     <div className="maps-address" ref={containerRef}>
       <div className="maps-address__input-wrap">
-        <span className="maps-address__icon material-symbols-rounded">search</span>
+        <SearchIcon size={20} className="maps-address__icon" />
         <input
           type="text"
           className="maps-input maps-address__input"

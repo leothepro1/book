@@ -123,7 +123,7 @@
 }
 
 .products-row:hover {
-  background: #f7f7f7;
+  background: #FAFAFA;
 }
 
 .products-row--selected {
@@ -131,7 +131,7 @@
 }
 
 .products-row--selected:hover {
-  background: #f7f7f7;
+  background: #FAFAFA;
 }
 
 /* ── Columns (matched to column headers) ── */
@@ -223,7 +223,7 @@
     color: #303030;
      border-top: 1px solid var(--admin-border);
     z-index: 5;
-    background: #f7f7f7;
+    background: #FAFAFA;
     border-radius: 0;
     align-items: center;
     gap: 16px;

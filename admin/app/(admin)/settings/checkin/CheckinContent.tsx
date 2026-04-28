@@ -1121,7 +1121,7 @@ function CheckinCardItemCard({
               padding: "3px 8px",
               borderRadius: 6,
               whiteSpace: "nowrap",
-              background: "#ebebeb",
+              background: "#EBEBEB",
             }}
           >
             {item.optional ? "Valfri" : "Obligatorisk"}
@@ -1520,7 +1520,7 @@ function CheckinCardsEditor({ onBack, onHeaderExtraChange }: { onBack: () => voi
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 20px 16px", borderBottom: "1px solid var(--admin-border)", background: "#f7f7f7", borderRadius: "16px 16px 0 0" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 20px 16px", borderBottom: "1px solid var(--admin-border)", background: "#FAFAFA", borderRadius: "16px 16px 0 0" }}>
               <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Förhandsgranska</h3>
               <button
                 onClick={() => setShowPreview(false)}
@@ -1601,7 +1601,7 @@ function AddCheckinCardModal({
         {/* Header */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          background: "#f7f7f7", borderBottom: "1px solid #E6E5E3",
+          background: "#FAFAFA", borderBottom: "1px solid #E6E5E3",
           padding: "20px 20px 12px 20px", borderRadius: "16px 16px 0 0",
         }}>
           <h3 style={{ fontSize: 17, fontWeight: 600, margin: 0 }}>Lägg till formulärfält</h3>

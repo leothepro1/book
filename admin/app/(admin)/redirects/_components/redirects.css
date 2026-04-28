@@ -21,14 +21,14 @@
 }
 
 .redirects-row:not(.redirects-row--header):hover {
-  background: #f7f7f7;
+  background: #FAFAFA;
 }
 
 .redirects-row--header {
   font-size: 14px;
   font-weight: 500;
   color: #303030;
-  background: #f7f7f7;
+  background: #FAFAFA;
   position: sticky;
   top: 0;
   z-index: 5;

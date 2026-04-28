@@ -127,7 +127,7 @@ export function CompanyNoteCard({
                 justifyContent: "space-between",
                 padding: "12px 20px",
                 borderBottom: "1px solid var(--admin-border)",
-                background: "#f3f3f4",
+                background: "#FAFAFA",
               }}
             >
               <span

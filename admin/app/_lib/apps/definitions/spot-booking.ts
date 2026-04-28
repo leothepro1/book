@@ -83,6 +83,10 @@ const spotBooking: AppDefinition = {
     },
   ],
   setupSteps: [],
+  pages: [
+    { slug: "", label: "Överblick", icon: "dashboard" },
+    { slug: "settings", label: "Inställningar", icon: "settings" },
+  ],
 };
 
 registerApp(spotBooking);

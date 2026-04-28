@@ -1,0 +1,497 @@
+/* ══════════════════════════════════════════════════════════
+   Sidebar — shared item + section vocabulary
+
+   `.sb__item` is THE single styling source for every clickable
+   row in the sidebar:
+     - Top-level main nav links     (Startsida, Ordrar, Rabatter…)
+     - Accordion parents            (Ordrar, Kunder, Produkter…)
+     - Sub-items inside accordions  (Övergivna kassor, Företag…)
+     - App entries                  (sales channels, installed apps)
+     - Settings drill-in items      (Organisation, Användare, Språk…)
+     - "Inställningar" + "Lägg till" buttons
+
+   Variants are composable via modifiers:
+     .sb__item--active     selected/current
+     .sb__item--sub        indented sub-row inside an accordion
+     .sb__item--collapsed  hides label, centers icon
+
+   Section drill-in (back-chevron + title) lives under the same
+   `.sb__section-*` namespace so future Orders/Customers/etc.
+   drill-ins inherit identical styling for free.
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Item base ── */
+
+.sb__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0 8px;
+  height: 34px;
+  line-height: 1;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  color: #4C4C4C;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: -0.15px;
+  font-weight: 500;
+  gap: 9px;
+  position: relative;
+}
+
+.sb__item:hover,
+.sb__item:active,
+.sb__item:focus-visible {
+  background: #EBEBEB;
+  color: #303030;
+  outline: none;
+}
+
+.sb__item--active,
+.sb__item--active:hover {
+  background: #EBEBEB;
+  color: #303030;
+  font-weight: 600;
+}
+
+.sb__item--collapsed {
+  justify-content: center;
+  gap: 0;
+}
+
+/* Sub-item — indented row inside accordion */
+.sb__item--sub {
+  padding-left: 36px;
+  color: #616161;
+}
+
+.sb__item--sub:hover {
+  background: #EBEBEB;
+  color: #303030;
+}
+
+.sb__item--sub.sb__item--active {
+  color: #303030;
+}
+
+/* ── Icon ── */
+
+/* Specificity boost on `.sb__item .sb__icon` (0,2,0) — beats the Google Fonts
+   default `.material-symbols-rounded { font-size: 24px }` (0,1,0). */
+.sb__item .sb__icon {
+  flex-shrink: 0;
+  font-size: 18px;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.sb__item .sb__icon--sm {
+  font-size: 14px;
+}
+
+/* Section back chevron — slightly smaller than the standard 18px row icon. */
+.sb__item .sb__icon--back {
+  font-size: 16px;
+}
+
+.sb__item--active > .sb__icon {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* App icon (small image — sales channel logos, installed apps) */
+.sb__icon-img {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 1px solid var(--admin-border);
+}
+
+/* Trailing slot — pinned to the far right of an item.
+   Used for drill-in chevrons (`chevron_right`) on items that open a
+   sub-section (Settings today; Orders / Customers / Products in the future).
+   Acts as a nested affordance: own hover + active background, layered on
+   top of the row's hover/active background for visual depth.
+   Glyph styling (size, weight) matches the leading `.sb__icon`. */
+.sb__item-trail {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border-radius: 6px;
+  color: inherit;
+}
+
+.sb__item .sb__item-trail {
+  font-size: 11px;
+  line-height: 1;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Chevron picks up its hover / focus background whenever the parent
+   row is in any of those states — user shouldn't have to hover the
+   chevron specifically to reveal it. Always strictly darker than the
+   row's own background so the affordance reads as a nested button. */
+.sb__item:hover .sb__item-trail,
+.sb__item:active .sb__item-trail,
+.sb__item:focus-visible .sb__item-trail,
+.sb__item--active .sb__item-trail {
+  background: #DDDDDD;
+}
+
+/* Hovering the chevron specifically — even darker. */
+.sb__item:hover .sb__item-trail:hover,
+.sb__item:focus-visible .sb__item-trail:hover {
+  background: #CCCCCC;
+}
+
+/* Pressing the chevron — darkest. */
+.sb__item-trail:active {
+  background: #BBBBBB;
+}
+
+.sb__item--collapsed .sb__item-trail {
+  display: none;
+}
+
+/* ── Label ── */
+
+.sb__label {
+  white-space: nowrap;
+  overflow: visible;
+  transition: width 0.2s, opacity 0.2s;
+}
+
+.sb__item--collapsed .sb__label {
+  width: 0;
+  opacity: 0;
+}
+
+/* Sub-item connector graphics (active row arrow + bridging line) */
+.sb__sub-connector {
+  position: absolute;
+  top: 50%;
+  left: 7.5px;
+  width: 21px;
+  height: 28px;
+  transform: translateY(-50%);
+  margin-top: -1.5px;
+  pointer-events: none;
+}
+
+.sb__sub-line {
+  position: absolute;
+  left: 7.5px;
+  top: -6px;
+  height: calc(100% + 12px);
+  width: 21px;
+  pointer-events: none;
+}
+
+/* ── Section drill-in (back-chevron header + nav body) ── */
+
+.sb__section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Section back button — extends `.sb__item`. Differences:
+   - chevron pinned to the far left (absolute)
+   - label visually centered in the button
+   - bolder weight + outer margin so it sits outside nav-list padding */
+.sb__section-back {
+  width: calc(100% - 24px);
+  margin: 12px 12px 2px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.sb__section-back .sb__icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.sb__section-back .sb__label {
+  flex: 1;
+  text-align: center;
+}
+
+/* Collapsed sidebar — restore chevron to flex flow so it centers in the
+   58px-wide aside instead of pinning to the left edge. */
+.sb__section-back.sb__item--collapsed .sb__icon {
+  position: static;
+  transform: none;
+}
+
+/* ── Nav containers ── */
+
+.sb__nav {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+}
+
+/* Section nav — same gap/padding as main nav. Top padding trimmed so the
+   first item sits closer to the back button which already has bottom margin. */
+.sb__nav--section {
+  padding-top: 0;
+}
+
+/* Group label (e.g. "Försäljningskanaler", "Appar") */
+.sb__group-label {
+  padding: 0 8px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.sb__group-label .sb__group-label-chevron {
+  font-size: 14px;
+  color: #303030;
+}
+
+/* ── Sidebar search input ──
+   Closed state lives in the main sidebar under SidebarOrgRow. On open,
+   the input morphs in place: `left` slides to the viewport edge and
+   `width` expands well past the sidebar. A white focus overlay fades
+   in behind so the morphed input owns attention without a dark scrim. */
+
+/* Spacer holds the input's flex-flow space AND acts as the position
+   oracle — the component reads its top via getBoundingClientRect() and
+   pins the fixed input to the same y. Height = input height + breathing. */
+.sb-search-spacer {
+  flex-shrink: 0;
+  height: 32px;
+}
+
+.sb-search {
+  position: fixed;
+  top: 0;
+  /* `top` is overridden inline from the spacer ref. Closed `left` / `width`
+     keep the input aligned to the sidebar nav-padding column. */
+  left: 12px;
+  width: 246px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: #fff;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  z-index: 60;
+  box-shadow: none;
+  transition:
+    left 280ms cubic-bezier(0.32, 0.72, 0, 1),
+    width 280ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 220ms ease;
+}
+
+.sb-search--open {
+  left: 0;
+  width: 640px;
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.14),
+    0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.sb-search__icon {
+  flex-shrink: 0;
+  color: #9c9c9c;
+}
+
+.sb-search__input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  color: #303030;
+}
+
+.sb-search__input::placeholder {
+  color: #9c9c9c;
+}
+
+/* White focus overlay — fades in behind the input on open. Sits below
+   the input's z-index so the morphed pill stays crisp on top. */
+.sb-search-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0);
+  backdrop-filter: blur(0);
+  -webkit-backdrop-filter: blur(0);
+  pointer-events: none;
+  z-index: 50;
+  transition:
+    background 220ms ease,
+    backdrop-filter 220ms ease;
+}
+
+.sb-search-overlay--visible {
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  pointer-events: auto;
+}
+
+/* Pinned footer — persists across every drill-in swap, mirrors the
+   org row at the top. Lives outside `.sb__swap` in the aside. */
+.sb__footer {
+  flex-shrink: 0;
+  padding: 12px;
+  border-top: 1px solid #EBEBEB;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sb__footer-user {
+  flex: 1;
+  min-width: 0;
+}
+
+.sb__footer-actions {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sb__footer-btn {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: #fff;
+  border: 1px solid var(--admin-border);
+  border-radius: 500px;
+  color: #4c4c4c;
+  cursor: pointer;
+  transition: background 100ms ease-out, color 100ms ease-out;
+}
+
+.sb__footer-btn:hover {
+  background: #FAFAFA;
+  color: #202020;
+}
+
+/* Specificity boost (0,2,0) over the Google Fonts default 24px on
+   `.material-symbols-rounded`. */
+.sb__footer-btn .material-symbols-rounded {
+  font-size: 16px;
+}
+
+/* ── Section swap animation (Apple/iOS style) ──
+   Old pane parallaxes 30% to one side and fades while the new pane
+   slides in from the opposite edge over ~320ms. The container clips
+   off-screen content so nothing leaks past the sidebar edges. */
+
+.sb__swap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.sb__swap-pane {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  will-change: transform, opacity;
+}
+
+/* Snap easing — quick acceleration, decisive deceleration. */
+:root {
+  --sb-swap-duration: 220ms;
+  --sb-swap-easing: cubic-bezier(0.4, 0, 0.1, 1);
+}
+
+/* Forward (entering a section) */
+.sb__swap--forward .sb__swap-pane--exit {
+  animation: sb-swap-exit-forward var(--sb-swap-duration) var(--sb-swap-easing) forwards;
+  pointer-events: none;
+}
+
+.sb__swap--forward .sb__swap-pane--enter {
+  animation: sb-swap-enter-forward var(--sb-swap-duration) var(--sb-swap-easing);
+}
+
+/* Back (returning to main) */
+.sb__swap--back .sb__swap-pane--exit {
+  animation: sb-swap-exit-back var(--sb-swap-duration) var(--sb-swap-easing) forwards;
+  pointer-events: none;
+}
+
+.sb__swap--back .sb__swap-pane--enter {
+  animation: sb-swap-enter-back var(--sb-swap-duration) var(--sb-swap-easing);
+}
+
+/* Snappy motion blur — quick smudge through the slide, resolves to
+   crisp the moment the pane lands. Peak blur is light enough that the
+   panel content stays readable even mid-transition. */
+@keyframes sb-swap-exit-forward {
+  0%   { transform: translateX(0);     opacity: 1; filter: blur(0); }
+  50%  {                                            filter: blur(2px); }
+  100% { transform: translateX(-30%);  opacity: 0; filter: blur(1.5px); }
+}
+
+@keyframes sb-swap-enter-forward {
+  0%   { transform: translateX(100%);  opacity: 0; filter: blur(3px); }
+  50%  {                                            filter: blur(1.5px); }
+  100% { transform: translateX(0);     opacity: 1; filter: blur(0); }
+}
+
+@keyframes sb-swap-exit-back {
+  0%   { transform: translateX(0);     opacity: 1; filter: blur(0); }
+  50%  {                                            filter: blur(2px); }
+  100% { transform: translateX(100%);  opacity: 0; filter: blur(1.5px); }
+}
+
+@keyframes sb-swap-enter-back {
+  0%   { transform: translateX(-30%);  opacity: 0; filter: blur(3px); }
+  50%  {                                            filter: blur(1.5px); }
+  100% { transform: translateX(0);     opacity: 1; filter: blur(0); }
+}
+
+/* ── Accordion expand/collapse wrapper ── */
+
+.sb__accordion {
+  overflow: hidden;
+  transition: max-height 0.3s, opacity 0.3s;
+  max-height: 0;
+  opacity: 0;
+}
+
+.sb__accordion--open {
+  max-height: 240px;
+  opacity: 1;
+}

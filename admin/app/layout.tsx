@@ -5,6 +5,9 @@ import Script from "next/script";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
+// In dev, Clerk middleware is bypassed (see middleware.ts) and auth is mocked
+// via app/(admin)/_lib/auth/devAuth.ts. Skip ClerkProvider here so Clerk JS
+// never loads in dev — no handshake, no warnings, no session expectations.
 function AuthProvider({ children }: { children: ReactNode }) {
   if (IS_DEV) return <>{children}</>;
   return <ClerkProvider>{children}</ClerkProvider>;

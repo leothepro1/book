@@ -19,6 +19,7 @@ import { useSearchEngine } from "@/app/_lib/search/useSearchEngine";
 import { CommerceEngineProvider } from "@/app/_lib/commerce/CommerceEngineContext";
 import { FONT_CATALOG } from "@/app/_lib/fonts/catalog";
 import { useCommerceEngineContext } from "@/app/_lib/commerce/CommerceEngineContext";
+import { SearchIcon } from "@/app/_components/SearchIcon";
 import "./search-results-renderer.css";
 import "@/app/(guest)/_components/spinner-button.css";
 
@@ -87,7 +88,7 @@ function CompactSearchForm({
         <input type="number" value={guests} min={1} max={99} onChange={(e) => setGuests(parseInt(e.target.value, 10) || 1)} className="sr__form-input" required />
       </div>
       <button type="submit" className="sr__form-btn">
-        <span className="material-symbols-rounded" style={{ fontSize: 20 }}>search</span>
+        <SearchIcon size={20} />
         Sök
       </button>
     </form>

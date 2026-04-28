@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useOrderFormat } from "@/app/(admin)/_hooks/useOrderFormat";
 import { EditorIcon } from "@/app/_components/EditorIcon";
+import { SearchIcon } from "@/app/_components/SearchIcon";
 import { getOrders, type OrderListItem, type OrderSortField, type OrderSortDirection, type OrderTab } from "./actions";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { OrderBadge } from "@/app/(admin)/_components/orders/OrderBadge";
@@ -299,7 +300,7 @@ export function OrdersClient() {
         {searchMode ? (
           <>
             <div className="ord-search">
-              <span className="material-symbols-rounded ord-search__icon">search</span>
+              <SearchIcon size={20} className="ord-search__icon" />
               <input
                 ref={searchInputRef}
                 type="text"
@@ -372,7 +373,7 @@ export function OrdersClient() {
                 onClick={() => setSearchMode(true)}
                 aria-label="Sök"
               >
-                <span className="material-symbols-rounded" style={{ fontSize: 20 }}>search</span>
+                <SearchIcon size={20} />
               </button>
               {sortButton}
             </div>

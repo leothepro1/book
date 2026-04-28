@@ -98,7 +98,7 @@
 .home-empty { padding: 48px 24px; text-align: center; color: #bbb; font-size: 14px; background: #fff; border-radius: 16px; border: 1px dashed #e5e5e5; }
 
 /* ── Card ── */
-.home-card { display: flex; flex-direction: column; background: #f7f7f7; border-radius: 1.25rem; border: 1px solid #e3e3e3; box-shadow: none; overflow: hidden; transition: box-shadow 0.2s ease; }
+.home-card { display: flex; flex-direction: column; background: #FAFAFA; border-radius: 1.25rem; border: 1px solid #EBEBEB; box-shadow: none; overflow: hidden; transition: box-shadow 0.2s ease; }
 .home-card--warning { border-color: #FDC700; }
 
 /* ── Card warning body ── */
@@ -207,7 +207,7 @@
 .home-card-panel--open { grid-template-rows: 1fr; border-top: 1px solid #f0f0f0; transition: grid-template-rows 1.05s cubic-bezier(0.16, 1, 0.3, 1), border-top-color 0s; }
 .home-card-panel--open .home-card-panel-inner { opacity: 1; transform: translateY(0); transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s, transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.06s, height 0.9s cubic-bezier(0.16, 1, 0.3, 1); }
 .home-card-panel-header {
-    background: #e3e3e3;
+    background: #EBEBEB;
     border: none !important;
     align-items: center;
     padding: 5px 14px 5px;
@@ -1051,7 +1051,7 @@
 .archive-toggle {
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; padding: 11px 14px; background: #fafafa;
-  border: 1px solid #ebebeb; border-radius: 12px; cursor: pointer;
+  border: 1px solid #EBEBEB; border-radius: 12px; cursor: pointer;
   font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
@@ -1072,7 +1072,7 @@
 
 .archive-card {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 11px 14px; background: #fff; border: 1px solid #ebebeb;
+  padding: 11px 14px; background: #fff; border: 1px solid #EBEBEB;
   border-radius: 12px; gap: 12px;
   transition: border-color 0.15s ease;
 }
@@ -1152,7 +1152,7 @@
   display: flex; align-items: center; gap: 8px;
   width: 100%; margin-top: 24px;
   padding: 11px 14px; background: #fafafa;
-  border: 1px solid #ebebeb; border-radius: 12px; cursor: pointer;
+  border: 1px solid #EBEBEB; border-radius: 12px; cursor: pointer;
   font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
   transition: background 0.15s ease, border-color 0.15s ease;
   color: #555;

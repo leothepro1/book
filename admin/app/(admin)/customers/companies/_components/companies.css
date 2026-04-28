@@ -1340,11 +1340,11 @@
 /* ── Meta-kort (sidebar, ovanför Anteckningar) ── */
 
 .co-meta-card__pill:hover {
-  background: #e3e3e3 !important;
+  background: #EBEBEB !important;
   border-color: var(--admin-border) !important;
 }
 
 .co-meta-card__menu button[role="menuitem"]:hover,
 .co-meta-card__menu a[role="menuitem"]:hover {
-  background: #f7f7f7;
+  background: #FAFAFA;
 }

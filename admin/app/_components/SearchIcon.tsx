@@ -1,0 +1,42 @@
+/**
+ * Search icon — Geist-style. Replaces the Material Symbols `search` glyph
+ * everywhere we display a search affordance.
+ *
+ * Renders an SVG that picks up `currentColor`, so the existing CSS classes
+ * that previously colored the icon span continue to work without change.
+ * Pass `size` (default 16) to match the surrounding context.
+ */
+
+import type { CSSProperties } from 'react';
+
+export function SearchIcon({
+  size = 16,
+  className,
+  style,
+  'aria-hidden': ariaHidden = true,
+}: {
+  size?: number;
+  className?: string;
+  style?: CSSProperties;
+  'aria-hidden'?: boolean;
+}) {
+  return (
+    <svg
+      data-testid="geist-icon"
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      strokeLinejoin="round"
+      style={{ color: 'currentColor', ...style }}
+      className={className}
+      aria-hidden={ariaHidden}
+    >
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M1.5 6.5C1.5 3.73858 3.73858 1.5 6.5 1.5C9.26142 1.5 11.5 3.73858 11.5 6.5C11.5 9.26142 9.26142 11.5 6.5 11.5C3.73858 11.5 1.5 9.26142 1.5 6.5ZM6.5 0C2.91015 0 0 2.91015 0 6.5C0 10.0899 2.91015 13 6.5 13C8.02469 13 9.42677 12.475 10.5353 11.596L13.9697 15.0303L14.5 15.5607L15.5607 14.5L15.0303 13.9697L11.596 10.5353C12.475 9.42677 13 8.02469 13 6.5C13 2.91015 10.0899 0 6.5 0Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}

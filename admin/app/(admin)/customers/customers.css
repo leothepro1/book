@@ -199,7 +199,7 @@
   color: #303030;
   border-top: 1px solid var(--admin-border);
   z-index: 5;
-  background: #f7f7f7;
+  background: #FAFAFA;
   border-radius: 0;
   align-items: center;
   gap: 16px;
@@ -342,7 +342,7 @@
 }
 
 .cst-selection__dropdown-item:hover {
-  background: #f7f7f7;
+  background: #FAFAFA;
 }
 
 /* ── Customer rows ── */
@@ -365,7 +365,7 @@
 }
 
 .cst-row:hover {
-  background: #f7f7f7;
+  background: #FAFAFA;
 }
 
 .cst-row--selected {
@@ -373,7 +373,7 @@
 }
 
 .cst-row--selected:hover {
-  background: #f7f7f7;
+  background: #FAFAFA;
 }
 
 /* ── Columns ── */
@@ -511,7 +511,7 @@
 }
 
 .cst-sort__item:hover {
-  background: #f7f7f7;
+  background: #FAFAFA;
 }
 
 .cst-sort__item--active {

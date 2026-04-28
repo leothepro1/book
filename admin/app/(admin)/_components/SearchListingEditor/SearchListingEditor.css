@@ -116,7 +116,7 @@
 }
 
 .sle__input--readonly {
-  background: var(--admin-surface-raised, #f7f7f7);
+  background: var(--admin-surface-raised, #FAFAFA);
   color: var(--admin-text-secondary, #4d5156);
   cursor: not-allowed;
 }
