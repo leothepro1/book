@@ -13,6 +13,7 @@ import { LoadingScreen } from "@/app/_components/Loading";
 import { track } from "@/app/_lib/analytics/client";
 import { SpinnerButton } from "@/app/(guest)/_components/SpinnerButton";
 import { SummaryCol } from "@/app/(guest)/_components/SummaryCol";
+import { SearchIcon } from "@/app/_components/SearchIcon";
 import type { SummaryRow } from "@/app/(guest)/_components/SummaryCol";
 import "./checkout.css";
 
@@ -983,7 +984,7 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
                     autoComplete="street-address"
                   />
                   <span className="co__float-label">Adress</span>
-                  <span className="material-symbols-rounded co__float-icon">search</span>
+                  <SearchIcon size={20} className="co__float-icon" />
                 </div>
                 <FieldError error={contactErrors.address} />
               </div>

@@ -8,6 +8,7 @@ import { formatDateRange } from "@/app/_lib/search/dates";
 import { track } from "@/app/_lib/analytics/client";
 import { fetchAvailability } from "@/app/_lib/search/fetchAvailability";
 import type { SearchResult, AvailabilityResponse } from "@/app/_lib/search/types";
+import { SearchIcon } from "@/app/_components/SearchIcon";
 import "./stays.css";
 
 interface StaysClientProps {
@@ -90,7 +91,7 @@ function CompactSearchForm({
         />
       </div>
       <button type="submit" className="stays__search-btn">
-        <span className="material-symbols-rounded" style={{ fontSize: 20 }}>search</span>
+        <SearchIcon size={20} />
         Sök
       </button>
     </form>

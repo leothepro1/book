@@ -1,6 +1,7 @@
 import { getCurrentTenant } from "@/app/(admin)/_lib/tenant/getCurrentTenant";
 import { notFound } from "next/navigation";
 import LiveViewClient from "./LiveViewClient";
+import { SearchIcon } from "@/app/_components/SearchIcon";
 import "./live.css";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export default async function LiveViewPage() {
           </h1>
           <div className="live-header-actions">
             <div className="live-search-wrap">
-              <span className="material-symbols-rounded">search</span>
+              <SearchIcon size={20} />
               <input className="live-search" type="text" placeholder="Sök plats" readOnly />
             </div>
             <button className="live-header-btn" type="button">
