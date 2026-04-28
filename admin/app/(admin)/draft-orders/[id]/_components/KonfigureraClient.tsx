@@ -14,6 +14,7 @@ import { DraftBadge } from "@/app/(admin)/_components/draft-orders/DraftBadge";
 import { PublishBarUI } from "@/app/(admin)/_components/PublishBar/PublishBar";
 
 import { LineItemsCard } from "./LineItemsCard";
+import { LineItemsCardEditable } from "./LineItemsCardEditable";
 import { PaymentCard } from "./PaymentCard";
 import { PaymentTermsCard } from "./PaymentTermsCard";
 import { StatusCard } from "./StatusCard";
@@ -54,6 +55,8 @@ export type KonfigureraClientDraft = {
   expiresAt: Date;
   invoiceSentAt: Date | null;
   pricesFrozenAt: Date | null;
+  cancelledAt: Date | null;
+  completedAt: Date | null;
   guestAccountId: string | null;
   companyLocationId: string | null;
   contactFirstName: string | null;
@@ -131,6 +134,14 @@ export function KonfigureraClient({
 
   const editable = EDITABLE_STATUSES.includes(draft.status);
   const isLocked = draft.pricesFrozenAt !== null;
+  // Stricter gate than `editable` — matches service `assertDraftMutable` in
+  // lines.ts: requires OPEN status + all null lifecycle flags. Service is
+  // authoritative; UI is advisory.
+  const linesEditable =
+    draft.status === "OPEN" &&
+    draft.pricesFrozenAt === null &&
+    draft.cancelledAt === null &&
+    draft.completedAt === null;
 
   // Card state (initialised from draft prop, reset on discard / refresh)
   const [customerState, setCustomerState] = useState<{
@@ -296,7 +307,15 @@ export function KonfigureraClient({
 
         <div className="pf-body">
           <div className="pf-main">
-            <LineItemsCard lines={draft.lineItems} />
+            {linesEditable ? (
+              <LineItemsCardEditable
+                lines={draft.lineItems}
+                draftId={draft.id}
+                onUpdate={() => router.refresh()}
+              />
+            ) : (
+              <LineItemsCard lines={draft.lineItems} />
+            )}
             <PaymentCard draft={draft} />
             {paymentTerms !== null && (
               <PaymentTermsCard

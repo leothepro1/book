@@ -18,7 +18,25 @@ vi.mock("../actions", () => ({
   updateDraftCustomerAction: (input: unknown) => updateCustomerMock(input),
   applyDraftDiscountCodeAction: vi.fn(),
   removeDraftDiscountCodeAction: vi.fn(),
+  addDraftLineItemAction: vi.fn(),
+  updateDraftLineItemAction: vi.fn(),
+  removeDraftLineItemAction: vi.fn(),
 }));
+
+// Mock the cross-route AccommodationPickerModal to avoid importing the
+// searchAccommodationsAction tree.
+vi.mock(
+  "@/app/(admin)/draft-orders/new/_components/AccommodationPickerModal",
+  () => ({
+    AccommodationPickerModal: ({ onClose }: { onClose: () => void }) => (
+      <div data-testid="acc-picker-mock">
+        <button type="button" onClick={onClose}>
+          mock-close
+        </button>
+      </div>
+    ),
+  }),
+);
 
 // Mock the cross-route CustomerPickerModal to avoid importing the
 // searchCustomersAction tree.
@@ -99,6 +117,8 @@ const baseDraft: KonfigureraClientDraft = {
   expiresAt: new Date("2026-04-27T00:00:00Z"),
   invoiceSentAt: null,
   pricesFrozenAt: null,
+  cancelledAt: null,
+  completedAt: null,
   guestAccountId: null,
   companyLocationId: null,
   contactFirstName: null,
@@ -444,6 +464,77 @@ describe("KonfigureraClient — edit mode (editable status)", () => {
         /Priserna är låsta sedan fakturan skickades\. Rader och rabatt kan inte ändras\./,
       ),
     ).toBeTruthy();
+  });
+});
+
+describe("KonfigureraClient — linesEditable gate", () => {
+  it("OPEN + no locks → LineItemsCardEditable renders ('+ Lägg till boende' visible)", () => {
+    render(
+      <KonfigureraClient
+        draft={baseDraft}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    expect(screen.getByText("+ Lägg till boende")).toBeTruthy();
+  });
+
+  it("PENDING_APPROVAL → editable cards remain (meta) but lines are read-only", () => {
+    render(
+      <KonfigureraClient
+        draft={{ ...baseDraft, status: "PENDING_APPROVAL" }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    // No add-line affordance (linesEditable=false)
+    expect(screen.queryByText("+ Lägg till boende")).toBeNull();
+    // But meta editable affordances exist (CustomerCardEditable's add button)
+    expect(screen.getByText("+ Lägg till kund")).toBeTruthy();
+  });
+
+  it("OPEN + pricesFrozenAt set → lines read-only", () => {
+    render(
+      <KonfigureraClient
+        draft={{
+          ...baseDraft,
+          pricesFrozenAt: new Date("2026-04-22T08:00:00Z"),
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    expect(screen.queryByText("+ Lägg till boende")).toBeNull();
+  });
+
+  it("OPEN + cancelledAt set → lines read-only", () => {
+    render(
+      <KonfigureraClient
+        draft={{
+          ...baseDraft,
+          cancelledAt: new Date("2026-04-22T08:00:00Z"),
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    expect(screen.queryByText("+ Lägg till boende")).toBeNull();
   });
 });
 

@@ -59,6 +59,8 @@ export default async function KonfigureraDraftPage({
         expiresAt: draft.expiresAt,
         invoiceSentAt: draft.invoiceSentAt,
         pricesFrozenAt: draft.pricesFrozenAt,
+        cancelledAt: draft.cancelledAt,
+        completedAt: draft.completedAt,
         guestAccountId: draft.guestAccountId,
         companyLocationId: draft.companyLocationId,
         contactFirstName: draft.contactFirstName,

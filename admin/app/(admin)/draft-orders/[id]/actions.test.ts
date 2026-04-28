@@ -32,6 +32,12 @@ vi.mock("@/app/_lib/draft-orders/discount", () => ({
   removeDiscountCode: vi.fn(),
 }));
 
+vi.mock("@/app/_lib/draft-orders/lines", () => ({
+  addLineItem: vi.fn(),
+  updateLineItem: vi.fn(),
+  removeLineItem: vi.fn(),
+}));
+
 import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
 import { prisma } from "@/app/_lib/db/prisma";
 import { getDraft } from "@/app/_lib/draft-orders/get";
@@ -42,11 +48,19 @@ import {
   removeDiscountCode,
 } from "@/app/_lib/draft-orders/discount";
 import {
+  addLineItem,
+  updateLineItem,
+  removeLineItem,
+} from "@/app/_lib/draft-orders/lines";
+import {
   getDraftAction,
   updateDraftMetaAction,
   updateDraftCustomerAction,
   applyDraftDiscountCodeAction,
   removeDraftDiscountCodeAction,
+  addDraftLineItemAction,
+  updateDraftLineItemAction,
+  removeDraftLineItemAction,
 } from "./actions";
 
 type Mock = ReturnType<typeof vi.fn>;
@@ -58,6 +72,9 @@ const updateDraftMetaMock = updateDraftMeta as unknown as Mock;
 const updateDraftCustomerMock = updateDraftCustomer as unknown as Mock;
 const applyDiscountCodeMock = applyDiscountCode as unknown as Mock;
 const removeDiscountCodeMock = removeDiscountCode as unknown as Mock;
+const addLineItemMock = addLineItem as unknown as Mock;
+const updateLineItemMock = updateLineItem as unknown as Mock;
+const removeLineItemMock = removeLineItem as unknown as Mock;
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -325,6 +342,207 @@ describe("removeDraftDiscountCodeAction", () => {
     removeDiscountCodeMock.mockRejectedValueOnce(new Error("Boom"));
     await expect(
       removeDraftDiscountCodeAction({ draftId: "d" }),
+    ).rejects.toThrow("Boom");
+  });
+});
+
+describe("addDraftLineItemAction", () => {
+  const accLine = {
+    lineType: "ACCOMMODATION" as const,
+    accommodationId: "acc_1",
+    checkInDate: "2026-05-12",
+    checkOutDate: "2026-05-15",
+    guestCounts: { adults: 2, children: 0, infants: 0 },
+    taxable: true,
+  };
+
+  it("missing orgId → { ok: false, error: 'Ingen tenant' }", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: null,
+      userId: null,
+      orgRole: null,
+    });
+    const result = await addDraftLineItemAction({ draftId: "d", line: accLine });
+    expect(result.ok).toBe(false);
+    expect(addLineItemMock).not.toHaveBeenCalled();
+  });
+
+  it("happy path passes draftOrderId + line + actorUserId, returns Result.draft", async () => {
+    const draft = { id: "d", lineItems: [] };
+    addLineItemMock.mockResolvedValueOnce({ draft, lineItem: { id: "l_1" }, reservation: null, totals: {} });
+    const result = await addDraftLineItemAction({ draftId: "d", line: accLine });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.draft).toBe(draft);
+    expect(addLineItemMock).toHaveBeenCalledWith({
+      tenantId: "tenant_t",
+      draftOrderId: "d",
+      line: accLine,
+      actorUserId: "u",
+    });
+  });
+
+  it("ValidationError → { ok: false, error: msg }", async () => {
+    addLineItemMock.mockRejectedValueOnce(
+      new ValidationError("Line currency does not match draft currency"),
+    );
+    const result = await addDraftLineItemAction({ draftId: "d", line: accLine });
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.error).toBe("Line currency does not match draft currency");
+  });
+
+  it("NotFoundError → { ok: false, error: msg }", async () => {
+    addLineItemMock.mockRejectedValueOnce(
+      new NotFoundError("DraftOrder not found in tenant"),
+    );
+    const result = await addDraftLineItemAction({ draftId: "missing", line: accLine });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("DraftOrder not found in tenant");
+  });
+
+  it("unknown error bubbles up", async () => {
+    addLineItemMock.mockRejectedValueOnce(new Error("DB exploded"));
+    await expect(
+      addDraftLineItemAction({ draftId: "d", line: accLine }),
+    ).rejects.toThrow("DB exploded");
+  });
+});
+
+describe("updateDraftLineItemAction", () => {
+  it("missing orgId → { ok: false, error: 'Ingen tenant' }", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: null,
+      userId: null,
+      orgRole: null,
+    });
+    const result = await updateDraftLineItemAction({
+      draftId: "d",
+      lineItemId: "l_1",
+      patch: { lineType: "ACCOMMODATION", quantity: 3 },
+    });
+    expect(result.ok).toBe(false);
+    expect(updateLineItemMock).not.toHaveBeenCalled();
+  });
+
+  it("happy path passes draftOrderId + lineItemId + patch + actorUserId", async () => {
+    const draft = { id: "d" };
+    updateLineItemMock.mockResolvedValueOnce({ draft, lineItem: {}, reservation: null, totals: {} });
+    const patch = { lineType: "ACCOMMODATION" as const, quantity: 3 };
+    const result = await updateDraftLineItemAction({
+      draftId: "d",
+      lineItemId: "l_1",
+      patch,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.draft).toBe(draft);
+    expect(updateLineItemMock).toHaveBeenCalledWith({
+      tenantId: "tenant_t",
+      draftOrderId: "d",
+      lineItemId: "l_1",
+      patch,
+      actorUserId: "u",
+    });
+  });
+
+  it("ValidationError (hold-active) → { ok: false, error: msg }", async () => {
+    updateLineItemMock.mockRejectedValueOnce(
+      new ValidationError(
+        "Cannot modify line — hold is active; release it first",
+      ),
+    );
+    const result = await updateDraftLineItemAction({
+      draftId: "d",
+      lineItemId: "l_1",
+      patch: { lineType: "ACCOMMODATION", quantity: 3 },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.error).toBe(
+        "Cannot modify line — hold is active; release it first",
+      );
+  });
+
+  it("NotFoundError → { ok: false, error: msg }", async () => {
+    updateLineItemMock.mockRejectedValueOnce(
+      new NotFoundError("DraftLineItem not found in draft"),
+    );
+    const result = await updateDraftLineItemAction({
+      draftId: "d",
+      lineItemId: "missing",
+      patch: { lineType: "ACCOMMODATION", quantity: 1 },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("DraftLineItem not found in draft");
+  });
+
+  it("CUSTOM patch with unitPriceCents passes through bigint as-is", async () => {
+    updateLineItemMock.mockResolvedValueOnce({ draft: {}, lineItem: {}, reservation: null, totals: {} });
+    const patch = {
+      lineType: "CUSTOM" as const,
+      unitPriceCents: BigInt(15000),
+    };
+    await updateDraftLineItemAction({
+      draftId: "d",
+      lineItemId: "l_1",
+      patch,
+    });
+    expect(updateLineItemMock).toHaveBeenCalledWith(
+      expect.objectContaining({ patch }),
+    );
+  });
+});
+
+describe("removeDraftLineItemAction", () => {
+  it("missing orgId → { ok: false, error: 'Ingen tenant' }", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: null,
+      userId: null,
+      orgRole: null,
+    });
+    const result = await removeDraftLineItemAction({
+      draftId: "d",
+      lineItemId: "l_1",
+    });
+    expect(result.ok).toBe(false);
+    expect(removeLineItemMock).not.toHaveBeenCalled();
+  });
+
+  it("happy path returns { ok: true, draft }", async () => {
+    const draft = { id: "d" };
+    removeLineItemMock.mockResolvedValueOnce({ draft, totals: {} });
+    const result = await removeDraftLineItemAction({
+      draftId: "d",
+      lineItemId: "l_1",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.draft).toBe(draft);
+    expect(removeLineItemMock).toHaveBeenCalledWith({
+      tenantId: "tenant_t",
+      draftOrderId: "d",
+      lineItemId: "l_1",
+      actorUserId: "u",
+    });
+  });
+
+  it("ValidationError (hold in flight) → { ok: false, error: msg }", async () => {
+    removeLineItemMock.mockRejectedValueOnce(
+      new ValidationError("Cannot remove line — hold placement is in flight"),
+    );
+    const result = await removeDraftLineItemAction({
+      draftId: "d",
+      lineItemId: "l_1",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.error).toBe(
+        "Cannot remove line — hold placement is in flight",
+      );
+  });
+
+  it("unknown error bubbles up", async () => {
+    removeLineItemMock.mockRejectedValueOnce(new Error("Boom"));
+    await expect(
+      removeDraftLineItemAction({ draftId: "d", lineItemId: "l_1" }),
     ).rejects.toThrow("Boom");
   });
 });
