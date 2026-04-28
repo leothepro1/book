@@ -22,6 +22,11 @@ import type {
   AddLineItemInput,
   UpdateLineItemInput,
 } from "@/app/_lib/draft-orders/types";
+import { freezePrices, sendInvoice, cancelDraft } from "@/app/_lib/draft-orders/lifecycle";
+import { markDraftAsPaid } from "@/app/_lib/draft-orders/mark-as-paid";
+import { sendEmailEvent, type EmailSendResult } from "@/app/_lib/email";
+import { formatSek } from "@/app/_lib/money/format";
+import { formatSwedishDate } from "@/app/_lib/search/dates";
 import {
   NotFoundError,
   ValidationError,
@@ -246,6 +251,179 @@ export async function removeDraftLineItemAction(
   } catch (err) {
     if (err instanceof NotFoundError) return { ok: false, error: err.message };
     if (err instanceof ValidationError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+// ── Lifecycle actions (FAS 7.2b.4d.1) ──────────────────────────
+
+export type SendDraftInvoiceActionResult =
+  | {
+      ok: true;
+      draft: DraftOrder;
+      invoiceUrl: string;
+      emailStatus: EmailSendResult["status"] | null;
+    }
+  | { ok: false; error: string };
+
+function composeGuestName(draft: {
+  contactFirstName: string | null;
+  contactLastName: string | null;
+  guestAccount: { firstName: string | null; lastName: string | null } | null;
+}): string {
+  const first =
+    draft.contactFirstName ?? draft.guestAccount?.firstName ?? "";
+  const last = draft.contactLastName ?? draft.guestAccount?.lastName ?? "";
+  return `${first} ${last}`.trim() || "Kund";
+}
+
+export async function sendDraftInvoiceAction(input: {
+  draftId: string;
+}): Promise<SendDraftInvoiceActionResult> {
+  const actor = await getActor();
+  if (!actor.tenantId) return { ok: false, error: NO_TENANT_ERROR };
+
+  try {
+    // Pre-fetch for email metadata + frozen-state check.
+    const draftBefore = await prisma.draftOrder.findFirst({
+      where: { id: input.draftId, tenantId: actor.tenantId },
+      select: {
+        pricesFrozenAt: true,
+        contactEmail: true,
+        contactFirstName: true,
+        contactLastName: true,
+        guestAccountId: true,
+        displayNumber: true,
+        totalCents: true,
+        currency: true,
+        expiresAt: true,
+      },
+    });
+    if (!draftBefore) {
+      return { ok: false, error: "Utkastet kunde inte hittas" };
+    }
+
+    // Step 1: freezePrices when not yet frozen (sendInvoice requires it).
+    if (draftBefore.pricesFrozenAt === null) {
+      await freezePrices({
+        tenantId: actor.tenantId,
+        draftOrderId: input.draftId,
+        actorUserId: actor.userId,
+      });
+    }
+
+    // Step 2: sendInvoice — returns invoiceUrl + transitions to INVOICED.
+    const invoiceResult = await sendInvoice({
+      tenantId: actor.tenantId,
+      draftOrderId: input.draftId,
+      actorUserId: actor.userId,
+    });
+
+    // Step 3: best-effort email send. Failure does NOT abort the action —
+    // invoice was successfully sent at the Stripe level. UI surfaces
+    // emailStatus so operator can copy the URL manually if needed.
+    let emailStatus: EmailSendResult["status"] | null = null;
+    const guestAccount = draftBefore.guestAccountId
+      ? await prisma.guestAccount.findFirst({
+          where: {
+            id: draftBefore.guestAccountId,
+            tenantId: actor.tenantId,
+          },
+          select: { email: true, firstName: true, lastName: true },
+        })
+      : null;
+    const recipientEmail =
+      draftBefore.contactEmail ?? guestAccount?.email ?? null;
+
+    if (recipientEmail) {
+      const tenantRecord = await prisma.tenant.findUnique({
+        where: { id: actor.tenantId },
+        select: { name: true },
+      });
+      const guestName = composeGuestName({
+        contactFirstName: draftBefore.contactFirstName,
+        contactLastName: draftBefore.contactLastName,
+        guestAccount: guestAccount
+          ? {
+              firstName: guestAccount.firstName,
+              lastName: guestAccount.lastName,
+            }
+          : null,
+      });
+
+      const emailResult = await sendEmailEvent(
+        actor.tenantId,
+        "DRAFT_INVOICE",
+        recipientEmail,
+        {
+          guestName,
+          hotelName: tenantRecord?.name ?? "",
+          displayNumber: draftBefore.displayNumber,
+          totalAmount: formatSek(draftBefore.totalCents),
+          currency: draftBefore.currency,
+          invoiceUrl: invoiceResult.invoiceUrl,
+          expiresAt: formatSwedishDate(draftBefore.expiresAt),
+        },
+      );
+      emailStatus = emailResult.status;
+    }
+
+    return {
+      ok: true,
+      draft: invoiceResult.draft,
+      invoiceUrl: invoiceResult.invoiceUrl,
+      emailStatus,
+    };
+  } catch (err) {
+    if (err instanceof NotFoundError) return { ok: false, error: err.message };
+    if (err instanceof ValidationError) return { ok: false, error: err.message };
+    if (err instanceof ConflictError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+export async function markDraftAsPaidAction(input: {
+  draftId: string;
+  reference?: string;
+}): Promise<DraftMutationResult> {
+  const actor = await getActor();
+  if (!actor.tenantId) return { ok: false, error: NO_TENANT_ERROR };
+
+  try {
+    const result = await markDraftAsPaid({
+      tenantId: actor.tenantId,
+      draftOrderId: input.draftId,
+      reference: input.reference,
+      actorUserId: actor.userId,
+    });
+    return { ok: true, draft: result.draft };
+  } catch (err) {
+    if (err instanceof NotFoundError) return { ok: false, error: err.message };
+    if (err instanceof ValidationError) return { ok: false, error: err.message };
+    if (err instanceof ConflictError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+export async function cancelDraftAction(input: {
+  draftId: string;
+  reason?: string;
+}): Promise<DraftMutationResult> {
+  const actor = await getActor();
+  if (!actor.tenantId) return { ok: false, error: NO_TENANT_ERROR };
+
+  try {
+    const result = await cancelDraft({
+      tenantId: actor.tenantId,
+      draftOrderId: input.draftId,
+      reason: input.reason,
+      actorUserId: actor.userId,
+    });
+    return { ok: true, draft: result.draft };
+  } catch (err) {
+    if (err instanceof NotFoundError) return { ok: false, error: err.message };
+    if (err instanceof ValidationError) return { ok: false, error: err.message };
+    if (err instanceof ConflictError) return { ok: false, error: err.message };
     throw err;
   }
 }

@@ -12,6 +12,8 @@ vi.mock("@/app/(admin)/_lib/auth/devAuth", () => ({
 vi.mock("@/app/_lib/db/prisma", () => ({
   prisma: {
     tenant: { findUnique: vi.fn() },
+    draftOrder: { findFirst: vi.fn() },
+    guestAccount: { findFirst: vi.fn() },
   },
 }));
 
@@ -38,6 +40,20 @@ vi.mock("@/app/_lib/draft-orders/lines", () => ({
   removeLineItem: vi.fn(),
 }));
 
+vi.mock("@/app/_lib/draft-orders/lifecycle", () => ({
+  freezePrices: vi.fn(),
+  sendInvoice: vi.fn(),
+  cancelDraft: vi.fn(),
+}));
+
+vi.mock("@/app/_lib/draft-orders/mark-as-paid", () => ({
+  markDraftAsPaid: vi.fn(),
+}));
+
+vi.mock("@/app/_lib/email", () => ({
+  sendEmailEvent: vi.fn(),
+}));
+
 import { getAuth } from "@/app/(admin)/_lib/auth/devAuth";
 import { prisma } from "@/app/_lib/db/prisma";
 import { getDraft } from "@/app/_lib/draft-orders/get";
@@ -53,6 +69,13 @@ import {
   removeLineItem,
 } from "@/app/_lib/draft-orders/lines";
 import {
+  freezePrices,
+  sendInvoice,
+  cancelDraft,
+} from "@/app/_lib/draft-orders/lifecycle";
+import { markDraftAsPaid } from "@/app/_lib/draft-orders/mark-as-paid";
+import { sendEmailEvent } from "@/app/_lib/email";
+import {
   getDraftAction,
   updateDraftMetaAction,
   updateDraftCustomerAction,
@@ -61,6 +84,9 @@ import {
   addDraftLineItemAction,
   updateDraftLineItemAction,
   removeDraftLineItemAction,
+  sendDraftInvoiceAction,
+  markDraftAsPaidAction,
+  cancelDraftAction,
 } from "./actions";
 
 type Mock = ReturnType<typeof vi.fn>;
@@ -75,6 +101,17 @@ const removeDiscountCodeMock = removeDiscountCode as unknown as Mock;
 const addLineItemMock = addLineItem as unknown as Mock;
 const updateLineItemMock = updateLineItem as unknown as Mock;
 const removeLineItemMock = removeLineItem as unknown as Mock;
+const freezePricesMock = freezePrices as unknown as Mock;
+const sendInvoiceMock = sendInvoice as unknown as Mock;
+const cancelDraftMock = cancelDraft as unknown as Mock;
+const markDraftAsPaidMock = markDraftAsPaid as unknown as Mock;
+const sendEmailEventMock = sendEmailEvent as unknown as Mock;
+const draftOrderFindFirstMock = (
+  prisma as unknown as { draftOrder: { findFirst: Mock } }
+).draftOrder.findFirst;
+const guestAccountFindFirstMock = (
+  prisma as unknown as { guestAccount: { findFirst: Mock } }
+).guestAccount.findFirst;
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -544,5 +581,296 @@ describe("removeDraftLineItemAction", () => {
     await expect(
       removeDraftLineItemAction({ draftId: "d", lineItemId: "l_1" }),
     ).rejects.toThrow("Boom");
+  });
+});
+
+// ── sendDraftInvoiceAction ──────────────────────────────────────
+
+describe("sendDraftInvoiceAction", () => {
+  const draftRow = {
+    pricesFrozenAt: null,
+    contactEmail: "anna@example.com",
+    contactFirstName: "Anna",
+    contactLastName: "Lind",
+    guestAccountId: null,
+    displayNumber: "D-2026-0042",
+    totalCents: BigInt(123400),
+    currency: "SEK",
+    expiresAt: new Date("2026-05-31T00:00:00Z"),
+  };
+
+  it("missing orgId → { ok: false, error: 'Ingen tenant' }", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: null,
+      userId: null,
+      orgRole: null,
+    });
+    const result = await sendDraftInvoiceAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    expect(freezePricesMock).not.toHaveBeenCalled();
+  });
+
+  it("draft not found → { ok: false, error: ... }", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce(null);
+    const result = await sendDraftInvoiceAction({ draftId: "missing" });
+    expect(result.ok).toBe(false);
+    expect(freezePricesMock).not.toHaveBeenCalled();
+    expect(sendInvoiceMock).not.toHaveBeenCalled();
+  });
+
+  it("already frozen → freezePrices NOT called, sendInvoice called", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce({
+      ...draftRow,
+      pricesFrozenAt: new Date("2026-04-25T00:00:00Z"),
+    });
+    sendInvoiceMock.mockResolvedValueOnce({
+      draft: { id: "d" },
+      invoiceUrl: "https://t.rutgr.com/invoice/abc",
+    });
+    sendEmailEventMock.mockResolvedValueOnce({ status: "sent" });
+    const result = await sendDraftInvoiceAction({ draftId: "d" });
+    expect(result.ok).toBe(true);
+    expect(freezePricesMock).not.toHaveBeenCalled();
+    expect(sendInvoiceMock).toHaveBeenCalled();
+  });
+
+  it("not frozen → freezePrices + sendInvoice both called in order", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce(draftRow);
+    freezePricesMock.mockResolvedValueOnce({});
+    sendInvoiceMock.mockResolvedValueOnce({
+      draft: { id: "d" },
+      invoiceUrl: "https://t.rutgr.com/invoice/abc",
+    });
+    sendEmailEventMock.mockResolvedValueOnce({ status: "sent" });
+    await sendDraftInvoiceAction({ draftId: "d" });
+    expect(freezePricesMock).toHaveBeenCalled();
+    expect(sendInvoiceMock).toHaveBeenCalled();
+    // freezePrices called before sendInvoice
+    const freezeOrder = freezePricesMock.mock.invocationCallOrder[0];
+    const sendOrder = sendInvoiceMock.mock.invocationCallOrder[0];
+    expect(freezeOrder).toBeLessThan(sendOrder);
+  });
+
+  it("recipient email present → email sent, returns emailStatus", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce({
+      ...draftRow,
+      pricesFrozenAt: new Date(),
+    });
+    sendInvoiceMock.mockResolvedValueOnce({
+      draft: { id: "d" },
+      invoiceUrl: "https://x",
+    });
+    findUniqueMock.mockResolvedValueOnce({ id: "tenant_t", name: "Hotel X" });
+    sendEmailEventMock.mockResolvedValueOnce({ status: "sent" });
+    const result = await sendDraftInvoiceAction({ draftId: "d" });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.emailStatus).toBe("sent");
+      expect(result.invoiceUrl).toBe("https://x");
+    }
+    expect(sendEmailEventMock).toHaveBeenCalled();
+    const args = sendEmailEventMock.mock.calls[0];
+    expect(args[1]).toBe("DRAFT_INVOICE");
+    expect(args[2]).toBe("anna@example.com");
+    const vars = args[3] as Record<string, string>;
+    expect(vars.guestName).toBe("Anna Lind");
+    expect(vars.displayNumber).toBe("D-2026-0042");
+    expect(vars.invoiceUrl).toBe("https://x");
+  });
+
+  it("no recipient email (no contactEmail, no guestAccount) → emailStatus null, no email call", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce({
+      ...draftRow,
+      pricesFrozenAt: new Date(),
+      contactEmail: null,
+      guestAccountId: null,
+    });
+    sendInvoiceMock.mockResolvedValueOnce({
+      draft: { id: "d" },
+      invoiceUrl: "https://x",
+    });
+    const result = await sendDraftInvoiceAction({ draftId: "d" });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.emailStatus).toBeNull();
+    expect(sendEmailEventMock).not.toHaveBeenCalled();
+  });
+
+  it("email fails → action still returns ok=true with emailStatus='failed'", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce({
+      ...draftRow,
+      pricesFrozenAt: new Date(),
+    });
+    sendInvoiceMock.mockResolvedValueOnce({
+      draft: { id: "d" },
+      invoiceUrl: "https://x",
+    });
+    findUniqueMock.mockResolvedValueOnce({ id: "tenant_t", name: "Hotel X" });
+    sendEmailEventMock.mockResolvedValueOnce({ status: "failed", error: "boom" });
+    const result = await sendDraftInvoiceAction({ draftId: "d" });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.emailStatus).toBe("failed");
+  });
+
+  it("falls back to GuestAccount.email when contactEmail is null", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce({
+      ...draftRow,
+      pricesFrozenAt: new Date(),
+      contactEmail: null,
+      guestAccountId: "guest_1",
+    });
+    guestAccountFindFirstMock.mockResolvedValueOnce({
+      email: "guest@example.com",
+      firstName: "Guest",
+      lastName: "From-DB",
+    });
+    sendInvoiceMock.mockResolvedValueOnce({
+      draft: { id: "d" },
+      invoiceUrl: "https://x",
+    });
+    findUniqueMock.mockResolvedValueOnce({ id: "tenant_t", name: "Hotel X" });
+    sendEmailEventMock.mockResolvedValueOnce({ status: "sent" });
+    await sendDraftInvoiceAction({ draftId: "d" });
+    const args = sendEmailEventMock.mock.calls[0];
+    expect(args[2]).toBe("guest@example.com");
+  });
+
+  it("sendInvoice ValidationError → { ok: false, error }", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce({
+      ...draftRow,
+      pricesFrozenAt: new Date(),
+    });
+    sendInvoiceMock.mockRejectedValueOnce(
+      new ValidationError("Stripe is not configured for this tenant"),
+    );
+    const result = await sendDraftInvoiceAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.error).toBe("Stripe is not configured for this tenant");
+  });
+
+  it("freezePrices ValidationError → { ok: false, error }", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce(draftRow);
+    freezePricesMock.mockRejectedValueOnce(
+      new ValidationError("Draft is not in a freezable status"),
+    );
+    const result = await sendDraftInvoiceAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    expect(sendInvoiceMock).not.toHaveBeenCalled();
+  });
+});
+
+// ── markDraftAsPaidAction ───────────────────────────────────────
+
+describe("markDraftAsPaidAction", () => {
+  it("missing orgId → { ok: false, error: 'Ingen tenant' }", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: null,
+      userId: null,
+      orgRole: null,
+    });
+    const result = await markDraftAsPaidAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    expect(markDraftAsPaidMock).not.toHaveBeenCalled();
+  });
+
+  it("happy path passes draftOrderId + reference + actorUserId", async () => {
+    const draft = { id: "d", status: "COMPLETED" };
+    markDraftAsPaidMock.mockResolvedValueOnce({ draft, order: { id: "o_1" } });
+    const result = await markDraftAsPaidAction({
+      draftId: "d",
+      reference: "BG-9876",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.draft).toBe(draft);
+    expect(markDraftAsPaidMock).toHaveBeenCalledWith({
+      tenantId: "tenant_t",
+      draftOrderId: "d",
+      reference: "BG-9876",
+      actorUserId: "u",
+    });
+  });
+
+  it("ValidationError → { ok: false, error }", async () => {
+    markDraftAsPaidMock.mockRejectedValueOnce(
+      new ValidationError("Draft must be in INVOICED or OVERDUE status to mark paid"),
+    );
+    const result = await markDraftAsPaidAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.error).toBe(
+        "Draft must be in INVOICED or OVERDUE status to mark paid",
+      );
+  });
+
+  it("NotFoundError → { ok: false, error }", async () => {
+    markDraftAsPaidMock.mockRejectedValueOnce(
+      new NotFoundError("DraftOrder not found in tenant"),
+    );
+    const result = await markDraftAsPaidAction({ draftId: "missing" });
+    expect(result.ok).toBe(false);
+  });
+
+  it("ConflictError (from convert) → { ok: false, error }", async () => {
+    markDraftAsPaidMock.mockRejectedValueOnce(
+      new ConflictError("Draft mutated during convert"),
+    );
+    const result = await markDraftAsPaidAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+  });
+});
+
+// ── cancelDraftAction ───────────────────────────────────────────
+
+describe("cancelDraftAction", () => {
+  it("missing orgId → { ok: false, error: 'Ingen tenant' }", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: null,
+      userId: null,
+      orgRole: null,
+    });
+    const result = await cancelDraftAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    expect(cancelDraftMock).not.toHaveBeenCalled();
+  });
+
+  it("happy path passes reason + actorUserId", async () => {
+    const draft = { id: "d", status: "CANCELLED" };
+    cancelDraftMock.mockResolvedValueOnce({
+      draft,
+      releasedHolds: 0,
+      holdReleaseErrors: [],
+    });
+    const result = await cancelDraftAction({
+      draftId: "d",
+      reason: "kund ångrade",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.draft).toBe(draft);
+    expect(cancelDraftMock).toHaveBeenCalledWith({
+      tenantId: "tenant_t",
+      draftOrderId: "d",
+      reason: "kund ångrade",
+      actorUserId: "u",
+    });
+  });
+
+  it("ValidationError (PAID drafts) → { ok: false, error }", async () => {
+    cancelDraftMock.mockRejectedValueOnce(
+      new ValidationError("Cannot cancel a PAID draft — refund via Stripe, then retry"),
+    );
+    const result = await cancelDraftAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.error).toBe(
+        "Cannot cancel a PAID draft — refund via Stripe, then retry",
+      );
+  });
+
+  it("ConflictError → { ok: false, error }", async () => {
+    cancelDraftMock.mockRejectedValueOnce(
+      new ConflictError("Draft mutated during cancel — retry"),
+    );
+    const result = await cancelDraftAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
   });
 });
