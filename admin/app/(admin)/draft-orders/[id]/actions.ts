@@ -14,6 +14,15 @@ import {
   removeDiscountCode,
 } from "@/app/_lib/draft-orders/discount";
 import {
+  addLineItem,
+  updateLineItem,
+  removeLineItem,
+} from "@/app/_lib/draft-orders/lines";
+import type {
+  AddLineItemInput,
+  UpdateLineItemInput,
+} from "@/app/_lib/draft-orders/types";
+import {
   NotFoundError,
   ValidationError,
   ConflictError,
@@ -155,6 +164,88 @@ export async function removeDraftDiscountCodeAction(
     if (err instanceof NotFoundError) return { ok: false, error: err.message };
     if (err instanceof ValidationError) return { ok: false, error: err.message };
     if (err instanceof ConflictError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+// ── Line-item actions (FAS 7.2b.4c) ────────────────────────────
+
+export type AddDraftLineItemActionInput = {
+  draftId: string;
+  line: AddLineItemInput["line"];
+};
+
+export async function addDraftLineItemAction(
+  input: AddDraftLineItemActionInput,
+): Promise<DraftMutationResult> {
+  const actor = await getActor();
+  if (!actor.tenantId) return { ok: false, error: NO_TENANT_ERROR };
+
+  try {
+    const result = await addLineItem({
+      tenantId: actor.tenantId,
+      draftOrderId: input.draftId,
+      line: input.line,
+      actorUserId: actor.userId,
+    });
+    return { ok: true, draft: result.draft };
+  } catch (err) {
+    if (err instanceof NotFoundError) return { ok: false, error: err.message };
+    if (err instanceof ValidationError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+export type UpdateDraftLineItemActionInput = {
+  draftId: string;
+  lineItemId: string;
+  patch: UpdateLineItemInput["patch"];
+};
+
+export async function updateDraftLineItemAction(
+  input: UpdateDraftLineItemActionInput,
+): Promise<DraftMutationResult> {
+  const actor = await getActor();
+  if (!actor.tenantId) return { ok: false, error: NO_TENANT_ERROR };
+
+  try {
+    const result = await updateLineItem({
+      tenantId: actor.tenantId,
+      draftOrderId: input.draftId,
+      lineItemId: input.lineItemId,
+      patch: input.patch,
+      actorUserId: actor.userId,
+    });
+    return { ok: true, draft: result.draft };
+  } catch (err) {
+    if (err instanceof NotFoundError) return { ok: false, error: err.message };
+    if (err instanceof ValidationError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+export type RemoveDraftLineItemActionInput = {
+  draftId: string;
+  lineItemId: string;
+};
+
+export async function removeDraftLineItemAction(
+  input: RemoveDraftLineItemActionInput,
+): Promise<DraftMutationResult> {
+  const actor = await getActor();
+  if (!actor.tenantId) return { ok: false, error: NO_TENANT_ERROR };
+
+  try {
+    const result = await removeLineItem({
+      tenantId: actor.tenantId,
+      draftOrderId: input.draftId,
+      lineItemId: input.lineItemId,
+      actorUserId: actor.userId,
+    });
+    return { ok: true, draft: result.draft };
+  } catch (err) {
+    if (err instanceof NotFoundError) return { ok: false, error: err.message };
+    if (err instanceof ValidationError) return { ok: false, error: err.message };
     throw err;
   }
 }
