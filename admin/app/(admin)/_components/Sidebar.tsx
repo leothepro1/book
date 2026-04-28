@@ -5,840 +5,222 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSidebar } from './SidebarContext';
 import { useNavigationGuard } from './NavigationGuard';
-import { SidebarUserRow } from './SidebarUserRow';
+import { SidebarOrgRow } from './SidebarOrgRow';
+import { SidebarFooter } from './SidebarFooter';
+import { SidebarSearchInput } from './SidebarSearchInput';
 import { useSettings } from './SettingsContext';
+import { useSidebarNav } from './SidebarNavContext';
+import { SidebarNavSwap } from './SidebarNavSwap';
+import { SettingsSidebar } from './SettingsSidebar';
+import { RouteSidebar } from './RouteSidebar';
+import { AppSidebar } from './AppSidebar';
+import { DRILL_IN_SECTIONS, getSection, inferSectionFromPath, parseAppSectionId } from './sidebar-sections';
+import { getDefaultSettingsTab } from './settings-nav-items';
+import { getApparHref, isApparActivePath } from '../_lib/apps/route-helpers';
 import { useRole } from './RoleContext';
 import type { SidebarApp } from '@/app/_lib/apps/actions';
 
-const NAV_ITEMS = [
-  { href: '/home', label: 'Startsida', icon: 'home_app_logo' },
-  { href: '/orders', label: 'Ordrar', icon: 'inbox' },
-  { href: '/analytics', label: 'Analys', icon: 'bar_chart' },
-];
-
-const ANALYTICS_ITEMS = [
-  { href: '/live', label: 'Live-vy' },
-];
-
-const ORDER_ITEMS = [
-  { href: '/orders/abandoned', label: 'Övergivna kassor' },
-];
-
-const CUSTOMER_ITEMS = [
-  { href: '/customers/companies', label: 'Företag' },
-  { href: '/customers/segments', label: 'Kundsegment' },
-];
-
-const PRODUCT_ITEMS = [
-  { href: '/collections', label: 'Produktserier' },
-  { href: '/inventory', label: 'Lager' },
-  { href: '/gift-cards', label: 'Presentkort' },
-];
-
-const ACCOMMODATION_ITEMS = [
-  { href: '/accommodation-categories', label: 'Boendetyper' },
-];
-
-const CONTENT_ITEMS = [
-  { href: '/files', label: 'Filer' },
-  { href: '/maps', label: 'Kartor' },
-  { href: '/menus', label: 'Menyer' },
-  { href: '/redirects', label: 'URL-omdirigeringar' },
-];
-
-// Webbshop (sales channel) sub-items. Preferences lives here —
-// matches Shopify's "Online Store → Preferences" IA. Not in Settings.
-const WEBSHOP_ITEMS = [
-  { href: '/store/preferences', label: 'Preferenser' },
-];
-
-// Curved connector SVG for active sub-item
-const CONNECTOR_SVG = `data:image/svg+xml,%3Csvg%20width%3D'21'%20height%3D'28'%20viewBox%3D'0%200%2021%2028'%20fill%3D'none'%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%3E%3Cpath%20d%3D'M19%2014.25H19.75V15.75H19V14.25ZM10.077%2013.362L10.7452%2013.0215V13.0215L10.077%2013.362ZM11.388%2014.673L11.7285%2014.0048H11.7285L11.388%2014.673ZM10.5%200V10.2H9V0H10.5ZM14.55%2014.25H19V15.75H14.55V14.25ZM10.5%2010.2C10.5%2011.0525%2010.5006%2011.6467%2010.5384%2012.1093C10.5755%2012.5632%2010.6446%2012.824%2010.7452%2013.0215L9.40873%2013.7025C9.18239%2013.2582%209.08803%2012.7781%209.04336%2012.2315C8.99942%2011.6936%209%2011.0277%209%2010.2H10.5ZM14.55%2015.75C13.7223%2015.75%2013.0564%2015.7506%2012.5185%2015.7066C11.9719%2015.662%2011.4918%2015.5676%2011.0475%2015.3413L11.7285%2014.0048C11.926%2014.1054%2012.1868%2014.1745%2012.6407%2014.2116C13.1033%2014.2494%2013.6975%2014.25%2014.55%2014.25V15.75ZM10.7452%2013.0215C10.9609%2013.4448%2011.3052%2013.7891%2011.7285%2014.0048L11.0475%2015.3413C10.3419%2014.9817%209.76825%2014.4081%209.40873%2013.7025L10.7452%2013.0215Z'%20fill%3D'%23B5B5B5'/%3E%3Cpath%20d%3D'M17%2012L20%2015L17%2018'%20stroke%3D'%23B5B5B5'%20stroke-width%3D'1.5'%20stroke-linecap%3D'round'%20stroke-linejoin%3D'round'/%3E%3C/svg%3E`;
-
-// Straight vertical line SVG for non-active sub-items
-// preserveAspectRatio="none" ensures the rect stretches to fill any height
-const LINE_SVG = `data:image/svg+xml,%3Csvg%20width%3D'21'%20height%3D'28'%20viewBox%3D'0%200%2021%2028'%20preserveAspectRatio%3D'none'%20fill%3D'none'%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%3E%3Crect%20x%3D'9'%20width%3D'1.5'%20height%3D'28'%20fill%3D'%23B5B5B5'%2F%3E%3C%2Fsvg%3E`;
+// Compose `.sb__*` class string from a base + modifiers (false-y values dropped).
+function itemClass(...mods: (string | false | null | undefined)[]): string {
+  return ['sb__item', ...(mods.filter(Boolean) as string[])].join(' ');
+}
 
 export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
-  const { isCollapsed, setIsCollapsed } = useSidebar();
+  const { currentSection, enterSection, setNavigatingTo } = useSidebarNav();
+  const { isCollapsed } = useSidebar();
   const pathname = usePathname();
-  const { navigate, isGuarded } = useNavigationGuard();
+  const { navigate, guardAction, isGuarded } = useNavigationGuard();
   const { open: openSettings } = useSettings();
   const { isAdmin } = useRole();
 
-  const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
-  const isOrdersLinkActive = pathname === '/orders' || (pathname.startsWith('/orders/') && !pathname.startsWith('/orders/abandoned'));
-  const isOrderAccordionOpen = isOrdersLinkActive || ORDER_ITEMS.some((item) => isActive(item.href));
-  const isCustomersLinkActive =
-    pathname === '/customers' ||
-    (pathname.startsWith('/customers/') &&
-      !pathname.startsWith('/customers/segments') &&
-      !pathname.startsWith('/customers/companies'));
-  const isCustomerAccordionOpen = isCustomersLinkActive || CUSTOMER_ITEMS.some((item) => isActive(item.href));
-  const isAnalyticsLinkActive = pathname === '/analytics';
-  const isAnalyticsAccordionOpen = isAnalyticsLinkActive || ANALYTICS_ITEMS.some((item) => isActive(item.href));
-  const isProductsLinkActive = isActive('/products');
-  const isProductAccordionOpen = isProductsLinkActive || PRODUCT_ITEMS.some((item) => isActive(item.href));
-  const isAccommodationsLinkActive = pathname === '/accommodations' || (pathname.startsWith('/accommodations/') && !pathname.startsWith('/accommodation-categories'));
-  const isAccommodationAccordionOpen = isAccommodationsLinkActive || ACCOMMODATION_ITEMS.some((item) => isActive(item.href));
-  const isContentActive = CONTENT_ITEMS.some((item) => isActive(item.href));
-  // Webbshop: parent link is `/store`. Active when on /store or any
-  // WEBSHOP_ITEMS sub-path. Accordion opens whenever parent or child
-  // is active — same pattern as Produkter / Boenden.
-  const isWebshopLinkActive =
-    pathname === '/store' ||
-    (pathname.startsWith('/store/') &&
-      !WEBSHOP_ITEMS.some((item) => pathname.startsWith(item.href)));
-  const isWebshopAccordionOpen =
-    isWebshopLinkActive || WEBSHOP_ITEMS.some((item) => isActive(item.href));
+  // Tag any link click as "navigation pending" so the body shows a
+  // loading state immediately, then clears when the new pathname lands.
+  const markPending = (href: string) => {
+    if (href !== pathname) setNavigatingTo(href);
+  };
+
+  const isActive = (path: string) => pathname === path || pathname.startsWith(path + '/');
+  const inferredSection = inferSectionFromPath(pathname);
 
   const guardedClick = (e: MouseEvent<HTMLAnchorElement>, href: string) => {
     if (isGuarded) {
       e.preventDefault();
       navigate(href);
+      return;
     }
+    markPending(href);
   };
+
+  // Section trigger — opens the drill-in AND navigates to the section's
+  // first item (its parent route, when the section has one). The auto-sync
+  // in SidebarNavContext would also pick up the navigation, but we call
+  // `enterSection` synchronously so the slide animation starts on click
+  // instead of after navigation lands.
+  const triggerClick = (e: MouseEvent<HTMLAnchorElement>, sectionId: string, href: string) => {
+    if (isGuarded) {
+      e.preventDefault();
+      guardAction(() => {
+        enterSection(sectionId);
+        navigate(href);
+      });
+      return;
+    }
+    enterSection(sectionId);
+    markPending(href);
+  };
+
+  const renderSectionTrigger = (sectionId: string) => {
+    const section = getSection(sectionId);
+    if (!section) return null;
+    const firstHref = section.items[0]?.href ?? '/';
+    const active = inferredSection === section.id;
+    return (
+      <Link
+        href={firstHref}
+        onClick={(e) => triggerClick(e, section.id, firstHref)}
+        className={itemClass(active && 'sb__item--active', isCollapsed && 'sb__item--collapsed')}
+      >
+        <span className="material-symbols-rounded sb__icon">{section.icon}</span>
+        <span className="sb__label">{section.label}</span>
+        <span className="material-symbols-rounded sb__item-trail">arrow_forward_ios</span>
+      </Link>
+    );
+  };
+
+  // Determine which drill-in body to render under the org row.
+  const drillInSection = currentSection && currentSection !== 'settings'
+    ? getSection(currentSection)
+    : null;
+
+  // App sections are dynamic — id is `app:{appId}`. Resolve via sidebarApps.
+  const appSection = (() => {
+    if (!currentSection) return null;
+    const appId = parseAppSectionId(currentSection);
+    if (!appId) return null;
+    const app = sidebarApps.find((a) => a.appId === appId);
+    if (!app || !app.pages || app.pages.length < 2) return null;
+    return app;
+  })();
 
   return (
     <aside
       className={`fixed left-0 top-0 h-screen z-30 flex flex-col ${
         isCollapsed ? 'w-[58px]' : 'w-[270px]'
       }`}
-      style={{ background: '#f3f3f4', borderRight: '1px solid var(--admin-border)', transition: 'width 0.2s ease-in-out', overflow: 'hidden' }}
+      style={{
+        background: '#FAFAFA',
+        borderRight: '1px solid var(--admin-border)',
+        transition: 'width 0.2s ease-in-out',
+        overflow: 'hidden',
+      }}
     >
-      {/* Profile row */}
-      <SidebarUserRow isCollapsed={isCollapsed} />
+      {/* Profile row — always visible, even inside drill-in sections */}
+      <SidebarOrgRow isCollapsed={isCollapsed} />
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto flex flex-col" style={{ gap: 6, padding: 12 }}>
-        {/* Startsida */}
-        {(() => {
-          const item = NAV_ITEMS[0];
-          const active = isActive(item.href);
-          return (
-            <Link
-              href={item.href}
-              onClick={(e) => guardedClick(e, item.href)}
-              className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} ${
-                active
-                  ? 'bg-[#e3e3e3] text-[#303030]'
-                  : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
-              }`}
-              style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
-            >
-              <span
-                className="material-symbols-rounded flex-shrink-0"
-                style={{
-                  fontSize: 18,
-                  fontVariationSettings: active
-                    ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                    : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-                }}
-              >
-                {item.icon}
-              </span>
-              <span className={`text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-                isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-              }`} style={{ fontWeight: active ? 600 : 500 }}>
-                {item.label}
-              </span>
-            </Link>
-          );
-        })()}
-
-        {/* Ordrar — accordion with sub-items */}
-        <div>
-          <Link
-            href="/orders"
-            onClick={(e) => guardedClick(e, '/orders')}
-            className={`flex items-center gap-3 ${
-              isOrdersLinkActive
-                ? 'bg-[#e3e3e3] text-[#303030]'
-                : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
-            }`}
-            style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
-          >
-            <span
-              className="material-symbols-rounded flex-shrink-0"
-              style={{
-                fontSize: 18,
-                fontVariationSettings: isOrderAccordionOpen
-                  ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                  : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-              }}
-            >
-              inbox
-            </span>
-            <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-            }`} style={{ fontWeight: isOrdersLinkActive ? 600 : 500 }}>
-              Ordrar
-            </span>
-          </Link>
-
-          <div className={`overflow-hidden transition-all duration-300 ${
-            isOrderAccordionOpen && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
-          }`}>
-            <div className="flex flex-col">
-              {ORDER_ITEMS.map((sub) => {
-                const subActive = isActive(sub.href);
+      <SidebarNavSwap sectionKey={currentSection ?? 'main'}>
+        {currentSection === 'settings' ? (
+          <SettingsSidebar />
+        ) : appSection ? (
+          <AppSidebar app={appSection} />
+        ) : drillInSection ? (
+          <RouteSidebar section={drillInSection} />
+        ) : (
+          <>
+            <nav className="sb__nav">
+              <SidebarSearchInput />
+              {/* Startsida — flat link, no drill-in */}
+              {(() => {
+                const active = isActive('/home');
                 return (
                   <Link
-                    key={sub.href}
-                    href={sub.href}
-                    onClick={(e) => guardedClick(e, sub.href)}
-                    className={`relative block text-[13px] ${
-                      subActive
-                        ? 'bg-[#e3e3e3] text-[#303030]'
-                        : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
-                    }`}
-                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontWeight: subActive ? 600 : 500 }}
+                    href="/home"
+                    onClick={(e) => guardedClick(e, '/home')}
+                    className={itemClass(active && 'sb__item--active', isCollapsed && 'sb__item--collapsed')}
                   >
-                    {subActive && (
-                      <img
-                        src={CONNECTOR_SVG}
-                        alt=""
-                        className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
-                        style={{ width: 21, height: 28, left: 7.5, marginTop: -1.5 }}
-                      />
-                    )}
-                    {sub.label}
+                    <span className="material-symbols-rounded sb__icon">home_app_logo</span>
+                    <span className="sb__label">Startsida</span>
                   </Link>
                 );
-              })}
-            </div>
-          </div>
-        </div>
+              })()}
 
-        {/* Kunder — accordion with sub-items */}
-        <div>
-          <Link
-            href="/customers"
-            onClick={(e) => guardedClick(e, '/customers')}
-            className={`flex items-center gap-3 ${
-              isCustomersLinkActive
-                ? 'bg-[#e3e3e3] text-[#303030]'
-                : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
-            }`}
-            style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
-          >
-            <span
-              className="material-symbols-rounded flex-shrink-0"
-              style={{
-                fontSize: 18,
-                fontVariationSettings: isCustomerAccordionOpen
-                  ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                  : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-              }}
-            >
-              group
-            </span>
-            <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-            }`} style={{ fontWeight: isCustomersLinkActive ? 600 : 500 }}>
-              Kunder
-            </span>
-          </Link>
+              {/* Section triggers (drill-ins) */}
+              {renderSectionTrigger('orders')}
+              {renderSectionTrigger('customers')}
+              {renderSectionTrigger('products')}
+              {renderSectionTrigger('accommodations')}
 
-          <div className={`overflow-hidden transition-all duration-300 ${
-            isCustomerAccordionOpen && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
-          }`}>
-            <div className="flex flex-col">
-              {CUSTOMER_ITEMS.map((sub) => {
-                const subActive = isActive(sub.href);
+              {/* Rabatter — flat link */}
+              {(() => {
+                const active = isActive('/discounts');
                 return (
                   <Link
-                    key={sub.href}
-                    href={sub.href}
-                    onClick={(e) => guardedClick(e, sub.href)}
-                    className={`relative block text-[13px] ${
-                      subActive
-                        ? 'bg-[#e3e3e3] text-[#303030]'
-                        : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
-                    }`}
-                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontWeight: subActive ? 600 : 500 }}
+                    href="/discounts"
+                    onClick={(e) => guardedClick(e, '/discounts')}
+                    className={itemClass(active && 'sb__item--active', isCollapsed && 'sb__item--collapsed')}
                   >
-                    {subActive && (
-                      <img
-                        src={CONNECTOR_SVG}
-                        alt=""
-                        className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
-                        style={{ width: 21, height: 28, left: 7.5, marginTop: -1.5 }}
-                      />
-                    )}
-                    {sub.label}
+                    <span className="material-symbols-rounded sb__icon">percent_discount</span>
+                    <span className="sb__label">Rabatter</span>
                   </Link>
                 );
-              })}
-            </div>
-          </div>
-        </div>
+              })()}
 
-        {/* Produkter — accordion with sub-items */}
-        <div>
-          <Link
-            href="/products"
-            onClick={(e) => guardedClick(e, '/products')}
-            className={`flex items-center gap-3 ${
-              isProductsLinkActive
-                ? 'bg-[#e3e3e3] text-[#303030]'
-                : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
-            }`}
-            style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
-          >
-            <span
-              className="material-symbols-rounded flex-shrink-0"
-              style={{
-                fontSize: 18,
-                fontVariationSettings: isProductAccordionOpen
-                  ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                  : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-              }}
-            >
-              sell
-            </span>
-            <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-            }`} style={{ fontWeight: isProductsLinkActive ? 600 : 500 }}>
-              Produkter
-            </span>
-          </Link>
+              {renderSectionTrigger('content')}
 
-          <div className={`overflow-hidden transition-all duration-300 ${
-            isProductAccordionOpen && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
-          }`}>
-            <div className="flex flex-col">
-              {PRODUCT_ITEMS.map((sub, idx) => {
-                const subActive = isActive(sub.href);
-                const activeIdx = PRODUCT_ITEMS.findIndex((s) => isActive(s.href));
-                const hasActiveSub = activeIdx !== -1;
-                const showLine = hasActiveSub && !subActive && idx < activeIdx;
-
+              {/* Ekonomi — flat link */}
+              {(() => {
+                const active = isActive('/finance');
                 return (
                   <Link
-                    key={sub.href}
-                    href={sub.href}
-                    onClick={(e) => guardedClick(e, sub.href)}
-                    className={`relative block text-[13px] ${
-                      subActive
-                        ? 'bg-[#e3e3e3] text-[#303030]'
-                        : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
-                    }`}
-                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontWeight: subActive ? 600 : 500 }}
+                    href="/finance"
+                    onClick={(e) => guardedClick(e, '/finance')}
+                    className={itemClass(active && 'sb__item--active', isCollapsed && 'sb__item--collapsed')}
                   >
-                    {subActive ? (
-                      <img
-                        src={CONNECTOR_SVG}
-                        alt=""
-                        className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
-                        style={{ width: 21, height: 28, left: 7.5, marginTop: -1.5 }}
-                      />
-                    ) : showLine ? (
-                      <img
-                        src={LINE_SVG}
-                        alt=""
-                        className="absolute pointer-events-none"
-                        style={{ width: 21, left: 7.5, top: -6, bottom: -6, height: 'calc(100% + 12px)' }}
-                      />
-                    ) : null}
-                    {sub.label}
+                    <span className="material-symbols-rounded sb__icon">account_balance_wallet</span>
+                    <span className="sb__label">Ekonomi</span>
                   </Link>
                 );
-              })}
-            </div>
-          </div>
-        </div>
+              })()}
 
-        {/* Boenden — accordion with sub-items */}
-        <div>
-          <Link
-            href="/accommodations"
-            onClick={(e) => guardedClick(e, '/accommodations')}
-            className={`flex items-center gap-3 ${
-              isAccommodationsLinkActive
-                ? 'bg-[#e3e3e3] text-[#303030]'
-                : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
-            }`}
-            style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
-          >
-            <span
-              className="material-symbols-rounded flex-shrink-0"
-              style={{
-                fontSize: 18,
-                fontVariationSettings: isAccommodationAccordionOpen
-                  ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                  : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-              }}
-            >
-              villa
-            </span>
-            <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-            }`} style={{ fontWeight: isAccommodationsLinkActive ? 600 : 500 }}>
-              Boenden
-            </span>
-          </Link>
+              {renderSectionTrigger('analytics')}
+              {renderSectionTrigger('webshop')}
 
-          <div className={`overflow-hidden transition-all duration-300 ${
-            isAccommodationAccordionOpen && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
-          }`}>
-            <div className="flex flex-col">
-              {ACCOMMODATION_ITEMS.map((sub, idx) => {
-                const subActive = isActive(sub.href);
-                const activeIdx = ACCOMMODATION_ITEMS.findIndex((s) => isActive(s.href));
-                const hasActiveSub = activeIdx !== -1;
-                const showLine = hasActiveSub && !subActive && idx < activeIdx;
-
+              {/* Appar — single flat link. Targets the marketplace when no
+                  apps are installed, the installed-apps overview otherwise.
+                  Active state spans the whole `/apps` area. */}
+              {(() => {
+                const apparHref = getApparHref(sidebarApps.length);
+                const active = isApparActivePath(pathname);
                 return (
                   <Link
-                    key={sub.href}
-                    href={sub.href}
-                    onClick={(e) => guardedClick(e, sub.href)}
-                    className={`relative block text-[13px] ${
-                      subActive
-                        ? 'bg-[#e3e3e3] text-[#303030]'
-                        : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
-                    }`}
-                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontWeight: subActive ? 600 : 500 }}
+                    href={apparHref}
+                    onClick={(e) => guardedClick(e, apparHref)}
+                    className={itemClass(active && 'sb__item--active', isCollapsed && 'sb__item--collapsed')}
                   >
-                    {subActive ? (
-                      <img
-                        src={CONNECTOR_SVG}
-                        alt=""
-                        className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
-                        style={{ width: 21, height: 28, left: 7.5, marginTop: -1.5 }}
-                      />
-                    ) : showLine ? (
-                      <img
-                        src={LINE_SVG}
-                        alt=""
-                        className="absolute pointer-events-none"
-                        style={{ width: 21, left: 7.5, top: -6, bottom: -6, height: 'calc(100% + 12px)' }}
-                      />
-                    ) : null}
-                    {sub.label}
+                    <span className="material-symbols-rounded sb__icon">home_storage</span>
+                    <span className="sb__label">Appar</span>
                   </Link>
                 );
-              })}
-            </div>
-          </div>
-        </div>
+              })()}
 
-        {/* Rabatter — standalone link */}
-        {(() => {
-          const active = isActive('/discounts');
-          return (
-            <Link
-              href="/discounts"
-              onClick={(e) => guardedClick(e, '/discounts')}
-              className={`flex items-center gap-3 ${
-                active
-                  ? 'bg-[#e3e3e3] text-[#303030]'
-                  : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
-              }`}
-              style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
-            >
-              <span
-                className="material-symbols-rounded flex-shrink-0"
-                style={{
-                  fontSize: 18,
-                  fontVariationSettings: active
-                    ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                    : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-                }}
-              >
-                percent_discount
-              </span>
-              <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-                isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-              }`} style={{ fontWeight: active ? 600 : 500 }}>
-                Rabatter
-              </span>
-            </Link>
-          );
-        })()}
-
-        {/* Innehåll — accordion with sub-items */}
-        <div>
-          <Link
-            href={CONTENT_ITEMS[0].href}
-            onClick={(e) => guardedClick(e, CONTENT_ITEMS[0].href)}
-            className="flex items-center gap-3 text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]"
-            style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
-          >
-            <span
-              className="material-symbols-rounded flex-shrink-0"
-              style={{
-                fontSize: 18,
-                fontVariationSettings: isContentActive
-                  ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                  : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-              }}
-            >
-              database
-            </span>
-            <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-            }`} style={{ fontWeight: isContentActive ? 600 : 500 }}>
-              Innehåll
-            </span>
-          </Link>
-
-          {/* Sub-items — visible when content is active */}
-          <div className={`overflow-hidden transition-all duration-300 ${
-            isContentActive && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
-          }`}>
-            <div className="flex flex-col">
-              {CONTENT_ITEMS.map((sub, idx) => {
-                const subActive = isActive(sub.href);
-                const activeIdx = CONTENT_ITEMS.findIndex((s) => isActive(s.href));
-                const hasActiveSub = activeIdx !== -1;
-                const showLine = hasActiveSub && !subActive && idx < activeIdx;
-
-                return (
-                  <Link
-                    key={sub.href}
-                    href={sub.href}
-                    onClick={(e) => guardedClick(e, sub.href)}
-                    className={`relative block text-[13px] ${
-                      subActive
-                        ? 'bg-[#e3e3e3] text-[#303030]'
-                        : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
-                    }`}
-                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontWeight: subActive ? 600 : 500 }}
-                  >
-                    {subActive ? (
-                      <img
-                        src={CONNECTOR_SVG}
-                        alt=""
-                        className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
-                        style={{ width: 21, height: 28, left: 7.5, marginTop: -1.5 }}
-                      />
-                    ) : showLine ? (
-                      <img
-                        src={LINE_SVG}
-                        alt=""
-                        className="absolute pointer-events-none"
-                        style={{ width: 21, left: 7.5, top: -6, bottom: -6, height: 'calc(100% + 12px)' }}
-                      />
-                    ) : null}
-                    {sub.label}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Ekonomi — standalone link */}
-        {(() => {
-          const active = isActive('/finance');
-          return (
-            <Link
-              href="/finance"
-              onClick={(e) => guardedClick(e, '/finance')}
-              className={`flex items-center gap-3 ${
-                active
-                  ? 'bg-[#e3e3e3] text-[#303030]'
-                  : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
-              }`}
-              style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
-            >
-              <span
-                className="material-symbols-rounded flex-shrink-0"
-                style={{
-                  fontSize: 18,
-                  fontVariationSettings: active
-                    ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                    : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-                }}
-              >
-                account_balance_wallet
-              </span>
-              <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-                isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-              }`} style={{ fontWeight: active ? 600 : 500 }}>
-                Ekonomi
-              </span>
-            </Link>
-          );
-        })()}
-
-        {/* Analys — accordion with sub-items */}
-        <div>
-          <Link
-            href="/analytics"
-            onClick={(e) => guardedClick(e, '/analytics')}
-            className={`flex items-center gap-3 ${
-              isAnalyticsLinkActive
-                ? 'bg-[#e3e3e3] text-[#303030]'
-                : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
-            }`}
-            style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
-          >
-            <span
-              className="material-symbols-rounded flex-shrink-0"
-              style={{
-                fontSize: 18,
-                fontVariationSettings: isAnalyticsAccordionOpen
-                  ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                  : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-              }}
-            >
-              travel_explore
-            </span>
-            <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-            }`} style={{ fontWeight: isAnalyticsLinkActive ? 600 : 500 }}>
-              Analys
-            </span>
-          </Link>
-
-          <div className={`overflow-hidden transition-all duration-300 ${
-            isAnalyticsAccordionOpen && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
-          }`}>
-            <div className="flex flex-col">
-              {ANALYTICS_ITEMS.map((sub, idx) => {
-                const subActive = isActive(sub.href);
-                const activeIdx = ANALYTICS_ITEMS.findIndex((s) => isActive(s.href));
-                const hasActiveSub = activeIdx !== -1;
-                const showLine = hasActiveSub && !subActive && idx < activeIdx;
-
-                return (
-                  <Link
-                    key={sub.href}
-                    href={sub.href}
-                    onClick={(e) => guardedClick(e, sub.href)}
-                    className={`relative block text-[13px] ${
-                      subActive
-                        ? 'bg-[#e3e3e3] text-[#303030]'
-                        : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
-                    }`}
-                    style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontWeight: subActive ? 600 : 500 }}
-                  >
-                    {subActive ? (
-                      <img
-                        src={CONNECTOR_SVG}
-                        alt=""
-                        className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
-                        style={{ width: 21, height: 28, left: 7.5, marginTop: -1.5 }}
-                      />
-                    ) : showLine ? (
-                      <img
-                        src={LINE_SVG}
-                        alt=""
-                        className="absolute pointer-events-none"
-                        style={{ width: 21, left: 7.5, top: -6, bottom: -6, height: 'calc(100% + 12px)' }}
-                      />
-                    ) : null}
-                    {sub.label}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Försäljningskanaler */}
-        {!isCollapsed && (
-          <div style={{ marginTop: 'var(--space-2)' }}>
-            <div className="admin-group-label" style={{ padding: '0 8px', marginBottom: 6 }}>
-              Försäljningskanaler
-            </div>
-            {/* Webbshop — accordion with sub-items (same pattern as
-                Produkter / Boenden). Preferenser lives here. */}
-            <div>
-              <Link
-                href="/store"
-                onClick={(e) => guardedClick(e, '/store')}
-                className={`flex items-center gap-3 ${
-                  isWebshopLinkActive
-                    ? 'bg-[#e3e3e3] text-[#303030]'
-                    : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
-                }`}
-                style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
-              >
-                <span
-                  className="material-symbols-rounded flex-shrink-0"
-                  style={{
-                    fontSize: 18,
-                    fontVariationSettings: isWebshopAccordionOpen
-                      ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                      : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-                  }}
+              {/* Inställningar — drill-in trigger, last item in the list. */}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => openSettings(getDefaultSettingsTab(isAdmin))}
+                  className={itemClass(isCollapsed && 'sb__item--collapsed')}
                 >
-                  storefront
-                </span>
-                <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-                  isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-                }`} style={{ fontWeight: isWebshopLinkActive ? 600 : 500 }}>
-                  Webbshop
-                </span>
-              </Link>
-
-              <div className={`overflow-hidden transition-all duration-300 ${
-                isWebshopAccordionOpen && !isCollapsed ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
-              }`}>
-                <div className="flex flex-col">
-                  {WEBSHOP_ITEMS.map((sub, idx) => {
-                    const subActive = isActive(sub.href);
-                    const activeIdx = WEBSHOP_ITEMS.findIndex((s) => isActive(s.href));
-                    const hasActiveSub = activeIdx !== -1;
-                    const showLine = hasActiveSub && !subActive && idx < activeIdx;
-
-                    return (
-                      <Link
-                        key={sub.href}
-                        href={sub.href}
-                        onClick={(e) => guardedClick(e, sub.href)}
-                        className={`relative block text-[13px] ${
-                          subActive
-                            ? 'bg-[#e3e3e3] text-[#303030]'
-                            : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
-                        }`}
-                        style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontWeight: subActive ? 600 : 500 }}
-                      >
-                        {subActive ? (
-                          <img
-                            src={CONNECTOR_SVG}
-                            alt=""
-                            className="absolute top-1/2 -translate-y-1/2 pointer-events-none"
-                            style={{ width: 21, height: 28, left: 7.5, marginTop: -1.5 }}
-                          />
-                        ) : showLine ? (
-                          <img
-                            src={LINE_SVG}
-                            alt=""
-                            className="absolute pointer-events-none"
-                            style={{ width: 21, left: 7.5, top: -6, bottom: -6, height: 'calc(100% + 12px)' }}
-                          />
-                        ) : null}
-                        {sub.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-            {/* Installed sales channel apps */}
-            {sidebarApps.filter((a) => a.isSalesChannel).map((app) => {
-              const active = isActive(`/apps/${app.appId}`);
-              return (
-                <Link
-                  key={app.appId}
-                  href={`/apps/${app.appId}`}
-                  onClick={(e) => guardedClick(e, `/apps/${app.appId}`)}
-                  className={`flex items-center gap-3 ${
-                    active
-                      ? 'bg-[#e3e3e3] text-[#303030]'
-                      : 'text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]'
-                  }`}
-                  style={{ padding: '0 8px 0 36px', lineHeight: '2.2em', borderRadius: 8, fontSize: 'var(--font-sm)' }}
-                >
-                  <span
-                    className="material-symbols-rounded flex-shrink-0"
-                    style={{ fontSize: 16, fontVariationSettings: active
-                      ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                      : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
-                  >
-                    {app.icon}
-                  </span>
-                  <span className="text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden" style={{ fontWeight: active ? 600 : 500 }}>
-                    {app.name}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
+                  <span className="material-symbols-rounded sb__icon">settings</span>
+                  <span className="sb__label">Inställningar</span>
+                  <span className="material-symbols-rounded sb__item-trail">arrow_forward_ios</span>
+                </button>
+              )}
+            </nav>
+          </>
         )}
+      </SidebarNavSwap>
 
-        {/* Appar — installed ACTIVE apps (non-channel) + "Lägg till" */}
-        {!isCollapsed && (
-          <div style={{ marginTop: 'var(--space-2)' }}>
-            <Link href="/apps" className="admin-group-label" style={{ padding: '0 8px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 2, textDecoration: 'none', color: 'inherit' }}>
-              Appar
-              <span className="material-symbols-rounded" style={{ fontSize: 14, color: '#303030' }}>chevron_right</span>
-            </Link>
-            {sidebarApps.filter((a) => !a.isSalesChannel).map((app) => {
-              const active = isActive(`/apps/${app.appId}`);
-              return (
-                <Link
-                  key={app.appId}
-                  href={`/apps/${app.appId}`}
-                  onClick={(e) => guardedClick(e, `/apps/${app.appId}`)}
-                  className={`flex items-center gap-3 ${
-                    active
-                      ? 'bg-[#e3e3e3] text-[#303030]'
-                      : 'text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030]'
-                  }`}
-                  style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8, fontSize: 'var(--font-sm)' }}
-                >
-                  {app.iconUrl ? (
-                    <img src={app.iconUrl} alt="" style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'cover', flexShrink: 0, border: '1px solid var(--admin-border)' }} />
-                  ) : (
-                    <span
-                      className="material-symbols-rounded flex-shrink-0"
-                      style={{ fontSize: 16, fontVariationSettings: active
-                        ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24"
-                        : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
-                    >
-                      {app.icon}
-                    </span>
-                  )}
-                  <span className="text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden" style={{ fontWeight: active ? 600 : 500 }}>
-                    {app.name}
-                  </span>
-                </Link>
-              );
-            })}
-            {sidebarApps.filter((a) => !a.isSalesChannel).length === 0 && (
-              <Link
-                href="/apps"
-                className="flex items-center gap-3 text-[#616161] hover:bg-[#f3f3f3] hover:text-[#303030]"
-                style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8, fontSize: 'var(--font-sm)' }}
-              >
-                <span
-                  className="material-symbols-rounded flex-shrink-0"
-                  style={{ fontSize: 16, fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24" }}
-                >
-                  add_circle
-                </span>
-                <span className="text-[13px] tracking-[-0.15px] font-[500] whitespace-nowrap overflow-hidden">
-                  Lägg till
-                </span>
-              </Link>
-            )}
-          </div>
-        )}
-
-      </nav>
-
-      {/* Inställningar — pinned above footer */}
-      {isAdmin && (
-        <div style={{ padding: '0 12px 16px' }}>
-          <button
-            onClick={() => openSettings()}
-            className="w-full flex items-center gap-3 text-[#303030] hover:bg-[#f3f3f3] hover:text-[#303030] cursor-pointer"
-            style={{ padding: '0 8px', lineHeight: '2.2em', borderRadius: 8 }}
-          >
-            <span
-              className="material-symbols-rounded flex-shrink-0"
-              style={{
-                fontSize: 18,
-                fontVariationSettings: "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
-              }}
-            >
-              settings
-            </span>
-            <span className={`text-[13px] tracking-[-0.15px] whitespace-nowrap overflow-hidden transition-all duration-200 ${
-              isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-            }`} style={{ fontWeight: 500 }}>
-              Inställningar
-            </span>
-          </button>
-        </div>
-      )}
-
+      {/* Pinned footer — persistent across every drill-in section swap. */}
+      <SidebarFooter />
     </aside>
   );
 }

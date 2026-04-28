@@ -1,6 +1,18 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { useSidebarNav } from './SidebarNavContext';
+
+/**
+ * Settings state — active tab, sub-path, and hash sync.
+ *
+ * `isOpen` / `open` / `close` / `toggle` are kept on the public API for
+ * backwards compatibility with `*Content` callers. They delegate to the
+ * shared `SidebarNavContext` so the sidebar drill-in is the single source
+ * of truth for "is settings showing".
+ */
+
+const SETTINGS_SECTION_ID = 'settings';
 
 type SettingsContextValue = {
   isOpen: boolean;
@@ -33,17 +45,19 @@ function buildHash(tab: string, subPath: string | null): string {
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const { currentSection, enterSection, exitSection } = useSidebarNav();
   const [activeTab, setActiveTabState] = useState<string | null>(null);
   const [subPath, setSubPathState] = useState<string | null>(null);
 
-  // On mount: read hash and auto-open if it matches #settings/...
+  const isOpen = currentSection === SETTINGS_SECTION_ID;
+
+  // On mount: read hash and auto-enter section if it matches #settings/...
   useEffect(() => {
     const { tab, subPath: sp } = parseHash(window.location.hash);
     if (tab) {
       setActiveTabState(tab);
       setSubPathState(sp);
-      setIsOpen(true);
+      enterSection(SETTINGS_SECTION_ID);
     }
 
     function onHashChange() {
@@ -51,14 +65,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       if (t) {
         setActiveTabState(t);
         setSubPathState(s);
-        setIsOpen(true);
+        enterSection(SETTINGS_SECTION_ID);
       } else {
-        setIsOpen(false);
+        exitSection();
       }
     }
 
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const setActiveTab = useCallback((tab: string) => {
@@ -69,41 +84,40 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const setSubPath = useCallback((path: string | null) => {
     setSubPathState(path);
-    setActiveTabState((prev) => {
-      if (prev) window.history.replaceState(null, '', buildHash(prev, path));
-      return prev;
-    });
-  }, []);
+    if (activeTab) {
+      window.history.replaceState(null, '', buildHash(activeTab, path));
+    }
+  }, [activeTab]);
 
   const open = useCallback((tab?: string) => {
-    setIsOpen(true);
+    enterSection(SETTINGS_SECTION_ID);
     if (tab) {
       setActiveTabState(tab);
       setSubPathState(null);
       window.history.replaceState(null, '', buildHash(tab, null));
     } else {
-      setActiveTabState((prev) => {
-        const t = prev ?? 'organization';
-        window.history.replaceState(null, '', buildHash(t, null));
-        return t;
-      });
+      const t = activeTab ?? 'organization';
+      if (t !== activeTab) setActiveTabState(t);
+      window.history.replaceState(null, '', buildHash(t, null));
     }
-  }, []);
+  }, [activeTab, enterSection]);
 
   const close = useCallback(() => {
-    setIsOpen(false);
+    exitSection();
     // Clear hash without triggering scroll
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
-  }, []);
+  }, [exitSection]);
 
   const toggle = useCallback(() => {
-    setIsOpen((v) => {
-      if (v) {
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
-      }
-      return !v;
-    });
-  }, []);
+    if (isOpen) {
+      exitSection();
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    } else {
+      enterSection(SETTINGS_SECTION_ID);
+      const t = activeTab ?? 'organization';
+      window.history.replaceState(null, '', buildHash(t, null));
+    }
+  }, [isOpen, enterSection, exitSection, activeTab]);
 
   return (
     <SettingsContext.Provider value={{ isOpen, open, close, toggle, activeTab, setActiveTab, subPath, setSubPath }}>
