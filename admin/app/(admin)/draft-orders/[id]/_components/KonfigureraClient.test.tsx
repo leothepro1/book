@@ -169,6 +169,7 @@ describe("KonfigureraClient — header & layout (status-agnostic)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(screen.getByText("Draft D-2026-0042")).toBeTruthy();
@@ -185,6 +186,7 @@ describe("KonfigureraClient — header & layout (status-agnostic)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(screen.queryByText("Betalningsvillkor")).toBeNull();
@@ -205,6 +207,7 @@ describe("KonfigureraClient — header & layout (status-agnostic)", () => {
           depositPercent: 25,
           frozen: false,
         }}
+        events={[]}
       />,
     );
     expect(screen.getByText("Betalningsvillkor")).toBeTruthy();
@@ -221,6 +224,7 @@ describe("KonfigureraClient — header & layout (status-agnostic)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     fireEvent.click(screen.getByLabelText("Tillbaka till utkastorders"));
@@ -237,6 +241,7 @@ describe("KonfigureraClient — header & layout (status-agnostic)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(
@@ -257,6 +262,7 @@ describe("KonfigureraClient — header & layout (status-agnostic)", () => {
         prev={{ id: "draft_prev", displayNumber: "D-2026-0041" }}
         next={{ id: "draft_next", displayNumber: "D-2026-0043" }}
         paymentTerms={null}
+        events={[]}
       />,
     );
     fireEvent.click(screen.getByLabelText("Föregående utkast"));
@@ -282,6 +288,7 @@ describe("KonfigureraClient — header & layout (status-agnostic)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(screen.getByText("Priser låsta")).toBeTruthy();
@@ -304,6 +311,7 @@ describe("KonfigureraClient — read-only mode (non-editable status)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(screen.getByText("Ingen kund kopplad.")).toBeTruthy();
@@ -325,6 +333,7 @@ describe("KonfigureraClient — read-only mode (non-editable status)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(screen.queryByText("Osparade ändringar")).toBeNull();
@@ -342,6 +351,7 @@ describe("KonfigureraClient — read-only mode (non-editable status)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(screen.queryByTestId("expires-card-mock")).toBeNull();
@@ -359,6 +369,7 @@ describe("KonfigureraClient — edit mode (editable status)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(screen.getByText("+ Lägg till kund")).toBeTruthy();
@@ -376,6 +387,7 @@ describe("KonfigureraClient — edit mode (editable status)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     // PublishBarUI mounts but hides via CSS class (no .publish-actions--visible).
@@ -394,6 +406,7 @@ describe("KonfigureraClient — edit mode (editable status)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     fireEvent.click(screen.getByText("tag-add"));
@@ -411,6 +424,7 @@ describe("KonfigureraClient — edit mode (editable status)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     fireEvent.click(screen.getByText("expires-pick"));
@@ -428,6 +442,7 @@ describe("KonfigureraClient — edit mode (editable status)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     // DiscountCardEditable wraps /new DiscountCard (mocked as discount-card-mock).
@@ -447,6 +462,7 @@ describe("KonfigureraClient — edit mode (editable status)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     // Mocked /new DiscountCard not rendered (DiscountCardEditable hidden).
@@ -468,6 +484,7 @@ describe("KonfigureraClient — edit mode (editable status)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(
@@ -489,6 +506,7 @@ describe("KonfigureraClient — linesEditable gate", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(screen.getByText("+ Lägg till boende")).toBeTruthy();
@@ -504,6 +522,7 @@ describe("KonfigureraClient — linesEditable gate", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     // No add-line affordance (linesEditable=false)
@@ -525,6 +544,7 @@ describe("KonfigureraClient — linesEditable gate", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(screen.queryByText("+ Lägg till boende")).toBeNull();
@@ -543,6 +563,7 @@ describe("KonfigureraClient — linesEditable gate", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(screen.queryByText("+ Lägg till boende")).toBeNull();
@@ -561,6 +582,7 @@ describe("KonfigureraClient — handleSave + handleDiscard", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     // dirty meta:
@@ -588,6 +610,7 @@ describe("KonfigureraClient — handleSave + handleDiscard", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     fireEvent.click(screen.getByText("tag-add"));
@@ -615,6 +638,7 @@ describe("KonfigureraClient — handleSave + handleDiscard", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     // Make dirty
@@ -648,6 +672,7 @@ describe("KonfigureraClient — sequential save with stop-at-first-failure (Q8)"
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     // Mark customer dirty: click "Ta bort kund"
@@ -681,6 +706,7 @@ describe("KonfigureraClient — sequential save with stop-at-first-failure (Q8)"
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     fireEvent.click(screen.getByText("Ta bort kund"));
@@ -709,6 +735,7 @@ describe("KonfigureraClient — saveError banner", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(screen.queryByRole("alert")).toBeNull();
@@ -725,6 +752,7 @@ describe("KonfigureraClient — saveError banner", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     // No editable affordances → no Spara button → no possibility to trigger.
@@ -748,6 +776,7 @@ describe("KonfigureraClient — saveError banner", () => {
           prev={null}
           next={null}
           paymentTerms={null}
+          events={[]}
         />,
       );
       fireEvent.click(screen.getByText("tag-add"));
@@ -781,6 +810,7 @@ describe("KonfigureraClient — lifecycle actions (7.2b.4d.2)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(screen.getByText(/Fler åtgärder/)).toBeTruthy();
@@ -796,6 +826,7 @@ describe("KonfigureraClient — lifecycle actions (7.2b.4d.2)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(screen.queryByText(/Fler åtgärder/)).toBeNull();
@@ -815,6 +846,7 @@ describe("KonfigureraClient — lifecycle actions (7.2b.4d.2)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -844,6 +876,7 @@ describe("KonfigureraClient — lifecycle actions (7.2b.4d.2)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     fireEvent.click(screen.getByText("Skicka faktura"));
@@ -874,6 +907,7 @@ describe("KonfigureraClient — lifecycle actions (7.2b.4d.2)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     fireEvent.click(screen.getByText("Skicka faktura"));
@@ -905,6 +939,7 @@ describe("KonfigureraClient — lifecycle actions (7.2b.4d.2)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     fireEvent.click(screen.getByText("Skicka faktura"));
@@ -934,6 +969,7 @@ describe("KonfigureraClient — lifecycle actions (7.2b.4d.2)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     fireEvent.click(screen.getByText("Skicka faktura"));
@@ -955,6 +991,7 @@ describe("KonfigureraClient — lifecycle actions (7.2b.4d.2)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     fireEvent.click(screen.getByText("Markera som betald"));
@@ -980,6 +1017,7 @@ describe("KonfigureraClient — lifecycle actions (7.2b.4d.2)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     fireEvent.click(screen.getByText("Markera som betald"));
@@ -1003,6 +1041,7 @@ describe("KonfigureraClient — lifecycle actions (7.2b.4d.2)", () => {
         prev={null}
         next={null}
         paymentTerms={null}
+        events={[]}
       />,
     );
     fireEvent.click(screen.getByText(/Fler åtgärder/));
@@ -1033,6 +1072,7 @@ describe("KonfigureraClient — lifecycle actions (7.2b.4d.2)", () => {
           prev={null}
           next={null}
           paymentTerms={null}
+          events={[]}
         />,
       );
       fireEvent.click(screen.getByText(/Fler åtgärder/));
@@ -1051,5 +1091,84 @@ describe("KonfigureraClient — lifecycle actions (7.2b.4d.2)", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("KonfigureraClient — timeline integration (7.2b.4e)", () => {
+  it("empty events array → 'Ingen aktivitet.' rendered in pf-main", () => {
+    render(
+      <KonfigureraClient
+        draft={baseDraft}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+      />,
+    );
+    expect(screen.getByText("Ingen aktivitet.")).toBeTruthy();
+    expect(screen.getByText("Aktivitet")).toBeTruthy();
+  });
+
+  it("renders timeline events alongside other cards", () => {
+    render(
+      <KonfigureraClient
+        draft={baseDraft}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[
+          {
+            id: "ev_1",
+            type: "CREATED",
+            metadata: {},
+            actorUserId: null,
+            actorSource: "admin_ui",
+            createdAt: new Date("2026-04-28T10:00:00Z"),
+          },
+          {
+            id: "ev_2",
+            type: "INVOICE_SENT",
+            metadata: {},
+            actorUserId: null,
+            actorSource: "admin_ui",
+            createdAt: new Date("2026-04-28T11:00:00Z"),
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Utkast skapat")).toBeTruthy();
+    expect(screen.getByText("Faktura skickad")).toBeTruthy();
+    expect(screen.queryByText("Ingen aktivitet.")).toBeNull();
+  });
+
+  it("timeline renders for terminal-status drafts (always read-only)", () => {
+    render(
+      <KonfigureraClient
+        draft={{ ...baseDraft, status: "COMPLETED" }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[
+          {
+            id: "ev_1",
+            type: "CONVERTED",
+            metadata: {},
+            actorUserId: null,
+            actorSource: "webhook",
+            createdAt: new Date("2026-04-28T10:00:00Z"),
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Konverterad till order")).toBeTruthy();
   });
 });
