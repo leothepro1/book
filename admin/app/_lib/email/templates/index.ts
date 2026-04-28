@@ -19,6 +19,7 @@ import MagicLink from "./magic-link";
 import SupportReply from "./support-reply";
 import GuestOtp from "./guest-otp";
 import OrderConfirmed from "./order-confirmed";
+import DraftInvoice from "./draft-invoice";
 import GiftCardSent from "./gift-card-sent";
 import PaymentFailed from "./payment-failed";
 import AbandonedCheckout from "./abandoned-checkout";
@@ -48,6 +49,7 @@ const TEMPLATE_MAP: Record<EmailEventType, TemplateRenderer> = {
   SUPPORT_REPLY: (v, b) => render(React.createElement(SupportReply as any, { ...v, branding: b })),
   GUEST_OTP: (v, b) => render(React.createElement(GuestOtp as any, { ...v, branding: b })),
   ORDER_CONFIRMED: (v, b) => render(React.createElement(OrderConfirmed as any, { ...v, branding: b })),
+  DRAFT_INVOICE: (v, b) => render(React.createElement(DraftInvoice as any, { ...v, branding: b })),
   GIFT_CARD_SENT: (v, b) => render(React.createElement(GiftCardSent as any, { ...v, branding: b })),
   PAYMENT_FAILED: (v, b) => render(React.createElement(PaymentFailed as any, { ...v, branding: b })),
   ABANDONED_CHECKOUT: (v, b) => render(React.createElement(AbandonedCheckout as any, { ...v, branding: b })),

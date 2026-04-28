@@ -34,6 +34,7 @@ export type EmailEventType =
   | "SUPPORT_REPLY"
   | "GUEST_OTP"
   | "ORDER_CONFIRMED"
+  | "DRAFT_INVOICE"
   | "GIFT_CARD_SENT"
   | "PAYMENT_FAILED"
   | "ABANDONED_CHECKOUT"
@@ -149,6 +150,24 @@ export const EMAIL_EVENT_REGISTRY: readonly EmailEventDefinition[] = [
     variables: ["guestName", "hotelName", "orderNumber", "failureReason", "retryUrl"],
     defaultSubject: "Betalning misslyckades – {{hotelName}}",
     defaultPreviewText: "Din betalning kunde inte genomföras. Prova igen.",
+  },
+  {
+    type: "DRAFT_INVOICE",
+    label: "Faktura från utkastorder",
+    category: "ordrar",
+    description: "Skickas när en utkastorder skickas som faktura till kunden",
+    canDisable: false,
+    variables: [
+      "guestName",
+      "hotelName",
+      "displayNumber",
+      "totalAmount",
+      "currency",
+      "invoiceUrl",
+      "expiresAt",
+    ],
+    defaultSubject: "Faktura {{displayNumber}} från {{hotelName}}",
+    defaultPreviewText: "Hej {{guestName}}, din faktura {{displayNumber}} är klar att betala.",
   },
 
   // ── Konto ─────────────────────────────────────────────────────
