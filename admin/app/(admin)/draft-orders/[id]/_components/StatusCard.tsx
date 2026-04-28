@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import type { DraftOrder } from "@prisma/client";
 import { format } from "date-fns";
 import { sv } from "date-fns/locale";
@@ -29,7 +29,15 @@ const LABEL: CSSProperties = {
 
 type StatusCardDraft = Pick<
   DraftOrder,
-  "status" | "createdAt" | "expiresAt" | "invoiceSentAt" | "pricesFrozenAt"
+  | "status"
+  | "createdAt"
+  | "expiresAt"
+  | "invoiceSentAt"
+  | "pricesFrozenAt"
+  | "invoiceUrl"
+  | "completedAt"
+  | "cancelledAt"
+  | "cancellationReason"
 >;
 
 interface StatusCardProps {
@@ -45,7 +53,34 @@ function fmtDate(d: Date): string {
   return format(d, "d MMM yyyy", { locale: sv });
 }
 
+const COPY_BUTTON: CSSProperties = {
+  background: "none",
+  border: "none",
+  padding: 0,
+  fontSize: 13,
+  color: "var(--admin-link, #0070d2)",
+  cursor: "pointer",
+  fontFamily: "inherit",
+  textDecoration: "underline",
+};
+
+const REASON_ROW: CSSProperties = {
+  ...ROW,
+  alignItems: "flex-start",
+  fontSize: 12,
+  color: "var(--admin-text-muted)",
+};
+
 export function StatusCard({ draft, stripePaymentIntent }: StatusCardProps) {
+  const [urlCopied, setUrlCopied] = useState(false);
+
+  const handleCopy = async () => {
+    if (!draft.invoiceUrl) return;
+    await navigator.clipboard.writeText(draft.invoiceUrl);
+    setUrlCopied(true);
+    setTimeout(() => setUrlCopied(false), 2000);
+  };
+
   return (
     <div style={CARD}>
       <div className="pf-card-header" style={{ marginBottom: 12 }}>
@@ -74,11 +109,45 @@ export function StatusCard({ draft, stripePaymentIntent }: StatusCardProps) {
           <span>{fmtDateTime(draft.pricesFrozenAt)}</span>
         </div>
       )}
+      {draft.invoiceUrl !== null && (
+        <div style={ROW}>
+          <span style={LABEL}>Fakturalänk</span>
+          <button
+            type="button"
+            style={COPY_BUTTON}
+            onClick={() => {
+              void handleCopy();
+            }}
+          >
+            {urlCopied ? "Kopierat!" : "Kopiera"}
+          </button>
+        </div>
+      )}
       {stripePaymentIntent !== null && (
         <div style={ROW}>
           <span style={LABEL}>Betalning</span>
           <span>{stripePaymentIntent.status}</span>
         </div>
+      )}
+      {draft.completedAt !== null && (
+        <div style={ROW}>
+          <span style={LABEL}>Genomfört</span>
+          <span>{fmtDateTime(draft.completedAt)}</span>
+        </div>
+      )}
+      {draft.cancelledAt !== null && (
+        <>
+          <div style={ROW}>
+            <span style={LABEL}>Avbruten</span>
+            <span>{fmtDateTime(draft.cancelledAt)}</span>
+          </div>
+          {draft.cancellationReason !== null &&
+            draft.cancellationReason.length > 0 && (
+              <div style={REASON_ROW}>
+                <span>Anledning: {draft.cancellationReason}</span>
+              </div>
+            )}
+        </>
       )}
     </div>
   );
