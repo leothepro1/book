@@ -24,4 +24,7 @@ export const DRAFT_ERRORS = {
   TENANT_MISMATCH: "Boende tillhör inte denna tenant",
   PRICING_FAILED: (lineIndex: number) =>
     `Prissättning misslyckades för rad ${lineIndex + 1}`,
+
+  // ── FAS 7.2b.4b.1 — updateDraftCustomer ──
+  INVALID_CUSTOMER: "Kunden kunde inte hittas",
 } as const;

@@ -22,13 +22,15 @@ import { DRAFT_ERRORS } from "./errors";
 export type DraftMetaPatch = {
   expiresAt?: Date;
   internalNote?: string | null;
+  customerNote?: string | null;
   /** Replaces (not merges) the tag array. */
   tags?: string[];
 };
 
 export const DraftMetaPatchSchema = z.object({
   expiresAt: z.date().optional(),
-  internalNote: z.string().nullable().optional(),
+  internalNote: z.string().max(5000).nullable().optional(),
+  customerNote: z.string().max(5000).nullable().optional(),
   tags: z.array(z.string().min(1).max(64)).max(50).optional(),
 });
 
@@ -52,6 +54,7 @@ const EDITABLE_STATUSES: DraftOrderStatus[] = [
 type Diff = {
   expiresAt?: { from: string | null; to: string };
   internalNote?: { from: string | null; to: string | null };
+  customerNote?: { from: string | null; to: string | null };
   tags?: { from: string[]; to: string[] };
 };
 
@@ -73,6 +76,15 @@ function buildDiff(prev: DraftOrder, patch: DraftMetaPatch): Diff {
     diff.internalNote = {
       from: prev.internalNote ?? null,
       to: patch.internalNote ?? null,
+    };
+  }
+  if (
+    patch.customerNote !== undefined &&
+    (patch.customerNote ?? null) !== (prev.customerNote ?? null)
+  ) {
+    diff.customerNote = {
+      from: prev.customerNote ?? null,
+      to: patch.customerNote ?? null,
     };
   }
   if (patch.tags !== undefined) {
@@ -127,6 +139,7 @@ export async function updateDraftMeta(
       };
       if (patch.expiresAt !== undefined) data.expiresAt = patch.expiresAt;
       if (patch.internalNote !== undefined) data.internalNote = patch.internalNote;
+      if (patch.customerNote !== undefined) data.customerNote = patch.customerNote;
       if (patch.tags !== undefined) data.tags = { set: patch.tags };
 
       // Re-validate inside tx (defensive against concurrent transitions).
