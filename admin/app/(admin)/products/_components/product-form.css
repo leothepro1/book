@@ -999,6 +999,34 @@
   background: rgba(0, 0, 0, 0.05);
 }
 
+/* ── Info banner ── */
+
+.pf-info-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  margin: 0 var(--space-4) var(--space-2);
+  max-width: 1000px;
+  background: #FFF8E1;
+  color: #5C4A00;
+  border: 1px solid #F0C75E;
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: 500;
+}
+
+.pf-info-banner__icon {
+  flex-shrink: 0;
+  font-size: 18px;
+  color: #B07A00;
+}
+
+.pf-info-banner__text {
+  flex: 1;
+  line-height: 1.4;
+}
+
 /* ── Sticky footer ── */
 
 .pf-footer {
