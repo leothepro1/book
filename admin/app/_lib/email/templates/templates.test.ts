@@ -16,6 +16,12 @@ const sampleVars: Record<string, string> = {
   cancellationReason: "Gästen avbokade via portalen",
   supportMessage: "Tack för din förfrågan. Ditt rum är på 4:e våningen.",
   ticketUrl: "https://portal.grandhotel.se/support/ticket/99",
+  // Draft-invoice vars
+  displayNumber: "D-2026-0042",
+  totalAmount: "1 234 kr",
+  currency: "SEK",
+  invoiceUrl: "https://grand-hotel-stockholm.rutgr.com/portal/invoice/abc123",
+  expiresAt: "31 maj 2026",
 };
 
 const eventTypes: EmailEventType[] = [
@@ -25,6 +31,7 @@ const eventTypes: EmailEventType[] = [
   "CHECK_OUT_CONFIRMED",
   "MAGIC_LINK",
   "SUPPORT_REPLY",
+  "DRAFT_INVOICE",
 ];
 
 describe("renderDefaultTemplate", () => {

@@ -30,6 +30,8 @@ const RATE_LIMITS: Record<EmailEventType, RateLimitConfig> = {
   SUPPORT_REPLY:       { maxCount: 20, windowMs: 24 * 60 * 60 * 1000 },
   GUEST_OTP:           { maxCount: 3,  windowMs: 15 * 60 * 1000 },
   ORDER_CONFIRMED:     { maxCount: 1,  windowMs: 24 * 60 * 60 * 1000 },
+  // Operator may resend a draft invoice (e.g. after editing); allow 5/24h.
+  DRAFT_INVOICE:       { maxCount: 5,  windowMs: 24 * 60 * 60 * 1000 },
   GIFT_CARD_SENT:      { maxCount: 1,  windowMs: 7 * 24 * 60 * 60 * 1000 }, // 1 per 7 days per key
   PAYMENT_FAILED:      { maxCount: 3,  windowMs: 24 * 60 * 60 * 1000 },
   ABANDONED_CHECKOUT:  { maxCount: 1,  windowMs: 24 * 60 * 60 * 1000 },
