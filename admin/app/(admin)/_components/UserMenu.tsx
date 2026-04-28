@@ -3,23 +3,50 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSidebar } from './SidebarContext';
 import { useUser, useClerk } from '@clerk/nextjs';
+import { useDevClerkUser } from './DevClerkContext';
 
 const IS_DEV = process.env.NODE_ENV === 'development';
 
-const DEV_USER = {
-  firstName: 'Dev',
-  fullName: 'Dev User',
-  username: 'dev',
-  primaryEmailAddress: { emailAddress: 'dev@localhost' },
-  imageUrl: '',
+// ClerkProvider does not wrap in dev (see app/layout.tsx) — calling Clerk
+// hooks would throw. Bind one implementation at module load via the build-time
+// IS_DEV constant; each variant calls hooks unconditionally, so React hook
+// order is stable for the lifetime of the build. The dev variant reads the
+// real Clerk user fetched server-side at admin layout boot.
+type ClerkUserShape = {
+  firstName?: string | null;
+  fullName?: string | null;
+  username?: string | null;
+  primaryEmailAddress?: { emailAddress?: string | null } | null;
+  imageUrl?: string | null;
 };
 
-function useClerkUser() {
-  const clerkUser = IS_DEV ? { user: null } : useUser();
-  const clerkInstance = IS_DEV ? { signOut: () => {} } : useClerk();
-  if (IS_DEV) return { user: DEV_USER, signOut: () => {} };
-  return { user: clerkUser.user, signOut: clerkInstance.signOut };
+type ClerkUserResult = {
+  user: ClerkUserShape | null | undefined;
+  signOut: () => void;
+};
+
+function useClerkUserDev(): ClerkUserResult {
+  const dev = useDevClerkUser();
+  if (!dev) return { user: null, signOut: () => {} };
+  return {
+    user: {
+      firstName: dev.firstName,
+      fullName: dev.fullName,
+      username: dev.username,
+      primaryEmailAddress: dev.emailAddress ? { emailAddress: dev.emailAddress } : null,
+      imageUrl: dev.imageUrl,
+    },
+    signOut: () => {},
+  };
 }
+
+function useClerkUserProd(): ClerkUserResult {
+  const { user } = useUser();
+  const { signOut } = useClerk();
+  return { user, signOut };
+}
+
+const useClerkUser: () => ClerkUserResult = IS_DEV ? useClerkUserDev : useClerkUserProd;
 
 interface UserMenuProps {
   inHeader?: boolean;
