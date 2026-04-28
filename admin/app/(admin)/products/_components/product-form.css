@@ -83,7 +83,7 @@
 }
 
 .pf-actions-dropdown__item:hover {
-  background: #f7f7f7;
+  background: #FAFAFA;
 }
 
 .pf-actions-dropdown__item:disabled {
@@ -259,7 +259,7 @@
   align-items: center;
   justify-content: center;
   border: 1.5px dashed var(--admin-border);
-  background: #F7F7F7;
+  background: #FAFAFA;
   color: #303030;
   cursor: pointer;
   transition: border-color var(--duration-fast), color var(--duration-fast);
@@ -296,7 +296,7 @@
 }
 
 .pf-media-empty__btn:hover {
-  background: #ebebeb;
+  background: #EBEBEB;
   border-color: var(--admin-border-focus);
 }
 
@@ -458,7 +458,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  border-top: 1px solid #E3E3E3;
+  border-top: 1px solid #EBEBEB;
 }
 
 .pf-price-footer__pills {
@@ -600,7 +600,7 @@
 
 .pf-collection-pill {
     color: #303030;
-    background: #E3E3E3;
+    background: #EBEBEB;
     border-radius: 8px;
     align-items: center;
     gap: 4px;
@@ -701,7 +701,7 @@
   display: inline-block;
   padding: 4px 7px;
   border-radius: 6px;
-  background: #E3E3E3;
+  background: #EBEBEB;
   color: #303030;
   font-size: 12px;
   font-weight: 400;
@@ -856,7 +856,7 @@
   display: flex;
   align-items: center;
   padding: 8px 16px;
-  background: #F7F7F7;
+  background: #FAFAFA;
   border-bottom: 1px solid var(--admin-border);
   font-size: 13px;
   font-weight: 400;

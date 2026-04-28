@@ -208,6 +208,29 @@ export const SalesChannelConfigSchema = z.object({
 
 export type SalesChannelConfig = z.infer<typeof SalesChannelConfigSchema>;
 
+// ── App Pages ───────────────────────────────────────────────────
+//
+// Optional sub-navigation within an installed app — a Shopify-style
+// "the app has multiple pages" surface. When an app declares ≥2 pages,
+// it becomes a drill-in section in the sidebar (same primitive as
+// Products / Customers etc.).
+//
+// `slug` is appended to `/apps/{appId}/`; an empty string means the app's
+// default landing page (`/apps/{appId}` itself, served by the app's
+// `page.tsx`). Each declared page MUST have a matching folder in
+// `app/(admin)/apps/{appId}/{slug}/page.tsx`.
+
+export const AppPageSchema = z.object({
+  /** URL slug appended to `/apps/{appId}/`. Empty string = default landing. */
+  slug: z.string().regex(/^[a-z0-9-]*$/, "Slug must be kebab-case (or empty)"),
+  /** Sidebar label shown for this page. */
+  label: z.string().min(1),
+  /** Material Symbols Rounded icon name. */
+  icon: z.string().min(1),
+});
+
+export type AppPage = z.infer<typeof AppPageSchema>;
+
 // ── App Definition ──────────────────────────────────────────────
 
 export const AppDefinitionSchema = z.object({
@@ -248,6 +271,12 @@ export const AppDefinitionSchema = z.object({
   privacyPolicyUrl: z.string().optional(),
   changelog: z.array(AppChangelogEntrySchema).default([]),
   salesChannel: SalesChannelConfigSchema.optional(),
+
+  /**
+   * Optional sub-pages declared by the app. Empty / undefined → flat
+   * single-page app. ≥2 pages → app becomes a sidebar drill-in section.
+   */
+  pages: z.array(AppPageSchema).optional(),
 });
 
 export type AppDefinition = z.infer<typeof AppDefinitionSchema>;

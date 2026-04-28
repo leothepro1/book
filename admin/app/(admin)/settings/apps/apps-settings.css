@@ -315,7 +315,7 @@
   align-items: center;
   padding: 8px 12px;
   border-bottom: 1px solid var(--admin-border);
-  background: #f7f7f7;
+  background: #FAFAFA;
 }
 
 .sa-perm-table__header .sa-perm-table__col {
@@ -432,7 +432,7 @@
   padding: 5px 12px;
   border-radius: var(--radius-sm);
   border: none;
-  background: #e3e3e3;
+  background: #EBEBEB;
   color: var(--admin-text);
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-default);

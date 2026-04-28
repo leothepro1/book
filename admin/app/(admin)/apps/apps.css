@@ -706,7 +706,7 @@ body:has(.app-modal__overlay--visible) {
 .app-modal__pricing {
   margin-top: var(--space-8);
   padding: 24px;
-  background: #f3f3f4;
+  background: #FAFAFA;
 }
 
 .app-modal__pricing-title {

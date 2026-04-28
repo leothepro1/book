@@ -890,7 +890,7 @@ export default function AccommodationForm({
             style={{ background: "#fff", borderRadius: 16, boxShadow: "0 24px 48px rgba(0,0,0,0.16)", width: 560, maxWidth: "90vw", maxHeight: "80vh", overflow: "hidden", display: "flex", flexDirection: "column", animation: "cap-modal-in 0.2s cubic-bezier(0.32, 0.72, 0, 1)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", borderBottom: "1px solid var(--admin-border)", background: "#f3f3f4", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", borderBottom: "1px solid var(--admin-border)", background: "#FAFAFA", flexShrink: 0 }}>
               <span style={{ fontSize: 16, fontWeight: 600, color: "var(--admin-text)" }}>Redigera faciliteter</span>
               <button
                 type="button"
@@ -976,7 +976,7 @@ export default function AccommodationForm({
             style={{ background: "#fff", borderRadius: 16, boxShadow: "0 24px 48px rgba(0,0,0,0.16)", width: 480, maxWidth: "90vw", overflow: "hidden", animation: "cap-modal-in 0.2s cubic-bezier(0.32, 0.72, 0, 1)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", borderBottom: "1px solid var(--admin-border)", background: "#f3f3f4" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", borderBottom: "1px solid var(--admin-border)", background: "#FAFAFA" }}>
               <span style={{ fontSize: 16, fontWeight: 600, color: "var(--admin-text)" }}>Redigera kapacitet</span>
               <button
                 type="button"

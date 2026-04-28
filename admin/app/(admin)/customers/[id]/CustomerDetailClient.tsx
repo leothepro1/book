@@ -8,6 +8,7 @@ import { getOrganisationUsers, type OrgUser } from "@/app/(admin)/settings/users
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { EditorIcon } from "@/app/_components/EditorIcon";
 import { useUser } from "@clerk/nextjs";
+import { useDevClerkUser } from "@/app/(admin)/_components/DevClerkContext";
 import { OrderBadge } from "@/app/(admin)/_components/orders/OrderBadge";
 import type { OrderFulfillmentStatus } from "@prisma/client";
 import "../../products/_components/product-form.css";
@@ -47,6 +48,17 @@ function customerName(first: string | null, last: string | null): string {
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
+// ClerkProvider does not wrap in dev (see app/layout.tsx). Bind at module
+// load — each variant calls hooks unconditionally. The dev variant reads
+// the real Clerk user fetched server-side at admin layout boot.
+function useClerkAvatarUrlDev(): string | null {
+  return useDevClerkUser()?.imageUrl || null;
+}
+function useClerkAvatarUrlProd(): string | null {
+  return useUser().user?.imageUrl ?? null;
+}
+const useClerkAvatarUrl: () => string | null = IS_DEV ? useClerkAvatarUrlDev : useClerkAvatarUrlProd;
+
 // ── Component ────────────────────────────────────────────────
 
 export function CustomerDetailClient({ customerId }: { customerId: string }) {
@@ -66,8 +78,7 @@ export function CustomerDetailClient({ customerId }: { customerId: string }) {
   const [mentionUsers, setMentionUsers] = useState<OrgUser[]>([]);
   const [mentionLoading, setMentionLoading] = useState(false);
   const [mentionedStaff, setMentionedStaff] = useState<OrgUser[]>([]);
-  const clerkUser = IS_DEV ? null : useUser().user;
-  const avatarUrl = clerkUser?.imageUrl ?? null;
+  const avatarUrl = useClerkAvatarUrl();
   const actionsRef = useRef<HTMLDivElement>(null);
   const mentionRef = useRef<HTMLDivElement>(null);
 
@@ -670,7 +681,7 @@ export function CustomerDetailClient({ customerId }: { customerId: string }) {
               style={{ background: "#fff", borderRadius: 16, boxShadow: "0 24px 48px rgba(0,0,0,0.16)", width: 480, maxWidth: "90vw", overflow: "hidden" }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", borderBottom: "1px solid var(--admin-border)", background: "#f3f3f4" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", borderBottom: "1px solid var(--admin-border)", background: "#FAFAFA" }}>
                 <span style={{ fontSize: 16, fontWeight: 600, color: "var(--admin-text)" }}>Redigera anteckningar</span>
                 <button
                   type="button"

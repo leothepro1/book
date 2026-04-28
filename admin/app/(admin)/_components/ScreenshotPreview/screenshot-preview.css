@@ -2,7 +2,7 @@
 
 .ss-preview {
   padding: 24px 24px 0 24px;
-  background: #f7f7f7;
+  background: #FAFAFA;
   overflow: hidden;
 }
 
@@ -23,7 +23,7 @@
   aspect-ratio: 8 / 5;
   border-radius: var(--radius-md);
   overflow: hidden;
-  background: #f7f7f7;
+  background: #FAFAFA;
   border: none;
   box-shadow: 0rem .5rem 1.5rem -.5rem rgba(0, 0, 0, .28), 0rem .5rem 1rem -.25rem rgba(0, 0, 0, .05), 0rem .1875rem .375rem 0rem rgba(0, 0, 0, .05), 0rem .125rem .25rem 0rem rgba(0, 0, 0, .05), 0rem .0625rem .125rem 0rem rgba(0, 0, 0, .05), 0rem 0rem 0rem .0625rem rgba(0, 0, 0, .06);
 }
@@ -36,7 +36,7 @@
   aspect-ratio: 390 / 844;
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: #f7f7f7;
+  background: #FAFAFA;
   border: 1px solid var(--admin-border);
   box-shadow: 0rem .5rem 1.5rem -.5rem rgba(0, 0, 0, .28), 0rem .5rem 1rem -.25rem rgba(0, 0, 0, .05), 0rem .1875rem .375rem 0rem rgba(0, 0, 0, .05), 0rem .125rem .25rem 0rem rgba(0, 0, 0, .05), 0rem .0625rem .125rem 0rem rgba(0, 0, 0, .05), 0rem 0rem 0rem .0625rem rgba(0, 0, 0, .06);
 }

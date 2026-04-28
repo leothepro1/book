@@ -118,7 +118,7 @@
   flex-shrink: 0 !important;
   height: 100% !important;
   overflow-y: auto !important;
-  background: #f3f3f4 !important;
+  background: #FAFAFA !important;
   border-right: none !important;
   z-index: 1;
   padding: 16px;
@@ -321,7 +321,7 @@
   min-width: 0 !important;
   height: 100% !important;
   position: relative !important;
-  background: #f3f3f4 !important;
+  background: #FAFAFA !important;
   overflow: hidden !important;
   display: flex !important;
 }

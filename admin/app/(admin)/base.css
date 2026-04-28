@@ -11,11 +11,11 @@
 :root,
 [data-theme="light"] {
   /* Surface / Background */
-  --admin-bg:            #F3F3F4;
+  --admin-bg:            #FAFAFA;
   --admin-surface:       #FFFFFF;
-  --admin-surface-hover: #f7f7f7;
+  --admin-surface-hover: #FAFAFA;
   --admin-surface-active:#f3f3f3;
-  --admin-surface-muted: #F3F3F4;
+  --admin-surface-muted: #FAFAFA;
   --admin-surface-sunken:#ECEBEA;
 
   /* Sidebar */
@@ -189,7 +189,7 @@
   --upload-empty-min-height:     96px;
   --upload-empty-border:         1.5px dashed var(--admin-border);
   --upload-empty-radius:         0.7rem;
-  --upload-empty-bg:             #f7f7f7;
+  --upload-empty-bg:             #FAFAFA;
   --upload-empty-bg-hover:       #f0f0f0;
   --upload-empty-padding:        16px;
 }
@@ -735,7 +735,7 @@ textarea::placeholder {
 
 .admin-dropdown__item--active {
   font-weight: 500;
-  background: #f3f3f4;
+  background: #FAFAFA;
 }
 
 /* Check icon inside active item */
