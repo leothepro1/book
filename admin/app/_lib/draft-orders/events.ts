@@ -40,7 +40,9 @@ export type DraftEventType =
   // FAS 6.5E
   | "EXPIRED_CLEANUP"
   // FAS 7.0
-  | "META_UPDATED";
+  | "META_UPDATED"
+  // FAS 7.2b.4b.1
+  | "CUSTOMER_UPDATED";
 
 /** Where the event originated — freeform but these are the known sources. */
 export type DraftEventActorSource =
