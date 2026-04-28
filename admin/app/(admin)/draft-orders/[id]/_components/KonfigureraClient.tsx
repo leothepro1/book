@@ -14,6 +14,7 @@ import { DraftBadge } from "@/app/(admin)/_components/draft-orders/DraftBadge";
 import { PublishBarUI } from "@/app/(admin)/_components/PublishBar/PublishBar";
 
 import { LineItemsCard } from "./LineItemsCard";
+import { TimelineCard, type TimelineEvent } from "./TimelineCard";
 import { LineItemsCardEditable } from "./LineItemsCardEditable";
 import { PaymentCard } from "./PaymentCard";
 import { PaymentCardEditable } from "./PaymentCardEditable";
@@ -105,6 +106,7 @@ interface KonfigureraClientProps {
   prev: { id: string; displayNumber: string } | null;
   next: { id: string; displayNumber: string } | null;
   paymentTerms: KonfigureraPaymentTerms | null;
+  events: TimelineEvent[];
 }
 
 const NAV_BUTTON: CSSProperties = {
@@ -141,6 +143,7 @@ export function KonfigureraClient({
   prev,
   next,
   paymentTerms,
+  events,
 }: KonfigureraClientProps) {
   const router = useRouter();
 
@@ -475,6 +478,8 @@ export function KonfigureraClient({
                 frozen={paymentTerms.frozen}
               />
             )}
+
+            <TimelineCard events={events} />
           </div>
           <div className="pf-sidebar">
             <StatusCard

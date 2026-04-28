@@ -95,6 +95,14 @@ export default async function KonfigureraDraftPage({
       prev={detail.prev}
       next={detail.next}
       paymentTerms={paymentTerms}
+      events={detail.events.map((e) => ({
+        id: e.id,
+        type: e.type,
+        metadata: e.metadata,
+        actorUserId: e.actorUserId,
+        actorSource: e.actorSource,
+        createdAt: e.createdAt,
+      }))}
     />
   );
 }
