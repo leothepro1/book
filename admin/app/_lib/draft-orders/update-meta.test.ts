@@ -290,6 +290,97 @@ describe("updateDraftMeta — expiresAt diff", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// customerNote — added FAS 7.2b.4b.1
+// ═══════════════════════════════════════════════════════════════
+
+describe("updateDraftMeta — customerNote", () => {
+  it("set: persists customerNote and records diff", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeDraft({ customerNote: null }),
+    );
+    mockTx.draftOrder.findFirst.mockResolvedValue({ status: "OPEN" });
+    mockTx.draftOrder.update.mockResolvedValue(
+      makeDraft({ customerNote: "Hej kund", version: 2 }),
+    );
+
+    const result = await updateDraftMeta(
+      "draft_1",
+      "tenant_1",
+      { customerNote: "Hej kund" },
+      { source: "admin_ui" },
+    );
+
+    expect(result.ok).toBe(true);
+    const updateArgs = mockTx.draftOrder.update.mock.calls[0][0] as {
+      data: { customerNote: string | null };
+    };
+    expect(updateArgs.data.customerNote).toBe("Hej kund");
+
+    const eventArgs = mockTx.draftOrderEvent.create.mock.calls[0][0] as {
+      data: {
+        metadata: {
+          diff: { customerNote?: { from: string | null; to: string | null } };
+        };
+      };
+    };
+    expect(eventArgs.data.metadata.diff.customerNote).toEqual({
+      from: null,
+      to: "Hej kund",
+    });
+  });
+
+  it("clear: customerNote → null persists and records diff", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeDraft({ customerNote: "tidigare" }),
+    );
+    mockTx.draftOrder.findFirst.mockResolvedValue({ status: "OPEN" });
+    mockTx.draftOrder.update.mockResolvedValue(
+      makeDraft({ customerNote: null, version: 2 }),
+    );
+
+    const result = await updateDraftMeta(
+      "draft_1",
+      "tenant_1",
+      { customerNote: null },
+      { source: "admin_ui" },
+    );
+
+    expect(result.ok).toBe(true);
+    const updateArgs = mockTx.draftOrder.update.mock.calls[0][0] as {
+      data: { customerNote: string | null };
+    };
+    expect(updateArgs.data.customerNote).toBeNull();
+    const eventArgs = mockTx.draftOrderEvent.create.mock.calls[0][0] as {
+      data: {
+        metadata: {
+          diff: { customerNote?: { from: string | null; to: string | null } };
+        };
+      };
+    };
+    expect(eventArgs.data.metadata.diff.customerNote).toEqual({
+      from: "tidigare",
+      to: null,
+    });
+  });
+
+  it("no-op: same customerNote → no event", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeDraft({ customerNote: "samma" }),
+    );
+
+    const result = await updateDraftMeta(
+      "draft_1",
+      "tenant_1",
+      { customerNote: "samma" },
+      { source: "admin_ui" },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(mockTx.draftOrderEvent.create).not.toHaveBeenCalled();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
 // In-tx race protection (terminal status flips during tx)
 // ═══════════════════════════════════════════════════════════════
 
