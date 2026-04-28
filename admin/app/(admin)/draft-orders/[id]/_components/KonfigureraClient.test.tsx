@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { act } from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const pushMock = vi.fn();
@@ -494,6 +495,12 @@ describe("KonfigureraClient — handleSave + handleDiscard", () => {
     // dirty.meta still true → bar stays visible
     const bar = document.querySelector(".publish-actions");
     expect(bar?.classList.contains("publish-actions--visible")).toBe(true);
+    // saveError banner surfaces the service error message
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toBe(
+        "Utkast med status OPEN kan inte ändras",
+      );
+    });
   });
 
   it("discard resets dirty + state from draft prop", () => {
@@ -550,6 +557,12 @@ describe("KonfigureraClient — sequential save with stop-at-first-failure (Q8)"
     await waitFor(() => expect(updateCustomerMock).toHaveBeenCalled());
     await waitFor(() => expect(updateMetaMock).toHaveBeenCalled());
     expect(refreshMock).not.toHaveBeenCalled();
+    // saveError banner displays the meta-failure message
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toBe(
+        "Utkast med status FOO kan inte ändras",
+      );
+    });
   });
 
   it("customer-failure stops the chain: meta NOT called", async () => {
@@ -574,5 +587,83 @@ describe("KonfigureraClient — sequential save with stop-at-first-failure (Q8)"
     await waitFor(() => expect(updateCustomerMock).toHaveBeenCalled());
     expect(updateMetaMock).not.toHaveBeenCalled();
     expect(refreshMock).not.toHaveBeenCalled();
+    // saveError banner surfaces the customer-failure message
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toBe(
+        "Kunden kunde inte hittas",
+      );
+    });
+  });
+});
+
+describe("KonfigureraClient — saveError banner", () => {
+  it("not rendered initially when no save has failed", () => {
+    render(
+      <KonfigureraClient
+        draft={baseDraft}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("does not render when !editable (banner is gated by editable flag)", async () => {
+    updateMetaMock.mockResolvedValueOnce({ ok: false, error: "x" });
+    render(
+      <KonfigureraClient
+        draft={{ ...baseDraft, status: "COMPLETED" }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    // No editable affordances → no Spara button → no possibility to trigger.
+    expect(screen.queryByText("Spara")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("auto-clears after 5000ms", async () => {
+    vi.useFakeTimers();
+    updateMetaMock.mockResolvedValueOnce({
+      ok: false,
+      error: "Tillfälligt fel",
+    });
+    try {
+      render(
+        <KonfigureraClient
+          draft={baseDraft}
+          reservations={[]}
+          customer={null}
+          stripePaymentIntent={null}
+          prev={null}
+          next={null}
+          paymentTerms={null}
+        />,
+      );
+      fireEvent.click(screen.getByText("tag-add"));
+      fireEvent.click(screen.getByText("Spara"));
+      // Flush the action's microtasks via act() so React commits the
+      // setSaveError state-change. Advance only 100ms — well below the
+      // 5000ms auto-clear timeout.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+      expect(screen.getByRole("alert").textContent).toBe("Tillfälligt fel");
+      // Advance past the 5000ms threshold (cumulative: 100 + 4901 > 5000).
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4901);
+      });
+      expect(screen.queryByRole("alert")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

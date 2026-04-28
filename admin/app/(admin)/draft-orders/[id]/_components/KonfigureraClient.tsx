@@ -191,6 +191,7 @@ export function KonfigureraClient({
       });
       if (!result.ok) {
         setSaveError(result.error);
+        setTimeout(() => setSaveError(null), 5000);
         setIsSaving(false);
         return;
       }
@@ -207,6 +208,7 @@ export function KonfigureraClient({
       });
       if (!result.ok) {
         setSaveError(result.error);
+        setTimeout(() => setSaveError(null), 5000);
         setIsSaving(false);
         return;
       }
@@ -375,6 +377,12 @@ export function KonfigureraClient({
           </div>
         </div>
       </div>
+
+      {editable && saveError && (
+        <div className="pf-error-banner" role="alert" aria-live="polite">
+          {saveError}
+        </div>
+      )}
 
       {editable && (
         <PublishBarUI
