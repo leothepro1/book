@@ -16,6 +16,7 @@ import { PublishBarUI } from "@/app/(admin)/_components/PublishBar/PublishBar";
 import { LineItemsCard } from "./LineItemsCard";
 import { LineItemsCardEditable } from "./LineItemsCardEditable";
 import { PaymentCard } from "./PaymentCard";
+import { PaymentCardEditable } from "./PaymentCardEditable";
 import { PaymentTermsCard } from "./PaymentTermsCard";
 import { StatusCard } from "./StatusCard";
 import { CustomerCard } from "./CustomerCard";
@@ -29,10 +30,19 @@ import { TagsCardEditable } from "./TagsCardEditable";
 import { ExpiresAtCardEditable } from "./ExpiresAtCardEditable";
 import { DiscountCardEditable } from "./DiscountCardEditable";
 import { PricesFrozenBanner } from "./PricesFrozenBanner";
+import { ConfirmModal } from "./ConfirmModal";
+import {
+  HeaderActionsDropdown,
+  type HeaderActionsDropdownItem,
+} from "./HeaderActionsDropdown";
 import {
   updateDraftMetaAction,
   updateDraftCustomerAction,
+  sendDraftInvoiceAction,
+  markDraftAsPaidAction,
+  cancelDraftAction,
 } from "../actions";
+import type { EmailSendResult } from "@/app/_lib/email";
 
 // EDITABLE_STATUSES är private i service-modulerna (update-meta.ts +
 // update-customer.ts). Duplicerad här som UI-advisory copy; service är
@@ -57,6 +67,8 @@ export type KonfigureraClientDraft = {
   pricesFrozenAt: Date | null;
   cancelledAt: Date | null;
   completedAt: Date | null;
+  cancellationReason: string | null;
+  invoiceUrl: string | null;
   guestAccountId: string | null;
   companyLocationId: string | null;
   contactFirstName: string | null;
@@ -164,6 +176,39 @@ export function KonfigureraClient({
   const [savedAt, setSavedAt] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Lifecycle-action state (FAS 7.2b.4d.2).
+  const [confirmKind, setConfirmKind] = useState<
+    "send-invoice" | "mark-paid" | "cancel" | null
+  >(null);
+  const [confirmReason, setConfirmReason] = useState("");
+  const [confirmReference, setConfirmReference] = useState("");
+  const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionResult, setActionResult] = useState<{
+    invoiceUrl: string;
+    emailStatus: EmailSendResult["status"] | null;
+  } | null>(null);
+
+  // Banner derivation (Q10): error vs info vs none based on emailStatus.
+  const emailStatus = actionResult?.emailStatus ?? null;
+  const emailBannerKind: "error" | "info" | null =
+    emailStatus === "failed" || emailStatus === "rate_limited"
+      ? "error"
+      : emailStatus === "skipped_unsubscribed" ||
+          emailStatus === "event_disabled"
+        ? "info"
+        : null;
+  const emailBannerText: string | null =
+    emailStatus === "failed"
+      ? "Email kunde inte levereras — använd länken nedan"
+      : emailStatus === "rate_limited"
+        ? "För många mail skickade — försök igen om en stund"
+        : emailStatus === "skipped_unsubscribed"
+          ? "Mottagaren har avregistrerat sig — använd länken nedan istället"
+          : emailStatus === "event_disabled"
+            ? "Email-händelse avstängd för denna butik"
+            : null;
+
   const handleCustomerChange = useCallback(
     (next: { guestAccountId: string | null }) => {
       setCustomerState(next);
@@ -246,6 +291,80 @@ export function KonfigureraClient({
     setIsDiscarding(false);
   }, [draft]);
 
+  // Lifecycle-action handlers (FAS 7.2b.4d.2).
+  const handleSendInvoiceConfirm = useCallback(async () => {
+    setActionPending(true);
+    setActionError(null);
+    const result = await sendDraftInvoiceAction({ draftId: draft.id });
+    setActionPending(false);
+    setConfirmKind(null);
+    if (result.ok) {
+      setActionResult({
+        invoiceUrl: result.invoiceUrl,
+        emailStatus: result.emailStatus,
+      });
+      router.refresh();
+    } else {
+      setActionError(result.error);
+      setTimeout(() => setActionError(null), 5000);
+    }
+  }, [draft.id, router]);
+
+  const handleMarkAsPaidConfirm = useCallback(async () => {
+    setActionPending(true);
+    setActionError(null);
+    const result = await markDraftAsPaidAction({
+      draftId: draft.id,
+      reference: confirmReference.trim() || undefined,
+    });
+    setActionPending(false);
+    setConfirmKind(null);
+    setConfirmReference("");
+    if (result.ok) {
+      router.refresh();
+    } else {
+      setActionError(result.error);
+      setTimeout(() => setActionError(null), 5000);
+    }
+  }, [draft.id, confirmReference, router]);
+
+  const handleCancelConfirm = useCallback(async () => {
+    setActionPending(true);
+    setActionError(null);
+    const result = await cancelDraftAction({
+      draftId: draft.id,
+      reason: confirmReason.trim() || undefined,
+    });
+    setActionPending(false);
+    setConfirmKind(null);
+    setConfirmReason("");
+    if (result.ok) {
+      router.refresh();
+    } else {
+      setActionError(result.error);
+      setTimeout(() => setActionError(null), 5000);
+    }
+  }, [draft.id, confirmReason, router]);
+
+  // Dropdown items derivation: cancel is hidden for terminal/PAID statuses.
+  const isCancellable = !["CANCELLED", "COMPLETED", "REJECTED", "PAID"].includes(
+    draft.status,
+  );
+  const dropdownItems: HeaderActionsDropdownItem[] = [];
+  if (isCancellable) {
+    dropdownItems.push({
+      key: "cancel",
+      label: "Avbryt utkast",
+      danger: true,
+      onClick: () => setConfirmKind("cancel"),
+    });
+  }
+
+  // PaymentCardEditable visibility: any non-terminal status.
+  const paymentEditable = !["REJECTED", "COMPLETED", "CANCELLED"].includes(
+    draft.status,
+  );
+
   return (
     <div className="admin-page admin-page--no-preview products-page">
       <div className="admin-editor">
@@ -278,6 +397,7 @@ export function KonfigureraClient({
             </span>
           </h1>
           <div style={NAV_GROUP}>
+            <HeaderActionsDropdown items={dropdownItems} />
             <button
               type="button"
               style={prev ? NAV_BUTTON : NAV_BUTTON_DISABLED}
@@ -316,7 +436,37 @@ export function KonfigureraClient({
             ) : (
               <LineItemsCard lines={draft.lineItems} />
             )}
-            <PaymentCard draft={draft} />
+
+            {/* Email-status banner: ephemeral, after sendInvoice success.
+                error variant for failed/rate_limited; info for skipped/disabled. */}
+            {emailBannerText && emailBannerKind === "error" && (
+              <div className="pf-error-banner" role="alert">
+                {emailBannerText}
+              </div>
+            )}
+            {emailBannerText && emailBannerKind === "info" && (
+              <div className="pf-info-banner" role="status">
+                <span className="pf-info-banner__text">{emailBannerText}</span>
+              </div>
+            )}
+
+            {/* Action-error banner: ephemeral, auto-clears after 5000ms. */}
+            {actionError && (
+              <div className="pf-error-banner" role="alert">
+                {actionError}
+              </div>
+            )}
+
+            {paymentEditable ? (
+              <PaymentCardEditable
+                draft={draft}
+                customerEmail={customer?.email ?? null}
+                onSendInvoice={() => setConfirmKind("send-invoice")}
+                onMarkAsPaid={() => setConfirmKind("mark-paid")}
+              />
+            ) : (
+              <PaymentCard draft={draft} />
+            )}
             {paymentTerms !== null && (
               <PaymentTermsCard
                 paymentTermsId={paymentTerms.id}
@@ -414,6 +564,114 @@ export function KonfigureraClient({
           error={saveError}
         />
       )}
+
+      <ConfirmModal
+        open={confirmKind === "send-invoice"}
+        title="Skicka faktura"
+        description={
+          <>
+            Att skicka faktura låser prissnapshot — det kan inte ändras
+            efter detta. Stripe skapar en betalningslänk och ett email
+            skickas till kunden.
+          </>
+        }
+        confirmLabel="Skicka"
+        isPending={actionPending}
+        onConfirm={handleSendInvoiceConfirm}
+        onCancel={() => setConfirmKind(null)}
+      />
+
+      <ConfirmModal
+        open={confirmKind === "mark-paid"}
+        title="Markera som betald"
+        description={
+          <>
+            Detta registrerar manuell betalning (t.ex. bankgiro eller
+            kontant) och konverterar utkastet till en order.
+          </>
+        }
+        confirmLabel="Markera"
+        isPending={actionPending}
+        onConfirm={handleMarkAsPaidConfirm}
+        onCancel={() => {
+          setConfirmKind(null);
+          setConfirmReference("");
+        }}
+      >
+        <label
+          style={{
+            display: "block",
+            fontSize: 13,
+            color: "var(--admin-text-muted)",
+            marginBottom: 6,
+          }}
+        >
+          Referens (valfritt)
+        </label>
+        <input
+          type="text"
+          value={confirmReference}
+          onChange={(e) => setConfirmReference(e.target.value)}
+          placeholder="T.ex. Bankgiro 5050-1234"
+          disabled={actionPending}
+          style={{
+            width: "100%",
+            padding: "8px 12px",
+            border: "1px solid var(--admin-border)",
+            borderRadius: 6,
+            fontSize: 14,
+            fontFamily: "inherit",
+          }}
+        />
+      </ConfirmModal>
+
+      <ConfirmModal
+        open={confirmKind === "cancel"}
+        title="Avbryt utkast"
+        description={
+          <>
+            Utkastet markeras som avbrutet och kan inte återställas.
+            Stripe-betalningen avbryts automatiskt om en sådan finns.
+            Eventuella PMS-reservationer släpps.
+          </>
+        }
+        confirmLabel="Avbryt utkastet"
+        danger
+        isPending={actionPending}
+        onConfirm={handleCancelConfirm}
+        onCancel={() => {
+          setConfirmKind(null);
+          setConfirmReason("");
+        }}
+      >
+        <label
+          style={{
+            display: "block",
+            fontSize: 13,
+            color: "var(--admin-text-muted)",
+            marginBottom: 6,
+          }}
+        >
+          Anledning (valfritt)
+        </label>
+        <textarea
+          value={confirmReason}
+          onChange={(e) => setConfirmReason(e.target.value)}
+          rows={3}
+          placeholder="T.ex. kunden ändrade sig"
+          disabled={actionPending}
+          style={{
+            width: "100%",
+            padding: "8px 12px",
+            border: "1px solid var(--admin-border)",
+            borderRadius: 6,
+            fontSize: 14,
+            fontFamily: "inherit",
+            resize: "vertical",
+            minHeight: 60,
+          }}
+        />
+      </ConfirmModal>
     </div>
   );
 }

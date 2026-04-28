@@ -8,6 +8,9 @@ const pushMock = vi.fn();
 const refreshMock = vi.fn();
 const updateMetaMock = vi.fn();
 const updateCustomerMock = vi.fn();
+const sendInvoiceMock = vi.fn();
+const markPaidMock = vi.fn();
+const cancelMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock, refresh: refreshMock }),
@@ -21,6 +24,9 @@ vi.mock("../actions", () => ({
   addDraftLineItemAction: vi.fn(),
   updateDraftLineItemAction: vi.fn(),
   removeDraftLineItemAction: vi.fn(),
+  sendDraftInvoiceAction: (input: unknown) => sendInvoiceMock(input),
+  markDraftAsPaidAction: (input: unknown) => markPaidMock(input),
+  cancelDraftAction: (input: unknown) => cancelMock(input),
 }));
 
 // Mock the cross-route AccommodationPickerModal to avoid importing the
@@ -119,6 +125,8 @@ const baseDraft: KonfigureraClientDraft = {
   pricesFrozenAt: null,
   cancelledAt: null,
   completedAt: null,
+  cancellationReason: null,
+  invoiceUrl: null,
   guestAccountId: null,
   companyLocationId: null,
   contactFirstName: null,
@@ -145,6 +153,9 @@ beforeEach(() => {
   refreshMock.mockReset();
   updateMetaMock.mockReset();
   updateCustomerMock.mockReset();
+  sendInvoiceMock.mockReset();
+  markPaidMock.mockReset();
+  cancelMock.mockReset();
 });
 
 describe("KonfigureraClient — header & layout (status-agnostic)", () => {
@@ -753,6 +764,290 @@ describe("KonfigureraClient — saveError banner", () => {
         await vi.advanceTimersByTimeAsync(4901);
       });
       expect(screen.queryByRole("alert")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("KonfigureraClient — lifecycle actions (7.2b.4d.2)", () => {
+  it("OPEN status → 'Fler åtgärder' dropdown rendered", () => {
+    render(
+      <KonfigureraClient
+        draft={baseDraft}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    expect(screen.getByText(/Fler åtgärder/)).toBeTruthy();
+  });
+
+  it("COMPLETED status → no dropdown (items=[])", () => {
+    render(
+      <KonfigureraClient
+        draft={{ ...baseDraft, status: "COMPLETED" }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    expect(screen.queryByText(/Fler åtgärder/)).toBeNull();
+  });
+
+  it("clicking 'Skicka faktura' opens send-invoice ConfirmModal", () => {
+    render(
+      <KonfigureraClient
+        draft={{
+          ...baseDraft,
+          guestAccountId: "g_1",
+          contactEmail: "x@y.z",
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByText("Skicka faktura"));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeTruthy();
+    expect(dialog.textContent).toContain("Skicka faktura");
+  });
+
+  it("send-invoice success with emailStatus='sent' → router.refresh, no banner", async () => {
+    sendInvoiceMock.mockResolvedValueOnce({
+      ok: true,
+      draft: { id: "draft_1" },
+      invoiceUrl: "https://x/inv",
+      emailStatus: "sent",
+    });
+    render(
+      <KonfigureraClient
+        draft={{
+          ...baseDraft,
+          guestAccountId: "g_1",
+          contactEmail: "x@y.z",
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    fireEvent.click(screen.getByText("Skicka faktura"));
+    fireEvent.click(screen.getByText("Skicka"));
+    await waitFor(() => expect(sendInvoiceMock).toHaveBeenCalled());
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    // No error/info banner should appear for emailStatus=sent
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("send-invoice success with emailStatus='failed' → error banner with copy hint", async () => {
+    sendInvoiceMock.mockResolvedValueOnce({
+      ok: true,
+      draft: { id: "draft_1" },
+      invoiceUrl: "https://x/inv",
+      emailStatus: "failed",
+    });
+    render(
+      <KonfigureraClient
+        draft={{
+          ...baseDraft,
+          guestAccountId: "g_1",
+          contactEmail: "x@y.z",
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    fireEvent.click(screen.getByText("Skicka faktura"));
+    fireEvent.click(screen.getByText("Skicka"));
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Email kunde inte levereras/),
+      ).toBeTruthy(),
+    );
+  });
+
+  it("send-invoice success with emailStatus='skipped_unsubscribed' → info banner", async () => {
+    sendInvoiceMock.mockResolvedValueOnce({
+      ok: true,
+      draft: { id: "draft_1" },
+      invoiceUrl: "https://x/inv",
+      emailStatus: "skipped_unsubscribed",
+    });
+    render(
+      <KonfigureraClient
+        draft={{
+          ...baseDraft,
+          guestAccountId: "g_1",
+          contactEmail: "x@y.z",
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    fireEvent.click(screen.getByText("Skicka faktura"));
+    fireEvent.click(screen.getByText("Skicka"));
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Mottagaren har avregistrerat sig/),
+      ).toBeTruthy(),
+    );
+  });
+
+  it("send-invoice failure → action error banner", async () => {
+    sendInvoiceMock.mockResolvedValueOnce({
+      ok: false,
+      error: "Stripe ej konfigurerat",
+    });
+    render(
+      <KonfigureraClient
+        draft={{
+          ...baseDraft,
+          guestAccountId: "g_1",
+          contactEmail: "x@y.z",
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    fireEvent.click(screen.getByText("Skicka faktura"));
+    fireEvent.click(screen.getByText("Skicka"));
+    await waitFor(() =>
+      expect(screen.getByText("Stripe ej konfigurerat")).toBeTruthy(),
+    );
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  it("mark-paid passes reference when provided", async () => {
+    markPaidMock.mockResolvedValueOnce({ ok: true, draft: { id: "draft_1" } });
+    render(
+      <KonfigureraClient
+        draft={{ ...baseDraft, status: "INVOICED" }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    fireEvent.click(screen.getByText("Markera som betald"));
+    const refInput = screen.getByPlaceholderText(/Bankgiro/) as HTMLInputElement;
+    fireEvent.change(refInput, { target: { value: "BG-1234" } });
+    fireEvent.click(screen.getByText("Markera"));
+    await waitFor(() =>
+      expect(markPaidMock).toHaveBeenCalledWith({
+        draftId: "draft_1",
+        reference: "BG-1234",
+      }),
+    );
+  });
+
+  it("mark-paid without reference → action called with reference=undefined", async () => {
+    markPaidMock.mockResolvedValueOnce({ ok: true, draft: { id: "draft_1" } });
+    render(
+      <KonfigureraClient
+        draft={{ ...baseDraft, status: "INVOICED" }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    fireEvent.click(screen.getByText("Markera som betald"));
+    fireEvent.click(screen.getByText("Markera"));
+    await waitFor(() =>
+      expect(markPaidMock).toHaveBeenCalledWith({
+        draftId: "draft_1",
+        reference: undefined,
+      }),
+    );
+  });
+
+  it("cancel passes reason when provided", async () => {
+    cancelMock.mockResolvedValueOnce({ ok: true, draft: { id: "draft_1" } });
+    render(
+      <KonfigureraClient
+        draft={baseDraft}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+      />,
+    );
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    fireEvent.click(screen.getByText("Avbryt utkast"));
+    const reasonInput = screen.getByPlaceholderText(
+      /kunden ändrade sig/,
+    ) as HTMLTextAreaElement;
+    fireEvent.change(reasonInput, { target: { value: "Kund ångrade sig" } });
+    fireEvent.click(screen.getByText("Avbryt utkastet"));
+    await waitFor(() =>
+      expect(cancelMock).toHaveBeenCalledWith({
+        draftId: "draft_1",
+        reason: "Kund ångrade sig",
+      }),
+    );
+  });
+
+  it("action error auto-clears after 5000ms", async () => {
+    vi.useFakeTimers();
+    cancelMock.mockResolvedValueOnce({ ok: false, error: "Något fel" });
+    try {
+      render(
+        <KonfigureraClient
+          draft={baseDraft}
+          reservations={[]}
+          customer={null}
+          stripePaymentIntent={null}
+          prev={null}
+          next={null}
+          paymentTerms={null}
+        />,
+      );
+      fireEvent.click(screen.getByText(/Fler åtgärder/));
+      fireEvent.click(screen.getByText("Avbryt utkast"));
+      fireEvent.click(screen.getByText("Avbryt utkastet"));
+      // Flush pending microtasks (action promise resolves, setActionError fires)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+      expect(screen.getByText("Något fel")).toBeTruthy();
+      // Advance past the 5000ms auto-clear (cumulative 5001 > 5000)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4901);
+      });
+      expect(screen.queryByText("Något fel")).toBeNull();
     } finally {
       vi.useRealTimers();
     }
