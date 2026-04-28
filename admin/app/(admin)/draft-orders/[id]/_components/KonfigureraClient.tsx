@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties } from "react";
+import { useCallback, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import type {
   DiscountValueType,
@@ -11,6 +11,7 @@ import type {
 } from "@prisma/client";
 import { EditorIcon } from "@/app/_components/EditorIcon";
 import { DraftBadge } from "@/app/(admin)/_components/draft-orders/DraftBadge";
+import { PublishBarUI } from "@/app/(admin)/_components/PublishBar/PublishBar";
 
 import { LineItemsCard } from "./LineItemsCard";
 import { PaymentCard } from "./PaymentCard";
@@ -21,6 +22,25 @@ import { DiscountCard } from "./DiscountCard";
 import { NotesCard } from "./NotesCard";
 import { TagsCard } from "./TagsCard";
 import { HoldsCard } from "./HoldsCard";
+import { CustomerCardEditable } from "./CustomerCardEditable";
+import { NotesCardEditable } from "./NotesCardEditable";
+import { TagsCardEditable } from "./TagsCardEditable";
+import { ExpiresAtCardEditable } from "./ExpiresAtCardEditable";
+import { DiscountCardEditable } from "./DiscountCardEditable";
+import { PricesFrozenBanner } from "./PricesFrozenBanner";
+import {
+  updateDraftMetaAction,
+  updateDraftCustomerAction,
+} from "../actions";
+
+// EDITABLE_STATUSES är private i service-modulerna (update-meta.ts +
+// update-customer.ts). Duplicerad här som UI-advisory copy; service är
+// authoritative gate. Hålls i sync med service-konstanterna.
+const EDITABLE_STATUSES: DraftOrderStatus[] = [
+  "OPEN",
+  "PENDING_APPROVAL",
+  "APPROVED",
+];
 
 type SerializableLineItem = Omit<DraftLineItem, "lineDiscountValue"> & {
   lineDiscountValue: number | null;
@@ -109,6 +129,112 @@ export function KonfigureraClient({
 }: KonfigureraClientProps) {
   const router = useRouter();
 
+  const editable = EDITABLE_STATUSES.includes(draft.status);
+  const isLocked = draft.pricesFrozenAt !== null;
+
+  // Card state (initialised from draft prop, reset on discard / refresh)
+  const [customerState, setCustomerState] = useState<{
+    guestAccountId: string | null;
+  }>({ guestAccountId: draft.guestAccountId });
+  const [metaState, setMetaState] = useState({
+    internalNote: draft.internalNote ?? "",
+    customerNote: draft.customerNote ?? "",
+    tags: draft.tags,
+    expiresAt: draft.expiresAt,
+  });
+
+  const [dirty, setDirty] = useState({
+    customer: false,
+    meta: false,
+  });
+
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDiscarding, setIsDiscarding] = useState(false);
+  const [savedAt, setSavedAt] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleCustomerChange = useCallback(
+    (next: { guestAccountId: string | null }) => {
+      setCustomerState(next);
+      setDirty((prev) => ({ ...prev, customer: true }));
+    },
+    [],
+  );
+
+  const handleNotesChange = useCallback(
+    (next: { internalNote: string; customerNote: string }) => {
+      setMetaState((prev) => ({ ...prev, ...next }));
+      setDirty((prev) => ({ ...prev, meta: true }));
+    },
+    [],
+  );
+
+  const handleTagsChange = useCallback((tags: string[]) => {
+    setMetaState((prev) => ({ ...prev, tags }));
+    setDirty((prev) => ({ ...prev, meta: true }));
+  }, []);
+
+  const handleExpiresAtChange = useCallback((expiresAt: Date) => {
+    setMetaState((prev) => ({ ...prev, expiresAt }));
+    setDirty((prev) => ({ ...prev, meta: true }));
+  }, []);
+
+  // Sequential save (Q1) with stop-at-first-failure (Q8).
+  const handleSave = useCallback(async () => {
+    setIsSaving(true);
+    setSaveError(null);
+
+    if (dirty.customer) {
+      const result = await updateDraftCustomerAction({
+        draftId: draft.id,
+        guestAccountId: customerState.guestAccountId,
+      });
+      if (!result.ok) {
+        setSaveError(result.error);
+        setTimeout(() => setSaveError(null), 5000);
+        setIsSaving(false);
+        return;
+      }
+      setDirty((prev) => ({ ...prev, customer: false }));
+    }
+
+    if (dirty.meta) {
+      const result = await updateDraftMetaAction({
+        draftId: draft.id,
+        internalNote: metaState.internalNote,
+        customerNote: metaState.customerNote,
+        tags: metaState.tags,
+        expiresAt: metaState.expiresAt,
+      });
+      if (!result.ok) {
+        setSaveError(result.error);
+        setTimeout(() => setSaveError(null), 5000);
+        setIsSaving(false);
+        return;
+      }
+      setDirty((prev) => ({ ...prev, meta: false }));
+    }
+
+    setIsSaving(false);
+    setSavedAt(true);
+    setTimeout(() => setSavedAt(false), 1500);
+    router.refresh();
+  }, [dirty, customerState, metaState, draft.id, router]);
+
+  const handleDiscard = useCallback(() => {
+    setIsDiscarding(true);
+    setCustomerState({ guestAccountId: draft.guestAccountId });
+    setMetaState({
+      internalNote: draft.internalNote ?? "",
+      customerNote: draft.customerNote ?? "",
+      tags: draft.tags,
+      expiresAt: draft.expiresAt,
+    });
+    setDirty({ customer: false, meta: false });
+    setSaveError(null);
+    setIsDiscarding(false);
+  }, [draft]);
+
   return (
     <div className="admin-page admin-page--no-preview products-page">
       <div className="admin-editor">
@@ -166,6 +292,8 @@ export function KonfigureraClient({
           </div>
         </div>
 
+        {isLocked && <PricesFrozenBanner />}
+
         <div className="pf-body">
           <div className="pf-main">
             <LineItemsCard lines={draft.lineItems} />
@@ -184,17 +312,64 @@ export function KonfigureraClient({
               draft={draft}
               stripePaymentIntent={stripePaymentIntent}
             />
-            <CustomerCard draft={draft} customer={customer} />
-            <DiscountCard
-              appliedDiscountCode={draft.appliedDiscountCode}
-              appliedDiscountAmount={draft.appliedDiscountAmount}
-              appliedDiscountType={draft.appliedDiscountType}
-            />
-            <NotesCard
-              internalNote={draft.internalNote}
-              customerNote={draft.customerNote}
-            />
-            <TagsCard tags={draft.tags} />
+
+            {editable ? (
+              <CustomerCardEditable
+                draft={draft}
+                customer={customer}
+                value={customerState}
+                onChange={handleCustomerChange}
+              />
+            ) : (
+              <CustomerCard draft={draft} customer={customer} />
+            )}
+
+            {editable && !isLocked ? (
+              <DiscountCardEditable
+                draftId={draft.id}
+                appliedCode={draft.appliedDiscountCode}
+                appliedAmount={draft.appliedDiscountAmount}
+                onUpdate={() => router.refresh()}
+              />
+            ) : (
+              <DiscountCard
+                appliedDiscountCode={draft.appliedDiscountCode}
+                appliedDiscountAmount={draft.appliedDiscountAmount}
+                appliedDiscountType={draft.appliedDiscountType}
+              />
+            )}
+
+            {editable ? (
+              <NotesCardEditable
+                value={{
+                  internalNote: metaState.internalNote,
+                  customerNote: metaState.customerNote,
+                }}
+                onChange={handleNotesChange}
+              />
+            ) : (
+              <NotesCard
+                internalNote={draft.internalNote}
+                customerNote={draft.customerNote}
+              />
+            )}
+
+            {editable ? (
+              <TagsCardEditable
+                value={metaState.tags}
+                onChange={handleTagsChange}
+              />
+            ) : (
+              <TagsCard tags={draft.tags} />
+            )}
+
+            {editable && (
+              <ExpiresAtCardEditable
+                value={metaState.expiresAt}
+                onChange={handleExpiresAtChange}
+              />
+            )}
+
             <HoldsCard
               reservations={reservations}
               lineItems={draft.lineItems}
@@ -202,6 +377,24 @@ export function KonfigureraClient({
           </div>
         </div>
       </div>
+
+      {editable && saveError && (
+        <div className="pf-error-banner" role="alert" aria-live="polite">
+          {saveError}
+        </div>
+      )}
+
+      {editable && (
+        <PublishBarUI
+          hasUnsavedChanges={dirty.customer || dirty.meta}
+          isPublishing={isSaving}
+          isDiscarding={isDiscarding}
+          isLingeringAfterPublish={savedAt}
+          onPublish={handleSave}
+          onDiscard={handleDiscard}
+          error={saveError}
+        />
+      )}
     </div>
   );
 }
