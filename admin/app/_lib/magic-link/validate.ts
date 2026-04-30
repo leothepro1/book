@@ -49,6 +49,46 @@ export async function validateMagicLink(
     return { valid: false, reason: "used" };
   }
 
+  // Analytics pipeline emit — guest_authenticated (Phase 2). Fire-and-forget.
+  // Pairs with guest_otp_sent via the same token_id (sha256-16hex of the
+  // token string) so Phase 5 can compute (sent → authenticated)
+  // conversion rates.
+  Promise.all([
+    import("@/app/_lib/analytics/pipeline/emitter"),
+    import("@/app/_lib/analytics/pipeline/integrations"),
+    import("node:crypto"),
+  ])
+    .then(async ([{ emitAnalyticsEventStandalone }, { deriveGuestId }, { createHash }]) => {
+      const tokenId = createHash("sha256").update(token).digest("hex").slice(0, 16);
+      const emailHash = deriveGuestId({
+        tenantId: record.tenantId,
+        guestAccountId: null,
+        guestEmail: record.email,
+      });
+      // Look up linked GuestAccount (may not exist yet — auth-then-create flow).
+      const account = await prisma.guestAccount.findFirst({
+        where: { tenantId: record.tenantId, email: record.email },
+        select: { id: true },
+      });
+      await emitAnalyticsEventStandalone({
+        tenantId: record.tenantId,
+        eventName: "guest_authenticated",
+        schemaVersion: "0.1.0",
+        occurredAt: new Date(),
+        actor: account?.id
+          ? { actor_type: "guest", actor_id: account.id }
+          : { actor_type: "anonymous", actor_id: null },
+        payload: {
+          guest_id: account?.id ?? null,
+          email_hash: emailHash,
+          token_id: tokenId,
+          authenticated_at: new Date(),
+        },
+        idempotencyKey: `guest_authenticated:${tokenId}`,
+      });
+    })
+    .catch(() => { /* fire-and-forget */ });
+
   // 5. Return valid result
   return { valid: true, tenantId: record.tenantId, email: record.email };
 }

@@ -27,6 +27,10 @@ import { BookingCompletedSchema } from "./booking-completed";
 import { BookingImportedSchema } from "./booking-imported";
 import { BookingModifiedSchema } from "./booking-modified";
 import { BookingNoShowSchema } from "./booking-no-show";
+import { GuestAccountCreatedSchema } from "./guest-account-created";
+import { GuestAccountLinkedSchema } from "./guest-account-linked";
+import { GuestAuthenticatedSchema } from "./guest-authenticated";
+import { GuestOtpSentSchema } from "./guest-otp-sent";
 import { PaymentDisputedSchema } from "./payment-disputed";
 import { PaymentFailedSchema } from "./payment-failed";
 import { PaymentRefundedSchema } from "./payment-refunded";
@@ -47,6 +51,18 @@ export const ANALYTICS_EVENT_REGISTRY = {
   },
   booking_no_show: {
     "0.1.0": BookingNoShowSchema,
+  },
+  guest_account_created: {
+    "0.1.0": GuestAccountCreatedSchema,
+  },
+  guest_account_linked: {
+    "0.1.0": GuestAccountLinkedSchema,
+  },
+  guest_authenticated: {
+    "0.1.0": GuestAuthenticatedSchema,
+  },
+  guest_otp_sent: {
+    "0.1.0": GuestOtpSentSchema,
   },
   payment_disputed: {
     "0.1.0": PaymentDisputedSchema,

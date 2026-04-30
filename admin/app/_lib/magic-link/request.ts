@@ -68,6 +68,39 @@ export async function requestMagicLink(
       data: { tenantId, email: normalizedEmail, token, expiresAt },
     });
 
+    // Analytics pipeline emit — guest_otp_sent (Phase 2). Fire-and-forget.
+    // The token itself is NEVER included; we hash it to a stable correlation
+    // key so the matching guest_authenticated event can be paired in
+    // Phase 5's authentication-funnel aggregations.
+    Promise.all([
+      import("@/app/_lib/analytics/pipeline/emitter"),
+      import("@/app/_lib/analytics/pipeline/integrations"),
+      import("node:crypto"),
+    ])
+      .then(async ([{ emitAnalyticsEventStandalone }, { deriveGuestId }, { createHash }]) => {
+        const tokenId = createHash("sha256").update(token).digest("hex").slice(0, 16);
+        const emailHash = deriveGuestId({
+          tenantId,
+          guestAccountId: null,
+          guestEmail: normalizedEmail,
+        });
+        await emitAnalyticsEventStandalone({
+          tenantId,
+          eventName: "guest_otp_sent",
+          schemaVersion: "0.1.0",
+          occurredAt: new Date(),
+          actor: { actor_type: "anonymous", actor_id: null },
+          payload: {
+            email_hash: emailHash,
+            token_id: tokenId,
+            expires_at: expiresAt,
+            sent_at: new Date(),
+          },
+          idempotencyKey: `guest_otp_sent:${tokenId}`,
+        });
+      })
+      .catch(() => { /* fire-and-forget */ });
+
     // 6. Fetch tenant for name + portalSlug
     const tenant = await prisma.tenant.findUniqueOrThrow({
       where: { id: tenantId },

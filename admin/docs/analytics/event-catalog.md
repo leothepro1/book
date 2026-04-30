@@ -329,6 +329,65 @@ rate and per-instrument dispute likelihood.
   provider          enum          "stripe"
   ```
 
+### `guest_account_created` v0.1.0 — Active
+
+A new GuestAccount row was inserted. Today the trigger is the
+checkout / order-linking path; future explicit signup flows will emit
+from their own sites.
+
+- **Trigger:** `emitIfNewAccount` in `app/_lib/guest-auth/account.ts`
+  (called from `upsertGuestAccount` when the row was just created).
+  Standalone emit, fire-and-forget.
+- **Idempotency key:** `guest_account_created:${account.id}`.
+- **Payload:** `guest_id`, `email_hash`, `source` (checkout / order /
+  magic_link / import / other), `created_at`.
+
+### `guest_otp_sent` v0.1.0 — Active
+
+A magic-link OTP email was queued for delivery. Pairs with
+`guest_authenticated` via the `token_id` correlation key.
+
+- **Trigger:** `requestMagicLink` in `app/_lib/magic-link/request.ts`,
+  after the MagicLinkToken row is persisted. Standalone emit,
+  fire-and-forget. Rate-limited / invalid-email branches don't reach
+  the emit.
+- **Idempotency key:** `guest_otp_sent:${token_id}`. One token per send;
+  re-runs of the same handler with the same token would dedupe.
+- **Privacy:** the token itself is NEVER in the event. `token_id` is
+  `sha256(token).slice(0, 16)` — a correlation key, not a credential.
+- **Payload:** `email_hash`, `token_id`, `expires_at`, `sent_at`.
+
+### `guest_authenticated` v0.1.0 — Active
+
+A guest successfully verified a magic-link OTP. Pairs with
+`guest_otp_sent` via `token_id` for funnel-conversion aggregations.
+
+- **Trigger:** `validateMagicLink` in `app/_lib/magic-link/validate.ts`,
+  after the token is atomically marked as used. Standalone emit.
+  Expired / used / not-found paths do NOT emit (those are a separate
+  `guest_otp_failed` event, deferred to v0.2.0).
+- **Idempotency key:** `guest_authenticated:${token_id}`. The validate
+  path is atomic — a token is consumed exactly once.
+- **Payload:** `guest_id` (CUID if linked, null in auth-then-create
+  flows), `email_hash`, `token_id`, `authenticated_at`.
+
+### `guest_account_linked` v0.1.0 — Active
+
+An existing operational resource (Order today, future Booking) had its
+`guestAccountId` populated by linking to a GuestAccount row.
+
+- **Trigger:** `upsertGuestAccountFromOrder` in
+  `app/_lib/guest-auth/account.ts`. Standalone emit, fire-and-forget.
+- **Idempotency key:**
+  `guest_account_linked:${guestAccountId}:${orderId}`. One link per
+  (account, order) — re-runs of the same handler dedupe.
+- **Phase 5 use case:** account-level revenue rollup requires this
+  event to attribute historical orders to a GuestAccount discovered
+  later via email match.
+- **Payload:** `guest_id`, `email_hash`, `linked_resource_type`
+  ("order" today, "booking" reserved), `linked_resource_id`,
+  `link_method` ("auto_via_email_match" today), `linked_at`.
+
 ## Why `booking_completed` and `booking_imported` are separate event types
 
 Repeated for emphasis: this is a deliberate design choice, not an

@@ -13,6 +13,10 @@ import { BookingCompletedSchema } from "./booking-completed";
 import { BookingImportedSchema } from "./booking-imported";
 import { BookingModifiedSchema } from "./booking-modified";
 import { BookingNoShowSchema } from "./booking-no-show";
+import { GuestAccountCreatedSchema } from "./guest-account-created";
+import { GuestAccountLinkedSchema } from "./guest-account-linked";
+import { GuestAuthenticatedSchema } from "./guest-authenticated";
+import { GuestOtpSentSchema } from "./guest-otp-sent";
 import { PaymentDisputedSchema } from "./payment-disputed";
 import { PaymentFailedSchema } from "./payment-failed";
 import { PaymentRefundedSchema } from "./payment-refunded";
@@ -541,6 +545,155 @@ describe("PaymentDisputedSchema", () => {
       PaymentDisputedSchema.safeParse({
         ...validPaymentDisputedEvent,
         payload: { ...validPaymentDisputedEvent.payload, dispute_id: "" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+// ── Phase 2 Commit C — guest lifecycle ──────────────────────────────────
+
+const validGuestAccountCreated = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "guest_account_created",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "guest" as const,
+  actor_id: "cguest123",
+  payload: {
+    guest_id: "cguest123",
+    email_hash: "email_a3f7b2c1d4e5f6a7",
+    source: "checkout" as const,
+    created_at: new Date(),
+  },
+};
+
+describe("GuestAccountCreatedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(GuestAccountCreatedSchema.safeParse(validGuestAccountCreated).success).toBe(true);
+  });
+  it("rejects unknown source", () => {
+    expect(
+      GuestAccountCreatedSchema.safeParse({
+        ...validGuestAccountCreated,
+        payload: { ...validGuestAccountCreated.payload, source: "made_up" },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects empty guest_id", () => {
+    expect(
+      GuestAccountCreatedSchema.safeParse({
+        ...validGuestAccountCreated,
+        payload: { ...validGuestAccountCreated.payload, guest_id: "" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validGuestOtpSent = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "guest_otp_sent",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "anonymous" as const,
+  actor_id: null,
+  payload: {
+    email_hash: "email_a3f7b2c1d4e5f6a7",
+    token_id: "abcdef0123456789",
+    expires_at: new Date(),
+    sent_at: new Date(),
+  },
+};
+
+describe("GuestOtpSentSchema", () => {
+  it("accepts a valid event", () => {
+    expect(GuestOtpSentSchema.safeParse(validGuestOtpSent).success).toBe(true);
+  });
+  it("rejects empty token_id", () => {
+    expect(
+      GuestOtpSentSchema.safeParse({
+        ...validGuestOtpSent,
+        payload: { ...validGuestOtpSent.payload, token_id: "" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validGuestAuthenticated = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "guest_authenticated",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "guest" as const,
+  actor_id: "cguest123",
+  payload: {
+    guest_id: "cguest123",
+    email_hash: "email_a3f7b2c1d4e5f6a7",
+    token_id: "abcdef0123456789",
+    authenticated_at: new Date(),
+  },
+};
+
+describe("GuestAuthenticatedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(GuestAuthenticatedSchema.safeParse(validGuestAuthenticated).success).toBe(true);
+  });
+  it("accepts null guest_id (auth-then-create flow)", () => {
+    const r = GuestAuthenticatedSchema.safeParse({
+      ...validGuestAuthenticated,
+      actor_type: "anonymous",
+      actor_id: null,
+      payload: { ...validGuestAuthenticated.payload, guest_id: null },
+    });
+    expect(r.success).toBe(true);
+  });
+  it("rejects empty token_id", () => {
+    expect(
+      GuestAuthenticatedSchema.safeParse({
+        ...validGuestAuthenticated,
+        payload: { ...validGuestAuthenticated.payload, token_id: "" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validGuestAccountLinked = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "guest_account_linked",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "guest" as const,
+  actor_id: "cguest123",
+  payload: {
+    guest_id: "cguest123",
+    email_hash: "email_a3f7b2c1d4e5f6a7",
+    linked_resource_type: "order" as const,
+    linked_resource_id: "co_abc",
+    link_method: "auto_via_email_match" as const,
+    linked_at: new Date(),
+  },
+};
+
+describe("GuestAccountLinkedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(GuestAccountLinkedSchema.safeParse(validGuestAccountLinked).success).toBe(true);
+  });
+  it("rejects unknown linked_resource_type", () => {
+    expect(
+      GuestAccountLinkedSchema.safeParse({
+        ...validGuestAccountLinked,
+        payload: { ...validGuestAccountLinked.payload, linked_resource_type: "made_up" },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects unknown link_method", () => {
+    expect(
+      GuestAccountLinkedSchema.safeParse({
+        ...validGuestAccountLinked,
+        payload: { ...validGuestAccountLinked.payload, link_method: "made_up" },
       }).success,
     ).toBe(false);
   });
