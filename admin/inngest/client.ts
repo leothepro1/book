@@ -37,6 +37,20 @@ export type InngestEvents = {
       hint_count?: number;
     };
   };
+  /**
+   * Cron-triggered scan event (Phase 1B). The scan-analytics-outbox
+   * function fires this on its `* * * * *` schedule, then itself fans
+   * out per-tenant `analytics.outbox.flush` events for any tenant with
+   * pending outbox rows.
+   *
+   * Empty data — the scanner derives the per-tenant set from the DB,
+   * not from the event payload. Kept as a typed event (rather than a
+   * pure cron handler) so it shows up in the Inngest dashboard with
+   * the same observability story as the other analytics events.
+   */
+  "analytics.outbox.scan": {
+    data: Record<string, never>;
+  };
 };
 
 export type InngestEventName = keyof InngestEvents;
