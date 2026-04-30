@@ -127,3 +127,7 @@ export type {
 // ── Phase E — lazy DraftCheckoutSession creation (v1.3 §7.3) ──
 export { createDraftCheckoutSession } from "./checkout-session";
 export type { CreateDraftCheckoutSessionResult } from "./checkout-session";
+
+// ── Phase F — token-resolution helpers (v1.3 §7.2) ──
+export { resolveDraftByToken, classifyTokenState } from "./resolve-token";
+export type { DraftForToken, TokenState } from "./resolve-token";
