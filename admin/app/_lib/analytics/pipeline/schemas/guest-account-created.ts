@@ -29,7 +29,7 @@ export const GuestAccountCreatedPayloadSchema = z.object({
   guest_id: z.string().min(1),
   email_hash: z.string().min(1),
   source: z.enum(["checkout", "order", "magic_link", "import", "other"]),
-  created_at: z.coerce.date(),
+  created_at: z.union([z.string(), z.date()]),
 });
 
 export const GuestAccountCreatedSchema = BaseEventSchema.and(

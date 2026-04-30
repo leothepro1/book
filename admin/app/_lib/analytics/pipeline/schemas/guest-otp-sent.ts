@@ -35,8 +35,8 @@ import { BaseEventSchema } from "./base";
 export const GuestOtpSentPayloadSchema = z.object({
   email_hash: z.string().min(1),
   token_id: z.string().min(1),
-  expires_at: z.coerce.date(),
-  sent_at: z.coerce.date(),
+  expires_at: z.union([z.string(), z.date()]),
+  sent_at: z.union([z.string(), z.date()]),
 });
 
 export const GuestOtpSentSchema = BaseEventSchema.and(

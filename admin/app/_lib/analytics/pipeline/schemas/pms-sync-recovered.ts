@@ -33,7 +33,7 @@ import { BaseEventSchema } from "./base";
 export const PmsSyncRecoveredPayloadSchema = z.object({
   pms_provider: z.enum(["mews", "fake", "manual", "other"]),
   previous_failures: z.number().int().positive(),
-  recovered_at: z.coerce.date(),
+  recovered_at: z.union([z.string(), z.date()]),
 });
 
 export const PmsSyncRecoveredSchema = BaseEventSchema.and(

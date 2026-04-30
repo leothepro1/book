@@ -58,7 +58,7 @@ export const BookingCancelledPayloadSchema = z.object({
   number_of_guests: z.number().int().positive().nullable(),
   accommodation_id: z.string().min(1).nullable(),
   source_channel: z.enum(["direct", "pms_import", "third_party_ota", "unknown"]),
-  cancelled_at: z.coerce.date(),
+  cancelled_at: z.union([z.string(), z.date()]),
 });
 
 export const BookingCancelledSchema = BaseEventSchema.and(

@@ -48,7 +48,7 @@ export const AccommodationPublishedPayloadSchema = z.object({
     from: z.enum(["active", "inactive", "archived", "unknown"]),
     to: z.literal("active"),
   }),
-  published_at: z.coerce.date(),
+  published_at: z.union([z.string(), z.date()]),
 });
 
 export const AccommodationPublishedSchema = BaseEventSchema.and(

@@ -38,7 +38,7 @@ export const AccommodationPriceChangedPayloadSchema = z.object({
     currency: z.string().length(3),
   }),
   change_pct: z.number().nullable(),
-  changed_at: z.coerce.date(),
+  changed_at: z.union([z.string(), z.date()]),
   changed_by_actor_id: z.string().min(1).nullable(),
 });
 

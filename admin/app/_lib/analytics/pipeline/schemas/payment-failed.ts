@@ -48,7 +48,7 @@ export const PaymentFailedPayloadSchema = z.object({
   decline_code: z.string().nullable(),
   error_code: z.string().nullable(),
   error_message: z.string().nullable(),
-  attempted_at: z.coerce.date(),
+  attempted_at: z.union([z.string(), z.date()]),
   provider: z.enum(["stripe", "swedbankpay", "manual", "other"]),
 });
 

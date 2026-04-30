@@ -37,7 +37,7 @@ export const PmsSyncFailedPayloadSchema = z.object({
   pms_provider: z.enum(["mews", "fake", "manual", "other"]),
   consecutive_failures: z.number().int().positive(),
   error_message: z.string(),
-  failed_at: z.coerce.date(),
+  failed_at: z.union([z.string(), z.date()]),
 });
 
 export const PmsSyncFailedSchema = BaseEventSchema.and(

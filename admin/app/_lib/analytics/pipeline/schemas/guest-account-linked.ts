@@ -47,7 +47,7 @@ export const GuestAccountLinkedPayloadSchema = z.object({
   linked_resource_type: z.enum(["order", "booking"]),
   linked_resource_id: z.string().min(1),
   link_method: z.enum(["auto_via_email_match", "magic_link_claim", "manual_admin"]),
-  linked_at: z.coerce.date(),
+  linked_at: z.union([z.string(), z.date()]),
 });
 
 export const GuestAccountLinkedSchema = BaseEventSchema.and(

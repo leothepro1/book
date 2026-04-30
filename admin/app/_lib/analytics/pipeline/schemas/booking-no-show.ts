@@ -61,7 +61,7 @@ export const BookingNoShowPayloadSchema = z.object({
   accommodation_id: z.string().min(1).nullable(),
   number_of_guests: z.number().int().positive().nullable(),
   detection_source: z.enum(["pms", "internal"]),
-  detected_at: z.coerce.date(),
+  detected_at: z.union([z.string(), z.date()]),
 });
 
 export const BookingNoShowSchema = BaseEventSchema.and(

@@ -43,7 +43,7 @@ export const GuestAuthenticatedPayloadSchema = z.object({
   guest_id: z.string().min(1).nullable(),
   email_hash: z.string().min(1),
   token_id: z.string().min(1),
-  authenticated_at: z.coerce.date(),
+  authenticated_at: z.union([z.string(), z.date()]),
 });
 
 export const GuestAuthenticatedSchema = BaseEventSchema.and(

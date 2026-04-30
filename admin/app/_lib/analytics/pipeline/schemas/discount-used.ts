@@ -41,7 +41,7 @@ export const DiscountUsedPayloadSchema = z.object({
     amount: z.number().int().nonnegative(),
     currency: z.string().length(3),
   }),
-  used_at: z.coerce.date(),
+  used_at: z.union([z.string(), z.date()]),
 });
 
 export const DiscountUsedSchema = BaseEventSchema.and(

@@ -41,10 +41,10 @@ export const DiscountCreatedPayloadSchema = z.object({
   value_type: z.enum(["percentage", "fixed_amount"]),
   value: z.number().int().nonnegative(),
   currency: z.string().length(3).nullable(),
-  starts_at: z.coerce.date(),
-  ends_at: z.coerce.date().nullable(),
+  starts_at: z.union([z.string(), z.date()]),
+  ends_at: z.union([z.string(), z.date()]).nullable(),
   usage_limit: z.number().int().positive().nullable(),
-  created_at: z.coerce.date(),
+  created_at: z.union([z.string(), z.date()]),
   created_by_actor_id: z.string().min(1).nullable(),
 });
 

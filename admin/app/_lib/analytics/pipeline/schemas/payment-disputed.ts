@@ -75,7 +75,7 @@ export const PaymentDisputedPayloadSchema = z.object({
     "lost",
     "unknown",
   ]),
-  created_at: z.coerce.date(),
+  created_at: z.union([z.string(), z.date()]),
   provider: z.enum(["stripe", "swedbankpay", "manual", "other"]),
 });
 

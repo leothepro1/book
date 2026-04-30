@@ -24,7 +24,7 @@ export const AccommodationArchivedPayloadSchema = z.object({
   accommodation_id: z.string().min(1),
   accommodation_type: z.enum(["hotel", "cabin", "camping", "apartment", "pitch"]),
   display_name: z.string().min(1),
-  archived_at: z.coerce.date(),
+  archived_at: z.union([z.string(), z.date()]),
   archived_by_actor_id: z.string().min(1).nullable(),
 });
 

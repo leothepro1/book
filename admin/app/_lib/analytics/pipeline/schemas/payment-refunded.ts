@@ -47,7 +47,7 @@ export const PaymentRefundedPayloadSchema = z.object({
     "other",
     "unknown",
   ]),
-  refunded_at: z.coerce.date(),
+  refunded_at: z.union([z.string(), z.date()]),
   provider: z.enum(["stripe", "swedbankpay", "manual", "other"]),
 });
 

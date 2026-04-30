@@ -35,8 +35,8 @@ import { BaseEventSchema } from "./base";
 export const DiscountExpiredPayloadSchema = z.object({
   discount_id: z.string().min(1),
   title: z.string().min(1),
-  ends_at: z.coerce.date(),
-  expired_at: z.coerce.date(),
+  ends_at: z.union([z.string(), z.date()]),
+  expired_at: z.union([z.string(), z.date()]),
   total_uses: z.number().int().nonnegative(),
 });
 
