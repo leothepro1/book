@@ -40,7 +40,14 @@ const MAX_TENANTS_PER_SCAN = 1000;
 export const scanAnalyticsOutbox = inngest.createFunction(
   {
     id: "scan-analytics-outbox",
-    triggers: [{ cron: "* * * * *" }],
+    // Dual-trigger: cron */1 fires in production; the matching event
+    // is exposed so verify-phase1b.ts (and operators in incidents) can
+    // invoke a scan immediately without waiting up to 60s for the next
+    // cron tick. Both triggers run the same function body.
+    triggers: [
+      { event: "analytics.outbox.scan" },
+      { cron: "* * * * *" },
+    ],
     retries: 1,
   },
   async ({ step }) => {
