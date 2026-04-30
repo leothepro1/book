@@ -74,19 +74,14 @@ beforeEach(() => {
 // Happy path
 // ═══════════════════════════════════════════════════════════════
 
-describe("markDraftAsPaid — happy path", () => {
-  it("INVOICED → PAID + auto-convert → returns { draft, order }", async () => {
+describe("markDraftAsPaid — happy path (Phase C: PAID only, no auto-convert)", () => {
+  it("INVOICED → PAID, returns { draft } (no order — convert wired in Phase E + H)", async () => {
     const draft = makeDraft({ status: "INVOICED" });
     mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(draft);
     mockTx.draftOrder.findFirst.mockResolvedValueOnce({ status: "INVOICED" });
-    // Final findFirst-after-tx for the no-PI fallback path
     mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(
       makeDraft({ status: "PAID" }),
     );
-
-    const convertedDraft = makeDraft({ status: "COMPLETED" });
-    const order = { id: "order_1" };
-    convertMock.mockResolvedValueOnce({ draft: convertedDraft, order });
 
     const result = await markDraftAsPaid({
       tenantId: "tenant_1",
@@ -95,25 +90,18 @@ describe("markDraftAsPaid — happy path", () => {
       actorUserId: "user_1",
     });
 
-    expect(result.draft).toBe(convertedDraft);
-    expect(result.order).toBe(order);
-    expect(convertMock).toHaveBeenCalledWith({
-      tenantId: "tenant_1",
-      draftOrderId: "draft_1",
-      stripePaymentIntentId: "pi_abc123",
-      actorSource: "admin_manual_recovery",
-      actorUserId: "user_1",
-    });
+    expect(result.draft.status).toBe("PAID");
+    expect(result.order).toBeUndefined();
+    expect(convertMock).not.toHaveBeenCalled();
   });
 
-  it("OVERDUE → PAID + auto-convert", async () => {
+  it("OVERDUE → PAID (no auto-convert)", async () => {
     const draft = makeDraft({ status: "OVERDUE" });
     mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(draft);
     mockTx.draftOrder.findFirst.mockResolvedValueOnce({ status: "OVERDUE" });
-    convertMock.mockResolvedValueOnce({
-      draft: makeDraft({ status: "COMPLETED" }),
-      order: { id: "order_1" },
-    });
+    mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(
+      makeDraft({ status: "PAID" }),
+    );
 
     const result = await markDraftAsPaid({
       tenantId: "tenant_1",
@@ -121,17 +109,17 @@ describe("markDraftAsPaid — happy path", () => {
       actorUserId: "user_1",
     });
 
-    expect(result.order).toBeTruthy();
-    expect(convertMock).toHaveBeenCalled();
+    expect(result.draft.status).toBe("PAID");
+    expect(result.order).toBeUndefined();
+    expect(convertMock).not.toHaveBeenCalled();
   });
 
   it("reference is recorded in STATE_CHANGED event metadata", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(makeDraft());
     mockTx.draftOrder.findFirst.mockResolvedValueOnce({ status: "INVOICED" });
-    convertMock.mockResolvedValueOnce({
-      draft: makeDraft({ status: "COMPLETED" }),
-      order: {},
-    });
+    mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(
+      makeDraft({ status: "PAID" }),
+    );
 
     await markDraftAsPaid({
       tenantId: "tenant_1",
@@ -152,10 +140,9 @@ describe("markDraftAsPaid — happy path", () => {
   it("actorSource is admin_ui (not webhook) for manual mark-paid", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(makeDraft());
     mockTx.draftOrder.findFirst.mockResolvedValueOnce({ status: "INVOICED" });
-    convertMock.mockResolvedValueOnce({
-      draft: makeDraft({ status: "COMPLETED" }),
-      order: {},
-    });
+    mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(
+      makeDraft({ status: "PAID" }),
+    );
 
     await markDraftAsPaid({
       tenantId: "tenant_1",
@@ -262,60 +249,13 @@ describe("markDraftAsPaid — in-tx race", () => {
 // Convert failure / no-PI edge case
 // ═══════════════════════════════════════════════════════════════
 
-describe("markDraftAsPaid — auto-convert path", () => {
-  it("convertDraftToOrder failure: PAID is committed, error propagates", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(makeDraft());
-    mockTx.draftOrder.findFirst.mockResolvedValueOnce({ status: "INVOICED" });
-    convertMock.mockRejectedValueOnce(new ValidationError("HOLD_NOT_PLACED"));
-
-    await expect(
-      markDraftAsPaid({
-        tenantId: "tenant_1",
-        draftOrderId: "draft_1",
-        actorUserId: "user_1",
-      }),
-    ).rejects.toThrow("HOLD_NOT_PLACED");
-    // Tx ran (PAID committed) before convertMock rejected
-    expect(mockPrisma.$transaction).toHaveBeenCalled();
-    expect(mockTx.draftOrder.updateMany).toHaveBeenCalled();
-  });
-
-  it("draft.metafields without stripePaymentIntentId: skip convert, return draft only", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(
-      makeDraft({ metafields: {} }),
-    );
-    mockTx.draftOrder.findFirst.mockResolvedValueOnce({ status: "INVOICED" });
-    // Re-fetch after tx for the no-PI path
-    const refreshed = makeDraft({ status: "PAID", metafields: {} });
-    mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(refreshed);
-
-    const result = await markDraftAsPaid({
-      tenantId: "tenant_1",
-      draftOrderId: "draft_1",
-      actorUserId: "user_1",
-    });
-
-    expect(result.draft).toBe(refreshed);
-    expect(result.order).toBeUndefined();
-    expect(convertMock).not.toHaveBeenCalled();
-  });
-
-  it("draft.metafields null: skip convert", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(
-      makeDraft({ metafields: null }),
-    );
-    mockTx.draftOrder.findFirst.mockResolvedValueOnce({ status: "INVOICED" });
-    mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(
-      makeDraft({ status: "PAID", metafields: null }),
-    );
-
-    const result = await markDraftAsPaid({
-      tenantId: "tenant_1",
-      draftOrderId: "draft_1",
-      actorUserId: "user_1",
-    });
-
-    expect(result.order).toBeUndefined();
-    expect(convertMock).not.toHaveBeenCalled();
-  });
-});
+// Auto-convert path tests removed in Phase C.
+//
+// Pre-Phase-C, markDraftAsPaid forwarded `metafields.stripePaymentIntentId`
+// to `convertDraftToOrder` to push the draft from PAID → COMPLETED in the
+// same call. Phase B dropped the metafields-based PI storage; Phase E
+// will move the PI to `DraftCheckoutSession.stripePaymentIntentId` and
+// Phase H will rewire the auto-convert hook through the new model.
+//
+// In the meantime markDraftAsPaid stops at PAID with `order` undefined.
+// Production has zero drafts, so no real flow regresses.

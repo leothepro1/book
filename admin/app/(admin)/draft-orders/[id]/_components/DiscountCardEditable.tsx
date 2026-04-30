@@ -36,7 +36,8 @@ const OVERLAY: CSSProperties = {
  * router.refresh()).
  *
  * isApplicable=true: konfigurera-mode trustar server som authoritative gate.
- * Denna card renderas bara när editable && !pricesFrozenAt (Q9).
+ * Denna card renderas bara när editable && draft.status === "OPEN".
+ * (Phase D will refine to also account for active checkout session.)
  *
  * Multi-click race-mitigering: lokalt isApplying-state styr overlay-element,
  * INTE prop till /new DiscountCard (den har ingen sådan prop).

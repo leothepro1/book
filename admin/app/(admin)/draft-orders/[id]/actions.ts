@@ -22,7 +22,7 @@ import type {
   AddLineItemInput,
   UpdateLineItemInput,
 } from "@/app/_lib/draft-orders/types";
-import { freezePrices, sendInvoice, cancelDraft } from "@/app/_lib/draft-orders/lifecycle";
+import { sendInvoice, cancelDraft } from "@/app/_lib/draft-orders/lifecycle";
 import { markDraftAsPaid } from "@/app/_lib/draft-orders/mark-as-paid";
 import { sendEmailEvent, type EmailSendResult } from "@/app/_lib/email";
 import { formatSek } from "@/app/_lib/money/format";
@@ -284,11 +284,12 @@ export async function sendDraftInvoiceAction(input: {
   if (!actor.tenantId) return { ok: false, error: NO_TENANT_ERROR };
 
   try {
-    // Pre-fetch for email metadata + frozen-state check.
+    // Pre-fetch for email metadata. sendInvoice itself enforces the
+    // status / customer-info preconditions per v1.2 §2.1, so this
+    // pre-fetch is purely for assembling the email payload.
     const draftBefore = await prisma.draftOrder.findFirst({
       where: { id: input.draftId, tenantId: actor.tenantId },
       select: {
-        pricesFrozenAt: true,
         contactEmail: true,
         contactFirstName: true,
         contactLastName: true,
@@ -303,25 +304,18 @@ export async function sendDraftInvoiceAction(input: {
       return { ok: false, error: "Utkastet kunde inte hittas" };
     }
 
-    // Step 1: freezePrices when not yet frozen (sendInvoice requires it).
-    if (draftBefore.pricesFrozenAt === null) {
-      await freezePrices({
-        tenantId: actor.tenantId,
-        draftOrderId: input.draftId,
-        actorUserId: actor.userId,
-      });
-    }
-
-    // Step 2: sendInvoice — returns invoiceUrl + transitions to INVOICED.
+    // sendInvoice — transitions to INVOICED, returns share-link URL.
+    // Per v1.2 §2.1 (lazy creation) it makes zero external calls; the
+    // PaymentIntent is created later when the buyer opens the link.
     const invoiceResult = await sendInvoice({
       tenantId: actor.tenantId,
       draftOrderId: input.draftId,
       actorUserId: actor.userId,
     });
 
-    // Step 3: best-effort email send. Failure does NOT abort the action —
-    // invoice was successfully sent at the Stripe level. UI surfaces
-    // emailStatus so operator can copy the URL manually if needed.
+    // Best-effort email send. Failure does NOT abort the action —
+    // the invoice URL is already valid. UI surfaces emailStatus so the
+    // operator can copy the URL manually if needed.
     let emailStatus: EmailSendResult["status"] | null = null;
     const guestAccount = draftBefore.guestAccountId
       ? await prisma.guestAccount.findFirst({

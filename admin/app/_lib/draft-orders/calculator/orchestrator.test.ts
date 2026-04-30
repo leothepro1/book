@@ -59,7 +59,6 @@ function makeRawDraft(overrides: Record<string, unknown> = {}) {
     currency: "SEK",
     taxesIncluded: true,
     shippingCents: BigInt(0),
-    pricesFrozenAt: null,
     appliedDiscountCode: null,
     subtotalCents: BigInt(0),
     orderDiscountCents: BigInt(0),
@@ -157,61 +156,11 @@ describe("computeDraftTotals — tx injection", () => {
   });
 });
 
-// ── Frozen short-circuit (audit §6) ─────────────────────────────
-
-describe("computeDraftTotals — frozen snapshot short-circuit", () => {
-  it("returns FROZEN_SNAPSHOT with frozenAt populated when pricesFrozenAt is set", async () => {
-    const frozenAt = new Date("2026-04-01T10:00:00Z");
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeRawDraft({
-        pricesFrozenAt: frozenAt,
-        subtotalCents: BigInt(99_999),
-        orderDiscountCents: BigInt(1_234),
-        totalTaxCents: BigInt(2_000),
-        totalCents: BigInt(100_765),
-        lineItems: [
-          makeRawLine({
-            subtotalCents: BigInt(99_999),
-            lineDiscountCents: BigInt(500),
-            taxAmountCents: BigInt(2_000),
-            totalCents: BigInt(100_765),
-          }),
-        ],
-      }),
-    );
-
-    const result = await computeDraftTotals("tenant_1", "draft_1");
-
-    expect(result.source).toBe("FROZEN_SNAPSHOT");
-    expect(result.frozenAt?.toISOString()).toBe(frozenAt.toISOString());
-    // Values pulled from persisted snapshot, not recomputed.
-    expect(result.subtotalCents).toBe(BigInt(99_999));
-    expect(result.orderDiscountCents).toBe(BigInt(1_234));
-    expect(result.taxCents).toBe(BigInt(2_000));
-    expect(result.totalCents).toBe(BigInt(100_765));
-    expect(result.perLine[0].totalCents).toBe(BigInt(100_765));
-    // Core is bypassed entirely; discount engine not called.
-    expect(mockCalculateDiscountImpact).not.toHaveBeenCalled();
-  });
-
-  it("bypasses snapshot when ignorePricesFrozenAt=true (preview mode)", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeRawDraft({
-        pricesFrozenAt: new Date("2026-04-01T10:00:00Z"),
-        subtotalCents: BigInt(99_999), // persisted stale value
-        lineItems: [makeRawLine()], // live line = 10_000
-      }),
-    );
-
-    const result = await computeDraftTotals("tenant_1", "draft_1", {
-      ignorePricesFrozenAt: true,
-    });
-
-    expect(result.source).toBe("COMPUTED");
-    expect(result.frozenAt).toBeNull();
-    expect(result.subtotalCents).toBe(BigInt(10_000)); // live, not persisted
-  });
-});
+// ── Frozen-snapshot short-circuit removed in Phase C ────────────
+// `pricesFrozenAt` was dropped in Phase B. Frozen totals now live on
+// `DraftCheckoutSession` (Phase E §3.1, §7.3). The orchestrator always
+// recomputes from current state until Phase E reuses
+// `assembleFrozenSnapshot` against session-scoped data.
 
 // ── companyTaxExempt (audit §5) ─────────────────────────────────
 

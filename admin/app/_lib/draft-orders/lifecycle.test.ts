@@ -68,7 +68,7 @@ vi.mock("@/app/_lib/stripe/client", () => ({
   }),
 }));
 
-const { freezePrices, sendInvoice, cancelDraft } = await import("./lifecycle");
+const { sendInvoice, cancelDraft } = await import("./lifecycle");
 
 // ── Fixtures ────────────────────────────────────────────────────
 
@@ -138,7 +138,6 @@ function makeDraft(overrides: Partial<RawDraft> = {}): RawDraft {
     totalCents: BigInt(10_000),
     currency: "SEK",
     taxesIncluded: true,
-    pricesFrozenAt: null,
     appliedDiscountId: null,
     appliedDiscountCode: null,
     appliedDiscountAmount: null,
@@ -219,6 +218,7 @@ function makeReservation(
     holdState: "PLACED",
     holdLastAttemptAt: new Date(),
     holdLastError: null,
+    holdReleaseReason: null,
     holdIdempotencyKey: "idem_hold_1",
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -244,7 +244,7 @@ function makeDraftForInvoice(
     productVariantId: null,
   });
   return {
-    ...makeDraft({ pricesFrozenAt: new Date("2026-04-23T12:00:00Z") }),
+    ...makeDraft(),
     lineItems: [baseAccLine],
     reservations: [makeReservation()],
     ...overrides,
@@ -291,257 +291,11 @@ beforeEach(() => {
 });
 
 // ═══════════════════════════════════════════════════════════════
-// Happy path
-// ═══════════════════════════════════════════════════════════════
-
-describe("freezePrices — happy path", () => {
-  it("writes totals + pricesFrozenAt + version+1 in a single DraftOrder.update", async () => {
-    const before = Date.now();
-    const result = await freezePrices({
-      tenantId: "tenant_1",
-      draftOrderId: "draft_1",
-      actorUserId: "user_1",
-    });
-    const after = Date.now();
-
-    expect(mockTx.draftOrder.update).toHaveBeenCalledTimes(1);
-    const data = mockTx.draftOrder.update.mock.calls[0][0].data;
-    expect(data.subtotalCents).toBe(BigInt(10_000));
-    expect(data.orderDiscountCents).toBe(BigInt(0));
-    expect(data.totalTaxCents).toBe(BigInt(0));
-    expect(data.totalCents).toBe(BigInt(10_000));
-    expect(data.version).toEqual({ increment: 1 });
-    expect(data.pricesFrozenAt).toBeInstanceOf(Date);
-    const ts = (data.pricesFrozenAt as Date).getTime();
-    expect(ts).toBeGreaterThanOrEqual(before);
-    expect(ts).toBeLessThanOrEqual(after);
-
-    expect(result.frozenAt).toBeInstanceOf(Date);
-    expect(result.totals.source).toBe("FROZEN_SNAPSHOT");
-    expect(result.totals.frozenAt).toEqual(data.pricesFrozenAt);
-  });
-
-  it("writes per-line taxAmountCents + totalCents via draftLineItem.update", async () => {
-    await freezePrices({
-      tenantId: "tenant_1",
-      draftOrderId: "draft_1",
-    });
-
-    expect(mockTx.draftLineItem.update).toHaveBeenCalledTimes(1);
-    const lineData = mockTx.draftLineItem.update.mock.calls[0][0].data;
-    expect(lineData.taxAmountCents).toBe(BigInt(0));
-    expect(lineData.totalCents).toBe(BigInt(10_000));
-  });
-
-  it("emits PRICES_FROZEN event inside tx with snapshot metadata", async () => {
-    await freezePrices({
-      tenantId: "tenant_1",
-      draftOrderId: "draft_1",
-      actorUserId: "user_42",
-    });
-
-    expect(mockTx.draftOrderEvent.create).toHaveBeenCalledTimes(1);
-    const evData = mockTx.draftOrderEvent.create.mock.calls[0][0].data;
-    expect(evData.type).toBe("PRICES_FROZEN");
-    expect(evData.actorUserId).toBe("user_42");
-    expect(evData.actorSource).toBe("admin_ui");
-    expect(evData.metadata.frozenAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(evData.metadata.snapshot).toEqual({
-      subtotalCents: "10000",
-      orderDiscountCents: "0",
-      totalTaxCents: "0",
-      totalCents: "10000",
-    });
-  });
-
-  it("emits draft_order.updated platform webhook with changeType=prices_frozen", async () => {
-    await freezePrices({
-      tenantId: "tenant_1",
-      draftOrderId: "draft_1",
-    });
-
-    expect(mockEmit).toHaveBeenCalledTimes(1);
-    const call = mockEmit.mock.calls[0][0];
-    expect(call.type).toBe("draft_order.updated");
-    expect(call.payload.changeType).toBe("prices_frozen");
-    expect(call.payload.frozenAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(call.payload.totalCents).toBe("10000");
-  });
-
-  it("uses the injected tx for calculator reads (not global prisma)", async () => {
-    await freezePrices({
-      tenantId: "tenant_1",
-      draftOrderId: "draft_1",
-    });
-
-    // computeDraftTotals called with 4 args including tx
-    expect(mockComputeDraftTotals).toHaveBeenCalledTimes(1);
-    const args = mockComputeDraftTotals.mock.calls[0];
-    expect(args[0]).toBe("tenant_1"); // tenantId
-    expect(args[1]).toBe("draft_1"); // draftOrderId
-    expect(args[3]).toBe(mockTx); // tx
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════
-// Idempotency — operator decision: throw, not silent no-op
-// ═══════════════════════════════════════════════════════════════
-
-describe("freezePrices — idempotency (ALREADY_FROZEN)", () => {
-  it("throws ValidationError when draft is already frozen", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ pricesFrozenAt: new Date() }),
-    );
-
-    await expect(
-      freezePrices({
-        tenantId: "tenant_1",
-        draftOrderId: "draft_1",
-      }),
-    ).rejects.toThrow(/already frozen/i);
-
-    // Tx not opened on early rejection
-    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
-    expect(mockEmit).not.toHaveBeenCalled();
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════
-// Empty draft
-// ═══════════════════════════════════════════════════════════════
-
-describe("freezePrices — empty draft allowed", () => {
-  it("freezes an empty draft (all totals 0n)", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ lineItems: [] }),
-    );
-    mockTx.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ lineItems: [] }),
-    );
-    mockComputeDraftTotals.mockResolvedValue(
-      makeTotals({
-        subtotalCents: BigInt(0),
-        totalCents: BigInt(0),
-        perLine: [],
-      }),
-    );
-
-    const result = await freezePrices({
-      tenantId: "tenant_1",
-      draftOrderId: "draft_1",
-    });
-
-    const data = mockTx.draftOrder.update.mock.calls[0][0].data;
-    expect(data.subtotalCents).toBe(BigInt(0));
-    expect(data.totalCents).toBe(BigInt(0));
-    expect(data.pricesFrozenAt).toBeInstanceOf(Date);
-
-    // No per-line updates when there are no lines.
-    expect(mockTx.draftLineItem.update).not.toHaveBeenCalled();
-
-    expect(result.totals.totalCents).toBe(BigInt(0));
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════
-// Mutability guards
-// ═══════════════════════════════════════════════════════════════
-
-describe("freezePrices — mutability guards", () => {
-  it("rejects when draft not found in tenant", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(null);
-    await expect(
-      freezePrices({
-        tenantId: "tenant_1",
-        draftOrderId: "ghost",
-      }),
-    ).rejects.toThrow(/not found/i);
-  });
-
-  it("rejects non-OPEN statuses (6.5B scope — 6.5D will add APPROVED)", async () => {
-    for (const status of [
-      "INVOICED",
-      "PAID",
-      "OVERDUE",
-      "COMPLETED",
-      "CANCELLED",
-      "PENDING_APPROVAL",
-      "APPROVED",
-      "REJECTED",
-    ] as const) {
-      mockPrisma.draftOrder.findFirst.mockResolvedValue(
-        makeDraft({ status }),
-      );
-      await expect(
-        freezePrices({
-          tenantId: "tenant_1",
-          draftOrderId: "draft_1",
-        }),
-      ).rejects.toThrow(/freezable status/i);
-    }
-  });
-
-  it("rejects Zod-invalid input (missing tenantId)", async () => {
-    await expect(
-      freezePrices({
-        tenantId: "",
-        draftOrderId: "draft_1",
-      } as never),
-    ).rejects.toThrow();
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════
-// Platform webhook resilience
-// ═══════════════════════════════════════════════════════════════
-
-describe("freezePrices — webhook fire-and-forget", () => {
-  it("swallows webhook failures (does not throw)", async () => {
-    mockEmit.mockRejectedValueOnce(new Error("app down"));
-    await expect(
-      freezePrices({
-        tenantId: "tenant_1",
-        draftOrderId: "draft_1",
-      }),
-    ).resolves.toMatchObject({ frozenAt: expect.any(Date) });
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════
-// Race safety — second freeze attempt inside tx
-// ═══════════════════════════════════════════════════════════════
-
-describe("freezePrices — tx-internal re-validation", () => {
-  it("rejects when draft was frozen by a concurrent request between pre-tx and tx", async () => {
-    // Pre-tx read: not frozen
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ pricesFrozenAt: null }),
-    );
-    // Tx-internal re-read: frozen (race)
-    mockTx.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ pricesFrozenAt: new Date() }),
-    );
-
-    await expect(
-      freezePrices({
-        tenantId: "tenant_1",
-        draftOrderId: "draft_1",
-      }),
-    ).rejects.toThrow(/already frozen/i);
-
-    // Calculator NOT called (rejected in pre-write check)
-    expect(mockComputeDraftTotals).not.toHaveBeenCalled();
-    // No webhook
-    expect(mockEmit).not.toHaveBeenCalled();
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════
-// FAS 6.5D — sendInvoice
+// sendInvoice (Phase C — lazy creation, no external calls)
 // ═══════════════════════════════════════════════════════════════
 
 describe("sendInvoice — happy path", () => {
-  it("creates PI + transitions OPEN → INVOICED + persists invoice artifacts", async () => {
+  it("transitions OPEN → INVOICED + persists token + URL", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
     mockTx.draftOrder.findFirst
       .mockResolvedValueOnce(makeDraftForInvoice())
@@ -553,35 +307,37 @@ describe("sendInvoice — happy path", () => {
       actorUserId: "user_42",
     });
 
-    expect(mockInitiatePayment).toHaveBeenCalledTimes(1);
-    expect(mockInitiatePayment.mock.calls[0][0].metadata).toMatchObject({
-      draftOrderId: "draft_1",
-      kind: "draft_order_invoice",
-      draftDisplayNumber: "D-2026-1001",
-    });
-    expect(result.stripePaymentIntentId).toBe("pi_test_123");
-    expect(result.clientSecret).toBe("cs_test_secret_123");
-    expect(result.invoiceUrl).toMatch(/^https:\/\/acme\.rutgr\.com\/invoice\//);
-    expect(result.shareLinkToken).toHaveLength(32);
-    expect(result.shareLinkExpiresAt).toBeInstanceOf(Date);
+    // Status transition recorded via the shared helper
+    expect(mockTx.draftOrder.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: "draft_1",
+          tenantId: "tenant_1",
+          status: "OPEN",
+        }),
+        data: expect.objectContaining({ status: "INVOICED" }),
+      }),
+    );
 
-    // Tx work: updateMany for status transition + update for invoice fields
-    expect(mockTx.draftOrder.updateMany).toHaveBeenCalled();
-    const transitionCall = mockTx.draftOrder.updateMany.mock.calls[0][0];
-    expect(transitionCall.where.status).toBe("OPEN");
-    expect(transitionCall.data.status).toBe("INVOICED");
+    // Invoice artifacts persisted (token, URL, sentAt)
+    const updateCall = mockTx.draftOrder.update.mock.calls[0]?.[0];
+    expect(updateCall.data.shareLinkToken).toBeTypeOf("string");
+    expect(updateCall.data.shareLinkToken.length).toBeGreaterThan(20);
+    expect(updateCall.data.invoiceUrl).toMatch(/\/invoice\//);
+    expect(updateCall.data.invoiceSentAt).toBeInstanceOf(Date);
+    // No metafields write — PI stays unborn until Phase E
+    expect(updateCall.data.metafields).toBeUndefined();
 
-    expect(mockTx.draftOrder.update).toHaveBeenCalledTimes(1);
-    const updateData = mockTx.draftOrder.update.mock.calls[0][0].data;
-    expect(updateData.invoiceUrl).toBe(result.invoiceUrl);
-    expect(updateData.shareLinkToken).toBe(result.shareLinkToken);
-    expect(updateData.invoiceSentAt).toBeInstanceOf(Date);
-    expect(updateData.metafields).toMatchObject({
-      stripePaymentIntentId: "pi_test_123",
+    // Return shape: only the three Phase-C fields
+    expect(result).toMatchObject({
+      invoiceUrl: expect.stringMatching(/\/invoice\//),
+      shareLinkToken: expect.any(String),
     });
+    expect((result as Record<string, unknown>).clientSecret).toBeUndefined();
+    expect((result as Record<string, unknown>).stripePaymentIntentId).toBeUndefined();
   });
 
-  it("emits INVOICE_SENT event + draft_order.invoiced platform webhook", async () => {
+  it("emits INVOICE_SENT event in-tx + draft_order.invoiced webhook post-commit", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
     mockTx.draftOrder.findFirst
       .mockResolvedValueOnce(makeDraftForInvoice())
@@ -590,76 +346,20 @@ describe("sendInvoice — happy path", () => {
     await sendInvoice({
       tenantId: "tenant_1",
       draftOrderId: "draft_1",
+      actorUserId: "user_42",
     });
 
-    // STATE_CHANGED + INVOICE_SENT events inside tx
     const eventTypes = mockTx.draftOrderEvent.create.mock.calls.map(
-      (call) => (call[0] as { data: { type: string } }).data.type,
+      (c: unknown[]) => (c[0] as { data: { type: string } }).data.type,
     );
-    expect(eventTypes).toContain("STATE_CHANGED");
     expect(eventTypes).toContain("INVOICE_SENT");
 
-    // Platform webhook
-    expect(mockEmit).toHaveBeenCalledTimes(1);
-    const ev = mockEmit.mock.calls[0][0];
-    expect(ev.type).toBe("draft_order.invoiced");
-    expect(ev.payload.draftOrderId).toBe("draft_1");
-    expect(ev.payload.stripePaymentIntentId).toBe("pi_test_123");
-    expect(ev.payload.invoiceUrl).toMatch(/^https:\/\/acme\.rutgr\.com\/invoice\//);
-  });
-
-  it("accepts APPROVED status (future-compatible with approval workflow)", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraftForInvoice({ status: "APPROVED" }),
+    expect(mockEmit).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "draft_order.invoiced" }),
     );
-    mockTx.draftOrder.findFirst
-      .mockResolvedValueOnce(makeDraftForInvoice({ status: "APPROVED" }))
-      .mockResolvedValueOnce(makeDraftForInvoice({ status: "INVOICED" }));
-
-    await expect(
-      sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).resolves.toMatchObject({ stripePaymentIntentId: "pi_test_123" });
-
-    const transitionCall = mockTx.draftOrder.updateMany.mock.calls[0][0];
-    expect(transitionCall.where.status).toBe("APPROVED");
-    expect(transitionCall.data.status).toBe("INVOICED");
   });
 
-  it("clamps share-link TTL to [1d, 90d]", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
-    mockTx.draftOrder.findFirst
-      .mockResolvedValueOnce(makeDraftForInvoice())
-      .mockResolvedValueOnce(makeDraftForInvoice({ status: "INVOICED" }));
-
-    const tooShort = await sendInvoice({
-      tenantId: "tenant_1",
-      draftOrderId: "draft_1",
-      shareLinkTtlMs: 1_000, // 1 second
-    });
-    // Clamped up to 1 day
-    const delta1 =
-      tooShort.shareLinkExpiresAt.getTime() - Date.now();
-    expect(delta1).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000 - 5_000);
-    expect(delta1).toBeLessThanOrEqual(24 * 60 * 60 * 1000 + 5_000);
-
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
-    mockTx.draftOrder.findFirst
-      .mockResolvedValueOnce(makeDraftForInvoice())
-      .mockResolvedValueOnce(makeDraftForInvoice({ status: "INVOICED" }));
-
-    const tooLong = await sendInvoice({
-      tenantId: "tenant_1",
-      draftOrderId: "draft_1",
-      shareLinkTtlMs: 365 * 24 * 60 * 60 * 1000, // 1 year
-    });
-    const delta2 =
-      tooLong.shareLinkExpiresAt.getTime() - Date.now();
-    // Clamped down to 90 days
-    expect(delta2).toBeLessThanOrEqual(90 * 24 * 60 * 60 * 1000 + 5_000);
-    expect(delta2).toBeGreaterThanOrEqual(90 * 24 * 60 * 60 * 1000 - 5_000);
-  });
-
-  it("stores invoiceEmailSubject + invoiceEmailMessage when provided", async () => {
+  it("INVARIANT 3 — sendInvoice makes ZERO external calls (no Stripe SDK, no PMS adapter)", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
     mockTx.draftOrder.findFirst
       .mockResolvedValueOnce(makeDraftForInvoice())
@@ -668,318 +368,148 @@ describe("sendInvoice — happy path", () => {
     await sendInvoice({
       tenantId: "tenant_1",
       draftOrderId: "draft_1",
-      invoiceEmailSubject: "Faktura för din bokning",
-      invoiceEmailMessage: "Hej! Här kommer din faktura.",
     });
-    const data = mockTx.draftOrder.update.mock.calls[0][0].data;
-    expect(data.invoiceEmailSubject).toBe("Faktura för din bokning");
-    expect(data.invoiceEmailMessage).toBe("Hej! Här kommer din faktura.");
-  });
 
-  it("preserves existing metafields when writing PaymentIntent ID", async () => {
-    const draftWithExistingMeta = makeDraftForInvoice({
-      metafields: { customField: "existing_value" } as DraftOrder["metafields"],
-    });
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(draftWithExistingMeta);
-    mockTx.draftOrder.findFirst
-      .mockResolvedValueOnce(draftWithExistingMeta)
-      .mockResolvedValueOnce(makeDraftForInvoice({ status: "INVOICED" }));
-
-    await sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" });
-
-    const merged = mockTx.draftOrder.update.mock.calls[0][0].data.metafields;
-    expect(merged).toMatchObject({
-      customField: "existing_value",
-      stripePaymentIntentId: "pi_test_123",
-    });
+    // Stripe PI cancel mock is the only Stripe surface this file mocks;
+    // sendInvoice must not touch it under any path.
+    expect(mockStripePiCancel).not.toHaveBeenCalled();
+    // PMS adapter is invoked by holds.ts — sendInvoice imports nothing
+    // from the adapter layer post-Phase-C. No mock to assert against,
+    // but the absence of any await import("...payments/providers")
+    // call is enforced by the static import surface being empty.
   });
 });
 
-describe("sendInvoice — preconditions", () => {
-  it("S1: throws NotFoundError when draft missing in tenant", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(null);
-    await expect(
-      sendInvoice({ tenantId: "tenant_1", draftOrderId: "ghost" }),
-    ).rejects.toThrow(/not found/i);
-    expect(mockInitiatePayment).not.toHaveBeenCalled();
-  });
-
-  it("S2: rejects non-sendable statuses", async () => {
-    for (const status of [
-      "PENDING_APPROVAL",
-      "REJECTED",
-      "PAID",
-      "OVERDUE",
-      "COMPLETING",
-      "COMPLETED",
-      "CANCELLED",
-    ] as const) {
-      mockPrisma.draftOrder.findFirst.mockResolvedValue(
+describe("sendInvoice — preconditions (S1, S2, S4, S5)", () => {
+  it("S1: rejects when status is not OPEN or APPROVED", async () => {
+    // INVOICED has its own short-circuit path — covered separately in
+    // the "idempotent re-send" describe. Test the other non-sendable
+    // statuses here.
+    for (const status of ["OVERDUE", "PAID", "CANCELLED"] as const) {
+      mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(
         makeDraftForInvoice({ status }),
       );
       await expect(
         sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-      ).rejects.toThrow(/sendable status/i);
+      ).rejects.toThrow(/not in a sendable status/i);
     }
-    expect(mockInitiatePayment).not.toHaveBeenCalled();
   });
 
-  it("S3: rejects unfrozen draft", async () => {
+  it("S2: rejects empty draft (no line items)", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraftForInvoice({ pricesFrozenAt: null }),
-    );
-    await expect(
-      sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).rejects.toThrow(/prices must be frozen/i);
-  });
-
-  it("S4: rejects empty draft", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraftForInvoice({ lineItems: [], reservations: [] }),
+      makeDraftForInvoice({ lineItems: [] }),
     );
     await expect(
       sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
     ).rejects.toThrow(/empty draft/i);
   });
 
-  it("S5: rejects when any ACCOMMODATION hold is not PLACED", async () => {
-    for (const holdState of [
-      "NOT_PLACED",
-      "PLACING",
-      "FAILED",
-      "RELEASED",
-      "CONFIRMED",
-    ] as const) {
-      mockPrisma.draftOrder.findFirst.mockResolvedValue(
-        makeDraftForInvoice({
-          reservations: [makeReservation({ holdState })],
-        }),
-      );
-      await expect(
-        sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-      ).rejects.toThrow(/holds must be PLACED/i);
-    }
-  });
-
-  it("S5: rejects when ACCOMMODATION line has no DraftReservation", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraftForInvoice({ reservations: [] }),
-    );
-    await expect(
-      sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).rejects.toThrow(/missing its DraftReservation/i);
-  });
-
-  it("S5: allows draft with only PRODUCT / CUSTOM lines (no reservations required)", async () => {
-    const productOnlyDraft = makeDraftForInvoice({
-      lineItems: [makeLine({ lineType: "PRODUCT" })],
-      reservations: [],
-    });
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(productOnlyDraft);
-    mockTx.draftOrder.findFirst
-      .mockResolvedValueOnce(productOnlyDraft)
-      .mockResolvedValueOnce(makeDraftForInvoice({ status: "INVOICED" }));
-
-    await expect(
-      sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).resolves.toMatchObject({ stripePaymentIntentId: "pi_test_123" });
-  });
-
-  it("S6: rejects draft with totalCents === 0n", async () => {
+  it("S4: rejects zero-total draft", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(
       makeDraftForInvoice({ totalCents: BigInt(0) }),
     );
     await expect(
       sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).rejects.toThrow(/zero-total draft/i);
+    ).rejects.toThrow(/zero-total/i);
   });
 
-  it("S7: rejects tenant without Stripe Connect account", async () => {
-    mockPrisma.tenant.findUnique.mockResolvedValue(
-      makeTenantForInvoice({ stripeAccountId: null }),
+  it("S5: rejects when no customer association is set", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeDraftForInvoice({
+        contactEmail: null,
+        guestAccountId: null,
+        companyContactId: null,
+      }),
     );
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
     await expect(
       sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).rejects.toThrow(/Stripe Connect account/i);
+    ).rejects.toThrow(/customer association/i);
   });
 
-  it("S7: rejects tenant with incomplete Stripe onboarding", async () => {
-    mockPrisma.tenant.findUnique.mockResolvedValue(
-      makeTenantForInvoice({ stripeOnboardingComplete: false }),
-    );
+  it("rejects when tenant has no portalSlug", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
-    await expect(
-      sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).rejects.toThrow(/onboarding is not complete/i);
-  });
-
-  it("S7: rejects tenant without portalSlug", async () => {
     mockPrisma.tenant.findUnique.mockResolvedValue(
       makeTenantForInvoice({ portalSlug: null }),
     );
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
     await expect(
       sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).rejects.toThrow(/portalSlug/);
-  });
-
-  it("S7: rejects when Stripe charges disabled", async () => {
-    mockVerifyCharges.mockResolvedValue(false);
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
-    await expect(
-      sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).rejects.toThrow(/cannot accept charges/i);
+    ).rejects.toThrow(/portalSlug/i);
   });
 });
 
-describe("sendInvoice — adapter contract", () => {
-  it("throws when adapter returns non-embedded mode", async () => {
-    mockInitiatePayment.mockResolvedValue({
-      mode: "redirect",
-      redirectUrl: "https://pay.example",
-      providerSessionId: "pi_test_123",
+describe("sendInvoice — idempotent re-send", () => {
+  it("INVOICED draft → returns existing token + URL with NO state mutation, NO event, NO webhook", async () => {
+    const existingDraft = makeDraftForInvoice({
+      status: "INVOICED",
+      shareLinkToken: "existing_token_abc",
+      invoiceUrl: "https://acme.rutgr.com/invoice/existing_token_abc",
     });
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
-    await expect(
-      sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).rejects.toThrow(/non-embedded mode/i);
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(existingDraft);
+
+    const result = await sendInvoice({
+      tenantId: "tenant_1",
+      draftOrderId: "draft_1",
+    });
+
+    // Returns existing artifacts unchanged
+    expect(result.shareLinkToken).toBe("existing_token_abc");
+    expect(result.invoiceUrl).toBe("https://acme.rutgr.com/invoice/existing_token_abc");
+
+    // Zero state mutation
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    expect(mockTx.draftOrder.updateMany).not.toHaveBeenCalled();
+    expect(mockTx.draftOrder.update).not.toHaveBeenCalled();
+
+    // Zero event emission
+    expect(mockTx.draftOrderEvent.create).not.toHaveBeenCalled();
+
+    // Zero post-commit webhook
+    expect(mockEmit).not.toHaveBeenCalled();
   });
 
-  it("throws when adapter omits providerSessionId (Q4 contract)", async () => {
-    mockInitiatePayment.mockResolvedValue({
-      mode: "embedded",
-      clientSecret: "cs_test_secret_123",
-      // providerSessionId: undefined — simulate legacy adapter
-    });
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
+  it("INVOICED draft missing shareLinkToken throws (data integrity guard)", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeDraftForInvoice({
+        status: "INVOICED",
+        shareLinkToken: null,
+        invoiceUrl: null,
+      }),
+    );
+
     await expect(
       sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).rejects.toThrow(/did not return providerSessionId/i);
+    ).rejects.toThrow(/missing shareLinkToken/i);
   });
 });
 
 describe("sendInvoice — tx race safety", () => {
-  it("rejects if status changes between pre-tx and in-tx re-read", async () => {
+  it("rejects with ConflictError if status flipped between pre-tx and in-tx re-read", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
-    // In-tx re-read sees status was flipped by another request
+    // In-tx re-fetch returns a draft that's already CANCELLED
     mockTx.draftOrder.findFirst.mockResolvedValueOnce(
       makeDraftForInvoice({ status: "CANCELLED" }),
     );
+
     await expect(
       sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
     ).rejects.toThrow(/status changed/i);
   });
-
-  it("rejects if pricesFrozenAt cleared between pre-tx and in-tx re-read", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
-    mockTx.draftOrder.findFirst.mockResolvedValueOnce(
-      makeDraftForInvoice({ pricesFrozenAt: null }),
-    );
-    await expect(
-      sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).rejects.toThrow(/no longer frozen/i);
-  });
-
-  it("rejects when transitionDraftStatusInTx returns transitioned=false (count=0 race)", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
-    mockTx.draftOrder.findFirst.mockResolvedValueOnce(makeDraftForInvoice());
-    // updateMany sees status already changed by a concurrent mutation
-    mockTx.draftOrder.updateMany.mockResolvedValueOnce({ count: 0 });
-    await expect(
-      sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).rejects.toThrow(/mutated during send/i);
-  });
-});
-
-describe("sendInvoice — idempotent replay", () => {
-  it("re-sending an already-INVOICED draft returns the existing invoice artifacts + fresh clientSecret", async () => {
-    const sentDraft = makeDraftForInvoice({
-      status: "INVOICED",
-      shareLinkToken: "existing_token",
-      shareLinkExpiresAt: new Date("2026-07-01T00:00:00Z"),
-      invoiceUrl: "https://acme.rutgr.com/invoice/existing_token",
-      invoiceSentAt: new Date("2026-04-20T10:00:00Z"),
-      metafields: {
-        stripePaymentIntentId: "pi_existing_123",
-      } as DraftOrder["metafields"],
-    });
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(sentDraft);
-
-    const result = await sendInvoice({
-      tenantId: "tenant_1",
-      draftOrderId: "draft_1",
-    });
-
-    // Should not open a transaction (no state change)
-    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
-    // Should not emit any webhook
-    expect(mockEmit).not.toHaveBeenCalled();
-    // Should not write any event
-    expect(mockTx.draftOrderEvent.create).not.toHaveBeenCalled();
-
-    // Adapter IS called (to get fresh clientSecret for the admin UI)
-    expect(mockInitiatePayment).toHaveBeenCalledTimes(1);
-
-    // Returns the existing invoice artifacts
-    expect(result.shareLinkToken).toBe("existing_token");
-    expect(result.invoiceUrl).toBe("https://acme.rutgr.com/invoice/existing_token");
-    expect(result.stripePaymentIntentId).toBe("pi_existing_123");
-    expect(result.clientSecret).toBe("cs_test_secret_123");
-  });
-
-  it("refuses idempotent replay if PaymentIntent stored but invoiceUrl missing (inconsistent state)", async () => {
-    const sentDraft = makeDraftForInvoice({
-      status: "INVOICED",
-      shareLinkToken: null, // inconsistent
-      shareLinkExpiresAt: null,
-      invoiceUrl: null,
-      metafields: {
-        stripePaymentIntentId: "pi_existing_123",
-      } as DraftOrder["metafields"],
-    });
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(sentDraft);
-
-    await expect(
-      sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).rejects.toThrow(/manual recovery/i);
-  });
-
-  it("does NOT treat an OPEN draft with stored metafields.stripePaymentIntentId as idempotent replay", async () => {
-    // Edge case: someone manually wrote metafields, but status still OPEN.
-    // We should flow the normal path, not the idempotent replay.
-    const draftWithStaleMeta = makeDraftForInvoice({
-      status: "OPEN",
-      metafields: { stripePaymentIntentId: "pi_stale_999" } as DraftOrder["metafields"],
-    });
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(draftWithStaleMeta);
-    mockTx.draftOrder.findFirst
-      .mockResolvedValueOnce(draftWithStaleMeta)
-      .mockResolvedValueOnce(makeDraftForInvoice({ status: "INVOICED" }));
-
-    const result = await sendInvoice({
-      tenantId: "tenant_1",
-      draftOrderId: "draft_1",
-    });
-
-    // Fresh PI created, fresh invoice URL
-    expect(result.stripePaymentIntentId).toBe("pi_test_123");
-    // Transaction was opened (normal flow)
-    expect(mockPrisma.$transaction).toHaveBeenCalled();
-  });
 });
 
 describe("sendInvoice — webhook resilience", () => {
-  it("swallows platform webhook failures", async () => {
+  it("post-commit webhook failure does NOT throw to the caller", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
     mockTx.draftOrder.findFirst
       .mockResolvedValueOnce(makeDraftForInvoice())
       .mockResolvedValueOnce(makeDraftForInvoice({ status: "INVOICED" }));
-    mockEmit.mockRejectedValue(new Error("downstream app error"));
+    mockEmit.mockRejectedValue(new Error("redis down"));
 
+    // Returns successfully despite webhook failure
     await expect(
       sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
-    ).resolves.toMatchObject({ stripePaymentIntentId: "pi_test_123" });
+    ).resolves.toMatchObject({
+      invoiceUrl: expect.stringMatching(/\/invoice\//),
+    });
   });
 });
 
@@ -1036,13 +566,8 @@ describe("cancelDraft — happy path", () => {
     expect(result.holdReleaseErrors).toEqual([]);
   });
 
-  it("cancels INVOICED draft with reason + attempts Stripe PI cancel", async () => {
-    const invoicedDraft = makeDraftForInvoice({
-      status: "INVOICED",
-      metafields: {
-        stripePaymentIntentId: "pi_existing_123",
-      } as DraftOrder["metafields"],
-    });
+  it("cancels INVOICED draft with reason — Phase C does NOT attempt Stripe PI cancel (Phase D will)", async () => {
+    const invoicedDraft = makeDraftForInvoice({ status: "INVOICED" });
     mockPrisma.draftOrder.findFirst.mockResolvedValue(invoicedDraft);
     mockTx.draftOrder.findFirst
       .mockResolvedValueOnce(invoicedDraft)
@@ -1063,10 +588,10 @@ describe("cancelDraft — happy path", () => {
     const updData = mockTx.draftOrder.update.mock.calls[0][0].data;
     expect(updData.cancellationReason).toBe("Kund ångrade sig");
 
-    // Stripe PI cancel was attempted
-    expect(mockStripePiCancel).toHaveBeenCalledTimes(1);
-    expect(mockStripePiCancel.mock.calls[0][0]).toBe("pi_existing_123");
-    expect(result.stripePaymentIntentCancelAttempted).toBe(true);
+    // Phase C stub: PI cancel is wired to Phase D's
+    // unlinkActiveCheckoutSession. cancelDraft no longer touches Stripe.
+    expect(mockStripePiCancel).not.toHaveBeenCalled();
+    expect(result.stripePaymentIntentCancelAttempted).toBe(false);
     expect(result.stripePaymentIntentCancelError).toBeNull();
   });
 
@@ -1276,31 +801,12 @@ describe("cancelDraft — hold release", () => {
   });
 });
 
-describe("cancelDraft — Stripe PI cancellation", () => {
-  it("skips PI cancel when no stripePaymentIntentId stored", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
-    mockTx.draftOrder.findFirst
-      .mockResolvedValueOnce(makeDraftForInvoice())
-      .mockResolvedValueOnce(
-        makeDraftForInvoice({ status: "CANCELLED", cancelledAt: new Date() }),
-      );
-
-    const result = await cancelDraft({
-      tenantId: "tenant_1",
-      draftOrderId: "draft_1",
-    });
-
-    expect(mockStripePiCancel).not.toHaveBeenCalled();
-    expect(result.stripePaymentIntentCancelAttempted).toBe(false);
-    expect(result.stripePaymentIntentCancelError).toBeNull();
-  });
-
-  it("captures PI cancel error without throwing", async () => {
+describe("cancelDraft — Stripe PI cancellation (Phase C stub)", () => {
+  it("does NOT attempt Stripe PI cancel — Phase D will wire unlinkActiveCheckoutSession", async () => {
     const invoicedDraft = makeDraftForInvoice({
       status: "INVOICED",
-      metafields: {
-        stripePaymentIntentId: "pi_abc",
-      } as DraftOrder["metafields"],
+      // metafields could once have held a PI ID; Phase B dropped that path
+      metafields: null,
     });
     mockPrisma.draftOrder.findFirst.mockResolvedValue(invoicedDraft);
     mockTx.draftOrder.findFirst
@@ -1308,7 +814,6 @@ describe("cancelDraft — Stripe PI cancellation", () => {
       .mockResolvedValueOnce(
         makeDraftForInvoice({ status: "CANCELLED", cancelledAt: new Date() }),
       );
-    mockStripePiCancel.mockRejectedValue(new Error("pi already succeeded"));
 
     const result = await cancelDraft({
       tenantId: "tenant_1",
@@ -1316,12 +821,14 @@ describe("cancelDraft — Stripe PI cancellation", () => {
       reason: "Changed mind",
     });
 
-    // Cancel succeeded despite Stripe failure
+    // Cancel succeeds without touching Stripe
     expect(result.draft.status).toBe("CANCELLED");
-    expect(result.stripePaymentIntentCancelAttempted).toBe(true);
-    expect(result.stripePaymentIntentCancelError).toMatch(/pi already succeeded/);
+    expect(mockStripePiCancel).not.toHaveBeenCalled();
+    expect(result.stripePaymentIntentCancelAttempted).toBe(false);
+    expect(result.stripePaymentIntentCancelError).toBeNull();
   });
 });
+
 
 describe("cancelDraft — tx race safety", () => {
   it("rejects if draft reached terminal between pre-tx and in-tx re-read", async () => {

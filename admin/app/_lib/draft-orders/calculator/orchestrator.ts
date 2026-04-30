@@ -77,10 +77,11 @@ export async function computeDraftTotals(
     });
   }
 
-  // ── Frozen short-circuit (audit §6) ──
-  if (draft.pricesFrozenAt && !options.ignorePricesFrozenAt) {
-    return assembleFrozenSnapshot(draft);
-  }
+  // The historical `pricesFrozenAt` short-circuit was removed in
+  // Phase C — the column was dropped in Phase B and frozen totals now
+  // live on `DraftCheckoutSession` (Phase E). The orchestrator always
+  // recomputes from current state. `assembleFrozenSnapshot` is kept
+  // unreachable for now in case Phase E reuses the row-snapshot shape.
 
   // ── Resolve accommodation tax rates (batch) ──
   const accommodationIds = Array.from(
@@ -234,7 +235,7 @@ function assembleFrozenSnapshot(draft: RawDraftOrder): DraftTotals {
 
   return {
     source: "FROZEN_SNAPSHOT",
-    frozenAt: draft.pricesFrozenAt,
+    frozenAt: null,
     currency: draft.currency,
     subtotalCents: draft.subtotalCents,
     totalLineDiscountCents: manualSum,

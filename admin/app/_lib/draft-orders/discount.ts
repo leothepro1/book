@@ -102,11 +102,6 @@ function assertDraftMutable(draft: RawDraftOrder): void {
       status: draft.status,
     });
   }
-  if (draft.pricesFrozenAt !== null) {
-    throw new ValidationError("Draft prices are frozen; cannot modify", {
-      draftOrderId: draft.id,
-    });
-  }
 }
 
 function impactToSummary(

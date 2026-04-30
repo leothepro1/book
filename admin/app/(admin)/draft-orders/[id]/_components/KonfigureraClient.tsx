@@ -30,7 +30,6 @@ import { NotesCardEditable } from "./NotesCardEditable";
 import { TagsCardEditable } from "./TagsCardEditable";
 import { ExpiresAtCardEditable } from "./ExpiresAtCardEditable";
 import { DiscountCardEditable } from "./DiscountCardEditable";
-import { PricesFrozenBanner } from "./PricesFrozenBanner";
 import { ConfirmModal } from "./ConfirmModal";
 import {
   HeaderActionsDropdown,
@@ -65,7 +64,6 @@ export type KonfigureraClientDraft = {
   createdAt: Date;
   expiresAt: Date;
   invoiceSentAt: Date | null;
-  pricesFrozenAt: Date | null;
   cancelledAt: Date | null;
   completedAt: Date | null;
   cancellationReason: string | null;
@@ -148,13 +146,14 @@ export function KonfigureraClient({
   const router = useRouter();
 
   const editable = EDITABLE_STATUSES.includes(draft.status);
-  const isLocked = draft.pricesFrozenAt !== null;
-  // Stricter gate than `editable` — matches service `assertDraftMutable` in
-  // lines.ts: requires OPEN status + all null lifecycle flags. Service is
-  // authoritative; UI is advisory.
+  // Phase C: only OPEN drafts are mutable. Phase D will refine to allow
+  // editing INVOICED drafts via `unlinkActiveCheckoutSession`.
+  const isLocked = draft.status !== "OPEN";
+  // Stricter gate than `editable` — matches service `assertDraftMutable`
+  // in lines.ts: requires OPEN status + all null lifecycle flags.
+  // Service is authoritative; UI is advisory.
   const linesEditable =
     draft.status === "OPEN" &&
-    draft.pricesFrozenAt === null &&
     draft.cancelledAt === null &&
     draft.completedAt === null;
 
@@ -425,8 +424,6 @@ export function KonfigureraClient({
             </button>
           </div>
         </div>
-
-        {isLocked && <PricesFrozenBanner />}
 
         <div className="pf-body">
           <div className="pf-main">

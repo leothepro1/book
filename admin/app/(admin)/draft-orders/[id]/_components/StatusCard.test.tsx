@@ -17,7 +17,6 @@ const baseDraft = {
   createdAt: new Date("2026-04-20T10:30:00Z"),
   expiresAt: new Date("2026-04-27T00:00:00Z"),
   invoiceSentAt: null,
-  pricesFrozenAt: null,
   invoiceUrl: null,
   completedAt: null,
   cancelledAt: null,
@@ -47,20 +46,9 @@ describe("StatusCard — read-only", () => {
     expect(screen.getByText("Faktura skickad")).toBeTruthy();
   });
 
-  it("hides Priser låsta row when pricesFrozenAt is null", () => {
-    render(<StatusCard draft={baseDraft} stripePaymentIntent={null} />);
-    expect(screen.queryByText("Priser låsta")).toBeNull();
-  });
-
-  it("shows Priser låsta row when pricesFrozenAt is set", () => {
-    render(
-      <StatusCard
-        draft={{ ...baseDraft, pricesFrozenAt: new Date("2026-04-22T08:00:00Z") }}
-        stripePaymentIntent={null}
-      />,
-    );
-    expect(screen.getByText("Priser låsta")).toBeTruthy();
-  });
+  // "Priser låsta" row removed in Phase C — `pricesFrozenAt` column
+  // was deleted in Phase B. Phase F will introduce a session-aware
+  // status row if/when the design calls for it.
 
   it("hides Betalning row when stripePaymentIntent is null", () => {
     render(<StatusCard draft={baseDraft} stripePaymentIntent={null} />);

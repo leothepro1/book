@@ -87,7 +87,6 @@ type DraftRow = {
   id: string;
   tenantId: string;
   status: string;
-  pricesFrozenAt: Date | null;
   cancelledAt: Date | null;
   completedAt: Date | null;
   currency: string;
@@ -100,7 +99,6 @@ async function loadDraft(tenantId: string, draftOrderId: string): Promise<DraftR
       id: true,
       tenantId: true,
       status: true,
-      pricesFrozenAt: true,
       cancelledAt: true,
       completedAt: true,
       currency: true,
@@ -120,11 +118,6 @@ function assertDraftMutable(draft: DraftRow): void {
     throw new ValidationError("Draft is not editable (wrong status)", {
       draftOrderId: draft.id,
       status: draft.status,
-    });
-  }
-  if (draft.pricesFrozenAt !== null) {
-    throw new ValidationError("Draft prices are frozen; cannot modify holds", {
-      draftOrderId: draft.id,
     });
   }
   if (draft.cancelledAt !== null || draft.completedAt !== null) {

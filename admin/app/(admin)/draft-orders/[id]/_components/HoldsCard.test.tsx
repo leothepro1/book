@@ -70,6 +70,7 @@ function buildReservation(
     holdState: "PLACED" as DraftHoldState,
     holdLastAttemptAt: null,
     holdLastError: null,
+    holdReleaseReason: null,
     holdIdempotencyKey: null,
     createdAt: new Date(),
     updatedAt: new Date(),

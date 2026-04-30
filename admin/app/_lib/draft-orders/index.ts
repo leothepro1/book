@@ -41,8 +41,6 @@ export {
   removeDiscountCode,
   previewApplyDiscountCode,
 } from "./discount";
-export { freezePrices } from "./lifecycle";
-
 // ── Services (FAS 6.5C) ──
 export {
   placeHoldForDraftLine,

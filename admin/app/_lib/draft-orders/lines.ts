@@ -78,12 +78,6 @@ function assertDraftMutable(draft: DraftOrder): void {
       status: draft.status,
     });
   }
-  if (draft.pricesFrozenAt !== null) {
-    throw new ValidationError("Draft prices are frozen; cannot modify lines", {
-      draftOrderId: draft.id,
-      pricesFrozenAt: draft.pricesFrozenAt?.toISOString(),
-    });
-  }
   if (draft.cancelledAt !== null) {
     throw new ValidationError("Draft is cancelled", {
       draftOrderId: draft.id,

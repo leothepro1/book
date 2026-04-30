@@ -119,12 +119,18 @@ async function loadDraftForConvert(
  * Throws ValidationError / ConflictError by audit mapping:
  *   P1  NOT_FOUND (thrown by loader, not here)
  *   P2  INVALID_STATUS          → ValidationError
- *   P3  NOT_FROZEN              → ValidationError
+ *   P3  (removed) NOT_FROZEN    — pricesFrozenAt was deleted in Phase B
  *   P4  HOLDS_NOT_PLACED        → ValidationError
  *   P5  HOLDS_EXPIRED           → ConflictError (time-based, recoverable)
  *   P6  Already-converted is handled upstream as alreadyConverted replay
  *   P7  ACC_NOT_PMS_SYNCED      → ValidationError
  *   Q9  AMOUNT_EXCEEDS_…        → ValidationError (defensive overflow guard)
+ *
+ * NOTE: Frozen-totals guarantee comes from `DraftCheckoutSession.frozenTotal`
+ * (populated by `createDraftCheckoutSession` in Phase E §7.3 step 1).
+ * This function is effectively unreachable in the buyer flow until
+ * Phase H wires the Stripe webhook to transition through
+ * `DraftCheckoutSession` — see roadmap.
  */
 function assertConvertPreconditions(draft: DraftForConvert): void {
   // P2
@@ -133,13 +139,6 @@ function assertConvertPreconditions(draft: DraftForConvert): void {
       draftOrderId: draft.id,
       status: draft.status,
     });
-  }
-  // P3 — belt on top of 6.5B's suspenders
-  if (draft.pricesFrozenAt === null) {
-    throw new ValidationError(
-      "Draft prices are not frozen — cannot convert",
-      { draftOrderId: draft.id },
-    );
   }
   // Q9 — BigInt → Int overflow guard. Order.totalAmount is Int (SQL int4,
   // max 2^31-1 ≈ 21M SEK). MAX_SAFE_INTEGER is conservative — if the

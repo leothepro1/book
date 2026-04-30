@@ -26,7 +26,6 @@ import {
   ValidationError,
 } from "@/app/_lib/errors/service-errors";
 import { transitionDraftStatusInTx } from "./lifecycle";
-import { convertDraftToOrder } from "./convert";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -51,21 +50,14 @@ export type MarkDraftAsPaidResult = {
 
 const PAYABLE_STATUSES: DraftOrderStatus[] = ["INVOICED", "OVERDUE"];
 
-/**
- * Mirrors the private helper in get.ts. Reading from metafields rather
- * than a dedicated column keeps the schema unchanged.
- */
-function readStripePaymentIntentId(
-  metafields: DraftOrder["metafields"],
-): string | null {
-  if (metafields === null || metafields === undefined) return null;
-  if (typeof metafields !== "object" || Array.isArray(metafields)) return null;
-  const v = (metafields as Record<string, unknown>).stripePaymentIntentId;
-  return typeof v === "string" && v.length > 0 ? v : null;
-}
-
 // ── markDraftAsPaid ────────────────────────────────────────────
 
+// TODO: Phase D — call `unlinkActiveCheckoutSession` before recording
+// manual payment. This addresses §13.1 (mark-as-paid double-charge
+// bug) per draft-orders-invoice-flow.md v1.2. Phase C deliberately
+// leaves the bug in place because (a) the unlink helper does not yet
+// exist (Phase D) and (b) the session model is not wired into any
+// flow that creates PIs (Phase E), so there is no live PI to cancel.
 export async function markDraftAsPaid(
   input: MarkDraftAsPaidArgs,
 ): Promise<MarkDraftAsPaidResult> {
@@ -141,32 +133,16 @@ export async function markDraftAsPaid(
     reference: params.reference ?? null,
   });
 
-  // Auto-convert (Q14) — mirror the Stripe webhook flow. PAID is already
-  // committed; if convert fails the draft is left at PAID and the
-  // service rethrows so the caller surfaces the error. This matches the
-  // webhook handler's semantics where convert failure triggers Stripe
-  // retries but PAID stays committed.
-  const stripePaymentIntentId = readStripePaymentIntentId(draft.metafields);
-  if (stripePaymentIntentId === null) {
-    // Edge case: draft was INVOICED but PI ID missing from metafields
-    // (data inconsistency). Keep PAID committed; skip auto-convert.
-    log("warn", "draft_order.mark_paid.no_pi_id_skip_convert", {
-      tenantId: draft.tenantId,
-      draftOrderId: draft.id,
-    });
-    const refreshed = (await prisma.draftOrder.findFirst({
-      where: { id: draft.id, tenantId: draft.tenantId },
-    })) as DraftOrder;
-    return { draft: refreshed };
-  }
-
-  const convertResult = await convertDraftToOrder({
-    tenantId: draft.tenantId,
-    draftOrderId: draft.id,
-    stripePaymentIntentId,
-    actorSource: "admin_manual_recovery",
-    actorUserId: params.actorUserId,
-  });
-
-  return { draft: convertResult.draft, order: convertResult.order };
+  // TODO: Phase E + Phase H — auto-convert flow. Pre-Phase C this
+  // function read `metafields.stripePaymentIntentId` and forwarded it
+  // to `convertDraftToOrder` (which requires a PI ID). Phase B deleted
+  // the metafields-based storage of PI; Phase E moves the PI to
+  // `DraftCheckoutSession.stripePaymentIntentId`. Until Phase E +
+  // Phase H wire the session-aware lookup, mark-as-paid stops at PAID
+  // and does NOT auto-convert. Production has zero drafts, so this
+  // regression has zero exposure (Phase B verification VP4).
+  const refreshed = (await prisma.draftOrder.findFirst({
+    where: { id: draft.id, tenantId: draft.tenantId },
+  })) as DraftOrder;
+  return { draft: refreshed };
 }

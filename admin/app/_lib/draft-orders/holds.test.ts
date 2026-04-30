@@ -83,7 +83,6 @@ function makeDraft(overrides: Record<string, unknown> = {}) {
     id: "draft_1",
     tenantId: "tenant_1",
     status: "OPEN",
-    pricesFrozenAt: null,
     cancelledAt: null,
     completedAt: null,
     currency: "SEK",
@@ -402,18 +401,6 @@ describe("placeHoldForDraftLine — preconditions", () => {
     ).rejects.toThrow(/only to ACCOMMODATION/i);
   });
 
-  it("rejects when draft is frozen", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ pricesFrozenAt: new Date() }),
-    );
-    await expect(
-      placeHoldForDraftLine({
-        tenantId: "tenant_1",
-        draftLineItemId: "dli_1",
-      }),
-    ).rejects.toThrow(/frozen/i);
-  });
-
   it("rejects when accommodation lacks externalId (not PMS-synced)", async () => {
     mockPrisma.accommodation.findFirst.mockResolvedValue({
       externalId: null,
@@ -694,20 +681,6 @@ describe("placeHoldsForDraft — partial failure tolerance", () => {
 });
 
 describe("placeHoldsForDraft — mutability guards", () => {
-  it("rejects frozen draft before touching any reservation", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ pricesFrozenAt: new Date() }),
-    );
-    await expect(
-      placeHoldsForDraft({
-        tenantId: "tenant_1",
-        draftOrderId: "draft_1",
-      }),
-    ).rejects.toThrow(/frozen/i);
-
-    expect(mockPrisma.draftReservation.findMany).not.toHaveBeenCalled();
-  });
-
   it("returns all-empty result for draft with no placeable reservations", async () => {
     mockPrisma.draftReservation.findMany.mockResolvedValue([]);
 

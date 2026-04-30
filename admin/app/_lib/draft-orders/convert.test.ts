@@ -184,7 +184,6 @@ function makeDraft(overrides: Partial<DraftForConvert> = {}): DraftForConvert {
     totalCents: BigInt(10_000),
     currency: "SEK",
     taxesIncluded: true,
-    pricesFrozenAt: new Date("2026-04-23T12:00:00Z"),
     appliedDiscountId: null,
     appliedDiscountCode: null,
     appliedDiscountAmount: null,
@@ -600,18 +599,9 @@ describe("convertDraftToOrder — preconditions", () => {
     }
   });
 
-  it("P3: rejects unfrozen draft", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ pricesFrozenAt: null }),
-    );
-    await expect(
-      convertDraftToOrder({
-        tenantId: "tenant_1",
-        draftOrderId: "draft_1",
-        stripePaymentIntentId: "pi_1",
-      }),
-    ).rejects.toThrow(/not frozen/i);
-  });
+  // P3 (NOT_FROZEN) test removed in Phase C — `pricesFrozenAt` column
+  // was dropped in Phase B. Frozen-totals guarantee moves to
+  // `DraftCheckoutSession` in Phase E §7.3 step 1.
 
   it("P4: rejects when any ACC reservation is not PLACED", async () => {
     for (const holdState of ["NOT_PLACED", "PLACING", "FAILED", "RELEASED", "CONFIRMED"] as const) {

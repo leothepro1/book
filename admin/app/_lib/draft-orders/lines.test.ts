@@ -88,7 +88,6 @@ function makeDraft(overrides: Partial<DraftOrder> = {}): DraftOrder {
     totalCents: BigInt(0),
     currency: "SEK",
     taxesIncluded: true,
-    pricesFrozenAt: null,
     appliedDiscountId: null,
     appliedDiscountCode: null,
     appliedDiscountAmount: null,
@@ -595,25 +594,6 @@ describe("addLineItem — mutability guards", () => {
     ).rejects.toThrow(/not editable/);
   });
 
-  it("rejects when draft has pricesFrozenAt set", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ pricesFrozenAt: new Date() }),
-    );
-
-    await expect(
-      addLineItem({
-        tenantId: "tenant_1",
-        draftOrderId: "draft_1",
-        line: {
-          lineType: "CUSTOM",
-          title: "x",
-          quantity: 1,
-          unitPriceCents: BigInt(100),
-        },
-      }),
-    ).rejects.toThrow(/frozen/);
-  });
-
   it("rejects when draft is cancelled", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(
       makeDraft({ status: "CANCELLED", cancelledAt: new Date() }),
@@ -995,19 +975,6 @@ describe("updateLineItem — mutability + validation", () => {
     ).rejects.toThrow(/Patch lineType does not match/);
   });
 
-  it("rejects when draft is frozen", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ pricesFrozenAt: new Date() }),
-    );
-    await expect(
-      updateLineItem({
-        tenantId: "tenant_1",
-        draftOrderId: "draft_1",
-        lineItemId: "dli_existing",
-        patch: { lineType: "PRODUCT", taxable: false },
-      }),
-    ).rejects.toThrow(/frozen/);
-  });
 });
 
 // ═══════════════════════════════════════════════════════════════
