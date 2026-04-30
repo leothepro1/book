@@ -22,6 +22,9 @@
 
 import type { ZodType } from "zod";
 
+import { AccommodationArchivedSchema } from "./accommodation-archived";
+import { AccommodationPriceChangedSchema } from "./accommodation-price-changed";
+import { AccommodationPublishedSchema } from "./accommodation-published";
 import { BookingCancelledSchema } from "./booking-cancelled";
 import { BookingCompletedSchema } from "./booking-completed";
 import { BookingImportedSchema } from "./booking-imported";
@@ -37,6 +40,15 @@ import { PaymentRefundedSchema } from "./payment-refunded";
 import { PaymentSucceededSchema } from "./payment-succeeded";
 
 export const ANALYTICS_EVENT_REGISTRY = {
+  accommodation_archived: {
+    "0.1.0": AccommodationArchivedSchema,
+  },
+  accommodation_price_changed: {
+    "0.1.0": AccommodationPriceChangedSchema,
+  },
+  accommodation_published: {
+    "0.1.0": AccommodationPublishedSchema,
+  },
   booking_cancelled: {
     "0.1.0": BookingCancelledSchema,
   },

@@ -388,6 +388,42 @@ An existing operational resource (Order today, future Booking) had its
   ("order" today, "booking" reserved), `linked_resource_id`,
   `link_method` ("auto_via_email_match" today), `linked_at`.
 
+### `accommodation_published` v0.1.0 — Registered, emit deferred to Phase 4 CDC
+
+An accommodation went live on the guest-facing booking engine
+(`status` transitioned to `ACTIVE`).
+
+**Status: registered, emit deferred to Phase 4 CDC.** Bedfront has
+multiple admin write-paths for accommodations (visual editor saves,
+bulk import, future AI tools, manual admin). Instrumenting every
+write-path is fragile — a new admin route added later forgets to emit
+and the analytics record drifts from reality. Postgres CDC captures
+status transitions regardless of the writing code path; one
+emit-source for all writers. Listed in `KNOWN_DEFERRED_EVENTS` in
+`scripts/verify-phase2.ts` with the explicit reason.
+
+- **Payload:** `accommodation_id`, `accommodation_type` (hotel /
+  cabin / camping / apartment / pitch), `display_name`, `base_price`,
+  `status_transition: { from, to: "active" }`, `published_at`.
+
+### `accommodation_archived` v0.1.0 — Registered, emit deferred to Phase 4 CDC
+
+An accommodation was soft-archived (`status` set to `ARCHIVED`). Same
+Phase 4 CDC deferral as `accommodation_published`.
+
+- **Payload:** `accommodation_id`, `accommodation_type`,
+  `display_name`, `archived_at`, `archived_by_actor_id` (nullable —
+  CDC may not surface the actor).
+
+### `accommodation_price_changed` v0.1.0 — Registered, emit deferred to Phase 4 CDC
+
+The base price of an accommodation changed. Same Phase 4 CDC
+deferral.
+
+- **Payload:** `accommodation_id`, `accommodation_type`,
+  `previous_price`, `new_price`, `change_pct` (nullable when previous
+  was zero), `changed_at`, `changed_by_actor_id`.
+
 ## Why `booking_completed` and `booking_imported` are separate event types
 
 Repeated for emphasis: this is a deliberate design choice, not an

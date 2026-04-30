@@ -8,6 +8,9 @@
 
 import { describe, expect, it } from "vitest";
 
+import { AccommodationArchivedSchema } from "./accommodation-archived";
+import { AccommodationPriceChangedSchema } from "./accommodation-price-changed";
+import { AccommodationPublishedSchema } from "./accommodation-published";
 import { BookingCancelledSchema } from "./booking-cancelled";
 import { BookingCompletedSchema } from "./booking-completed";
 import { BookingImportedSchema } from "./booking-imported";
@@ -696,5 +699,102 @@ describe("GuestAccountLinkedSchema", () => {
         payload: { ...validGuestAccountLinked.payload, link_method: "made_up" },
       }).success,
     ).toBe(false);
+  });
+});
+
+// ── Phase 2 Commit D — accommodation lifecycle (deferred-CDC) ───────────
+
+const validAccommodationPublished = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "accommodation_published",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "merchant" as const,
+  actor_id: "cmerchant1",
+  payload: {
+    accommodation_id: "acc_1",
+    accommodation_type: "cabin" as const,
+    display_name: "Lakeside Cabin #4",
+    base_price: { amount: 90000, currency: "SEK" },
+    status_transition: { from: "inactive" as const, to: "active" as const },
+    published_at: new Date(),
+  },
+};
+
+describe("AccommodationPublishedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(AccommodationPublishedSchema.safeParse(validAccommodationPublished).success).toBe(true);
+  });
+  it("rejects unknown accommodation_type", () => {
+    expect(
+      AccommodationPublishedSchema.safeParse({
+        ...validAccommodationPublished,
+        payload: { ...validAccommodationPublished.payload, accommodation_type: "boat" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validAccommodationArchived = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "accommodation_archived",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "merchant" as const,
+  actor_id: "cmerchant1",
+  payload: {
+    accommodation_id: "acc_1",
+    accommodation_type: "cabin" as const,
+    display_name: "Lakeside Cabin #4",
+    archived_at: new Date(),
+    archived_by_actor_id: "cmerchant1",
+  },
+};
+
+describe("AccommodationArchivedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(AccommodationArchivedSchema.safeParse(validAccommodationArchived).success).toBe(true);
+  });
+  it("accepts null archived_by_actor_id", () => {
+    const r = AccommodationArchivedSchema.safeParse({
+      ...validAccommodationArchived,
+      payload: { ...validAccommodationArchived.payload, archived_by_actor_id: null },
+    });
+    expect(r.success).toBe(true);
+  });
+});
+
+const validAccommodationPriceChanged = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "accommodation_price_changed",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "merchant" as const,
+  actor_id: "cmerchant1",
+  payload: {
+    accommodation_id: "acc_1",
+    accommodation_type: "cabin" as const,
+    previous_price: { amount: 90000, currency: "SEK" },
+    new_price: { amount: 95000, currency: "SEK" },
+    change_pct: 5.56,
+    changed_at: new Date(),
+    changed_by_actor_id: "cmerchant1",
+  },
+};
+
+describe("AccommodationPriceChangedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(AccommodationPriceChangedSchema.safeParse(validAccommodationPriceChanged).success).toBe(true);
+  });
+  it("accepts null change_pct (when previous was zero)", () => {
+    expect(
+      AccommodationPriceChangedSchema.safeParse({
+        ...validAccommodationPriceChanged,
+        payload: { ...validAccommodationPriceChanged.payload, change_pct: null },
+      }).success,
+    ).toBe(true);
   });
 });
