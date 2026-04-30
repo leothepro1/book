@@ -41,6 +41,8 @@ import {
 } from "@/app/_lib/errors/service-errors";
 import { createDraftOrderEventInTx, type DraftEventActorSource } from "./events";
 import { canTransition } from "./state-machine";
+import { unlinkActiveCheckoutSession, type UnlinkResult } from "./unlink";
+import { runUnlinkSideEffects } from "./unlink-side-effects";
 import {
   CancelDraftInputSchema,
   SendInvoiceInputSchema,
@@ -609,21 +611,46 @@ export async function cancelDraft(
       actorSource: params.actorSource,
     });
 
+    // Phase D — v1.2 §6.1: cancel the live checkout session (if any)
+    // atomically with the draft cancellation. The pre-tx hold-release
+    // loop above handles draft-owned holds; this catches session-owned
+    // PMS state + the Stripe PaymentIntent.
+    const unlink = await unlinkActiveCheckoutSession(
+      tx,
+      draft.id,
+      draft.tenantId,
+      "draft_cancelled",
+      {
+        source: params.actorSource,
+        userId: params.actorUserId,
+      },
+    );
+
     const refreshed = (await tx.draftOrder.findFirst({
       where: { id: draft.id, tenantId: draft.tenantId },
     })) as DraftOrder;
-    return refreshed;
+    return { draft: refreshed, unlink };
   });
 
-  // TODO: Phase D — call `unlinkActiveCheckoutSession` here to cancel
-  // the live `DraftCheckoutSession` (and its Stripe PaymentIntent +
-  // PMS hold) atomically with the draft cancellation. Phase C cannot
-  // do this because (a) the session model isn't wired into any service
-  // yet (Phase E), and (b) the unlink helper itself doesn't exist yet
-  // (Phase D). Phase B verified production has zero drafts with PIs,
-  // so the regression window is empty.
-  const stripePiCancelAttempted = false;
-  const stripePiCancelError: string | null = null;
+  // Phase D — post-commit unlink side effects (Stripe PI cancel +
+  // remaining PMS releases). Run AWAITED here, not fire-and-forget,
+  // because cancelDraft historically populated
+  // CancelDraftResult.stripePaymentIntentCancelAttempted/Error from
+  // these calls. `runUnlinkSideEffects` never throws, so awaiting is
+  // safe.
+  let stripePiCancelAttempted = false;
+  let stripePiCancelError: string | null = null;
+  if (result.unlink.unlinked && result.unlink.sessionId !== null) {
+    const sideEffects = await runUnlinkSideEffects({
+      tenantId: draft.tenantId,
+      draftOrderId: draft.id,
+      sessionId: result.unlink.sessionId,
+      releasedHoldExternalIds: result.unlink.releasedHoldExternalIds,
+      stripePaymentIntentId: result.unlink.stripePaymentIntentId,
+    });
+    stripePiCancelAttempted = sideEffects.stripePaymentIntentCancelAttempted;
+    stripePiCancelError = sideEffects.stripePaymentIntentCancelError;
+  }
 
   log("info", "draft_order.cancelled", {
     tenantId: draft.tenantId,
@@ -641,10 +668,10 @@ export async function cancelDraft(
     payload: {
       draftOrderId: draft.id,
       tenantId: draft.tenantId,
-      displayNumber: result.displayNumber,
+      displayNumber: result.draft.displayNumber,
       previousStatus: draft.status,
       reason: params.reason ?? null,
-      cancelledAt: (result.cancelledAt ?? new Date()).toISOString(),
+      cancelledAt: (result.draft.cancelledAt ?? new Date()).toISOString(),
       releasedHolds,
       holdReleaseErrorCount: holdReleaseErrors.length,
     },
@@ -658,7 +685,7 @@ export async function cancelDraft(
   });
 
   return {
-    draft: result,
+    draft: result.draft,
     releasedHolds,
     holdReleaseErrors,
     stripePaymentIntentCancelAttempted: stripePiCancelAttempted,

@@ -16,8 +16,14 @@ const mockTx = {
   draftReservation: {
     create: vi.fn(),
     findFirst: vi.fn(),
+    findMany: vi.fn(),
     updateMany: vi.fn(),
     deleteMany: vi.fn(),
+  },
+  // Phase D — unlink reads/writes the session table.
+  draftCheckoutSession: {
+    findFirst: vi.fn(),
+    updateMany: vi.fn(),
   },
   draftOrderEvent: {
     create: vi.fn(),
@@ -60,6 +66,17 @@ vi.mock("@/app/_lib/pricing/line-pricing", () => ({
 const mockComputeAndPersist = vi.fn();
 vi.mock("./calculator", () => ({
   computeAndPersistDraftTotalsInTx: mockComputeAndPersist,
+}));
+
+// Phase D — unlink-side-effects mocked so post-commit fire-and-forget
+// doesn't try to import the live integrations resolver in tests.
+vi.mock("./unlink-side-effects", () => ({
+  runUnlinkSideEffects: vi.fn().mockResolvedValue({
+    holdReleaseAttempted: 0,
+    holdReleaseErrors: [],
+    stripePaymentIntentCancelAttempted: false,
+    stripePaymentIntentCancelError: null,
+  }),
 }));
 
 const { addLineItem, updateLineItem, removeLineItem } = await import("./lines");
@@ -199,6 +216,11 @@ beforeEach(() => {
       }) as never,
   );
   mockTx.draftOrderEvent.create.mockResolvedValue({ id: "ev_1" });
+  // Phase D — unlink defaults: no active session (silent no-op).
+  mockTx.draftCheckoutSession.findFirst.mockResolvedValue(null);
+  mockTx.draftCheckoutSession.updateMany.mockResolvedValue({ count: 1 });
+  mockTx.draftReservation.findMany.mockResolvedValue([]);
+  mockTx.draftReservation.updateMany.mockResolvedValue({ count: 1 });
   mockComputeAndPersist.mockResolvedValue({
     source: "COMPUTED",
     frozenAt: null,

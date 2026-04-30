@@ -14,6 +14,15 @@ const mockTx = {
     updateMany: vi.fn(),
   },
   draftLineItem: { update: vi.fn() },
+  // Phase D — unlink reads/writes the session table + reservations.
+  draftCheckoutSession: {
+    findFirst: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  draftReservation: {
+    findMany: vi.fn(),
+    updateMany: vi.fn(),
+  },
   draftOrderEvent: { create: vi.fn() },
 };
 
@@ -59,6 +68,14 @@ vi.mock("./holds", () => ({
   placeHoldForDraftLine: vi.fn(),
   placeHoldsForDraft: vi.fn(),
   DEFAULT_DRAFT_HOLD_DURATION_MS: 30 * 60 * 1000,
+}));
+
+// Phase D — unlink-side-effects mocked. cancelDraft awaits this
+// post-commit (per Phase D design — the helper never throws and we
+// surface its result fields). Other mutations fire-and-forget.
+const mockRunSideEffects = vi.fn();
+vi.mock("./unlink-side-effects", () => ({
+  runUnlinkSideEffects: mockRunSideEffects,
 }));
 
 const mockStripePiCancel = vi.fn();
@@ -288,6 +305,18 @@ beforeEach(() => {
     adapterReleaseOk: true,
   });
   mockStripePiCancel.mockResolvedValue({ id: "pi_test_123", status: "canceled" });
+  // Phase D — unlink defaults: no active session.
+  mockTx.draftCheckoutSession.findFirst.mockResolvedValue(null);
+  mockTx.draftCheckoutSession.updateMany.mockResolvedValue({ count: 1 });
+  mockTx.draftReservation.findMany.mockResolvedValue([]);
+  mockTx.draftReservation.updateMany.mockResolvedValue({ count: 1 });
+  // runUnlinkSideEffects default — no holds, no PI to cancel.
+  mockRunSideEffects.mockResolvedValue({
+    holdReleaseAttempted: 0,
+    holdReleaseErrors: [],
+    stripePaymentIntentCancelAttempted: false,
+    stripePaymentIntentCancelError: null,
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════

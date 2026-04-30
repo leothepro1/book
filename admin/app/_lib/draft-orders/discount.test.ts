@@ -6,6 +6,8 @@ import type { CalculatedDiscountImpact } from "@/app/_lib/discounts/apply";
 
 const mockTx = {
   draftOrder: { findFirst: vi.fn(), update: vi.fn() },
+  draftCheckoutSession: { findFirst: vi.fn(), updateMany: vi.fn() },
+  draftReservation: { findMany: vi.fn(), updateMany: vi.fn() },
   draftOrderEvent: { create: vi.fn() },
 };
 
@@ -38,6 +40,15 @@ vi.mock("./calculator", async () => {
     computeAndPersistDraftTotalsInTx: mockComputeAndPersist,
   };
 });
+
+vi.mock("./unlink-side-effects", () => ({
+  runUnlinkSideEffects: vi.fn().mockResolvedValue({
+    holdReleaseAttempted: 0,
+    holdReleaseErrors: [],
+    stripePaymentIntentCancelAttempted: false,
+    stripePaymentIntentCancelError: null,
+  }),
+}));
 
 const { applyDiscountCode, removeDiscountCode, previewApplyDiscountCode } =
   await import("./discount");
@@ -188,6 +199,11 @@ beforeEach(() => {
   mockTx.draftOrder.findFirst.mockResolvedValue(makeDraft());
   mockTx.draftOrder.update.mockResolvedValue(makeDraft());
   mockTx.draftOrderEvent.create.mockResolvedValue({ id: "ev_1" });
+  // Phase D — unlink defaults: no active session.
+  mockTx.draftCheckoutSession.findFirst.mockResolvedValue(null);
+  mockTx.draftCheckoutSession.updateMany.mockResolvedValue({ count: 1 });
+  mockTx.draftReservation.findMany.mockResolvedValue([]);
+  mockTx.draftReservation.updateMany.mockResolvedValue({ count: 1 });
   mockComputeAndPersist.mockResolvedValue(makeValidTotals());
   mockEmit.mockResolvedValue(undefined);
   mockPrisma.accommodation.findMany.mockResolvedValue([]);

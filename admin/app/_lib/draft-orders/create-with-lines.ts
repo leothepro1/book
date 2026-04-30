@@ -307,8 +307,15 @@ export async function createDraftWithLines(
         });
       }
 
-      // 8e. Compute & persist totals
-      await computeAndPersistDraftTotalsInTx(tx, params.tenantId, draft.id);
+      // 8e. Compute & persist totals — Phase D: pass version=1 (the
+      // schema default; draft was just created in this same tx, no
+      // contention possible).
+      await computeAndPersistDraftTotalsInTx(
+        tx,
+        params.tenantId,
+        draft.id,
+        draft.version,
+      );
 
       // 8f. Emit CREATED event
       await createDraftOrderEventInTx(tx, {

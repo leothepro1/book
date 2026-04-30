@@ -14,7 +14,8 @@ export type ServiceErrorCode =
   | "NOT_FOUND"
   | "CONFLICT"
   | "VALIDATION"
-  | "UNAUTHORIZED";
+  | "UNAUTHORIZED"
+  | "VERSION_CONFLICT";
 
 export type ServiceErrorContext = Record<
   string,
@@ -43,6 +44,25 @@ export class ConflictError extends ServiceError {
   constructor(message: string, context?: ServiceErrorContext) {
     super("CONFLICT", message, context);
     this.name = "ConflictError";
+  }
+}
+
+/**
+ * Optimistic-concurrency-control failure. Thrown when a CAS-guarded
+ * write detects that the row's `version` (or equivalent CAS column)
+ * advanced between the caller's read and the caller's write — meaning
+ * another request mutated the row first. Callers SHOULD surface this
+ * to the UI as a "please reload and retry" message; mid-tx code paths
+ * SHOULD let it propagate so the surrounding transaction rolls back.
+ *
+ * Distinct from generic ConflictError so callers can narrow precisely
+ * (status-based conflicts vs version-based conflicts both end the
+ * mutation but differ in user-recovery guidance).
+ */
+export class VersionConflictError extends ServiceError {
+  constructor(message: string, context?: ServiceErrorContext) {
+    super("VERSION_CONFLICT", message, context);
+    this.name = "VersionConflictError";
   }
 }
 

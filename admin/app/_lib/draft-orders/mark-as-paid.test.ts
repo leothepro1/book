@@ -11,6 +11,14 @@ type TxMock = {
     findFirst: ReturnType<typeof vi.fn>;
     updateMany: ReturnType<typeof vi.fn>;
   };
+  draftCheckoutSession: {
+    findFirst: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
+  };
+  draftReservation: {
+    findMany: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
+  };
   draftOrderEvent: {
     create: ReturnType<typeof vi.fn>;
   };
@@ -19,6 +27,14 @@ type TxMock = {
 const mockTx: TxMock = {
   draftOrder: {
     findFirst: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  draftCheckoutSession: {
+    findFirst: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  draftReservation: {
+    findMany: vi.fn(),
     updateMany: vi.fn(),
   },
   draftOrderEvent: {
@@ -44,6 +60,15 @@ vi.mock("./convert", () => ({
   convertDraftToOrder: (input: unknown) => convertMock(input),
 }));
 
+vi.mock("./unlink-side-effects", () => ({
+  runUnlinkSideEffects: vi.fn().mockResolvedValue({
+    holdReleaseAttempted: 0,
+    holdReleaseErrors: [],
+    stripePaymentIntentCancelAttempted: false,
+    stripePaymentIntentCancelError: null,
+  }),
+}));
+
 const { markDraftAsPaid } = await import("./mark-as-paid");
 
 // ── Fixtures ────────────────────────────────────────────────────
@@ -64,6 +89,11 @@ beforeEach(() => {
   mockTx.draftOrder.findFirst.mockResolvedValue(null);
   mockTx.draftOrder.updateMany.mockResolvedValue({ count: 1 });
   mockTx.draftOrderEvent.create.mockResolvedValue({ id: "ev_1" });
+  // Phase D — unlink defaults: no active session.
+  mockTx.draftCheckoutSession.findFirst.mockResolvedValue(null);
+  mockTx.draftCheckoutSession.updateMany.mockResolvedValue({ count: 1 });
+  mockTx.draftReservation.findMany.mockResolvedValue([]);
+  mockTx.draftReservation.updateMany.mockResolvedValue({ count: 1 });
   mockPrisma.$transaction.mockImplementation(
     async (cb: (tx: TxMock) => Promise<unknown>) => cb(mockTx),
   );

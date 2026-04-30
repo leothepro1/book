@@ -7,6 +7,15 @@ type TxMock = {
   draftOrder: {
     findFirst: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
+  };
+  draftCheckoutSession: {
+    findFirst: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
+  };
+  draftReservation: {
+    findMany: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
   };
   draftOrderEvent: {
     create: ReturnType<typeof vi.fn>;
@@ -17,6 +26,15 @@ const mockTx: TxMock = {
   draftOrder: {
     findFirst: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  draftCheckoutSession: {
+    findFirst: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  draftReservation: {
+    findMany: vi.fn(),
+    updateMany: vi.fn(),
   },
   draftOrderEvent: {
     create: vi.fn(),
@@ -33,6 +51,15 @@ const mockPrisma = {
 };
 
 vi.mock("@/app/_lib/db/prisma", () => ({ prisma: mockPrisma }));
+vi.mock("@/app/_lib/logger", () => ({ log: vi.fn() }));
+vi.mock("./unlink-side-effects", () => ({
+  runUnlinkSideEffects: vi.fn().mockResolvedValue({
+    holdReleaseAttempted: 0,
+    holdReleaseErrors: [],
+    stripePaymentIntentCancelAttempted: false,
+    stripePaymentIntentCancelError: null,
+  }),
+}));
 
 const { updateDraftMeta } = await import("./update-meta");
 
@@ -55,8 +82,15 @@ beforeEach(() => {
   vi.resetAllMocks();
   mockPrisma.draftOrder.findFirst.mockResolvedValue(null);
   mockTx.draftOrder.findFirst.mockResolvedValue(null);
-  mockTx.draftOrder.update.mockResolvedValue(makeDraft({ version: 2 }));
+  // Phase D — version CAS via updateMany. Default count=1 (write succeeded).
+  mockTx.draftOrder.updateMany.mockResolvedValue({ count: 1 });
   mockTx.draftOrderEvent.create.mockResolvedValue({ id: "ev_1" });
+  // Phase D — unlink: default to "no active session", which makes the
+  // helper a no-op and existing tests continue to work.
+  mockTx.draftCheckoutSession.findFirst.mockResolvedValue(null);
+  mockTx.draftCheckoutSession.updateMany.mockResolvedValue({ count: 1 });
+  mockTx.draftReservation.findMany.mockResolvedValue([]);
+  mockTx.draftReservation.updateMany.mockResolvedValue({ count: 1 });
   mockPrisma.$transaction.mockImplementation(
     async (cb: (tx: TxMock) => Promise<unknown>) => cb(mockTx),
   );
@@ -70,12 +104,13 @@ describe("updateDraftMeta — T-result-shape-success", () => {
   it("returns { ok: true, draft } on happy path", async () => {
     const draft = makeDraft();
     mockPrisma.draftOrder.findFirst.mockResolvedValue(draft);
-    mockTx.draftOrder.findFirst.mockResolvedValue({ status: "OPEN" });
     const updated = makeDraft({
       version: 2,
       internalNote: "ny anteckning",
     });
-    mockTx.draftOrder.update.mockResolvedValue(updated);
+    mockTx.draftOrder.findFirst
+      .mockResolvedValueOnce({ status: "OPEN", version: 1 })
+      .mockResolvedValueOnce(updated);
 
     const result = await updateDraftMeta(
       "draft_1",
@@ -182,8 +217,9 @@ describe("updateDraftMeta — T-event-emitted", () => {
       tags: ["a"],
     });
     mockPrisma.draftOrder.findFirst.mockResolvedValue(before);
-    mockTx.draftOrder.findFirst.mockResolvedValue({ status: "OPEN" });
-    mockTx.draftOrder.update.mockResolvedValue({
+    mockTx.draftOrder.findFirst
+      .mockResolvedValueOnce({ status: "OPEN", version: 1 })
+      .mockResolvedValueOnce({
       ...before,
       internalNote: "new",
       tags: ["a", "b"],
@@ -228,7 +264,7 @@ describe("updateDraftMeta — T-event-emitted", () => {
     );
 
     expect(mockTx.draftOrderEvent.create).not.toHaveBeenCalled();
-    expect(mockTx.draftOrder.update).not.toHaveBeenCalled();
+    expect(mockTx.draftOrder.updateMany).not.toHaveBeenCalled();
   });
 });
 
@@ -239,8 +275,9 @@ describe("updateDraftMeta — T-event-emitted", () => {
 describe("updateDraftMeta — T-version-increment", () => {
   it("update payload includes { version: { increment: 1 } }", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraft());
-    mockTx.draftOrder.findFirst.mockResolvedValue({ status: "OPEN" });
-    mockTx.draftOrder.update.mockResolvedValue(makeDraft({ version: 2 }));
+    mockTx.draftOrder.findFirst
+      .mockResolvedValueOnce({ status: "OPEN", version: 1 })
+      .mockResolvedValueOnce(makeDraft({ version: 2 }));
 
     await updateDraftMeta(
       "draft_1",
@@ -249,7 +286,7 @@ describe("updateDraftMeta — T-version-increment", () => {
       { source: "admin_ui" },
     );
 
-    const args = mockTx.draftOrder.update.mock.calls[0][0] as {
+    const args = mockTx.draftOrder.updateMany.mock.calls[0][0] as {
       data: { version: { increment: number } };
     };
     expect(args.data.version).toEqual({ increment: 1 });
@@ -267,8 +304,9 @@ describe("updateDraftMeta — expiresAt diff", () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(
       makeDraft({ expiresAt: oldDate }),
     );
-    mockTx.draftOrder.findFirst.mockResolvedValue({ status: "OPEN" });
-    mockTx.draftOrder.update.mockResolvedValue(
+    mockTx.draftOrder.findFirst
+      .mockResolvedValueOnce({ status: "OPEN", version: 1 })
+      .mockResolvedValueOnce(
       makeDraft({ expiresAt: newDate, version: 2 }),
     );
 
@@ -298,8 +336,9 @@ describe("updateDraftMeta — customerNote", () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(
       makeDraft({ customerNote: null }),
     );
-    mockTx.draftOrder.findFirst.mockResolvedValue({ status: "OPEN" });
-    mockTx.draftOrder.update.mockResolvedValue(
+    mockTx.draftOrder.findFirst
+      .mockResolvedValueOnce({ status: "OPEN", version: 1 })
+      .mockResolvedValueOnce(
       makeDraft({ customerNote: "Hej kund", version: 2 }),
     );
 
@@ -311,7 +350,7 @@ describe("updateDraftMeta — customerNote", () => {
     );
 
     expect(result.ok).toBe(true);
-    const updateArgs = mockTx.draftOrder.update.mock.calls[0][0] as {
+    const updateArgs = mockTx.draftOrder.updateMany.mock.calls[0][0] as {
       data: { customerNote: string | null };
     };
     expect(updateArgs.data.customerNote).toBe("Hej kund");
@@ -333,8 +372,9 @@ describe("updateDraftMeta — customerNote", () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(
       makeDraft({ customerNote: "tidigare" }),
     );
-    mockTx.draftOrder.findFirst.mockResolvedValue({ status: "OPEN" });
-    mockTx.draftOrder.update.mockResolvedValue(
+    mockTx.draftOrder.findFirst
+      .mockResolvedValueOnce({ status: "OPEN", version: 1 })
+      .mockResolvedValueOnce(
       makeDraft({ customerNote: null, version: 2 }),
     );
 
@@ -346,7 +386,7 @@ describe("updateDraftMeta — customerNote", () => {
     );
 
     expect(result.ok).toBe(true);
-    const updateArgs = mockTx.draftOrder.update.mock.calls[0][0] as {
+    const updateArgs = mockTx.draftOrder.updateMany.mock.calls[0][0] as {
       data: { customerNote: string | null };
     };
     expect(updateArgs.data.customerNote).toBeNull();
@@ -400,6 +440,6 @@ describe("updateDraftMeta — in-tx race", () => {
     if (!result.ok) {
       expect(result.error).toBe(DRAFT_ERRORS.TERMINAL_STATUS("INVOICED"));
     }
-    expect(mockTx.draftOrder.update).not.toHaveBeenCalled();
+    expect(mockTx.draftOrder.updateMany).not.toHaveBeenCalled();
   });
 });

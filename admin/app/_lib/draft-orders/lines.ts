@@ -34,6 +34,8 @@ import {
 } from "@/app/_lib/pricing/line-pricing";
 import { computeAndPersistDraftTotalsInTx } from "./calculator";
 import { createDraftOrderEventInTx } from "./events";
+import { unlinkActiveCheckoutSession, type UnlinkResult } from "./unlink";
+import { runUnlinkSideEffects } from "./unlink-side-effects";
 import {
   AddLineItemInputSchema,
   UpdateLineItemInputSchema,
@@ -445,6 +447,19 @@ export async function addLineItem(
       tx,
       draft.tenantId,
       draft.id,
+      fresh.version,
+    );
+
+    // Phase D — v1.2 §6.1: any merchant-side mutation on an INVOICED
+    // draft must hard-unlink the live buyer-side checkout session.
+    // Returns { unlinked: false } if no ACTIVE session exists, which
+    // is the common case for OPEN drafts edited pre-invoice.
+    const unlink = await unlinkActiveCheckoutSession(
+      tx,
+      draft.id,
+      draft.tenantId,
+      "draft_mutated",
+      { source: "admin_ui", userId: params.actorUserId },
     );
 
     const refreshed = (await tx.draftOrder.findFirst({
@@ -461,6 +476,7 @@ export async function addLineItem(
       lineItem: refreshedLine,
       reservation,
       totals,
+      unlink,
     };
   });
 
@@ -470,6 +486,11 @@ export async function addLineItem(
     lineItemId: result.lineItem.id,
     lineType: resolved.kind,
   });
+
+  // Phase D — fire-and-forget post-commit unlink side effects.
+  if (result.unlink.unlinked) {
+    schedulePostCommitUnlinkSideEffects(draft.tenantId, draft.id, result.unlink);
+  }
 
   // Platform webhook — fire-and-forget.
   emitPlatformEvent({
@@ -492,7 +513,39 @@ export async function addLineItem(
     });
   });
 
-  return result;
+  // Strip the in-tx-only `unlink` field from the public return — the
+  // caller's API surface is unchanged. Side effects are logged, not
+  // returned.
+  const { unlink: _unlink, ...publicResult } = result;
+  return publicResult;
+}
+
+/**
+ * Fire-and-forget post-commit dispatcher for unlink side effects
+ * (Stripe PI cancel + PMS hold release). Mirrors the
+ * `emitPlatformEvent(...).catch(...)` pattern already used in this
+ * file for webhook emission. Errors are logged, never thrown.
+ */
+function schedulePostCommitUnlinkSideEffects(
+  tenantId: string,
+  draftOrderId: string,
+  unlink: UnlinkResult,
+): void {
+  if (!unlink.unlinked || unlink.sessionId === null) return;
+  void runUnlinkSideEffects({
+    tenantId,
+    draftOrderId,
+    sessionId: unlink.sessionId,
+    releasedHoldExternalIds: unlink.releasedHoldExternalIds,
+    stripePaymentIntentId: unlink.stripePaymentIntentId,
+  }).catch((err) => {
+    log("error", "draft_invoice.side_effects_failed", {
+      tenantId,
+      draftOrderId,
+      sessionId: unlink.sessionId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
 }
 
 // ── updateLineItem ───────────────────────────────────────────
@@ -700,6 +753,16 @@ export async function updateLineItem(
       tx,
       draft.tenantId,
       draft.id,
+      fresh.version,
+    );
+
+    // Phase D — v1.2 §6.1.
+    const unlink = await unlinkActiveCheckoutSession(
+      tx,
+      draft.id,
+      draft.tenantId,
+      "draft_mutated",
+      { source: "admin_ui", userId: params.actorUserId },
     );
 
     const refreshedDraft = (await tx.draftOrder.findFirst({
@@ -714,8 +777,13 @@ export async function updateLineItem(
       lineItem: refreshedLine,
       reservation,
       totals,
+      unlink,
     };
   });
+
+  if (result.unlink.unlinked) {
+    schedulePostCommitUnlinkSideEffects(draft.tenantId, draft.id, result.unlink);
+  }
 
   log("info", "draft_order.line_updated", {
     tenantId: draft.tenantId,
@@ -744,7 +812,8 @@ export async function updateLineItem(
     });
   });
 
-  return result;
+  const { unlink: _unlink, ...publicResult } = result;
+  return publicResult;
 }
 
 /** Re-price on update — mirrors `resolveLineForAdd` but merges patch + stored. */
@@ -1045,14 +1114,28 @@ export async function removeLineItem(
       tx,
       draft.tenantId,
       draft.id,
+      fresh.version,
+    );
+
+    // Phase D — v1.2 §6.1.
+    const unlink = await unlinkActiveCheckoutSession(
+      tx,
+      draft.id,
+      draft.tenantId,
+      "draft_mutated",
+      { source: "admin_ui", userId: params.actorUserId },
     );
 
     const refreshedDraft = (await tx.draftOrder.findFirst({
       where: { id: draft.id, tenantId: draft.tenantId },
     })) as DraftOrder;
 
-    return { draft: refreshedDraft, totals };
+    return { draft: refreshedDraft, totals, unlink };
   });
+
+  if (result.unlink.unlinked) {
+    schedulePostCommitUnlinkSideEffects(draft.tenantId, draft.id, result.unlink);
+  }
 
   log("info", "draft_order.line_removed", {
     tenantId: draft.tenantId,
@@ -1081,5 +1164,6 @@ export async function removeLineItem(
     });
   });
 
-  return result;
+  const { unlink: _unlink, ...publicResult } = result;
+  return publicResult;
 }

@@ -28,7 +28,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/app/_lib/db/prisma";
 import { calculateDiscountImpact } from "@/app/_lib/discounts/apply";
-import { NotFoundError } from "@/app/_lib/errors/service-errors";
+import {
+  NotFoundError,
+  VersionConflictError,
+} from "@/app/_lib/errors/service-errors";
+import { DRAFT_ERRORS } from "../errors";
 import { computeDraftTotalsPure } from "./core";
 import {
   buildDiscountEngineInput,
@@ -167,13 +171,22 @@ export async function computeDraftTotals(
  * removeLineItem, applyDiscountCode, etc.) that want totals refreshed
  * atomically with their mutation.
  *
- * Increments `DraftOrder.version` to keep optimistic-concurrency chains
- * consistent.
+ * Increments `DraftOrder.version` AND uses CAS on the prior version
+ * (Phase D — v1.2 §11.1). Throws `VersionConflictError` when the row's
+ * `version` no longer matches `expectedVersion` — i.e. another mutation
+ * committed between the caller's read and the persist call. The
+ * surrounding tx rolls back so partial writes don't leak.
+ *
+ * Callers MUST pass the `expectedVersion` they read pre-persist. The
+ * canonical pattern is to read it from the in-tx re-fetch (the `fresh`
+ * draft) so the CAS reflects state at the start of the tx, not stale
+ * data from a pre-tx load.
  */
 export async function computeAndPersistDraftTotalsInTx(
   tx: Tx,
   tenantId: string,
   draftOrderId: string,
+  expectedVersion: number,
   options: DraftCalculatorOptions = {},
 ): Promise<DraftTotals> {
   const totals = await computeDraftTotals(tenantId, draftOrderId, options, tx);
@@ -181,8 +194,12 @@ export async function computeAndPersistDraftTotalsInTx(
   // Never persist on the frozen path — it's read-only by definition.
   if (totals.source === "FROZEN_SNAPSHOT") return totals;
 
-  await tx.draftOrder.update({
-    where: { id: draftOrderId },
+  const updated = await tx.draftOrder.updateMany({
+    where: {
+      id: draftOrderId,
+      tenantId,
+      version: expectedVersion,
+    },
     data: {
       subtotalCents: totals.subtotalCents,
       orderDiscountCents: totals.orderDiscountCents,
@@ -191,6 +208,13 @@ export async function computeAndPersistDraftTotalsInTx(
       version: { increment: 1 },
     },
   });
+  if (updated.count === 0) {
+    throw new VersionConflictError(DRAFT_ERRORS.VERSION_CONFLICT, {
+      draftOrderId,
+      tenantId,
+      expectedVersion,
+    });
+  }
 
   for (const breakdown of totals.perLine) {
     await tx.draftLineItem.update({

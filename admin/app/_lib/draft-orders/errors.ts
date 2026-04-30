@@ -27,4 +27,8 @@ export const DRAFT_ERRORS = {
 
   // ── FAS 7.2b.4b.1 — updateDraftCustomer ──
   INVALID_CUSTOMER: "Kunden kunde inte hittas",
+
+  // ── Phase D — version CAS ──
+  VERSION_CONFLICT:
+    "Utkastet ändrades av en annan begäran — ladda om och försök igen",
 } as const;

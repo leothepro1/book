@@ -29,6 +29,8 @@ export type RawDraftOrder = {
   currency: string;
   taxesIncluded: boolean;
   shippingCents: bigint;
+  /** Optimistic-concurrency version — needed for in-tx CAS by callers. */
+  version: number;
   appliedDiscountCode: string | null;
   // Persisted snapshot — historically used on the frozen path; today
   // always recomputed since `pricesFrozenAt` was removed in Phase B.

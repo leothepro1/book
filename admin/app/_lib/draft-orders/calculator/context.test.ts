@@ -47,6 +47,7 @@ function makeDraft(overrides: Partial<RawDraftOrder> = {}): RawDraftOrder {
     currency: "SEK",
     taxesIncluded: true,
     shippingCents: BigInt(0),
+    version: 1,
     appliedDiscountCode: null,
     subtotalCents: BigInt(0),
     orderDiscountCents: BigInt(0),

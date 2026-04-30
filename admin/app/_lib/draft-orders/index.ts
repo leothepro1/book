@@ -114,3 +114,12 @@ export type {
   CreateDraftWithLinesInput,
   CreateDraftWithLinesResult,
 } from "./create-with-lines";
+
+// ── Phase D — unlink protocol (v1.2 §6) ──
+export { unlinkActiveCheckoutSession } from "./unlink";
+export type { UnlinkResult, UnlinkReason, UnlinkActor } from "./unlink";
+export { runUnlinkSideEffects } from "./unlink-side-effects";
+export type {
+  RunUnlinkSideEffectsArgs,
+  UnlinkSideEffectsResult,
+} from "./unlink-side-effects";
