@@ -42,6 +42,7 @@
  * callers and the verification suite together.
  */
 
+import type { PrismaClient } from "@prisma/client";
 import {
   _unguardedAnalyticsPipelineClient,
 } from "@/app/_lib/db/prisma";
@@ -107,11 +108,20 @@ export class AnalyticsTenantMismatchError extends AnalyticsTenantError {
 //
 // The brand prevents callers from accidentally typing the global `prisma`
 // export as an AnalyticsPipelineScope or vice-versa. They are not
-// interchangeable: the scoped client auto-injects tenant_id; the global
+// interchangeable: the scoped client auto-injects tenantId; the global
 // client doesn't.
-
-declare const __analyticsPipelineScopeBrand: unique symbol;
-type Brand<T, B> = T & { readonly [__analyticsPipelineScopeBrand]: B };
+//
+// We define the type as an explicit object of per-model picks rather than
+// `ReturnType<typeof buildScopedClient>` (i.e. the result of `$extends(...)`).
+// Letting TS expand the `$extends` return type forces it to materialize Prisma's
+// full DynamicClientExtensionThis<...> generic — recursive across all 144 models
+// — at every call site that imports this type. That's what blew the Vercel build
+// to 11.5 GB during `tsc --noEmit`. The explicit picks below give callers the
+// same useful surface (the three pipeline models) at a flat, predictable cost.
+//
+// The runtime value still comes from `_unguardedAnalyticsPipelineClient.$extends(...)`;
+// only the exported *type* changes. `withTenant` casts the runtime client to
+// `AnalyticsPipelineScope` at its return boundary.
 
 // Operations whose `where` clause is optional (Prisma allows omitting it
 // entirely). For these, when the caller doesn't pass a where, we inject one
@@ -319,10 +329,11 @@ function buildScopedClient(scopeTenantId: string) {
   });
 }
 
-export type AnalyticsPipelineScope = Brand<
-  ReturnType<typeof buildScopedClient>,
-  "AnalyticsPipelineScope"
->;
+export type AnalyticsPipelineScope = {
+  analyticsPipelineEvent: PrismaClient["analyticsPipelineEvent"];
+  analyticsPipelineOutbox: PrismaClient["analyticsPipelineOutbox"];
+  analyticsPipelineTenantConfig: PrismaClient["analyticsPipelineTenantConfig"];
+} & { readonly __analyticsPipelineScopeBrand: unique symbol };
 
 /**
  * Run `fn` against a tenant-scoped analytics-pipeline client.

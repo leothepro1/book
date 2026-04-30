@@ -147,6 +147,28 @@ function buildDevGuardedClient(client: PrismaClient) {
  */
 export const _unguardedAnalyticsPipelineClient = baseClient;
 
-export const prisma = shouldEnableAnalyticsDevGuard()
+// ── Why we cast the export to PrismaClient ────────────────────────────────
+//
+// `buildDevGuardedClient(baseClient)` returns Prisma's `DynamicClientExtensionThis<...>`,
+// the runtime-recursive generic computed by `$extends`. If the conditional below
+// was left to TypeScript's natural inference, the exported `prisma` symbol would
+// be the union `PrismaClient | DynamicClientExtensionThis<...>`. Every call site
+// across the codebase — every `prisma.something.findFirst(...)` — would then have
+// to resolve method dispatch against both arms of the union and structurally
+// compare the input/output types of all 144 models. That cost is what blew the
+// Vercel build's heap to 11.5 GB during `tsc --noEmit` (see PR #18 comments for
+// the bisect).
+//
+// The dev guard's user-facing job — throwing with a pointer to withTenant() when
+// pipeline models are accessed directly — is enforced by the runtime
+// `$allOperations` interceptor inside `buildDevGuardedClient`. It does not
+// depend on the exported value's TypeScript type. So we cast back to
+// `PrismaClient` at the boundary: runtime contract preserved, cross-codebase
+// type cost stays flat.
+//
+// The cast goes through `unknown` because `DynamicClientExtensionThis` is not
+// directly assignable to `PrismaClient` (different shapes at the type level
+// even though the runtime object exposes a superset of `PrismaClient`'s API).
+export const prisma: PrismaClient = (shouldEnableAnalyticsDevGuard()
   ? buildDevGuardedClient(baseClient)
-  : baseClient;
+  : baseClient) as unknown as PrismaClient;
