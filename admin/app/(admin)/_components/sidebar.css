@@ -210,10 +210,10 @@
    - label visually centered in the button
    - bolder weight + outer margin so it sits outside nav-list padding */
 .sb__section-back {
-  width: calc(100% - 24px);
-  margin: 12px 12px 2px;
-  font-weight: 600;
   flex-shrink: 0;
+  width: calc(100% - 24px);
+  margin: 0 12px 2px;
+  font-weight: 600;
 }
 
 .sb__section-back .sb__icon {
