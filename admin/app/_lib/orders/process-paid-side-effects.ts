@@ -257,6 +257,108 @@ export async function processOrderPaidSideEffects(
     });
   } catch { /* fire-and-forget */ }
 
+  // ── New analytics pipeline (Phase 1B+, fire-and-forget) ────
+  // Writes to analytics.outbox via the transactional outbox emitter.
+  // Runs alongside the legacy emit during the cutover window — both
+  // write to separate tables so they coexist. Legacy → pipeline cutover
+  // lands post-Phase 5.
+  //
+  // emitAnalyticsEventStandalone opens its own short tx (the order is
+  // already committed before this handler runs — there's no operational
+  // tx to attach to). See app/_lib/analytics/pipeline/emitter.ts.
+  //
+  // Emits per orderType:
+  //   ACCOMMODATION  → booking_completed (Commit C)
+  //   payment_succeeded for every paid order is added by Commit D.
+  try {
+    if (order.orderType === "ACCOMMODATION") {
+      const booking = await prisma.booking.findFirst({
+        where: { orderId: order.id, tenantId: order.tenantId },
+        select: {
+          id: true,
+          accommodationId: true,
+          arrival: true,
+          departure: true,
+          guestCount: true,
+          orderId: true,
+          externalSource: true,
+          externalId: true,
+        },
+      });
+
+      // Required fields for booking_completed v0.1.0. Phase 1B's scope
+      // covers direct-bookings only — those should always have these
+      // fields populated. If a row is missing them, log and skip rather
+      // than emit malformed data.
+      if (
+        booking &&
+        booking.accommodationId &&
+        booking.guestCount !== null &&
+        booking.guestCount > 0
+      ) {
+        const { emitAnalyticsEventStandalone, signalAnalyticsFlush } =
+          await import("@/app/_lib/analytics/pipeline/emitter");
+        const {
+          deriveActor,
+          deriveGuestId,
+          deriveSourceChannel,
+          formatAnalyticsDate,
+        } = await import("@/app/_lib/analytics/pipeline/integrations");
+
+        const nights = Math.max(
+          1,
+          Math.round(
+            (booking.departure.getTime() - booking.arrival.getTime()) /
+              (1000 * 60 * 60 * 24),
+          ),
+        );
+
+        await emitAnalyticsEventStandalone({
+          tenantId: order.tenantId,
+          eventName: "booking_completed",
+          schemaVersion: "0.1.0",
+          occurredAt: order.paidAt ?? new Date(),
+          actor: deriveActor(order),
+          payload: {
+            booking_id: booking.id,
+            accommodation_id: booking.accommodationId,
+            guest_id: deriveGuestId(order),
+            check_in_date: formatAnalyticsDate(booking.arrival),
+            check_out_date: formatAnalyticsDate(booking.departure),
+            number_of_nights: nights,
+            number_of_guests: booking.guestCount,
+            total_amount: {
+              amount: order.totalAmount,
+              currency: order.currency,
+            },
+            source_channel: deriveSourceChannel(booking),
+            pms_reference: booking.externalId ?? null,
+          },
+          idempotencyKey: `booking_completed:${booking.id}`,
+        });
+
+        // Fire-and-forget signal — cron fallback covers losses.
+        void signalAnalyticsFlush(order.tenantId).catch(() => {});
+      } else {
+        log("info", "process_paid.pipeline_booking_completed_skipped", {
+          orderId: order.id,
+          reason: !booking
+            ? "no_booking"
+            : !booking.accommodationId
+              ? "no_accommodation"
+              : "no_guest_count",
+        });
+      }
+    }
+  } catch (err) {
+    // Pipeline emit must never break the side-effects flow.
+    log("error", "process_paid.pipeline_emit_failed", {
+      orderId: order.id,
+      eventName: "booking_completed",
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   // ── Segment sync (shared, fire-and-forget) ─────────────────
   if (order.guestAccountId) {
     import("@/app/_lib/segments/sync").then(({ syncGuestSegments }) =>
