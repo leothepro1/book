@@ -27,6 +27,8 @@ import { PaymentDisputedSchema } from "./payment-disputed";
 import { PaymentFailedSchema } from "./payment-failed";
 import { PaymentRefundedSchema } from "./payment-refunded";
 import { PaymentSucceededSchema } from "./payment-succeeded";
+import { PmsSyncFailedSchema } from "./pms-sync-failed";
+import { PmsSyncRecoveredSchema } from "./pms-sync-recovered";
 import {
   ANALYTICS_EVENT_REGISTRY,
   AnalyticsSchemaNotRegisteredError,
@@ -909,5 +911,78 @@ describe("DiscountExpiredSchema", () => {
         payload: { ...validDiscountExpired.payload, total_uses: -1 },
       }).success,
     ).toBe(false);
+  });
+});
+
+// ── Phase 2 Commit F — PMS operational ──────────────────────────────────
+
+const validPmsSyncFailed = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "pms_sync_failed",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "system" as const,
+  actor_id: null,
+  payload: {
+    pms_provider: "mews" as const,
+    consecutive_failures: 3,
+    error_message: "Connection timeout",
+    failed_at: new Date(),
+  },
+};
+
+describe("PmsSyncFailedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(PmsSyncFailedSchema.safeParse(validPmsSyncFailed).success).toBe(true);
+  });
+  it("rejects zero consecutive_failures (must be positive after increment)", () => {
+    expect(
+      PmsSyncFailedSchema.safeParse({
+        ...validPmsSyncFailed,
+        payload: { ...validPmsSyncFailed.payload, consecutive_failures: 0 },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validPmsSyncRecovered = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "pms_sync_recovered",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "system" as const,
+  actor_id: null,
+  payload: {
+    pms_provider: "mews" as const,
+    previous_failures: 5,
+    recovered_at: new Date(),
+  },
+};
+
+describe("PmsSyncRecoveredSchema", () => {
+  it("accepts a valid event", () => {
+    expect(PmsSyncRecoveredSchema.safeParse(validPmsSyncRecovered).success).toBe(true);
+  });
+  it("rejects zero previous_failures (must be positive — fires only on over-threshold transition)", () => {
+    expect(
+      PmsSyncRecoveredSchema.safeParse({
+        ...validPmsSyncRecovered,
+        payload: { ...validPmsSyncRecovered.payload, previous_failures: 0 },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("ANALYTICS_EVENT_REGISTRY — totals after Phase 2", () => {
+  it("contains 21 event names (2 Phase 1A baseline + 19 Phase 2)", () => {
+    const names = Object.keys(ANALYTICS_EVENT_REGISTRY);
+    expect(names.length).toBe(21);
+    for (const name of names) {
+      expect(
+        (ANALYTICS_EVENT_REGISTRY as Record<string, Record<string, unknown>>)[name]["0.1.0"],
+      ).toBeDefined();
+    }
   });
 });

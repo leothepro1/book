@@ -475,6 +475,40 @@ deferral.
   `previous_price`, `new_price`, `change_pct` (nullable when previous
   was zero), `changed_at`, `changed_by_actor_id`.
 
+### `pms_sync_failed` v0.1.0 — Active
+
+A PMS sync attempt failed and the circuit-breaker incremented
+`TenantIntegration.consecutiveFailures`.
+
+- **Trigger:** `recordFailure` in
+  `app/_lib/integrations/sync/circuit-breaker.ts`. Standalone emit,
+  fire-and-forget — analytics failures must never block circuit-breaker
+  state updates.
+- **Idempotency key:**
+  `pms_sync_failed:${tenantId}:${provider}:${consecutive_failures}`.
+  Each increment is a distinct analytics event so Phase 5 can compute
+  MTBF, error rate, and time-to-recovery from occurrence counts.
+  Documented inline at the emit site.
+- **Payload:** `pms_provider`, `consecutive_failures` (post-increment),
+  `error_message` (truncated to 500 chars), `failed_at`.
+
+### `pms_sync_recovered` v0.1.0 — Active
+
+The circuit-breaker auto-closed —
+`TenantIntegration.consecutiveFailures` was at or above
+`FAILURE_THRESHOLD` and a successful sync reset it to 0. Pairs with
+`pms_sync_failed` for time-to-recovery aggregations.
+
+- **Trigger:** `recordSuccess` in
+  `app/_lib/integrations/sync/circuit-breaker.ts`, ONLY when the
+  `wasOverThreshold` flag is true. The "every successful sync" event
+  would be high-volume noise; aggregating it would defeat its purpose.
+- **Idempotency key:**
+  `pms_sync_recovered:${tenantId}:${provider}:${recovered_at.getTime()}`.
+  Successive open→close cycles get distinct events.
+- **Payload:** `pms_provider`, `previous_failures` (count just before
+  reset, ≥ FAILURE_THRESHOLD by definition), `recovered_at`.
+
 ## Why `booking_completed` and `booking_imported` are separate event types
 
 Repeated for emphasis: this is a deliberate design choice, not an

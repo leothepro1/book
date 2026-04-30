@@ -41,6 +41,8 @@ import { PaymentDisputedSchema } from "./payment-disputed";
 import { PaymentFailedSchema } from "./payment-failed";
 import { PaymentRefundedSchema } from "./payment-refunded";
 import { PaymentSucceededSchema } from "./payment-succeeded";
+import { PmsSyncFailedSchema } from "./pms-sync-failed";
+import { PmsSyncRecoveredSchema } from "./pms-sync-recovered";
 
 export const ANALYTICS_EVENT_REGISTRY = {
   accommodation_archived: {
@@ -99,6 +101,12 @@ export const ANALYTICS_EVENT_REGISTRY = {
   },
   payment_succeeded: {
     "0.1.0": PaymentSucceededSchema,
+  },
+  pms_sync_failed: {
+    "0.1.0": PmsSyncFailedSchema,
+  },
+  pms_sync_recovered: {
+    "0.1.0": PmsSyncRecoveredSchema,
   },
 } as const satisfies Record<string, Record<string, ZodType>>;
 
