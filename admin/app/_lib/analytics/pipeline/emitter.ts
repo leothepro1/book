@@ -38,6 +38,7 @@ import { createHash } from "node:crypto";
 
 import type { Prisma } from "@prisma/client";
 
+import { _unguardedAnalyticsPipelineClient } from "@/app/_lib/db/prisma";
 import { log } from "@/app/_lib/logger";
 import { inngest } from "@/inngest/client";
 
@@ -289,6 +290,68 @@ export async function emitAnalyticsEvent<TEventName extends RegisteredEventName>
   });
 
   return { event_id: eventId, outbox_id: canonicalOutboxId };
+}
+
+// ── emit (standalone) ────────────────────────────────────────────────────
+
+/**
+ * Standalone variant of `emitAnalyticsEvent` for callers that don't have
+ * an operational `tx` to attach to.
+ *
+ * ── When to use this vs the transactional variant ──────────────────────────
+ *
+ *   `emitAnalyticsEvent(tx, params)` — DEFAULT. Use whenever the
+ *   operational mutation that triggered the analytics event is itself
+ *   inside a `prisma.$transaction(async (tx) => …)`. The outbox row
+ *   commits with the operational state — if the operational tx aborts,
+ *   the outbox row never lands. This is what every transactional code
+ *   path should use (booking creation in ingest.ts, future direct-
+ *   booking creators, etc.).
+ *
+ *   `emitAnalyticsEventStandalone(params)` — EXCEPTION. Use ONLY when
+ *   the caller's site has no operational tx. Concretely, today this
+ *   means `processOrderPaidSideEffects` — a handler called by the
+ *   Stripe webhook AFTER the order is already committed as PAID.
+ *   There's no operational tx to attach to: the order's commit is
+ *   long over, and the function exists specifically to orchestrate
+ *   independently-idempotent side effects.
+ *
+ * ── Why we accept that the outbox write is not atomic with operational state
+ *
+ * In the transactional case, atomicity buys us: "if the operational
+ * mutation rolls back, the analytics event is silently dropped". That
+ * matters because we never want the data warehouse to see an event for
+ * a mutation that didn't actually happen.
+ *
+ * In the standalone case, atomicity isn't recoverable — the operational
+ * mutation has already committed before we got here. There's nothing to
+ * roll back to. The standalone helper still opens a short tx (so the
+ * outbox INSERT + the canonical-id SELECT are atomic with each other,
+ * matching the transactional variant's semantics), but the broader
+ * "atomic with operational state" guarantee is gone by construction.
+ *
+ * If the standalone emit fails, the operational mutation has still
+ * happened — the only loss is one analytics event. That's acceptable
+ * for after-the-fact handlers; it would not be acceptable for the
+ * mutation itself.
+ *
+ * ── Usage ─────────────────────────────────────────────────────────────────
+ *
+ * Prefer `emitAnalyticsEvent(tx, params)`. Reach for the standalone
+ * variant only when the call site genuinely has no operational tx.
+ * Two places in the codebase qualify today:
+ *   - `processOrderPaidSideEffects` (Phase 1B integration, this PR)
+ *   - The reconciliation cron's call to the same handler
+ * Anything else should use the transactional variant.
+ */
+export async function emitAnalyticsEventStandalone<
+  TEventName extends RegisteredEventName,
+>(
+  params: EmitAnalyticsEventParams<TEventName>,
+): Promise<EmitAnalyticsEventResult> {
+  return _unguardedAnalyticsPipelineClient.$transaction(async (tx) =>
+    emitAnalyticsEvent(tx, params),
+  );
 }
 
 // ── signal ───────────────────────────────────────────────────────────────
