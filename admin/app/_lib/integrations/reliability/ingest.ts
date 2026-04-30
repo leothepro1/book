@@ -49,6 +49,12 @@
 
 import { prisma } from "@/app/_lib/db/prisma";
 import { Prisma, type BookingStatus } from "@prisma/client";
+import { emitAnalyticsEvent } from "@/app/_lib/analytics/pipeline/emitter";
+import {
+  derivePMSAdapterType,
+  formatAnalyticsDate,
+  type PMSProvider,
+} from "@/app/_lib/analytics/pipeline/integrations";
 import { log } from "@/app/_lib/logger";
 import { setSentryTenantContext } from "@/app/_lib/observability/sentry";
 import { logSyncEvent } from "../sync/log";
@@ -257,6 +263,34 @@ async function executeUpsertOnce(
         ? created.createdAt.getTime() - input.providerCreatedAt.getTime()
         : undefined;
 
+      // booking_imported analytics emit (Phase 2). Transactional — if the
+      // ingest tx aborts, the outbox row never lands. PMS-imported bookings
+      // get a separate event from booking_completed (which fires for direct
+      // bookings via processOrderPaidSideEffects); see
+      // docs/analytics/event-catalog.md.
+      await emitAnalyticsEvent(tx, {
+        tenantId: input.tenantId,
+        eventName: "booking_imported",
+        schemaVersion: "0.1.0",
+        occurredAt: input.providerUpdatedAt,
+        actor: { actor_type: "system", actor_id: null },
+        payload: {
+          booking_id: created.id,
+          pms_provider: derivePMSAdapterType(input.provider) as PMSProvider,
+          pms_reference: input.externalId,
+          check_in_date: formatAnalyticsDate(input.stay.checkIn),
+          check_out_date: formatAnalyticsDate(input.stay.checkOut),
+          number_of_nights: pmsBookingNights(input.stay.checkIn, input.stay.checkOut),
+          number_of_guests: input.stay.guestCount ?? null,
+          accommodation_id: null,
+          guest_email_hash: pmsBookingGuestEmailHash(
+            input.tenantId,
+            input.guest.email,
+          ),
+        },
+        idempotencyKey: `booking_imported:${created.id}`,
+      });
+
       return {
         action: "created" satisfies UpsertAction,
         bookingId: created.id,
@@ -343,6 +377,63 @@ async function executeUpsertOnce(
       },
     });
 
+    // ── booking_modified vs booking_cancelled discriminator ────────────
+    //
+    // Cancel trumps modify (Phase 2 Q7). When a single PMS update both
+    // changes fields AND transitions status → CANCELLED, we emit
+    // booking_cancelled ONLY. The cancellation is the more specific
+    // signal — pre-cancellation field changes are almost always PMS
+    // internal housekeeping (the PMS clearing dates / reassigning units /
+    // closing balances as part of the cancel). Emitting both would
+    // double-count the cancellation in Phase 5 aggregations.
+    //
+    // The discriminator is "is this update transitioning into CANCELLED?"
+    // (mappedStatus is CANCELLED AND the row was not already cancelled).
+    // A re-sync of an already-cancelled booking with no field changes
+    // never reaches this branch — it falls into Case 3 (IDENTICAL).
+    //
+    // See docs/analytics/event-catalog.md "Relationship to other events"
+    // sections under booking_modified and booking_cancelled.
+    const isCancellationTransition =
+      mappedStatus === "CANCELLED" && existing.status !== "CANCELLED";
+
+    const commonPayload = {
+      booking_id: existing.id,
+      pms_provider: derivePMSAdapterType(input.provider) as PMSProvider,
+      pms_reference: input.externalId,
+      check_in_date: formatAnalyticsDate(input.stay.checkIn),
+      check_out_date: formatAnalyticsDate(input.stay.checkOut),
+      number_of_nights: pmsBookingNights(input.stay.checkIn, input.stay.checkOut),
+      number_of_guests: input.stay.guestCount ?? null,
+      accommodation_id: null as string | null,
+      source_channel: "pms_import" as const,
+    };
+
+    if (isCancellationTransition) {
+      await emitAnalyticsEvent(tx, {
+        tenantId: input.tenantId,
+        eventName: "booking_cancelled",
+        schemaVersion: "0.1.0",
+        occurredAt: input.providerUpdatedAt,
+        actor: { actor_type: "system", actor_id: null },
+        payload: { ...commonPayload, cancelled_at: input.providerUpdatedAt },
+        idempotencyKey: `booking_cancelled:${existing.id}:${input.providerUpdatedAt.getTime()}`,
+      });
+    } else {
+      await emitAnalyticsEvent(tx, {
+        tenantId: input.tenantId,
+        eventName: "booking_modified",
+        schemaVersion: "0.1.0",
+        occurredAt: input.providerUpdatedAt,
+        actor: { actor_type: "system", actor_id: null },
+        payload: {
+          ...commonPayload,
+          provider_updated_at: input.providerUpdatedAt,
+        },
+        idempotencyKey: `booking_modified:${existing.id}:${input.providerUpdatedAt.getTime()}`,
+      });
+    }
+
     return {
       action: "updated" satisfies UpsertAction,
       bookingId: existing.id,
@@ -350,6 +441,29 @@ async function executeUpsertOnce(
       externalId: input.externalId,
     };
   });
+}
+
+// ── Helpers used by Case 1 + Case 4 analytics emits ──────────────────────
+
+function pmsBookingNights(checkIn: Date, checkOut: Date): number {
+  return Math.max(
+    1,
+    Math.round((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)),
+  );
+}
+
+function pmsBookingGuestEmailHash(tenantId: string, email: string): string {
+  // Mirrors deriveGuestId's email-only branch: the analytics layer takes
+  // raw email through SHA-256 with tenant scoping so the same address
+  // across tenants gets distinct pseudonyms. PMS imports start without a
+  // GuestAccount link; the linked event is `guest_account_linked`.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { createHash } = require("node:crypto");
+  const normalized = email.trim().toLowerCase();
+  const hex = createHash("sha256")
+    .update(`${tenantId}:${normalized}`)
+    .digest("hex");
+  return `email_${hex.slice(0, 16)}`;
 }
 
 // ── Side-effects: audit + log (post-commit, failure-tolerant) ──

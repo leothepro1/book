@@ -266,6 +266,40 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // Analytics pipeline emit (Phase 2) — discount_created.
+      // Transactional with the discount/audit writes; rolls back if the
+      // create transaction aborts.
+      const { emitAnalyticsEvent } = await import(
+        "@/app/_lib/analytics/pipeline/emitter"
+      );
+      await emitAnalyticsEvent(tx, {
+        tenantId,
+        eventName: "discount_created",
+        schemaVersion: "0.1.0",
+        occurredAt: created.createdAt,
+        actor: userId
+          ? { actor_type: "merchant", actor_id: userId }
+          : { actor_type: "system", actor_id: null },
+        payload: {
+          discount_id: created.id,
+          title: created.title,
+          method: created.method.toLowerCase() as "automatic" | "code",
+          value_type:
+            created.valueType === "PERCENTAGE" ? "percentage" : "fixed_amount",
+          value: created.value,
+          // Discount has no explicit currency column; fixed_amount
+          // discounts are interpreted in the tenant's primary currency.
+          // Phase 5 enriches at query time.
+          currency: null,
+          starts_at: created.startsAt,
+          ends_at: created.endsAt,
+          usage_limit: created.usageLimit,
+          created_at: created.createdAt,
+          created_by_actor_id: created.createdByUserId,
+        },
+        idempotencyKey: `discount_created:${created.id}`,
+      });
+
       // Return with full relations
       return tx.discount.findUniqueOrThrow({
         where: { id: created.id },
