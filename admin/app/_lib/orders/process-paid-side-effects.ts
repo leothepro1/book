@@ -268,36 +268,46 @@ export async function processOrderPaidSideEffects(
   // tx to attach to). See app/_lib/analytics/pipeline/emitter.ts.
   //
   // Emits per orderType:
-  //   ACCOMMODATION  → booking_completed (Commit C)
-  //   payment_succeeded for every paid order is added by Commit D.
-  try {
-    if (order.orderType === "ACCOMMODATION") {
-      const booking = await prisma.booking.findFirst({
-        where: { orderId: order.id, tenantId: order.tenantId },
-        select: {
-          id: true,
-          accommodationId: true,
-          arrival: true,
-          departure: true,
-          guestCount: true,
-          orderId: true,
-          externalSource: true,
-          externalId: true,
-        },
-      });
+  //   ACCOMMODATION → booking_completed (when the linked Booking row
+  //                   has the required fields populated)
+  //   ALL paid      → payment_succeeded
+  //
+  // Each emit has its own try/catch so a failure in one doesn't suppress
+  // the other. signalAnalyticsFlush fires once at the end with a
+  // hint_count covering both events; the drainer reads outbox itself
+  // so the count is informational.
+  {
+    const accommodationBooking =
+      order.orderType === "ACCOMMODATION"
+        ? await prisma.booking.findFirst({
+            where: { orderId: order.id, tenantId: order.tenantId },
+            select: {
+              id: true,
+              accommodationId: true,
+              arrival: true,
+              departure: true,
+              guestCount: true,
+              orderId: true,
+              externalSource: true,
+              externalId: true,
+            },
+          })
+        : null;
 
-      // Required fields for booking_completed v0.1.0. Phase 1B's scope
-      // covers direct-bookings only — those should always have these
-      // fields populated. If a row is missing them, log and skip rather
-      // than emit malformed data.
+    let emitsAttempted = 0;
+
+    // booking_completed (ACCOMMODATION only) ----------------
+    try {
       if (
-        booking &&
-        booking.accommodationId &&
-        booking.guestCount !== null &&
-        booking.guestCount > 0
+        order.orderType === "ACCOMMODATION" &&
+        accommodationBooking &&
+        accommodationBooking.accommodationId &&
+        accommodationBooking.guestCount !== null &&
+        accommodationBooking.guestCount > 0
       ) {
-        const { emitAnalyticsEventStandalone, signalAnalyticsFlush } =
-          await import("@/app/_lib/analytics/pipeline/emitter");
+        const { emitAnalyticsEventStandalone } = await import(
+          "@/app/_lib/analytics/pipeline/emitter"
+        );
         const {
           deriveActor,
           deriveGuestId,
@@ -308,7 +318,8 @@ export async function processOrderPaidSideEffects(
         const nights = Math.max(
           1,
           Math.round(
-            (booking.departure.getTime() - booking.arrival.getTime()) /
+            (accommodationBooking.departure.getTime() -
+              accommodationBooking.arrival.getTime()) /
               (1000 * 60 * 60 * 24),
           ),
         );
@@ -320,43 +331,111 @@ export async function processOrderPaidSideEffects(
           occurredAt: order.paidAt ?? new Date(),
           actor: deriveActor(order),
           payload: {
-            booking_id: booking.id,
-            accommodation_id: booking.accommodationId,
+            booking_id: accommodationBooking.id,
+            accommodation_id: accommodationBooking.accommodationId,
             guest_id: deriveGuestId(order),
-            check_in_date: formatAnalyticsDate(booking.arrival),
-            check_out_date: formatAnalyticsDate(booking.departure),
+            check_in_date: formatAnalyticsDate(accommodationBooking.arrival),
+            check_out_date: formatAnalyticsDate(
+              accommodationBooking.departure,
+            ),
             number_of_nights: nights,
-            number_of_guests: booking.guestCount,
+            number_of_guests: accommodationBooking.guestCount,
             total_amount: {
               amount: order.totalAmount,
               currency: order.currency,
             },
-            source_channel: deriveSourceChannel(booking),
-            pms_reference: booking.externalId ?? null,
+            source_channel: deriveSourceChannel(accommodationBooking),
+            pms_reference: accommodationBooking.externalId ?? null,
           },
-          idempotencyKey: `booking_completed:${booking.id}`,
+          idempotencyKey: `booking_completed:${accommodationBooking.id}`,
         });
-
-        // Fire-and-forget signal — cron fallback covers losses.
-        void signalAnalyticsFlush(order.tenantId).catch(() => {});
-      } else {
+        emitsAttempted++;
+      } else if (order.orderType === "ACCOMMODATION") {
         log("info", "process_paid.pipeline_booking_completed_skipped", {
           orderId: order.id,
-          reason: !booking
+          reason: !accommodationBooking
             ? "no_booking"
-            : !booking.accommodationId
+            : !accommodationBooking.accommodationId
               ? "no_accommodation"
               : "no_guest_count",
         });
       }
+    } catch (err) {
+      log("error", "process_paid.pipeline_emit_failed", {
+        orderId: order.id,
+        eventName: "booking_completed",
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
-  } catch (err) {
-    // Pipeline emit must never break the side-effects flow.
-    log("error", "process_paid.pipeline_emit_failed", {
-      orderId: order.id,
-      eventName: "booking_completed",
-      error: err instanceof Error ? err.message : String(err),
-    });
+
+    // payment_succeeded (every paid order) ------------------
+    try {
+      const { emitAnalyticsEventStandalone } = await import(
+        "@/app/_lib/analytics/pipeline/emitter"
+      );
+      const { deriveActor, deriveProvider, deriveInstrument } = await import(
+        "@/app/_lib/analytics/pipeline/integrations"
+      );
+
+      // TODO(future): if Bedfront ever supports multi-payment per order
+      // (refund + new payment cycle), this idempotency key collapses
+      // both events into one. At that point, append a payment-attempt
+      // counter or use the payment-attempt UUID. For now (v0.1.0), one
+      // payment per order is the invariant, and order.id as fallback
+      // is safe.
+      const idempotencyKey = `payment_succeeded:${
+        order.stripePaymentIntentId ?? order.id
+      }`;
+
+      await emitAnalyticsEventStandalone({
+        tenantId: order.tenantId,
+        eventName: "payment_succeeded",
+        schemaVersion: "0.1.0",
+        occurredAt: order.paidAt ?? new Date(),
+        actor: deriveActor(order),
+        payload: {
+          // payment_id is the local identifier — Order.id is stable
+          // across providers (INVOICE has no Stripe PI). The
+          // provider_reference field carries the provider's own id.
+          payment_id: order.id,
+          booking_id: accommodationBooking?.id ?? null,
+          amount: {
+            amount: order.totalAmount,
+            currency: order.currency,
+          },
+          provider: deriveProvider(order),
+          payment_instrument: deriveInstrument(order),
+          // For Stripe-backed orders, the payment_intent_id is the
+          // canonical provider reference. For INVOICE / future
+          // Swedbankpay / NETS without a stripePaymentIntentId, fall
+          // back to order.id so the schema's `min(1)` constraint is
+          // satisfied. Phase 2 may introduce a unified
+          // PaymentSession.externalSessionId field for cross-provider
+          // referencing.
+          provider_reference: order.stripePaymentIntentId ?? order.id,
+          captured_at: order.paidAt ?? new Date(),
+        },
+        idempotencyKey,
+      });
+      emitsAttempted++;
+    } catch (err) {
+      log("error", "process_paid.pipeline_emit_failed", {
+        orderId: order.id,
+        eventName: "payment_succeeded",
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    // Signal once for the whole batch — fire-and-forget. Cron fallback
+    // (analytics.outbox.scan, every minute) catches any losses.
+    if (emitsAttempted > 0) {
+      try {
+        const { signalAnalyticsFlush } = await import(
+          "@/app/_lib/analytics/pipeline/emitter"
+        );
+        void signalAnalyticsFlush(order.tenantId, emitsAttempted).catch(() => {});
+      } catch { /* fire-and-forget */ }
+    }
   }
 
   // ── Segment sync (shared, fire-and-forget) ─────────────────
