@@ -40,15 +40,13 @@ import {
   _unguardedAnalyticsPipelineClient,
 } from "@/app/_lib/db/prisma";
 import { log } from "@/app/_lib/logger";
-import {
-  analyticsBreadcrumb,
-  analyticsSpan,
-} from "@/app/_lib/analytics/pipeline/observability";
+import { analyticsBreadcrumb } from "@/app/_lib/analytics/pipeline/observability";
 import {
   AnalyticsSchemaNotRegisteredError,
   AnalyticsSchemaVersionMissingError,
   getEventSchema,
 } from "@/app/_lib/analytics/pipeline/schemas/registry";
+import { captureDLQ, withSentry } from "@/app/_lib/observability/inngest-sentry";
 import { inngest } from "@/inngest/client";
 
 const BATCH_SIZE = 100;
@@ -102,12 +100,11 @@ export const drainAnalyticsOutbox = inngest.createFunction(
       hint_count: event.data.hint_count ?? null,
     });
 
-    const result = await step.run("drain-batch", async () =>
-      analyticsSpan(
-        "drainer.batch",
-        { tenant_id: tenantId, pipeline_step: "drainer.batch" },
-        () => drainOneBatch(tenantId, dlqThreshold),
-      ),
+    const result = await withSentry(
+      step,
+      "drainer.batch",
+      { tenant_id: tenantId, pipeline_step: "drainer.batch" },
+      () => drainOneBatch(tenantId, dlqThreshold),
     );
 
     log("info", "analytics.drainer.batch_complete", {
@@ -255,18 +252,15 @@ async function processRow(
             published_at = NOW()
         WHERE id = ${row.id}
       `;
-      // Sentry capture for DLQ — fingerprint per locked design decision
-      // (Phase 1B Sentry helper lives in app/_lib/observability/inngest-sentry.ts,
-      // shipped in Commit B; for Commit A the drainer captures inline so the
-      // pipeline is functional end-to-end, then Commit B promotes the helper).
-      captureDLQInline({
+      // captureDLQ uses the locked fingerprint
+      // ["analytics", "dlq", event_name, error_type] — see inngest-sentry.ts.
+      captureDLQ({
         tenant_id: row.tenant_id,
         event_id: row.event_id,
         event_name: row.event_name,
         schema_version: row.schema_version,
         failed_count: newFailedCount,
-        error_type: errorType,
-        error_message: errorMessage,
+        error: err instanceof Error ? err : new Error(errorMessage),
       });
       return "dlq";
     }
@@ -292,44 +286,3 @@ async function processRow(
   }
 }
 
-interface DLQCapture {
-  tenant_id: string;
-  event_id: string;
-  event_name: string;
-  schema_version: string;
-  failed_count: number;
-  error_type: string;
-  error_message: string;
-}
-
-function captureDLQInline(params: DLQCapture): void {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Sentry = require("@sentry/nextjs");
-    Sentry.captureException(new Error(`[DLQ] ${params.error_message}`), {
-      tags: {
-        tenant_id: params.tenant_id,
-        event_id: params.event_id,
-        event_name: params.event_name,
-        schema_version: params.schema_version,
-        failed_count: params.failed_count,
-        pipeline_step: "drainer.dlq",
-      },
-      fingerprint: ["analytics", "dlq", params.event_name, params.error_type],
-      extra: {
-        error_message: params.error_message,
-      },
-    });
-  } catch {
-    // Sentry not initialised — log only.
-    log("error", "analytics.drainer.dlq", {
-      tenantId: params.tenant_id,
-      eventId: params.event_id,
-      eventName: params.event_name,
-      schemaVersion: params.schema_version,
-      failedCount: params.failed_count,
-      errorType: params.error_type,
-      error: params.error_message,
-    });
-  }
-}
