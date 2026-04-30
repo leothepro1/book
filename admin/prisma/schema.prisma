@@ -4885,6 +4885,14 @@ enum DraftHoldState {
   CONFIRMED
 }
 
+enum DraftCheckoutSessionStatus {
+  ACTIVE
+  UNLINKED
+  EXPIRED
+  PAID
+  CANCELLED
+}
+
 /// Aggregate root for a staff-authored order draft. Carries buyer context,
 /// frozen pricing snapshot, payment-terms snapshot, share-link token for
 /// the invoice flow, and lifecycle timestamps. Expires and is swept by
@@ -4927,10 +4935,6 @@ model DraftOrder {
   totalCents         BigInt  @default(0)
   currency           String  @default("SEK")
   taxesIncluded      Boolean @default(true)
-
-  /// Set by the service layer when prices are frozen for invoice send.
-  /// After this moment the draft is effectively read-only for pricing.
-  pricesFrozenAt DateTime?
 
   // ── Applied order-level discount (snapshot) ──
   appliedDiscountId     String?
@@ -4986,9 +4990,10 @@ model DraftOrder {
   metafields   Json?
   tags         String[]
 
-  lineItems    DraftLineItem[]
-  reservations DraftReservation[]
-  events       DraftOrderEvent[]
+  lineItems             DraftLineItem[]
+  reservations          DraftReservation[]
+  events                DraftOrderEvent[]
+  draftCheckoutSessions DraftCheckoutSession[]
 
   @@unique([tenantId, displayNumber])
   @@index([tenantId, status])
@@ -5091,6 +5096,11 @@ model DraftReservation {
   holdState         DraftHoldState @default(NOT_PLACED)
   holdLastAttemptAt DateTime?
   holdLastError     String?
+  /// Set when holdState transitions to RELEASED, for observability and
+  /// analytics. Allowed values:
+  /// "session_unlinked" | "session_expired" | "draft_cancelled" |
+  /// "session_completed" | "manual_release".
+  holdReleaseReason String?
 
   /// FAS 6.5C: per-attempt idempotency key for the PMS holdAvailability
   /// call. Stored so stuck-PLACING recovery (cron sweep B) can probe
@@ -5132,4 +5142,75 @@ model DraftOrderEvent {
 
   @@index([draftOrderId, createdAt])
   @@index([tenantId, type])
+}
+
+/// Buyer-facing checkout session, created lazily on the first GET to
+/// `/invoice/[token]` per `draft-orders-invoice-flow.md` v1.2 §7.3.
+/// Holds the frozen pricing snapshot the buyer pays against, the
+/// Stripe PaymentIntent ID (typed column — never via DraftOrder.metafields),
+/// and lifecycle timestamps. A draft can have many historical sessions;
+/// at most one is ACTIVE at a time.
+///
+/// Partial unique invariant (enforced via raw SQL in the migration,
+/// since the Prisma DSL cannot express the WHERE clause): at most one
+/// `ACTIVE` session may exist per draft. See
+/// "DraftCheckoutSession_one_active_per_draft" in the migration file.
+///
+/// App code that creates a session MUST catch P2002 on this constraint
+/// and treat it as the race-loser path — re-query the existing ACTIVE
+/// session and return its data instead of retrying the insert. This is
+/// the mechanism that resolves concurrent buyer-opens of the same
+/// invoice link (v1.2 §7.5, invariant 11).
+model DraftCheckoutSession {
+  id                String @id @default(cuid())
+  tenantId          String
+  draftOrderId      String
+  /// version of draft when session was created
+  draftOrderVersion Int
+
+  status DraftCheckoutSessionStatus
+  // ACTIVE | UNLINKED | EXPIRED | PAID | CANCELLED
+
+  // ── Frozen snapshot — what the buyer sees and pays ──
+  frozenSubtotal       BigInt
+  frozenTaxAmount      BigInt
+  frozenDiscountAmount BigInt
+  frozenTotal          BigInt
+  currency             String
+
+  // ── Stripe — typed columns, never via metafields ──
+  stripePaymentIntentId String? @unique
+  /// returned to client; not sensitive in Stripe's design
+  stripeClientSecret    String?
+  stripeIdempotencyKey  String  @unique
+
+  // ── Hold refresh tracking (see v1.2 §6.5) ──
+  lastHoldRefreshAt       DateTime?
+  holdRefreshFailureCount Int       @default(0)
+
+  // ── Lifecycle timestamps ──
+  createdAt           DateTime  @default(now())
+  /// 24-hour hard cap from creation (v1.2 §7.4)
+  expiresAt           DateTime
+  lastBuyerActivityAt DateTime?
+  paidAt              DateTime?
+  unlinkedAt          DateTime?
+  /// "draft_mutated" | "buyer_abandoned" | "manual_admin" |
+  /// "marked_paid_manually" | "hold_refresh_failed"
+  unlinkReason        String?
+  cancelledAt         DateTime?
+
+  /// Optimistic concurrency control. Service layer increments on every
+  /// mutation and writes conditionally on the prior value.
+  version Int @default(1)
+
+  draftOrder DraftOrder @relation(fields: [draftOrderId], references: [id], onDelete: Cascade)
+
+  @@index([draftOrderId, status])
+  @@index([tenantId, status])
+  /// for sweep cron (v1.2 §7.4 expiry sweep)
+  @@index([expiresAt, status])
+  @@index([stripePaymentIntentId])
+  /// for hold-refresh cron (v1.2 §6.5)
+  @@index([status, lastHoldRefreshAt])
 }
