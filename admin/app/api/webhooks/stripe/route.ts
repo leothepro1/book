@@ -30,6 +30,11 @@ import { canTransition, canTransitionFinancial, canTransitionFulfillment } from 
 import { log } from "@/app/_lib/logger";
 // createPmsBookingAfterPayment now called via processOrderPaidSideEffects
 import { emitAnalyticsEvent } from "@/app/_lib/analytics";
+import { emitAnalyticsEventStandalone } from "@/app/_lib/analytics/pipeline/emitter";
+import {
+  deriveDisputeReason,
+  deriveRefundReason,
+} from "@/app/_lib/analytics/pipeline/integrations";
 import type Stripe from "stripe";
 import { upsertGuestAccountFromOrder } from "@/app/_lib/guest-auth/account";
 import { createGiftCard } from "@/app/_lib/gift-cards/create";
@@ -132,7 +137,11 @@ export async function POST(req: Request) {
         break;
 
       case "charge.refunded":
-        await handleChargeRefunded(event.data.object as Stripe.Charge);
+        await handleChargeRefunded(event.data.object as Stripe.Charge, event.id);
+        break;
+
+      case "charge.dispute.created":
+        await handleChargeDisputed(event.data.object as Stripe.Dispute, event.id);
         break;
 
       case "payment_intent.succeeded":
@@ -140,7 +149,7 @@ export async function POST(req: Request) {
         break;
 
       case "payment_intent.payment_failed":
-        await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
+        await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent, event.id);
         break;
 
       default:
@@ -468,7 +477,7 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
 
 // ── charge.refunded ────────────────────────────────────────────
 
-async function handleChargeRefunded(charge: Stripe.Charge) {
+async function handleChargeRefunded(charge: Stripe.Charge, stripeEventId: string) {
   const paymentIntentId =
     typeof charge.payment_intent === "string"
       ? charge.payment_intent
@@ -535,6 +544,37 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
       currency: charge.currency.toUpperCase(),
     },
   });
+
+  // New analytics pipeline (Phase 2) — payment_refunded.
+  //
+  // The latest refund's reason on the Charge object is the closest proxy
+  // for "why this refund". Stripe doesn't expose a per-refund timestamp
+  // on the Charge object's top-level fields, so refunded_at = now().
+  // Idempotency key includes the Stripe event id (NOT just charge.id)
+  // because charge.refunded fires once per refund creation — partial
+  // refunds across multiple webhook deliveries must be distinct events.
+  try {
+    const latestRefund = charge.refunds?.data[0];
+    void emitAnalyticsEventStandalone({
+      tenantId: order.tenantId,
+      eventName: "payment_refunded",
+      schemaVersion: "0.1.0",
+      occurredAt: new Date(),
+      actor: { actor_type: "system", actor_id: null },
+      payload: {
+        order_id: order.id,
+        charge_id: charge.id,
+        refund_amount: {
+          amount: charge.amount_refunded,
+          currency: charge.currency.toUpperCase(),
+        },
+        refund_reason: deriveRefundReason(latestRefund?.reason),
+        refunded_at: new Date(),
+        provider: "stripe",
+      },
+      idempotencyKey: `payment_refunded:${charge.id}:${stripeEventId}`,
+    }).catch(() => { /* fire-and-forget */ });
+  } catch { /* fire-and-forget */ }
 
   // Emit platform event for app webhooks (non-blocking)
   import("@/app/_lib/apps/webhooks").then(({ emitPlatformEvent }) =>
@@ -713,7 +753,7 @@ function mapDeclineCodeToSwedish(code?: string | null): string {
   }
 }
 
-async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
+async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent, stripeEventId: string) {
   const orderId = pi.metadata?.orderId;
   if (!orderId) return;
 
@@ -774,5 +814,130 @@ async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
       log("error", "webhook.payment_failed_email_error", { orderId: order.id, error: String(err) });
     }
   }
+
+  // New analytics pipeline (Phase 2) — payment_failed.
+  //
+  // Idempotency key: `payment_failed:${pi.id}:${stripeEventId}`. The PI
+  // ID alone is NOT unique per failure — the same PI can fail multiple
+  // times via Stripe-internal retries, with each failure delivering a
+  // separate `payment_intent.payment_failed` webhook event. Each Stripe
+  // event has its own unique `event.id`, so appending it to the
+  // idempotency key gives us "one analytics event per failure
+  // occurrence". Phase 5 needs occurrence counts (not unique sessions)
+  // to compute per-customer / per-provider failure rates and
+  // time-to-recovery curves.
+  try {
+    void emitAnalyticsEventStandalone({
+      tenantId: order.tenantId,
+      eventName: "payment_failed",
+      schemaVersion: "0.1.0",
+      occurredAt: new Date(),
+      actor: { actor_type: "system", actor_id: null },
+      payload: {
+        order_id: order.id,
+        payment_intent_id: pi.id,
+        amount: { amount: pi.amount, currency: pi.currency.toUpperCase() },
+        decline_code: pi.last_payment_error?.decline_code ?? null,
+        error_code: pi.last_payment_error?.code ?? null,
+        error_message: pi.last_payment_error?.message?.slice(0, 500) ?? null,
+        attempted_at: new Date(),
+        provider: "stripe",
+      },
+      idempotencyKey: `payment_failed:${pi.id}:${stripeEventId}`,
+    }).catch(() => { /* fire-and-forget */ });
+  } catch { /* fire-and-forget */ }
+}
+
+// ── charge.dispute.created (Phase 2 Commit B — NEW) ───────────────
+//
+// Mirrors the structure of handlePaymentIntentFailed:
+//   1. Resolve our Order via the dispute's payment_intent / charge.
+//   2. Skip silently if no matching Order (orders from other systems,
+//      legacy migrations, etc.).
+//   3. Record an OrderEvent so the merchant order timeline shows the
+//      dispute. Uses ORDER_UPDATED + dispute metadata since there's no
+//      dedicated DISPUTE enum value in OrderEventType (adding one
+//      requires a migration; tracked as follow-up).
+//   4. Emit analytics fire-and-forget.
+
+async function handleChargeDisputed(dispute: Stripe.Dispute, stripeEventId: string) {
+  // Stripe's Dispute object exposes `payment_intent` and `charge`.
+  // Prefer payment_intent because that's our primary linking field.
+  const paymentIntentId =
+    typeof dispute.payment_intent === "string"
+      ? dispute.payment_intent
+      : dispute.payment_intent?.id ?? null;
+
+  if (!paymentIntentId) {
+    // Older Stripe API versions may not include payment_intent on the
+    // dispute object. Without it we can't link to our Order — log and
+    // skip rather than expand the charge via a synchronous Stripe API
+    // call mid-webhook (would risk timing out the webhook ack).
+    log("warn", "webhook.dispute_no_payment_intent", { disputeId: dispute.id });
+    return;
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { stripePaymentIntentId: paymentIntentId },
+    select: { id: true, tenantId: true, orderNumber: true },
+  });
+  if (!order) return;
+
+  const chargeId =
+    typeof dispute.charge === "string" ? dispute.charge : dispute.charge.id;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.orderEvent.create({
+      data: {
+        orderId: order.id,
+        tenantId: order.tenantId,
+        type: "ORDER_UPDATED",
+        message: `Tvist (chargeback) initierad — anledning: ${dispute.reason}`,
+        metadata: {
+          dispute: true,
+          disputeId: dispute.id,
+          chargeId,
+          amount: dispute.amount,
+          currency: dispute.currency,
+          reason: dispute.reason,
+          status: dispute.status,
+        },
+      },
+    });
+  });
+
+  // New analytics pipeline emit — fire-and-forget.
+  try {
+    void emitAnalyticsEventStandalone({
+      tenantId: order.tenantId,
+      eventName: "payment_disputed",
+      schemaVersion: "0.1.0",
+      occurredAt: new Date(dispute.created * 1000),
+      actor: { actor_type: "system", actor_id: null },
+      payload: {
+        order_id: order.id,
+        charge_id: chargeId,
+        dispute_id: dispute.id,
+        disputed_amount: {
+          amount: dispute.amount,
+          currency: dispute.currency.toUpperCase(),
+        },
+        dispute_reason: deriveDisputeReason(dispute.reason),
+        dispute_status:
+          (dispute.status as
+            | "warning_needs_response"
+            | "warning_under_review"
+            | "warning_closed"
+            | "needs_response"
+            | "under_review"
+            | "charge_refunded"
+            | "won"
+            | "lost") ?? "unknown",
+        created_at: new Date(dispute.created * 1000),
+        provider: "stripe",
+      },
+      idempotencyKey: `payment_disputed:${dispute.id}:${stripeEventId}`,
+    }).catch(() => { /* fire-and-forget */ });
+  } catch { /* fire-and-forget */ }
 }
 

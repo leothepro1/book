@@ -196,6 +196,86 @@ export function deriveInstrument(order: Pick<Order, "paymentMethod">): Instrumen
   }
 }
 
+// ── Refund / Dispute reasons ─────────────────────────────────────────────
+
+export type RefundReason =
+  | "duplicate"
+  | "fraudulent"
+  | "requested_by_customer"
+  | "expired_uncaptured_charge"
+  | "other"
+  | "unknown";
+
+/**
+ * Maps Stripe's `Charge.refunds.data[].reason` (or the latest refund's
+ * reason on the Charge object) to the analytics RefundReason enum.
+ *
+ * Stripe currently emits: "duplicate" | "fraudulent" |
+ * "requested_by_customer" | "expired_uncaptured_charge" | null. Anything
+ * unrecognized maps to "other"; null / undefined to "unknown" (defensive).
+ *
+ * Used by: payment_refunded.
+ */
+export function deriveRefundReason(
+  reason: string | null | undefined,
+): RefundReason {
+  if (reason === null || reason === undefined) return "unknown";
+  switch (reason) {
+    case "duplicate":
+    case "fraudulent":
+    case "requested_by_customer":
+    case "expired_uncaptured_charge":
+      return reason;
+    default:
+      return "other";
+  }
+}
+
+export type DisputeReason =
+  | "credit_not_processed"
+  | "duplicate"
+  | "fraudulent"
+  | "general"
+  | "incorrect_account_details"
+  | "insufficient_funds"
+  | "product_not_received"
+  | "product_unacceptable"
+  | "subscription_canceled"
+  | "unrecognized"
+  | "other"
+  | "unknown";
+
+const STRIPE_DISPUTE_REASONS = new Set<DisputeReason>([
+  "credit_not_processed",
+  "duplicate",
+  "fraudulent",
+  "general",
+  "incorrect_account_details",
+  "insufficient_funds",
+  "product_not_received",
+  "product_unacceptable",
+  "subscription_canceled",
+  "unrecognized",
+]);
+
+/**
+ * Maps Stripe's `Dispute.reason` to the analytics DisputeReason enum.
+ *
+ * Stripe's documented reasons are passed through 1:1; future or
+ * undocumented reasons fall to "other". Null / undefined → "unknown".
+ *
+ * Used by: payment_disputed.
+ */
+export function deriveDisputeReason(
+  reason: string | null | undefined,
+): DisputeReason {
+  if (reason === null || reason === undefined) return "unknown";
+  if (STRIPE_DISPUTE_REASONS.has(reason as DisputeReason)) {
+    return reason as DisputeReason;
+  }
+  return "other";
+}
+
 // ── PMS Provider ─────────────────────────────────────────────────────────
 
 /**

@@ -27,6 +27,9 @@ import { BookingCompletedSchema } from "./booking-completed";
 import { BookingImportedSchema } from "./booking-imported";
 import { BookingModifiedSchema } from "./booking-modified";
 import { BookingNoShowSchema } from "./booking-no-show";
+import { PaymentDisputedSchema } from "./payment-disputed";
+import { PaymentFailedSchema } from "./payment-failed";
+import { PaymentRefundedSchema } from "./payment-refunded";
 import { PaymentSucceededSchema } from "./payment-succeeded";
 
 export const ANALYTICS_EVENT_REGISTRY = {
@@ -44,6 +47,15 @@ export const ANALYTICS_EVENT_REGISTRY = {
   },
   booking_no_show: {
     "0.1.0": BookingNoShowSchema,
+  },
+  payment_disputed: {
+    "0.1.0": PaymentDisputedSchema,
+  },
+  payment_failed: {
+    "0.1.0": PaymentFailedSchema,
+  },
+  payment_refunded: {
+    "0.1.0": PaymentRefundedSchema,
   },
   payment_succeeded: {
     "0.1.0": PaymentSucceededSchema,

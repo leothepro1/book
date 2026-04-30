@@ -13,6 +13,9 @@ import { BookingCompletedSchema } from "./booking-completed";
 import { BookingImportedSchema } from "./booking-imported";
 import { BookingModifiedSchema } from "./booking-modified";
 import { BookingNoShowSchema } from "./booking-no-show";
+import { PaymentDisputedSchema } from "./payment-disputed";
+import { PaymentFailedSchema } from "./payment-failed";
+import { PaymentRefundedSchema } from "./payment-refunded";
 import { PaymentSucceededSchema } from "./payment-succeeded";
 import {
   ANALYTICS_EVENT_REGISTRY,
@@ -384,6 +387,160 @@ describe("BookingNoShowSchema (registered, emit deferred to Phase 2.x)", () => {
       BookingNoShowSchema.safeParse({
         ...validNoShowEvent,
         payload: { ...validNoShowEvent.payload, detection_source: "made_up" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+// ── Phase 2 Commit B — payment lifecycle ────────────────────────────────
+
+const validPaymentFailedEvent = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "payment_failed",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "system" as const,
+  actor_id: null,
+  payload: {
+    order_id: "co_failed",
+    payment_intent_id: "pi_failed",
+    amount: { amount: 12900, currency: "SEK" },
+    decline_code: "insufficient_funds",
+    error_code: "card_declined",
+    error_message: "Otillräckligt saldo",
+    attempted_at: new Date(),
+    provider: "stripe" as const,
+  },
+};
+
+describe("PaymentFailedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(PaymentFailedSchema.safeParse(validPaymentFailedEvent).success).toBe(true);
+  });
+  it("accepts null decline_code / error_code / error_message", () => {
+    const r = PaymentFailedSchema.safeParse({
+      ...validPaymentFailedEvent,
+      payload: {
+        ...validPaymentFailedEvent.payload,
+        decline_code: null,
+        error_code: null,
+        error_message: null,
+      },
+    });
+    expect(r.success).toBe(true);
+  });
+  it("rejects empty payment_intent_id", () => {
+    expect(
+      PaymentFailedSchema.safeParse({
+        ...validPaymentFailedEvent,
+        payload: { ...validPaymentFailedEvent.payload, payment_intent_id: "" },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects unknown provider", () => {
+    expect(
+      PaymentFailedSchema.safeParse({
+        ...validPaymentFailedEvent,
+        payload: { ...validPaymentFailedEvent.payload, provider: "made_up" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validPaymentRefundedEvent = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "payment_refunded",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "system" as const,
+  actor_id: null,
+  payload: {
+    order_id: "co_refund",
+    charge_id: "ch_xxx",
+    refund_amount: { amount: 5000, currency: "SEK" },
+    refund_reason: "requested_by_customer" as const,
+    refunded_at: new Date(),
+    provider: "stripe" as const,
+  },
+};
+
+describe("PaymentRefundedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(PaymentRefundedSchema.safeParse(validPaymentRefundedEvent).success).toBe(true);
+  });
+  it("rejects unknown refund_reason", () => {
+    expect(
+      PaymentRefundedSchema.safeParse({
+        ...validPaymentRefundedEvent,
+        payload: { ...validPaymentRefundedEvent.payload, refund_reason: "made_up" },
+      }).success,
+    ).toBe(false);
+  });
+  it("accepts 'unknown' refund_reason (defensive fallback)", () => {
+    expect(
+      PaymentRefundedSchema.safeParse({
+        ...validPaymentRefundedEvent,
+        payload: { ...validPaymentRefundedEvent.payload, refund_reason: "unknown" },
+      }).success,
+    ).toBe(true);
+  });
+  it("rejects empty charge_id", () => {
+    expect(
+      PaymentRefundedSchema.safeParse({
+        ...validPaymentRefundedEvent,
+        payload: { ...validPaymentRefundedEvent.payload, charge_id: "" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validPaymentDisputedEvent = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "payment_disputed",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "system" as const,
+  actor_id: null,
+  payload: {
+    order_id: "co_dispute",
+    charge_id: "ch_xxx",
+    dispute_id: "dp_xxx",
+    disputed_amount: { amount: 12900, currency: "SEK" },
+    dispute_reason: "fraudulent" as const,
+    dispute_status: "needs_response" as const,
+    created_at: new Date(),
+    provider: "stripe" as const,
+  },
+};
+
+describe("PaymentDisputedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(PaymentDisputedSchema.safeParse(validPaymentDisputedEvent).success).toBe(true);
+  });
+  it("rejects unknown dispute_reason", () => {
+    expect(
+      PaymentDisputedSchema.safeParse({
+        ...validPaymentDisputedEvent,
+        payload: { ...validPaymentDisputedEvent.payload, dispute_reason: "made_up" },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects unknown dispute_status", () => {
+    expect(
+      PaymentDisputedSchema.safeParse({
+        ...validPaymentDisputedEvent,
+        payload: { ...validPaymentDisputedEvent.payload, dispute_status: "made_up" },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects empty dispute_id", () => {
+    expect(
+      PaymentDisputedSchema.safeParse({
+        ...validPaymentDisputedEvent,
+        payload: { ...validPaymentDisputedEvent.payload, dispute_id: "" },
       }).success,
     ).toBe(false);
   });

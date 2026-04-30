@@ -15,10 +15,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   deriveActor,
+  deriveDisputeReason,
   deriveGuestId,
   deriveInstrument,
   derivePMSAdapterType,
   deriveProvider,
+  deriveRefundReason,
   deriveSourceChannel,
   formatAnalyticsDate,
 } from "./integrations";
@@ -187,6 +189,55 @@ describe("formatAnalyticsDate", () => {
     expect(formatAnalyticsDate(new Date("2026-01-05T00:00:00Z"))).toBe(
       "2026-01-05",
     );
+  });
+});
+
+describe("deriveRefundReason — Phase 2", () => {
+  const passthrough = [
+    "duplicate",
+    "fraudulent",
+    "requested_by_customer",
+    "expired_uncaptured_charge",
+  ] as const;
+  for (const r of passthrough) {
+    it(`passes through Stripe '${r}'`, () => {
+      expect(deriveRefundReason(r)).toBe(r);
+    });
+  }
+  it("maps null to 'unknown'", () => {
+    expect(deriveRefundReason(null)).toBe("unknown");
+  });
+  it("maps undefined to 'unknown'", () => {
+    expect(deriveRefundReason(undefined)).toBe("unknown");
+  });
+  it("maps unrecognized strings to 'other'", () => {
+    expect(deriveRefundReason("vendor_specific")).toBe("other");
+  });
+});
+
+describe("deriveDisputeReason — Phase 2", () => {
+  const stripeReasons = [
+    "credit_not_processed",
+    "duplicate",
+    "fraudulent",
+    "general",
+    "incorrect_account_details",
+    "insufficient_funds",
+    "product_not_received",
+    "product_unacceptable",
+    "subscription_canceled",
+    "unrecognized",
+  ] as const;
+  for (const r of stripeReasons) {
+    it(`passes through Stripe '${r}'`, () => {
+      expect(deriveDisputeReason(r)).toBe(r);
+    });
+  }
+  it("maps null to 'unknown'", () => {
+    expect(deriveDisputeReason(null)).toBe("unknown");
+  });
+  it("maps unrecognized strings to 'other'", () => {
+    expect(deriveDisputeReason("future_reason")).toBe("other");
   });
 });
 

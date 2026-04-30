@@ -219,6 +219,116 @@ regardless of `orderType` (ACCOMMODATION, PURCHASE, …).
   captured_at         ISO date        Order.paidAt
   ```
 
+### `payment_failed` v0.1.0 — Active
+
+A payment attempt failed. Phase 2 emits only from the Stripe webhook;
+future providers (Swedbankpay, Nets) will emit from their own webhook
+handlers when activated.
+
+- **Trigger:** `handlePaymentIntentFailed` in
+  `app/api/webhooks/stripe/route.ts` (`payment_intent.payment_failed`).
+  Standalone emit — order is not mutated through a tx the analytics
+  emit can attach to.
+- **Idempotency key:** `payment_failed:${paymentIntent.id}:${stripeEventId}`.
+  The PI ID alone is NOT unique per failure occurrence — Stripe can
+  deliver multiple `payment_intent.payment_failed` events for the same
+  PI when it retries. The Stripe `event.id` differs per delivery, so
+  appending it gives "one analytics event per failure occurrence".
+  Phase 5 needs occurrence counts to compute per-customer / per-provider
+  failure rates and time-to-recovery.
+- **Payload (`PaymentFailedPayloadSchema`):**
+
+  ```
+  order_id            string         Order.id (from pi.metadata.orderId)
+  payment_intent_id   string         Stripe PI.id
+  amount              { amount: int, pi.amount + pi.currency
+                        currency }
+  decline_code        string|null    pi.last_payment_error?.decline_code
+  error_code          string|null    pi.last_payment_error?.code
+  error_message       string|null    pi.last_payment_error?.message
+                                     (truncated to 500 chars)
+  attempted_at        ISO date       now() at emit time
+  provider            enum           "stripe" today
+  ```
+
+### `payment_refunded` v0.1.0 — Active
+
+A refund was processed. A single Order can produce multiple
+`payment_refunded` events for partial refunds across separate webhook
+deliveries.
+
+- **Trigger:** `handleChargeRefunded` in
+  `app/api/webhooks/stripe/route.ts` (`charge.refunded`). Standalone
+  emit, fire-and-forget.
+- **Idempotency key:** `payment_refunded:${charge.id}:${stripeEventId}`.
+  Including the Stripe event id makes partial refunds across
+  successive webhook deliveries distinct events.
+- **Payload (`PaymentRefundedPayloadSchema`):**
+
+  ```
+  order_id          string        Order.id (resolved via PI → Order)
+  charge_id         string        Stripe Charge.id
+  refund_amount     { amount: int, charge.amount_refunded (cumulative)
+                      currency }
+  refund_reason     enum          duplicate | fraudulent |
+                                  requested_by_customer |
+                                  expired_uncaptured_charge |
+                                  other | unknown
+                                  (deriveRefundReason)
+  refunded_at       ISO date      now() (Stripe doesn't expose a
+                                  per-refund timestamp on the charge
+                                  object's top-level fields)
+  provider          enum          "stripe"
+  ```
+
+### `payment_disputed` v0.1.0 — Active
+
+A Stripe `charge.dispute.created` webhook fired (chargeback initiated).
+Disputes are operationally expensive: chargebacks include Stripe fees,
+require evidence response, and threaten merchant payment-account
+standing. The analytics event lets Phase 5 compute per-merchant dispute
+rate and per-instrument dispute likelihood.
+
+- **Trigger:** `handleChargeDisputed` in
+  `app/api/webhooks/stripe/route.ts` (NEW handler added in Phase 2
+  Commit B). Standalone emit. The handler also writes an `OrderEvent`
+  of type `ORDER_UPDATED` with `dispute: true` metadata so the
+  operator-facing order timeline reflects the dispute. A dedicated
+  `ORDER_DISPUTED` enum value would require a Prisma migration —
+  tracked as follow-up; the metadata flag is the bridge for now.
+- **Idempotency key:** `payment_disputed:${dispute.id}:${stripeEventId}`.
+  Stripe disputes are unique per chargeback; the event id absorbs
+  hypothetical webhook re-deliveries.
+- **Out of scope until v0.2.0:** dispute lifecycle transitions
+  (`dispute.updated`, `dispute.closed`). v0.1.0 captures only the
+  creation snapshot; dispute_status is the value at creation time.
+- **Payload (`PaymentDisputedPayloadSchema`):**
+
+  ```
+  order_id          string        Order.id (via dispute.payment_intent
+                                  → Order)
+  charge_id         string        Stripe Charge.id (dispute.charge)
+  dispute_id        string        Stripe Dispute.id
+  disputed_amount   { amount: int, dispute.amount + dispute.currency
+                      currency }
+  dispute_reason    enum          credit_not_processed | duplicate |
+                                  fraudulent | general |
+                                  incorrect_account_details |
+                                  insufficient_funds |
+                                  product_not_received |
+                                  product_unacceptable |
+                                  subscription_canceled |
+                                  unrecognized | other | unknown
+                                  (deriveDisputeReason)
+  dispute_status    enum          warning_needs_response |
+                                  warning_under_review |
+                                  warning_closed | needs_response |
+                                  under_review | charge_refunded |
+                                  won | lost | unknown
+  created_at        ISO date      Stripe dispute.created
+  provider          enum          "stripe"
+  ```
+
 ## Why `booking_completed` and `booking_imported` are separate event types
 
 Repeated for emphasis: this is a deliberate design choice, not an
