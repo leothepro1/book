@@ -17,6 +17,7 @@ import {
   deriveActor,
   deriveGuestId,
   deriveInstrument,
+  derivePMSAdapterType,
   deriveProvider,
   deriveSourceChannel,
   formatAnalyticsDate,
@@ -186,5 +187,25 @@ describe("formatAnalyticsDate", () => {
     expect(formatAnalyticsDate(new Date("2026-01-05T00:00:00Z"))).toBe(
       "2026-01-05",
     );
+  });
+});
+
+describe("derivePMSAdapterType — Phase 2", () => {
+  it("maps 'mews' (any case) to 'mews'", () => {
+    expect(derivePMSAdapterType("mews")).toBe("mews");
+    expect(derivePMSAdapterType("Mews")).toBe("mews");
+    expect(derivePMSAdapterType("MEWS")).toBe("mews");
+  });
+  it("maps 'fake' to 'fake'", () => {
+    expect(derivePMSAdapterType("fake")).toBe("fake");
+  });
+  it("maps 'manual' to 'manual'", () => {
+    expect(derivePMSAdapterType("manual")).toBe("manual");
+  });
+  it("maps null / undefined / unknown to 'other'", () => {
+    expect(derivePMSAdapterType(null)).toBe("other");
+    expect(derivePMSAdapterType(undefined)).toBe("other");
+    expect(derivePMSAdapterType("apaleo")).toBe("other");
+    expect(derivePMSAdapterType("")).toBe("other");
   });
 });

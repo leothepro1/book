@@ -53,34 +53,136 @@ and is ready for fulfillment. Direct bookings only.
   pms_reference       string | null   Booking.externalId
   ```
 
-### `booking_imported` v0.x.0 — Planned (Phase 2)
+### `booking_imported` v0.1.0 — Active
 
 A booking that originated AT a PMS (Mews, Apaleo, Opera, …) was
 ingested by Bedfront's reliability engine. **Deliberately a separate
-event type** from `booking_completed`, NOT the same event with a
-different `source_channel` value, because:
+event type** from `booking_completed` because PMS imports have a
+different field profile (no Order, no money, often no
+accommodationId) and different trigger semantics (we consume vs we
+produce).
 
-- PMS-imported bookings have a different field profile. The local
-  `Booking` row from the PMS chokepoint has no linked Order, no
-  guaranteed accommodationId, and no money on the Booking model
-  itself (totalAmount + currency live on Order, which PMS-imports
-  don't have). Forcing both shapes into one schema would either
-  destroy the required-field contract for `booking_completed` or
-  pad PMS-import payloads with placeholder values — both options
-  destroy dimensional clarity at the analytics layer.
+- **Trigger:** `executeUpsertOnce` in
+  `app/_lib/integrations/reliability/ingest.ts` Case 1 INSERT.
+  Transactional emit — the booking row and the outbox row commit
+  together.
+- **Idempotency key:** `booking_imported:${booking.id}`. The PMS
+  chokepoint is exactly-once per `(tenantId, externalId)`; one
+  insert ⇒ one event.
+- **Payload (`BookingImportedPayloadSchema`):**
 
-- Conflating them would also defeat Phase 5 aggregations. Questions
-  like "what's the average revenue per direct booking?" or "how
-  much PMS-side volume are we observing?" need to filter by event
-  type, not by an enum value inside an otherwise-overloaded payload.
+  ```
+  booking_id           string         Booking.id
+  pms_provider         enum           mews | fake | manual | other
+                                      (derivePMSAdapterType)
+  pms_reference        string         Booking.externalId
+  check_in_date        YYYY-MM-DD     Booking.arrival (UTC)
+  check_out_date       YYYY-MM-DD     Booking.departure (UTC)
+  number_of_nights     int positive   derived
+  number_of_guests     int|null       Booking.guestCount (nullable)
+  accommodation_id     string|null    Booking.accommodationId (nullable)
+  guest_email_hash     string         email_<sha256-16hex>(tenantId:email)
+  ```
 
-- The trigger sites are different (operational layer's
-  `ingest.ts` for imports, `processOrderPaidSideEffects` for direct).
-  Two events, two emit sites, two clear contracts.
+### `booking_modified` v0.1.0 — Active
 
-Phase 2 will add the schema and emit site. Until then, PMS-imported
-bookings are visible only in the legacy `public.AnalyticsEvent`
-table (via the legacy emitter, untouched by this work).
+An existing Booking row's content changed (dates, guest count, status
+change that isn't a cancellation). Phase 2 emits only from the PMS
+chokepoint; future direct-booking edit flows will emit from their own
+sites with `source_channel: "direct"`.
+
+- **Trigger:** `executeUpsertOnce` Case 4 UPDATE — fires when the
+  chokepoint detects real content change.
+- **Idempotency key:** `booking_modified:${booking.id}:${providerUpdatedAt.getTime()}`.
+  The PMS version timestamp scopes the key so successive
+  modifications of the same booking are distinct events.
+- **Relationship to other events:** Cancel trumps modify. When a
+  single PMS update both modifies fields AND transitions
+  status → CANCELLED, only `booking_cancelled` is emitted. See
+  `booking_cancelled` for the full discriminator. The discriminator
+  lives inline in `app/_lib/integrations/reliability/ingest.ts` Case 4.
+- **Payload (`BookingModifiedPayloadSchema`):**
+
+  ```
+  booking_id           string         Booking.id (current value)
+  pms_provider         enum           derivePMSAdapterType
+  pms_reference        string|null    Booking.externalId
+  check_in_date        YYYY-MM-DD     Booking.arrival (current)
+  check_out_date       YYYY-MM-DD     Booking.departure (current)
+  number_of_nights     int positive   derived
+  number_of_guests     int|null       Booking.guestCount
+  accommodation_id     string|null    Booking.accommodationId
+  source_channel       enum           "pms_import" today
+  provider_updated_at  ISO date       PMS version timestamp
+  ```
+
+### `booking_cancelled` v0.1.0 — Active
+
+A booking transitioned to status=CANCELLED. Phase 2 emits only from
+the PMS chokepoint; future direct-cancellation flows (admin cancel,
+guest self-cancel) will emit from their own sites.
+
+- **Trigger:** `executeUpsertOnce` Case 4 UPDATE — fires when the
+  update transitions status to CANCELLED AND the previous status was
+  not CANCELLED (no double-emit on re-sync of an already-cancelled
+  booking).
+- **Idempotency key:** `booking_cancelled:${booking.id}:${providerUpdatedAt.getTime()}`.
+  Includes the version timestamp so a cancellation, un-cancellation,
+  and re-cancellation each produce distinct events.
+- **Relationship to other events:** Cancel trumps modify. When a
+  single PMS update both changes fields AND transitions to CANCELLED,
+  only this event is emitted. The cancellation is the more specific
+  signal; pre-cancellation field changes are almost always PMS
+  internal housekeeping (clearing dates, reassigning units, closing
+  balances) that downstream Phase 5 aggregations shouldn't
+  double-count. The discriminator lives inline in
+  `app/_lib/integrations/reliability/ingest.ts` Case 4.
+- **Out of scope until v0.2.0:** `cancellation_reason`. The Booking
+  model has no reason field today; adding one without a product
+  decision on the reason taxonomy would lock in guesses.
+- **Payload (`BookingCancelledPayloadSchema`):**
+
+  ```
+  booking_id           string         Booking.id
+  pms_provider         enum           derivePMSAdapterType
+  pms_reference        string|null    Booking.externalId
+  check_in_date        YYYY-MM-DD     Booking.arrival
+  check_out_date       YYYY-MM-DD     Booking.departure
+  number_of_nights     int positive   derived
+  number_of_guests     int|null       Booking.guestCount
+  accommodation_id     string|null    Booking.accommodationId
+  source_channel       enum           "pms_import" today
+  cancelled_at         ISO date       providerUpdatedAt (PMS-reported)
+  ```
+
+### `booking_no_show` v0.1.0 — Registered, emit deferred to Phase 2.x
+
+A guest failed to arrive on the scheduled check-in date. **Schema is
+registered but no operational emit site exists yet.** The deferral is
+not about implementation cost — it's about the product decision
+behind no-show detection: "When does a booking count as no-show? 24h
+after arrival? 48h?" That window is for Apelviken (and other early
+tenants) to define before we wire detection.
+
+When Apelviken settles the window, Phase 2.x will either flip on
+emit at the existing PMS-reported path
+(`ingest.ts` already maps `IngestStatus="no_show"`) or add a
+detection cron, and the schema is already in place.
+
+- **Listed in `KNOWN_DEFERRED_EVENTS`** in
+  `scripts/verify-phase2.ts` with the explicit reason.
+- **Payload (`BookingNoShowPayloadSchema`, planned):**
+
+  ```
+  booking_id              string         Booking.id
+  pms_provider            enum           derivePMSAdapterType
+  pms_reference           string|null    Booking.externalId
+  expected_check_in_date  YYYY-MM-DD     Booking.arrival
+  accommodation_id        string|null
+  number_of_guests        int|null
+  detection_source        enum           "pms" | "internal"
+  detected_at             ISO date       now() at emit time
+  ```
 
 ### `payment_succeeded` v0.1.0 — Active
 

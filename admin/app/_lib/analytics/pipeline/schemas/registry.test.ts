@@ -8,7 +8,11 @@
 
 import { describe, expect, it } from "vitest";
 
+import { BookingCancelledSchema } from "./booking-cancelled";
 import { BookingCompletedSchema } from "./booking-completed";
+import { BookingImportedSchema } from "./booking-imported";
+import { BookingModifiedSchema } from "./booking-modified";
+import { BookingNoShowSchema } from "./booking-no-show";
 import { PaymentSucceededSchema } from "./payment-succeeded";
 import {
   ANALYTICS_EVENT_REGISTRY,
@@ -68,6 +72,13 @@ describe("ANALYTICS_EVENT_REGISTRY", () => {
 
   it("contains payment_succeeded at v0.1.0", () => {
     expect(ANALYTICS_EVENT_REGISTRY.payment_succeeded["0.1.0"]).toBeDefined();
+  });
+
+  it("contains booking_imported / booking_modified / booking_cancelled / booking_no_show at v0.1.0", () => {
+    expect(ANALYTICS_EVENT_REGISTRY.booking_imported["0.1.0"]).toBeDefined();
+    expect(ANALYTICS_EVENT_REGISTRY.booking_modified["0.1.0"]).toBeDefined();
+    expect(ANALYTICS_EVENT_REGISTRY.booking_cancelled["0.1.0"]).toBeDefined();
+    expect(ANALYTICS_EVENT_REGISTRY.booking_no_show["0.1.0"]).toBeDefined();
   });
 });
 
@@ -197,5 +208,183 @@ describe("PaymentSucceededSchema", () => {
       payload: { ...validPaymentEvent.payload, provider_reference: "" },
     });
     expect(r.success).toBe(false);
+  });
+});
+
+// ── Phase 2 Commit A — booking lifecycle ────────────────────────────────
+
+const validImportedEvent = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "booking_imported",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "system" as const,
+  actor_id: null,
+  payload: {
+    booking_id: "booking_pms_1",
+    pms_provider: "mews" as const,
+    pms_reference: "ext-1",
+    check_in_date: "2026-06-01",
+    check_out_date: "2026-06-04",
+    number_of_nights: 3,
+    number_of_guests: 2,
+    accommodation_id: null,
+    guest_email_hash: "email_a3f7b2c1d4e5f6a7",
+  },
+};
+
+describe("BookingImportedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(BookingImportedSchema.safeParse(validImportedEvent).success).toBe(true);
+  });
+  it("accepts nullable accommodation_id and number_of_guests (PMS imports often missing these)", () => {
+    const r = BookingImportedSchema.safeParse({
+      ...validImportedEvent,
+      payload: {
+        ...validImportedEvent.payload,
+        accommodation_id: null,
+        number_of_guests: null,
+      },
+    });
+    expect(r.success).toBe(true);
+  });
+  it("rejects empty booking_id", () => {
+    expect(
+      BookingImportedSchema.safeParse({
+        ...validImportedEvent,
+        payload: { ...validImportedEvent.payload, booking_id: "" },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects empty pms_reference (PMS imports always have an external id)", () => {
+    expect(
+      BookingImportedSchema.safeParse({
+        ...validImportedEvent,
+        payload: { ...validImportedEvent.payload, pms_reference: "" },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects unknown pms_provider", () => {
+    expect(
+      BookingImportedSchema.safeParse({
+        ...validImportedEvent,
+        payload: { ...validImportedEvent.payload, pms_provider: "newpms" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validModifiedEvent = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "booking_modified",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "system" as const,
+  actor_id: null,
+  payload: {
+    booking_id: "booking_pms_2",
+    pms_provider: "mews" as const,
+    pms_reference: "ext-2",
+    check_in_date: "2026-06-01",
+    check_out_date: "2026-06-04",
+    number_of_nights: 3,
+    number_of_guests: 2,
+    accommodation_id: "acc_1",
+    source_channel: "pms_import" as const,
+    provider_updated_at: new Date(),
+  },
+};
+
+describe("BookingModifiedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(BookingModifiedSchema.safeParse(validModifiedEvent).success).toBe(true);
+  });
+  it("rejects unknown source_channel", () => {
+    expect(
+      BookingModifiedSchema.safeParse({
+        ...validModifiedEvent,
+        payload: { ...validModifiedEvent.payload, source_channel: "made_up" },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects non-ISO check_in_date", () => {
+    expect(
+      BookingModifiedSchema.safeParse({
+        ...validModifiedEvent,
+        payload: { ...validModifiedEvent.payload, check_in_date: "01-06-2026" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validCancelledEvent = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "booking_cancelled",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "system" as const,
+  actor_id: null,
+  payload: {
+    booking_id: "booking_pms_3",
+    pms_provider: "mews" as const,
+    pms_reference: "ext-3",
+    check_in_date: "2026-06-01",
+    check_out_date: "2026-06-04",
+    number_of_nights: 3,
+    number_of_guests: 2,
+    accommodation_id: "acc_1",
+    source_channel: "pms_import" as const,
+    cancelled_at: new Date(),
+  },
+};
+
+describe("BookingCancelledSchema", () => {
+  it("accepts a valid event", () => {
+    expect(BookingCancelledSchema.safeParse(validCancelledEvent).success).toBe(true);
+  });
+  it("rejects missing cancelled_at", () => {
+    expect(
+      BookingCancelledSchema.safeParse({
+        ...validCancelledEvent,
+        payload: { ...validCancelledEvent.payload, cancelled_at: undefined },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validNoShowEvent = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "booking_no_show",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "system" as const,
+  actor_id: null,
+  payload: {
+    booking_id: "booking_pms_4",
+    pms_provider: "mews" as const,
+    pms_reference: "ext-4",
+    expected_check_in_date: "2026-06-01",
+    accommodation_id: "acc_1",
+    number_of_guests: 2,
+    detection_source: "internal" as const,
+    detected_at: new Date(),
+  },
+};
+
+describe("BookingNoShowSchema (registered, emit deferred to Phase 2.x)", () => {
+  it("accepts a valid event", () => {
+    expect(BookingNoShowSchema.safeParse(validNoShowEvent).success).toBe(true);
+  });
+  it("rejects unknown detection_source", () => {
+    expect(
+      BookingNoShowSchema.safeParse({
+        ...validNoShowEvent,
+        payload: { ...validNoShowEvent.payload, detection_source: "made_up" },
+      }).success,
+    ).toBe(false);
   });
 });

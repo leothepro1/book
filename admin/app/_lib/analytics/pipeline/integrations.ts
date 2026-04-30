@@ -32,6 +32,7 @@ export type Actor =
 export type SourceChannel = "direct" | "pms_import" | "third_party_ota" | "unknown";
 export type Provider = "stripe" | "swedbankpay" | "manual" | "other";
 export type Instrument = "card" | "bank_transfer" | "wallet" | "other";
+export type PMSProvider = "mews" | "fake" | "manual" | "other";
 
 // ── Actor ────────────────────────────────────────────────────────────────
 
@@ -192,6 +193,38 @@ export function deriveInstrument(order: Pick<Order, "paymentMethod">): Instrumen
       void _exhaustive;
       return "other";
     }
+  }
+}
+
+// ── PMS Provider ─────────────────────────────────────────────────────────
+
+/**
+ * Derives the PMS provider tag from a Booking's `externalSource` field.
+ *
+ * Bedfront's reliability engine writes the adapter name into
+ * `Booking.externalSource` ("mews", "fake", "manual"). Phase 2 events
+ * carry this as a separate analytics dimension so Phase 5 can slice
+ * import volume / sync error rates / latency by PMS vendor.
+ *
+ * Unknown / missing sources fall to "other" — never throw mid-emit.
+ * "manual" is a real adapter (the no-PMS fallback for tenants without an
+ * integration), distinct from "other" (an adapter we haven't seen yet).
+ *
+ * Used by: booking_imported, booking_modified, booking_cancelled,
+ *          booking_no_show, pms_sync_failed, pms_sync_recovered.
+ */
+export function derivePMSAdapterType(externalSource: string | null | undefined): PMSProvider {
+  if (!externalSource) return "other";
+  const normalized = externalSource.toLowerCase();
+  switch (normalized) {
+    case "mews":
+      return "mews";
+    case "fake":
+      return "fake";
+    case "manual":
+      return "manual";
+    default:
+      return "other";
   }
 }
 

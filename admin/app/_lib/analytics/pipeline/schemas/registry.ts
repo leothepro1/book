@@ -22,12 +22,28 @@
 
 import type { ZodType } from "zod";
 
+import { BookingCancelledSchema } from "./booking-cancelled";
 import { BookingCompletedSchema } from "./booking-completed";
+import { BookingImportedSchema } from "./booking-imported";
+import { BookingModifiedSchema } from "./booking-modified";
+import { BookingNoShowSchema } from "./booking-no-show";
 import { PaymentSucceededSchema } from "./payment-succeeded";
 
 export const ANALYTICS_EVENT_REGISTRY = {
+  booking_cancelled: {
+    "0.1.0": BookingCancelledSchema,
+  },
   booking_completed: {
     "0.1.0": BookingCompletedSchema,
+  },
+  booking_imported: {
+    "0.1.0": BookingImportedSchema,
+  },
+  booking_modified: {
+    "0.1.0": BookingModifiedSchema,
+  },
+  booking_no_show: {
+    "0.1.0": BookingNoShowSchema,
   },
   payment_succeeded: {
     "0.1.0": PaymentSucceededSchema,
