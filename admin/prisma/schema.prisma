@@ -5562,3 +5562,104 @@ model DraftOrderEvent {
 
   @@schema("public")
 }
+
+// ============================================================================
+// ANALYTICS PIPELINE (Phase 0 foundation — `analytics` schema)
+// ============================================================================
+//
+// Greenfield event pipeline running in parallel to the legacy `public.AnalyticsEvent`
+// table. The legacy emitter (app/_lib/analytics/emit.ts) is left untouched. Cutover
+// from legacy to this pipeline happens after Phase 5 — out of scope here.
+//
+// All three models live in the `analytics` Postgres schema (see datasource.schemas).
+// Column names are snake_case in the database (@map) but camelCase on the Prisma
+// client side, matching the rest of the codebase's TS naming convention.
+//
+// DSL escape hatches (handled in raw SQL inside the migration):
+//   - PARTITION BY RANGE on AnalyticsPipelineEvent — Prisma's DSL cannot model
+//     partitioning. The migration rewrites the generated CREATE TABLE.
+//   - Composite PRIMARY KEY (event_id, occurred_at) on AnalyticsPipelineEvent —
+//     Postgres requires the partition key to be part of every UNIQUE constraint,
+//     including the PRIMARY KEY. A single-column PK on event_id is impossible
+//     once the table is partitioned by occurred_at.
+//   - All CHECK constraints (tenant_id non-empty, actor_type enum, actor_type
+//     ↔ actor_id cross-validation, schema_version semver shape, received_at ≥
+//     occurred_at − 60s, failed_count ≥ 0, retention > 0, pipeline_enabled
+//     consistency) — Prisma DSL cannot express CHECK. Defense-in-depth: Zod
+//     enforces upstream; Postgres enforces at the row level.
+//   - Partial unique index on AnalyticsPipelineOutbox(published_at, created_at)
+//     WHERE published_at IS NULL — Prisma DSL cannot express WHERE clauses.
+
+model AnalyticsPipelineEvent {
+  /// ULID — 26-char Crockford Base32. Generation lives at the emitter (Phase 1).
+  eventId       String   @map("event_id")
+  /// Internal Tenant.id (CUID v1). Not a foreign key — analytics schema is
+  /// intentionally decoupled from the public schema for pipeline isolation.
+  tenantId      String   @map("tenant_id")
+  /// Domain event name, e.g. "booking_completed". Lowercase snake_case.
+  eventName     String   @map("event_name")
+  /// Semver "MAJOR.MINOR.PATCH" of the concrete event payload schema.
+  schemaVersion String   @map("schema_version")
+  /// When the event happened in the source domain. UTC. Partition key.
+  occurredAt    DateTime @map("occurred_at")
+  /// When the pipeline ingested the event. UTC. Server-assigned.
+  receivedAt    DateTime @default(now()) @map("received_at")
+  /// Cross-event tracing id. Optional.
+  correlationId String?  @map("correlation_id")
+  /// One of: guest, merchant, system, anonymous. CHECK constraint enforces.
+  actorType     String   @map("actor_type")
+  /// Required when actor_type ∈ {guest, merchant}; NULL when system/anonymous.
+  actorId       String?  @map("actor_id")
+  /// Event-specific payload. Validated against schema_version upstream.
+  payload       Json
+  /// Request context (ip, user_agent, locale, page_url, …). Optional.
+  context       Json?
+
+  /// Composite PK forced by Postgres partitioning — see comment block above.
+  @@id([eventId, occurredAt])
+  @@index([tenantId, occurredAt(sort: Desc)])
+  @@index([tenantId, eventName, occurredAt(sort: Desc)])
+  @@map("event")
+  @@schema("analytics")
+}
+
+model AnalyticsPipelineOutbox {
+  id            String    @id @default(cuid())
+  tenantId      String    @map("tenant_id")
+  /// ULID assigned at write time. Becomes analytics.event.event_id once the
+  /// drainer (Phase 1) publishes successfully.
+  eventId       String    @map("event_id")
+  eventName     String    @map("event_name")
+  schemaVersion String    @map("schema_version")
+  payload       Json
+  actorType     String    @map("actor_type")
+  actorId       String?   @map("actor_id")
+  correlationId String?   @map("correlation_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  /// NULL = pending. Drainer sets this on successful publish.
+  publishedAt   DateTime? @map("published_at")
+  failedCount   Int       @default(0) @map("failed_count")
+  lastError     String?   @map("last_error") @db.Text
+
+  /// Outbox-level idempotency: the same logical event can never sit in the
+  /// queue twice for the same tenant.
+  @@unique([tenantId, eventId])
+  @@map("outbox")
+  @@schema("analytics")
+}
+
+model AnalyticsPipelineTenantConfig {
+  /// Internal Tenant.id (CUID v1). Same convention as AnalyticsPipelineEvent.tenant_id.
+  tenantId          String    @id @map("tenant_id")
+  /// Master switch. False = pipeline is dormant for this tenant; emitters short-circuit.
+  pipelineEnabled   Boolean   @default(false) @map("pipeline_enabled")
+  /// Set when pipeline_enabled flips to true. CHECK constraint enforces consistency.
+  enabledAt         DateTime? @map("enabled_at")
+  /// Days to retain raw events before drop-partition GC (Phase 9). Default 730 (2 years).
+  dataRetentionDays Int       @default(730) @map("data_retention_days")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@map("tenant_config")
+  @@schema("analytics")
+}
