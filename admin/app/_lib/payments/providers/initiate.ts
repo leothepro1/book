@@ -28,9 +28,24 @@ export async function initiateOrderPayment(params: {
   cancelUrl?: string;
   /** Platform fee in basis points — passed to adapter for application_fee_amount */
   platformFeeBps?: number;
+  /**
+   * Stripe-level idempotency key. Forwarded verbatim to the underlying
+   * adapter via `PaymentSessionRequest.idempotencyKey`. Required by Phase E
+   * lazy `DraftCheckoutSession` creation (v1.3 §6.4); D2C callers can omit.
+   */
+  idempotencyKey?: string;
   metadata?: Record<string, string>;
 }): Promise<PaymentSessionInit> {
-  const { order, guest, locale, returnUrl, cancelUrl, platformFeeBps, metadata } = params;
+  const {
+    order,
+    guest,
+    locale,
+    returnUrl,
+    cancelUrl,
+    platformFeeBps,
+    idempotencyKey,
+    metadata,
+  } = params;
 
   // 1. Get the adapter + decrypted credentials for this tenant
   const { adapter, ctx } = await getAdapterAndContextForTenant(order.tenantId);
@@ -47,6 +62,7 @@ export async function initiateOrderPayment(params: {
     returnUrl,
     cancelUrl,
     platformFeeBps,
+    idempotencyKey,
     metadata: {
       orderId: order.id,
       tenantId: order.tenantId,

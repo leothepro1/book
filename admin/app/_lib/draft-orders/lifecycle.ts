@@ -251,40 +251,6 @@ async function loadTenantForInvoice(tenantId: string): Promise<TenantForInvoice>
   return tenant;
 }
 
-/** S7 — tenant must have working Stripe Connect and a portal slug. */
-async function assertTenantStripeReady(tenant: TenantForInvoice): Promise<void> {
-  if (!tenant.stripeAccountId) {
-    throw new ValidationError("Tenant has no Stripe Connect account", {
-      tenantId: tenant.id,
-    });
-  }
-  if (!tenant.stripeOnboardingComplete) {
-    throw new ValidationError("Tenant Stripe onboarding is not complete", {
-      tenantId: tenant.id,
-    });
-  }
-  if (!tenant.portalSlug) {
-    throw new ValidationError(
-      "Tenant has no portalSlug — cannot build invoice URL",
-      { tenantId: tenant.id },
-    );
-  }
-  // Lazy-loaded so services that don't touch Stripe (e.g. sendInvoice
-  // post-Phase C) can be imported in environments without STRIPE_*
-  // env vars (tests). Phase E will be the first caller of this helper
-  // when it pre-checks Stripe before lazy-creating the checkout session.
-  const { verifyChargesEnabled } = await import(
-    "@/app/_lib/stripe/verify-account"
-  );
-  const chargesOk = await verifyChargesEnabled(tenant.stripeAccountId);
-  if (!chargesOk) {
-    throw new ValidationError(
-      "Tenant Stripe account cannot accept charges",
-      { tenantId: tenant.id },
-    );
-  }
-}
-
 function clampShareLinkTtl(ms?: number): number {
   const raw = ms ?? DEFAULT_SHARE_LINK_TTL_MS;
   if (raw < MIN_SHARE_LINK_TTL_MS) return MIN_SHARE_LINK_TTL_MS;

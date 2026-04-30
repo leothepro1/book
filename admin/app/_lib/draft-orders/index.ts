@@ -123,3 +123,7 @@ export type {
   RunUnlinkSideEffectsArgs,
   UnlinkSideEffectsResult,
 } from "./unlink-side-effects";
+
+// ── Phase E — lazy DraftCheckoutSession creation (v1.3 §7.3) ──
+export { createDraftCheckoutSession } from "./checkout-session";
+export type { CreateDraftCheckoutSessionResult } from "./checkout-session";

@@ -41,6 +41,17 @@ export interface PaymentSessionRequest {
   cancelUrl?: string;
   /** Platform application fee in basis points, calculated by caller */
   platformFeeBps?: number;
+  /**
+   * Stripe-level idempotency key. When set, adapters that wrap Stripe
+   * forward this verbatim to the Stripe SDK call (`{ idempotencyKey }`
+   * second-arg). Required for Phase E lazy `DraftCheckoutSession`
+   * creation per `draft-orders-invoice-flow.md` v1.3 §6.4 — without
+   * it, a lost network response on `paymentIntents.create` would
+   * allow a duplicate PI on retry. D2C callers may omit it; the
+   * adapter then relies on its own DB-level dedup (`paymentSession`
+   * upsert keyed by `sessionId`), which is sufficient for that path.
+   */
+  idempotencyKey?: string;
   /** Provider may use for reconciliation */
   metadata: Record<string, string>;
 }
