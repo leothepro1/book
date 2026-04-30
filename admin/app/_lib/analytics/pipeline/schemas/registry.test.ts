@@ -8,6 +8,9 @@
 
 import { describe, expect, it } from "vitest";
 
+import { DiscountCreatedSchema } from "./discount-created";
+import { DiscountExpiredSchema } from "./discount-expired";
+import { DiscountUsedSchema } from "./discount-used";
 import { AccommodationArchivedSchema } from "./accommodation-archived";
 import { AccommodationPriceChangedSchema } from "./accommodation-price-changed";
 import { AccommodationPublishedSchema } from "./accommodation-published";
@@ -796,5 +799,115 @@ describe("AccommodationPriceChangedSchema", () => {
         payload: { ...validAccommodationPriceChanged.payload, change_pct: null },
       }).success,
     ).toBe(true);
+  });
+});
+
+// ── Phase 2 Commit E — discount lifecycle ───────────────────────────────
+
+const validDiscountCreated = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "discount_created",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "merchant" as const,
+  actor_id: "cmerchant1",
+  payload: {
+    discount_id: "cdisc_1",
+    title: "Summer 2026",
+    method: "code" as const,
+    value_type: "percentage" as const,
+    value: 1500,
+    currency: null,
+    starts_at: new Date(),
+    ends_at: null,
+    usage_limit: null,
+    created_at: new Date(),
+    created_by_actor_id: "cmerchant1",
+  },
+};
+
+describe("DiscountCreatedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(DiscountCreatedSchema.safeParse(validDiscountCreated).success).toBe(true);
+  });
+  it("rejects unknown method", () => {
+    expect(
+      DiscountCreatedSchema.safeParse({
+        ...validDiscountCreated,
+        payload: { ...validDiscountCreated.payload, method: "made_up" },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects unknown value_type", () => {
+    expect(
+      DiscountCreatedSchema.safeParse({
+        ...validDiscountCreated,
+        payload: { ...validDiscountCreated.payload, value_type: "made_up" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validDiscountUsed = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "discount_used",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "guest" as const,
+  actor_id: "cguest1",
+  payload: {
+    discount_id: "cdisc_1",
+    discount_code: "SUMMER2026",
+    order_id: "co_1",
+    discount_amount: { amount: 5000, currency: "SEK" },
+    order_total: { amount: 25000, currency: "SEK" },
+    used_at: new Date(),
+  },
+};
+
+describe("DiscountUsedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(DiscountUsedSchema.safeParse(validDiscountUsed).success).toBe(true);
+  });
+  it("accepts null discount_code (AUTOMATIC discount)", () => {
+    expect(
+      DiscountUsedSchema.safeParse({
+        ...validDiscountUsed,
+        payload: { ...validDiscountUsed.payload, discount_code: null },
+      }).success,
+    ).toBe(true);
+  });
+});
+
+const validDiscountExpired = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "discount_expired",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "system" as const,
+  actor_id: null,
+  payload: {
+    discount_id: "cdisc_1",
+    title: "Summer 2026",
+    ends_at: new Date(),
+    expired_at: new Date(),
+    total_uses: 12,
+  },
+};
+
+describe("DiscountExpiredSchema", () => {
+  it("accepts a valid event", () => {
+    expect(DiscountExpiredSchema.safeParse(validDiscountExpired).success).toBe(true);
+  });
+  it("rejects negative total_uses", () => {
+    expect(
+      DiscountExpiredSchema.safeParse({
+        ...validDiscountExpired,
+        payload: { ...validDiscountExpired.payload, total_uses: -1 },
+      }).success,
+    ).toBe(false);
   });
 });

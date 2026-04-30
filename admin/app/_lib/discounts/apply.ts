@@ -368,6 +368,36 @@ export async function commitDiscountApplication(
       },
     },
   });
+
+  // ── 7. Analytics pipeline emit (Phase 2) — discount_used ───
+  // Transactional with the operational discount-usage write. If the
+  // checkout transaction aborts (e.g. payment intent creation fails
+  // downstream), the analytics event never lands.
+  const orderRow = await tx.order.findUniqueOrThrow({
+    where: { id: orderId },
+    select: { totalAmount: true, currency: true },
+  });
+  const { emitAnalyticsEvent } = await import(
+    "@/app/_lib/analytics/pipeline/emitter"
+  );
+  await emitAnalyticsEvent(tx, {
+    tenantId,
+    eventName: "discount_used",
+    schemaVersion: "0.1.0",
+    occurredAt: new Date(),
+    actor: guestAccountId
+      ? { actor_type: "guest", actor_id: guestAccountId }
+      : { actor_type: "anonymous", actor_id: null },
+    payload: {
+      discount_id: discount.id,
+      discount_code: discountCodeValue ? normalizeCode(discountCodeValue) : null,
+      order_id: orderId,
+      discount_amount: { amount: discountAmount, currency: orderRow.currency },
+      order_total: { amount: orderRow.totalAmount, currency: orderRow.currency },
+      used_at: new Date(),
+    },
+    idempotencyKey: `discount_used:${orderId}:${discount.id}`,
+  });
 }
 
 // ── Legacy wrapper ─────────────────────────────────────────────

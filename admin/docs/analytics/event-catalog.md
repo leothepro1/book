@@ -388,6 +388,57 @@ An existing operational resource (Order today, future Booking) had its
   ("order" today, "booking" reserved), `linked_resource_id`,
   `link_method` ("auto_via_email_match" today), `linked_at`.
 
+### `discount_created` v0.1.0 — Active
+
+A merchant created a new Discount row.
+
+- **Trigger:** `POST /api/admin/discounts` admin route, inside the
+  existing `prisma.$transaction`. Transactional emit.
+- **Idempotency key:** `discount_created:${discount.id}`.
+- **Payload:** `discount_id`, `title`, `method` (automatic / code),
+  `value_type` (percentage / fixed_amount), `value` (basis points or
+  minor units), `currency` (nullable — Discount has no explicit
+  currency; fixed_amount discounts are interpreted in tenant primary
+  currency), `starts_at`, `ends_at` (nullable), `usage_limit`
+  (nullable), `created_at`, `created_by_actor_id` (nullable).
+
+### `discount_used` v0.1.0 — Active
+
+A discount was applied to an Order at checkout.
+
+- **Trigger:** `commitDiscountApplication` in
+  `app/_lib/discounts/apply.ts`, transactional with the Order-creation
+  flow.
+- **Idempotency key:** `discount_used:${orderId}:${discountId}`. The
+  unique constraint on `DiscountUsage.orderId` enforces one usage per
+  order at the operational layer.
+- **Payload:** `discount_id`, `discount_code` (nullable — AUTOMATIC
+  discounts have no code), `order_id`, `discount_amount`,
+  `order_total` (post-discount), `used_at`.
+
+### `discount_expired` v0.1.0 — Active
+
+A Discount's `endsAt` passed and the existing
+`sync-discount-statuses` cron transitioned it to EXPIRED. Q5 of the
+Phase 2 plan resolved as **extend the existing cron** rather than
+defer — the cron's expire branch is small (~12 lines), clean, and has
+all the data needed (id, tenantId, title, endsAt, usageCount).
+
+- **Trigger:** `syncDiscountStatuses` in `app/_lib/discounts/status.ts`,
+  inside the existing `toExpire` batch. Standalone emit, fire-and-forget
+  per discount expired in the cron tick.
+- **Idempotency key:** `discount_expired:${discountId}:${endsAt.getTime()}`.
+  endsAt in the key so a discount that's reset and re-expired produces
+  a distinct event.
+- **Payload:** `discount_id`, `title`, `ends_at` (the timestamp that
+  triggered the transition), `expired_at` (cron observation time —
+  approximate, bounded by the cron interval), `total_uses`
+  (`Discount.usageCount` snapshot at expiry).
+- **Latency note:** the cron runs every 15 minutes, so `expired_at` may
+  be up to that delayed from real expiry. Phase 5 should treat
+  `ends_at` as the precise timestamp and `expired_at` as the
+  observation time.
+
 ### `accommodation_published` v0.1.0 — Registered, emit deferred to Phase 4 CDC
 
 An accommodation went live on the guest-facing booking engine

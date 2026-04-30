@@ -25,6 +25,9 @@ import type { ZodType } from "zod";
 import { AccommodationArchivedSchema } from "./accommodation-archived";
 import { AccommodationPriceChangedSchema } from "./accommodation-price-changed";
 import { AccommodationPublishedSchema } from "./accommodation-published";
+import { DiscountCreatedSchema } from "./discount-created";
+import { DiscountExpiredSchema } from "./discount-expired";
+import { DiscountUsedSchema } from "./discount-used";
 import { BookingCancelledSchema } from "./booking-cancelled";
 import { BookingCompletedSchema } from "./booking-completed";
 import { BookingImportedSchema } from "./booking-imported";
@@ -63,6 +66,15 @@ export const ANALYTICS_EVENT_REGISTRY = {
   },
   booking_no_show: {
     "0.1.0": BookingNoShowSchema,
+  },
+  discount_created: {
+    "0.1.0": DiscountCreatedSchema,
+  },
+  discount_expired: {
+    "0.1.0": DiscountExpiredSchema,
+  },
+  discount_used: {
+    "0.1.0": DiscountUsedSchema,
   },
   guest_account_created: {
     "0.1.0": GuestAccountCreatedSchema,
