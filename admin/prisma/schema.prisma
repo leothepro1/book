@@ -5312,6 +5312,8 @@ enum DraftCheckoutSessionStatus {
   EXPIRED
   PAID
   CANCELLED
+
+  @@schema("public")
 }
 
 /// Aggregate root for a staff-authored order draft. Carries buyer context,
@@ -5743,4 +5745,5 @@ model DraftCheckoutSession {
   @@index([stripePaymentIntentId])
   /// for hold-refresh cron (v1.2 §6.5)
   @@index([status, lastHoldRefreshAt])
+  @@schema("public")
 }
