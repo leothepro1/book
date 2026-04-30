@@ -85,6 +85,68 @@ function createClient() {
   return client;
 }
 
-export const prisma = globalForPrisma.prisma ?? createClient();
+const baseClient = globalForPrisma.prisma ?? createClient();
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = baseClient;
+
+// ── Analytics pipeline dev guard ─────────────────────────────
+//
+// The new analytics pipeline (Phase 0+) has three models that must only be
+// accessed through the withTenant() helper in app/_lib/analytics/pipeline/tenant.ts.
+// Direct prisma.analyticsPipelineEvent.* calls would bypass tenant scoping and
+// silently leak data across tenants — exactly the failure mode withTenant
+// exists to prevent.
+//
+// In dev, we wrap the exported `prisma` so direct access throws with a pointer
+// to the helper. In production, this guard is hard-coded inert regardless of
+// the env flag value — the cost of a false positive in prod is too high for a
+// runtime that's already fronted by integration tests and the verify script.
+//
+// withTenant() imports `_unguardedAnalyticsPipelineClient` directly, sidestepping
+// this guard. That is the only intended caller; nothing else should touch it.
+
+const ANALYTICS_PIPELINE_MODELS = [
+  "analyticsPipelineEvent",
+  "analyticsPipelineOutbox",
+  "analyticsPipelineTenantConfig",
+] as const;
+
+function shouldEnableAnalyticsDevGuard(): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+  const flag = process.env.ANALYTICS_PIPELINE_DEV_GUARD;
+  // Default ON in development when the flag is unset.
+  if (flag === undefined) return process.env.NODE_ENV === "development";
+  return flag === "1";
+}
+
+function buildDevGuardedClient(client: PrismaClient) {
+  const guard = {
+    async $allOperations({ model, operation }: { model: string; operation: string }) {
+      throw new Error(
+        `[analytics-pipeline] direct access to prisma.${model}.${operation} is forbidden. ` +
+          `Use withTenant(tenantId, async (db) => db.${model}.${operation}(...)) ` +
+          `from app/_lib/analytics/pipeline/tenant.ts. ` +
+          `To disable this guard locally, set ANALYTICS_PIPELINE_DEV_GUARD=0.`,
+      );
+    },
+  };
+  return client.$extends({
+    query: {
+      analyticsPipelineEvent: guard,
+      analyticsPipelineOutbox: guard,
+      analyticsPipelineTenantConfig: guard,
+    },
+  });
+}
+
+/**
+ * Internal handle for app/_lib/analytics/pipeline/tenant.ts only.
+ *
+ * Bypasses the dev guard above. Do not import this anywhere else — every other
+ * consumer of the pipeline models must go through withTenant().
+ */
+export const _unguardedAnalyticsPipelineClient = baseClient;
+
+export const prisma = shouldEnableAnalyticsDevGuard()
+  ? buildDevGuardedClient(baseClient)
+  : baseClient;
