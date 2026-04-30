@@ -52,6 +52,46 @@ function emitIfNewAccount(account: GuestAccount, source: string): void {
         trigger: "GUEST_CREATED",
       }),
     ).catch((err) => log("error", "guest.automation_enroll.failed", { guestAccountId: account.id, error: String(err) }));
+
+    // New analytics pipeline emit — guest_account_created (Phase 2)
+    Promise.all([
+      import("@/app/_lib/analytics/pipeline/emitter"),
+      import("@/app/_lib/analytics/pipeline/integrations"),
+    ])
+      .then(async ([{ emitAnalyticsEventStandalone }, { deriveGuestId }]) => {
+        const emailHash = deriveGuestId({
+          tenantId: account.tenantId,
+          guestAccountId: null,
+          guestEmail: account.email,
+        });
+        const validatedSource: "checkout" | "order" | "magic_link" | "import" | "other" =
+          source === "checkout" ||
+          source === "order" ||
+          source === "magic_link" ||
+          source === "import"
+            ? source
+            : "other";
+        await emitAnalyticsEventStandalone({
+          tenantId: account.tenantId,
+          eventName: "guest_account_created",
+          schemaVersion: "0.1.0",
+          occurredAt: account.createdAt,
+          actor: { actor_type: "guest", actor_id: account.id },
+          payload: {
+            guest_id: account.id,
+            email_hash: emailHash,
+            source: validatedSource,
+            created_at: account.createdAt,
+          },
+          idempotencyKey: `guest_account_created:${account.id}`,
+        });
+      })
+      .catch((err) =>
+        log("error", "analytics.pipeline.guest_account_created.failed", {
+          guestAccountId: account.id,
+          error: String(err),
+        }),
+      );
   }
 }
 
@@ -209,6 +249,44 @@ export async function upsertGuestAccountFromOrder(
     orderId,
     tenantId,
   });
+
+  // New analytics pipeline emit — guest_account_linked (Phase 2).
+  // The Order's guestAccountId was just populated; analytics interest is
+  // in the link itself (one event per account ↔ order pair).
+  Promise.all([
+    import("@/app/_lib/analytics/pipeline/emitter"),
+    import("@/app/_lib/analytics/pipeline/integrations"),
+  ])
+    .then(async ([{ emitAnalyticsEventStandalone }, { deriveGuestId }]) => {
+      const emailHash = deriveGuestId({
+        tenantId,
+        guestAccountId: null,
+        guestEmail: normalizedEmail,
+      });
+      await emitAnalyticsEventStandalone({
+        tenantId,
+        eventName: "guest_account_linked",
+        schemaVersion: "0.1.0",
+        occurredAt: new Date(),
+        actor: { actor_type: "guest", actor_id: account.id },
+        payload: {
+          guest_id: account.id,
+          email_hash: emailHash,
+          linked_resource_type: "order",
+          linked_resource_id: orderId,
+          link_method: "auto_via_email_match",
+          linked_at: new Date(),
+        },
+        idempotencyKey: `guest_account_linked:${account.id}:${orderId}`,
+      });
+    })
+    .catch((err) =>
+      log("error", "analytics.pipeline.guest_account_linked.failed", {
+        accountId: account.id,
+        orderId,
+        error: String(err),
+      }),
+    );
 
   return account;
 }

@@ -32,6 +32,7 @@ export type Actor =
 export type SourceChannel = "direct" | "pms_import" | "third_party_ota" | "unknown";
 export type Provider = "stripe" | "swedbankpay" | "manual" | "other";
 export type Instrument = "card" | "bank_transfer" | "wallet" | "other";
+export type PMSProvider = "mews" | "fake" | "manual" | "other";
 
 // ── Actor ────────────────────────────────────────────────────────────────
 
@@ -192,6 +193,118 @@ export function deriveInstrument(order: Pick<Order, "paymentMethod">): Instrumen
       void _exhaustive;
       return "other";
     }
+  }
+}
+
+// ── Refund / Dispute reasons ─────────────────────────────────────────────
+
+export type RefundReason =
+  | "duplicate"
+  | "fraudulent"
+  | "requested_by_customer"
+  | "expired_uncaptured_charge"
+  | "other"
+  | "unknown";
+
+/**
+ * Maps Stripe's `Charge.refunds.data[].reason` (or the latest refund's
+ * reason on the Charge object) to the analytics RefundReason enum.
+ *
+ * Stripe currently emits: "duplicate" | "fraudulent" |
+ * "requested_by_customer" | "expired_uncaptured_charge" | null. Anything
+ * unrecognized maps to "other"; null / undefined to "unknown" (defensive).
+ *
+ * Used by: payment_refunded.
+ */
+export function deriveRefundReason(
+  reason: string | null | undefined,
+): RefundReason {
+  if (reason === null || reason === undefined) return "unknown";
+  switch (reason) {
+    case "duplicate":
+    case "fraudulent":
+    case "requested_by_customer":
+    case "expired_uncaptured_charge":
+      return reason;
+    default:
+      return "other";
+  }
+}
+
+export type DisputeReason =
+  | "credit_not_processed"
+  | "duplicate"
+  | "fraudulent"
+  | "general"
+  | "incorrect_account_details"
+  | "insufficient_funds"
+  | "product_not_received"
+  | "product_unacceptable"
+  | "subscription_canceled"
+  | "unrecognized"
+  | "other"
+  | "unknown";
+
+const STRIPE_DISPUTE_REASONS = new Set<DisputeReason>([
+  "credit_not_processed",
+  "duplicate",
+  "fraudulent",
+  "general",
+  "incorrect_account_details",
+  "insufficient_funds",
+  "product_not_received",
+  "product_unacceptable",
+  "subscription_canceled",
+  "unrecognized",
+]);
+
+/**
+ * Maps Stripe's `Dispute.reason` to the analytics DisputeReason enum.
+ *
+ * Stripe's documented reasons are passed through 1:1; future or
+ * undocumented reasons fall to "other". Null / undefined → "unknown".
+ *
+ * Used by: payment_disputed.
+ */
+export function deriveDisputeReason(
+  reason: string | null | undefined,
+): DisputeReason {
+  if (reason === null || reason === undefined) return "unknown";
+  if (STRIPE_DISPUTE_REASONS.has(reason as DisputeReason)) {
+    return reason as DisputeReason;
+  }
+  return "other";
+}
+
+// ── PMS Provider ─────────────────────────────────────────────────────────
+
+/**
+ * Derives the PMS provider tag from a Booking's `externalSource` field.
+ *
+ * Bedfront's reliability engine writes the adapter name into
+ * `Booking.externalSource` ("mews", "fake", "manual"). Phase 2 events
+ * carry this as a separate analytics dimension so Phase 5 can slice
+ * import volume / sync error rates / latency by PMS vendor.
+ *
+ * Unknown / missing sources fall to "other" — never throw mid-emit.
+ * "manual" is a real adapter (the no-PMS fallback for tenants without an
+ * integration), distinct from "other" (an adapter we haven't seen yet).
+ *
+ * Used by: booking_imported, booking_modified, booking_cancelled,
+ *          booking_no_show, pms_sync_failed, pms_sync_recovered.
+ */
+export function derivePMSAdapterType(externalSource: string | null | undefined): PMSProvider {
+  if (!externalSource) return "other";
+  const normalized = externalSource.toLowerCase();
+  switch (normalized) {
+    case "mews":
+      return "mews";
+    case "fake":
+      return "fake";
+    case "manual":
+      return "manual";
+    default:
+      return "other";
   }
 }
 

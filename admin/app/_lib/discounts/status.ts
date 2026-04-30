@@ -59,7 +59,13 @@ export async function syncDiscountStatuses(): Promise<{
         status: "ACTIVE",
         endsAt: { not: null, lte: now },
       },
-      select: { id: true, tenantId: true, title: true },
+      select: {
+        id: true,
+        tenantId: true,
+        title: true,
+        endsAt: true,
+        usageCount: true,
+      },
     });
 
     if (toExpire.length > 0) {
@@ -77,6 +83,40 @@ export async function syncDiscountStatuses(): Promise<{
           metadata: { triggeredBy: "cron", cronJob: "sync-discount-statuses" },
         })),
       });
+
+      // Analytics pipeline emit (Phase 2) — discount_expired.
+      // Per-discount, fire-and-forget. The cron's main DB writes have
+      // already committed; failures here log but never roll back the
+      // status transition. Idempotency key includes endsAt so a
+      // discount that's reset and re-expired produces a distinct event.
+      const { emitAnalyticsEventStandalone } = await import(
+        "@/app/_lib/analytics/pipeline/emitter"
+      );
+      for (const d of toExpire) {
+        try {
+          if (!d.endsAt) continue; // type-narrow — endsAt is non-null per the WHERE
+          await emitAnalyticsEventStandalone({
+            tenantId: d.tenantId,
+            eventName: "discount_expired",
+            schemaVersion: "0.1.0",
+            occurredAt: now,
+            actor: { actor_type: "system", actor_id: null },
+            payload: {
+              discount_id: d.id,
+              title: d.title,
+              ends_at: d.endsAt,
+              expired_at: now,
+              total_uses: d.usageCount,
+            },
+            idempotencyKey: `discount_expired:${d.id}:${d.endsAt.getTime()}`,
+          });
+        } catch (err) {
+          log("error", "analytics.pipeline.discount_expired.failed", {
+            discountId: d.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
     }
 
     // ── Step 3: Log and return ────────────────────────────────

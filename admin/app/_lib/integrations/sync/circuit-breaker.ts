@@ -32,6 +32,8 @@
  */
 
 import { prisma } from "@/app/_lib/db/prisma";
+import { emitAnalyticsEventStandalone } from "@/app/_lib/analytics/pipeline/emitter";
+import { derivePMSAdapterType } from "@/app/_lib/analytics/pipeline/integrations";
 import type { PmsProvider } from "../types";
 import { logSyncEvent } from "./log";
 import { log } from "@/app/_lib/logger";
@@ -92,14 +94,50 @@ export async function recordFailure(
   _provider: PmsProvider,
   errorMessage: string,
 ): Promise<void> {
-  await prisma.tenantIntegration.update({
+  const updated = await prisma.tenantIntegration.update({
     where: { tenantId },
     data: {
       consecutiveFailures: { increment: 1 },
       lastErrorAt: new Date(),
       lastError: errorMessage,
     },
+    select: { consecutiveFailures: true, lastErrorAt: true, provider: true },
   });
+
+  // Analytics pipeline emit (Phase 2) — pms_sync_failed.
+  //
+  // Q6 idempotency contract: the natural key seems to be
+  //     `pms_sync_failed:${tenantId}:${provider}`
+  // but that's NOT unique per failure occurrence — the same provider
+  // can fail repeatedly. Phase 5 needs OCCURRENCE counts (MTBF, error
+  // rate, time-to-recovery), not unique sessions. We append the
+  // updated `consecutive_failures` counter so each increment is a
+  // distinct analytics event:
+  //     `pms_sync_failed:${tenantId}:${provider}:${consecutive_failures}`.
+  // Future readers: do NOT collapse this key to just (tenantId,
+  // provider) — that would dedupe successive failures and destroy the
+  // count-based aggregations.
+  try {
+    await emitAnalyticsEventStandalone({
+      tenantId,
+      eventName: "pms_sync_failed",
+      schemaVersion: "0.1.0",
+      occurredAt: updated.lastErrorAt ?? new Date(),
+      actor: { actor_type: "system", actor_id: null },
+      payload: {
+        pms_provider: derivePMSAdapterType(updated.provider),
+        consecutive_failures: updated.consecutiveFailures,
+        error_message: errorMessage.slice(0, 500),
+        failed_at: updated.lastErrorAt ?? new Date(),
+      },
+      idempotencyKey: `pms_sync_failed:${tenantId}:${updated.provider}:${updated.consecutiveFailures}`,
+    });
+  } catch (err) {
+    log("error", "analytics.pipeline.pms_sync_failed.failed", {
+      tenantId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 /**
@@ -142,6 +180,33 @@ export async function recordSuccess(
       circuitTransition: "closed",
       previousFailures: prev?.consecutiveFailures,
     });
+
+    // Analytics pipeline emit (Phase 2) — pms_sync_recovered.
+    // ONLY on the over-threshold → 0 transition. Every successful
+    // sync would be high-volume noise. Idempotency key includes the
+    // recovery timestamp so successive open→close cycles are distinct
+    // events.
+    try {
+      const recoveredAt = new Date();
+      await emitAnalyticsEventStandalone({
+        tenantId,
+        eventName: "pms_sync_recovered",
+        schemaVersion: "0.1.0",
+        occurredAt: recoveredAt,
+        actor: { actor_type: "system", actor_id: null },
+        payload: {
+          pms_provider: derivePMSAdapterType(provider),
+          previous_failures: prev?.consecutiveFailures ?? FAILURE_THRESHOLD,
+          recovered_at: recoveredAt,
+        },
+        idempotencyKey: `pms_sync_recovered:${tenantId}:${provider}:${recoveredAt.getTime()}`,
+      });
+    } catch (err) {
+      log("error", "analytics.pipeline.pms_sync_recovered.failed", {
+        tenantId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 }
 

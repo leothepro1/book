@@ -22,15 +22,91 @@
 
 import type { ZodType } from "zod";
 
+import { AccommodationArchivedSchema } from "./accommodation-archived";
+import { AccommodationPriceChangedSchema } from "./accommodation-price-changed";
+import { AccommodationPublishedSchema } from "./accommodation-published";
+import { DiscountCreatedSchema } from "./discount-created";
+import { DiscountExpiredSchema } from "./discount-expired";
+import { DiscountUsedSchema } from "./discount-used";
+import { BookingCancelledSchema } from "./booking-cancelled";
 import { BookingCompletedSchema } from "./booking-completed";
+import { BookingImportedSchema } from "./booking-imported";
+import { BookingModifiedSchema } from "./booking-modified";
+import { BookingNoShowSchema } from "./booking-no-show";
+import { GuestAccountCreatedSchema } from "./guest-account-created";
+import { GuestAccountLinkedSchema } from "./guest-account-linked";
+import { GuestAuthenticatedSchema } from "./guest-authenticated";
+import { GuestOtpSentSchema } from "./guest-otp-sent";
+import { PaymentDisputedSchema } from "./payment-disputed";
+import { PaymentFailedSchema } from "./payment-failed";
+import { PaymentRefundedSchema } from "./payment-refunded";
 import { PaymentSucceededSchema } from "./payment-succeeded";
+import { PmsSyncFailedSchema } from "./pms-sync-failed";
+import { PmsSyncRecoveredSchema } from "./pms-sync-recovered";
 
 export const ANALYTICS_EVENT_REGISTRY = {
+  accommodation_archived: {
+    "0.1.0": AccommodationArchivedSchema,
+  },
+  accommodation_price_changed: {
+    "0.1.0": AccommodationPriceChangedSchema,
+  },
+  accommodation_published: {
+    "0.1.0": AccommodationPublishedSchema,
+  },
+  booking_cancelled: {
+    "0.1.0": BookingCancelledSchema,
+  },
   booking_completed: {
     "0.1.0": BookingCompletedSchema,
   },
+  booking_imported: {
+    "0.1.0": BookingImportedSchema,
+  },
+  booking_modified: {
+    "0.1.0": BookingModifiedSchema,
+  },
+  booking_no_show: {
+    "0.1.0": BookingNoShowSchema,
+  },
+  discount_created: {
+    "0.1.0": DiscountCreatedSchema,
+  },
+  discount_expired: {
+    "0.1.0": DiscountExpiredSchema,
+  },
+  discount_used: {
+    "0.1.0": DiscountUsedSchema,
+  },
+  guest_account_created: {
+    "0.1.0": GuestAccountCreatedSchema,
+  },
+  guest_account_linked: {
+    "0.1.0": GuestAccountLinkedSchema,
+  },
+  guest_authenticated: {
+    "0.1.0": GuestAuthenticatedSchema,
+  },
+  guest_otp_sent: {
+    "0.1.0": GuestOtpSentSchema,
+  },
+  payment_disputed: {
+    "0.1.0": PaymentDisputedSchema,
+  },
+  payment_failed: {
+    "0.1.0": PaymentFailedSchema,
+  },
+  payment_refunded: {
+    "0.1.0": PaymentRefundedSchema,
+  },
   payment_succeeded: {
     "0.1.0": PaymentSucceededSchema,
+  },
+  pms_sync_failed: {
+    "0.1.0": PmsSyncFailedSchema,
+  },
+  pms_sync_recovered: {
+    "0.1.0": PmsSyncRecoveredSchema,
   },
 } as const satisfies Record<string, Record<string, ZodType>>;
 

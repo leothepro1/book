@@ -65,7 +65,7 @@ export const PaymentSucceededPayloadSchema = z.object({
   provider: z.enum(["stripe", "swedbankpay", "manual", "other"]),
   payment_instrument: z.enum(["card", "bank_transfer", "wallet", "other"]),
   provider_reference: z.string().min(1),
-  captured_at: z.coerce.date(),
+  captured_at: z.union([z.string(), z.date()]),
 });
 
 export const PaymentSucceededSchema = BaseEventSchema.and(
