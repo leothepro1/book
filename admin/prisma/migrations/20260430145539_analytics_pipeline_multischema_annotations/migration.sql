@@ -1,0 +1,12 @@
+-- Metadata-only migration. No DDL.
+--
+-- Enables Postgres multi-schema support in Prisma's schema.prisma:
+--   datasource db { schemas = ["public", "analytics"] }
+-- and adds @@schema("public") to all 141 existing models and 73 enums so
+-- Prisma can continue to generate the client correctly under multi-schema.
+--
+-- The "analytics" schema itself is created by the next migration
+-- (analytics_pipeline_foundation), which introduces the new analytics
+-- pipeline tables. Splitting these two changes prevents a noisy combined
+-- diff in code review and makes it trivial to bisect a generator/runtime
+-- regression caused by the multi-schema flip.
