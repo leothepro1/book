@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| **Version** | 1.2 (binding) |
+| **Version** | 1.3 (binding) |
 | **Owner** | Leo / Pressify AB |
 | **Status** | **Approved — implementation may proceed** |
 | **Quality bar** | "Would Shopify approve this?" |
@@ -41,6 +41,18 @@ a PR.
 | §8 | Added edge cases 22, 23 (hold-refresh failure, buyer reactivates after long absence) | §11.5 closure |
 | §11 | All four open questions closed: 11.1 audit-and-fix, 11.3 status quo, 11.4 polling 15s, 11.5 24h Shopify model with hold-refresh | Final review |
 | §12 | Go/no-go checklist all items confirmed | Final review |
+
+### Changelog from v1.2 to v1.3
+
+| § | Change | Source |
+| --- | --- | --- |
+| §2.2 + §7.2 | Buyer redirect target changed from `/checkout?session={id}` to `/checkout?draftSession={id}` to avoid collision with the storefront `CheckoutSession`'s `session=` param; route must early-branch on `searchParams.draftSession` before the storefront loader runs | Phase E recon |
+| §3.3 | Clarified that session ownership of `DraftReservation` rows is implicit (no FK), enforced by invariant 18 plus the partial unique active-session index in §3.1 | Phase E recon |
+| §6.4 + §7.3 | Defensive in-pipeline cleanup spelled out per failure step (3, 4, 5) with explicit hold-release and Stripe-cancel compensation; orphan reuse on step-2 P2002 collision uses CAS guard against double-cancel races | Phase E recon |
+| §7.3 step 1 | Snapshot helper corrected from `previewDraftTotals` to `computeDraftTotals(tenantId, draftOrderId, {}, tx)` — `previewDraftTotals` takes a `lines[]` input for the pre-save flow and cannot snapshot an existing `INVOICED` draft by id | Phase E recon |
+| §7.3 step 4 + §13.4 | New helper `verifyEmbeddedModeReady(stripeAccountId)` in `_lib/stripe/verify-account.ts` (capabilities.card_payments active + requirements.disabled_reason null/undefined, 60s cache); composed by `assertTenantStripeReady` after `verifyChargesEnabled` | Phase E recon |
+| §7.3 | `assertTenantStripeReady` relocated to `_lib/stripe/verify-account.ts` and exported; all Stripe-readiness checks colocate, `lifecycle.ts`'s public surface stays minimal | Phase E recon |
+| §7.3 | `createDraftCheckoutSession` returns a discriminated union (`created` / `resumed` / `unit_unavailable` / `stripe_unavailable` / `tenant_not_ready` / `draft_not_payable`); throws reserved for programmer errors so Phase F can render fork pages without parsing exception messages | Phase E recon |
 
 ---
 
@@ -262,9 +274,17 @@ that surface and guarantee drift.
 **Implication.** `/invoice/[token]` is a **router**, not a checkout.
 It resolves the token, decides what state the draft is in (fresh,
 resumable, paid, cancelled, expired), and either redirects to
-`/checkout?session={id}` or renders a small status page (paid →
+`/checkout?draftSession={id}` or renders a small status page (paid →
 receipt, cancelled → "contact hotel," expired → "link no longer
 valid").
+
+`app/(guest)/checkout/page.tsx` must early-branch on
+`searchParams.draftSession` before the existing `session=` storefront
+loader runs. The two params are mutually exclusive: presence of
+`draftSession` routes through the `DraftCheckoutSession` lookup,
+absence falls through to the storefront `CheckoutSession` path. This
+implementation belongs to Phase F; it is documented here so the
+Phase F prompt is bound by the param contract.
 
 ### 2.3 Decision: Hard unlink on draft mutation
 
@@ -417,6 +437,14 @@ transition is already legal. New field for observability:
 holdReleaseReason String?
 // "session_unlinked" | "session_expired" | "draft_cancelled" | "session_completed" | "manual_release"
 ```
+
+**Session ownership of holds is implicit.** There is no FK from
+`DraftReservation` to `DraftCheckoutSession`. The relation is
+enforced by invariant 18 (only `ACTIVE` sessions own `PLACED` holds)
+together with the partial unique active-session index in §3.1, which
+guarantees at most one `ACTIVE` session per draft. The hold-refresh
+cron (§6.5) and the unlink protocol (§6.2) join via `DraftOrder`,
+not via a direct reservation→session link.
 
 ### 3.4 Migration plan (single migration)
 
@@ -749,19 +777,56 @@ window exists where:
 - Crash / network failure / timeout occurs before PI creation
 - Result: orphaned `ACTIVE` session with no PI
 
-Resolution:
-- The lazy-creation pipeline (§7.3) treats steps 3–5 as compensable.
-  If step 3 (hold) or step 4 (PI create) fails, step 5 marks the
-  session `CANCELLED` instead of `ACTIVE`. The next buyer-open creates
-  a fresh session.
-- For genuine crashes between insert and PI create: a 30-second
-  watchdog cron sweeps `ACTIVE` sessions older than 30s with
-  `stripePaymentIntentId IS NULL` and marks them `CANCELLED`. The
-  buyer's next open creates a fresh session.
-- The `stripeIdempotencyKey` (deterministic hash of draftId + version
-  + nonce) ensures that if the PI creation actually succeeded at
-  Stripe but our network response was lost, retry produces the same
-  PI rather than a duplicate.
+**Resolution — explicit per-step compensation.** Each failed step
+compensates in a fresh transaction (the original step's tx, if any,
+has already rolled back) and is best-effort. Cleanup is per-step:
+
+- **Step 3 (hold placement) fails.** Fresh tx marks the session
+  `CANCELLED` via CAS (`updateMany where { id, status: 'ACTIVE' }`).
+  For each entry in `placeHoldsForDraft`'s `placed[]` return, call
+  `adapter.releaseHold(holdExternalId)`. Failures log
+  `draft_invoice.hold_release_failed`; the PMS `ReleasedUtc`
+  auto-release is the safety net. No Stripe action — no PI exists
+  yet.
+- **Step 4 (PI creation at Stripe) fails.** Fresh tx marks the
+  session `CANCELLED` via CAS. Best-effort: release any holds
+  placed in step 3 (same loop as step-3 cleanup). No Stripe action
+  — the PI was never persisted on the session row, and the
+  `stripeIdempotencyKey` ensures a future retry produces the same
+  PI rather than a duplicate. Stripe's 24h auto-cancel on uncaptured
+  PIs is the safety net for the lost-response edge case where the
+  API call partially succeeded.
+- **Step 5 (PI persist to session row) fails.** The PI ID is
+  in-memory from step 4's Stripe response. Fresh tx marks the
+  session `CANCELLED` via CAS. Best-effort: call
+  `stripe.paymentIntents.cancel(piId)` with Connect-account context
+  (failure logs `draft_invoice.pi_cancel_failed`; Stripe's 24h
+  auto-cancel is the safety net). Best-effort: release the holds
+  (same loop as step-3 cleanup).
+
+**Orphan reuse on step-2 P2002 collision.** The race-loser of two
+concurrent inserts queries the existing `ACTIVE` session. Two
+sub-cases:
+
+- Existing session has `stripePaymentIntentId IS NULL` AND
+  `createdAt < now - 30s`: treat as orphan. Mark `CANCELLED` via CAS
+  (`updateMany where { id, status: 'ACTIVE' }`). On `count === 0`, a
+  concurrent writer beat us — re-query and re-decide; do not retry
+  the insert blind. On `count === 1`, retry the insert exactly once.
+- Otherwise (PI exists, OR the session is fresher than 30s): return
+  as `resumed` (PI exists case) or query-and-resume after brief
+  retry (race-loser case per §7.5).
+
+Genuine process crashes between session insert and PI persist are
+still covered by the 30-second watchdog cron, which sweeps `ACTIVE`
+sessions older than 30s with `stripePaymentIntentId IS NULL` and
+marks them `CANCELLED`. The CAS guard on every cancellation prevents
+double-cancel races between in-pipeline cleanup, orphan reuse, and
+the watchdog cron, and follows the established §11.1 version-CAS
+pattern. The `stripeIdempotencyKey` (deterministic hash of draftId +
+version + nonce) ensures that if the PI creation actually succeeded
+at Stripe but our network response was lost, retry produces the same
+PI rather than a duplicate.
 
 This is a Shopify-grade pattern: optimistic creation, compensating
 cancellation, idempotent retry. The race window exists but is bounded,
@@ -871,13 +936,13 @@ sequenceDiagram
       alt hold succeeds
         Route->>Stripe: paymentIntents.create(...) with idempotency key
         Route->>DB: update session with PI ID, client secret
-        Route-->>Buyer: redirect /checkout?session={id}
+        Route-->>Buyer: redirect /checkout?draftSession={id}
       else hold fails
         Route->>DB: update session status=CANCELLED
         Route-->>Buyer: render "unit no longer available" page
       end
     else existing active session
-      Route-->>Buyer: redirect /checkout?session={id}
+      Route-->>Buyer: redirect /checkout?draftSession={id}
     else paid
       Route-->>Buyer: render receipt page
     else cancelled / expired draft
@@ -905,10 +970,16 @@ Given a token, classify:
 
 The five-step pipeline that runs on the `fresh checkout` fork:
 
-1. **Snapshot calculation.** Re-run `previewDraftTotals` against the
+1. **Snapshot calculation.** Run
+   `computeDraftTotals(tenantId, draftOrderId, {}, tx)` against the
    draft's current state. The result is the snapshot the session
    freezes (`frozenSubtotal`, `frozenTaxAmount`, `frozenDiscountAmount`,
-   `frozenTotal`).
+   `frozenTotal`). `previewDraftTotals` is the wrong helper here —
+   it takes a `lines[]` input for the pre-save `/draft-orders/new`
+   flow and cannot snapshot an existing `INVOICED` draft by id.
+   `computeDraftTotals` is tx-aware, status-agnostic since Phase C,
+   and returns `DraftTotals` with bigint money fields suitable for
+   direct persistence.
 
 2. **Session insert.** `INSERT DraftCheckoutSession` with the snapshot,
    `status=ACTIVE`, `draftOrderVersion=draft.version`,
@@ -921,17 +992,71 @@ The five-step pipeline that runs on the `fresh checkout` fork:
    contract). On failure, mark session `CANCELLED` and surface
    "unit no longer available."
 
-4. **PI creation.** Stripe `paymentIntents.create` with Connect-account
-   context, `amount=frozenTotal`, idempotency-key from step 2,
-   metadata containing `draftOrderId` AND `draftCheckoutSessionId`.
+4. **PI creation.** Tenant Stripe-readiness gated by
+   `assertTenantStripeReady`, which composes `verifyChargesEnabled`
+   and `verifyEmbeddedModeReady` (see helpers below). Then Stripe
+   `paymentIntents.create` with Connect-account context,
+   `amount=frozenTotal`, idempotency-key from step 2, metadata
+   containing `draftOrderId` AND `draftCheckoutSessionId`.
 
 5. **Persist PI.** Update session with `stripePaymentIntentId`,
    `stripeClientSecret`. Now the session is fully ready; redirect
    buyer.
 
 If any step 3–5 fails after step 2 succeeded, the session must be
-marked `CANCELLED` and a clean error state shown to the buyer. The
-watchdog cron (§6.4) is the safety net for genuine crashes.
+marked `CANCELLED` via the per-step compensation spelled out in §6.4
+(fresh-tx CAS, best-effort hold-release and Stripe-cancel), and a
+typed failure result is returned to the buyer through the contract
+described below. The watchdog cron (§6.4) is the safety net for
+genuine process crashes between step 2 and step 5.
+
+**Stripe-readiness helpers.** `assertTenantStripeReady` lives in
+`_lib/stripe/verify-account.ts` and is exported from there (Phase E
+relocates it from its previous private home in `lifecycle.ts` so all
+Stripe-readiness checks colocate). It composes:
+
+- `verifyChargesEnabled(stripeAccountId)` — already in place; cached
+  60s.
+- `verifyEmbeddedModeReady(stripeAccountId)` — new helper. Mirrors
+  `verifyChargesEnabled`: queries
+  `stripe.accounts.retrieve(stripeAccountId)`, returns ready iff
+  BOTH `capabilities.card_payments === "active"` AND
+  `requirements.disabled_reason` is null/undefined. 60s in-process
+  cache. The second condition catches the case where the capability
+  is live but the account is administratively frozen (e.g.
+  `requirements.disabled_reason: "rejected.fraud"`) — defense in
+  depth against §13.4. Capability inspection is the Stripe-idiomatic
+  way to detect post-onboarding capability loss.
+
+**Return contract.** `createDraftCheckoutSession` returns a
+discriminated union, not throw-on-failure:
+
+```
+| { kind: "created";            sessionId; clientSecret; redirectUrl }
+| { kind: "resumed";            sessionId; clientSecret; redirectUrl }
+| { kind: "unit_unavailable";   reason }
+| { kind: "stripe_unavailable"; reason }
+| { kind: "tenant_not_ready";   reason }
+| { kind: "draft_not_payable";  reason }
+```
+
+`draft_not_payable` covers all structural non-payability cases:
+wrong status (not `INVOICED`), no line items, zero or negative
+total, invalid or missing currency, missing customer information.
+Exact reason strings are an implementation detail, but every
+Stripe-rejected structural case routes here rather than throwing or
+surfacing as `stripe_unavailable` — "structurally not chargeable"
+is a distinct UX state from "Stripe is having a problem".
+
+Throws are reserved for programmer errors (assertion failures,
+impossible states, schema invariants). The route at `/invoice/[token]`
+(Phase F) switches on `kind` to render the right fork: paying buyers
+hit `created`/`resumed`, structurally-broken drafts hit
+`draft_not_payable`, transient infrastructure issues hit
+`stripe_unavailable` or `unit_unavailable`, and tenants whose Connect
+account is not ready hit `tenant_not_ready`. Phase F needs this
+typed contract to render fork pages without parsing exception
+messages.
 
 ### 7.4 Session lifetime — Shopify model
 
@@ -1237,11 +1362,20 @@ embedded-mode UI rejects it. The PI lingers at Stripe in
 occurs). But it pollutes the Stripe dashboard and represents a
 correctness gap.
 
-**Fix:** Pre-check tenant Stripe account for embedded-mode capability
-in `assertTenantStripeReady`. If unavailable, fail the invoice send
-with a clear error before the PI is created. Under the new
-architecture this check moves to the lazy creation pipeline (§7.3
-step 4).
+**Fix:** New helper `verifyEmbeddedModeReady(stripeAccountId)` in
+`_lib/stripe/verify-account.ts` queries `stripe.accounts.retrieve()`
+and returns ready iff BOTH `capabilities.card_payments === "active"`
+AND `requirements.disabled_reason` is null/undefined (60s cache,
+mirrors `verifyChargesEnabled`). `assertTenantStripeReady` (now
+relocated to the same file and exported) calls both helpers in
+sequence. Under the new architecture this check runs at lazy session
+creation (§7.3 step 4); a tenant whose embedded-mode capability is
+missing or administratively disabled never has a PI created on their
+behalf, and the buyer receives a typed `tenant_not_ready` result
+rather than a half-rendered Elements form. The
+capability-active-but-account-frozen case (e.g.
+`requirements.disabled_reason: "rejected.fraud"`) is closed by the
+second condition.
 
 ---
 
