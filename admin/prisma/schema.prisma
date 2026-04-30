@@ -6,6 +6,7 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+  schemas   = ["public", "analytics"]
 }
 
 // ============================================================================
@@ -17,6 +18,8 @@ enum BookingStatus {
   ACTIVE
   COMPLETED
   CANCELLED
+
+  @@schema("public")
 }
 
 enum OrderStatus {
@@ -26,18 +29,24 @@ enum OrderStatus {
   CANCELLED // cancelled before or after payment
   PARTIALLY_REFUNDED // partial refund issued — can be further refunded
   REFUNDED // full refund issued
+
+  @@schema("public")
 }
 
 /// What type of purchase this order represents.
 enum OrderType {
   ACCOMMODATION // PMS booking (hotel room, cabin, camping)
   PURCHASE // Standard product purchase (shop, gift card, etc.)
+
+  @@schema("public")
 }
 
 enum SubscriptionPlan {
   BASIC
   GROW
   PRO
+
+  @@schema("public")
 }
 
 enum PaymentSessionStatus {
@@ -46,6 +55,8 @@ enum PaymentSessionStatus {
   RESOLVED // payment succeeded
   REJECTED // payment failed
   REFUNDED // full or partial refund completed
+
+  @@schema("public")
 }
 
 /// How payment was collected. One value per provider+mode combination.
@@ -58,6 +69,8 @@ enum PaymentMethod {
   SWEDBANK_PAY // Swedbank Pay (redirect flow)
   NETS // Nets Easy (redirect flow)
   INVOICE // Manual invoice
+
+  @@schema("public")
 }
 
 /// Lifecycle status of a gift card.
@@ -67,6 +80,8 @@ enum GiftCardStatus {
   REDEEMED // fully redeemed (balance = 0)
   EXPIRED // past expiration date (phase 2)
   CANCELLED // revoked by tenant or refund
+
+  @@schema("public")
 }
 
 /// Financial lifecycle — tracks payment state independently of fulfillment.
@@ -78,6 +93,8 @@ enum OrderFinancialStatus {
   PARTIALLY_REFUNDED // partial refund issued
   REFUNDED // full refund issued
   VOIDED // authorization voided or session expired
+
+  @@schema("public")
 }
 
 /// Fulfillment lifecycle — tracks delivery/service state independently of payment.
@@ -89,6 +106,8 @@ enum OrderFulfillmentStatus {
   FULFILLED // fully delivered/completed
   ON_HOLD // paused (investigation, guest request, etc.)
   CANCELLED // fulfillment cancelled
+
+  @@schema("public")
 }
 
 enum OrderEventType {
@@ -135,6 +154,8 @@ enum OrderEventType {
   DISCOUNT_APPLIED
   DISCOUNT_CODE_REDEEMED
   DISCOUNT_REMOVED
+
+  @@schema("public")
 }
 
 // ── Guest Account Enums ─────────────────────────────────────────
@@ -144,6 +165,8 @@ enum GuestAccountState {
   DISABLED // deactivated by staff
   INVITED // invitation sent, not yet accepted
   DECLINED // declined invitation
+
+  @@schema("public")
 }
 
 enum GuestMarketingState {
@@ -152,12 +175,16 @@ enum GuestMarketingState {
   PENDING
   NOT_SUBSCRIBED
   REDACTED // GDPR erasure requested
+
+  @@schema("public")
 }
 
 enum GuestOptInLevel {
   SINGLE_OPT_IN // checked a box
   CONFIRMED_OPT_IN // double opt-in email confirmed
   UNKNOWN
+
+  @@schema("public")
 }
 
 enum GuestEventType {
@@ -179,6 +206,8 @@ enum GuestEventType {
   DATA_DELETION_REQUESTED // TODO: GDPR implementation
   GUEST_JOINED_SEGMENT // "Gäst gick med i segment: [namn]"
   GUEST_LEFT_SEGMENT // "Gäst lämnade segment: [namn]"
+
+  @@schema("public")
 }
 
 // ── Discount Enums ──────────────────────────────────────────────
@@ -186,16 +215,22 @@ enum GuestEventType {
 enum DiscountMethod {
   AUTOMATIC
   CODE
+
+  @@schema("public")
 }
 
 enum DiscountValueType {
   PERCENTAGE // value field stores basis points: 1500 = 15.00%
   FIXED_AMOUNT // value field stores ören: 10000 = 100 SEK
+
+  @@schema("public")
 }
 
 enum DiscountTargetType {
   ORDER // discount applies to order subtotal
   LINE_ITEM // discount applies to specific products
+
+  @@schema("public")
 }
 
 enum DiscountStatus {
@@ -203,6 +238,8 @@ enum DiscountStatus {
   SCHEDULED // startsAt is in the future
   EXPIRED // endsAt has passed
   DISABLED // manually deactivated
+
+  @@schema("public")
 }
 
 enum DiscountConditionType {
@@ -218,6 +255,8 @@ enum DiscountConditionType {
   ONCE_PER_CUSTOMER // no value needed — presence means the rule is active
   SPECIFIC_COLLECTIONS // use DiscountCollection join table
   SPECIFIC_CUSTOMERS // use DiscountCustomer join table
+
+  @@schema("public")
 }
 
 enum DiscountEventType {
@@ -230,6 +269,8 @@ enum DiscountEventType {
   USAGE_RECORDED
   USAGE_VOIDED // discount usage released on order cancel/refund
   NOTE_ADDED // staff comment on a discount
+
+  @@schema("public")
 }
 
 // ── Accommodation Enums ─────────────────────────────────────────
@@ -240,12 +281,16 @@ enum AccommodationType {
   CAMPING
   APARTMENT
   PITCH
+
+  @@schema("public")
 }
 
 enum AccommodationStatus {
   ACTIVE
   INACTIVE
   ARCHIVED
+
+  @@schema("public")
 }
 
 enum AccommodationUnitStatus {
@@ -253,6 +298,8 @@ enum AccommodationUnitStatus {
   MAINTENANCE
   BLOCKED
   RETIRED
+
+  @@schema("public")
 }
 
 enum BedType {
@@ -267,6 +314,8 @@ enum BedType {
   TATAMI
   FOLDABLE
   EXTRA_BED
+
+  @@schema("public")
 }
 
 enum FacilityType {
@@ -365,22 +414,30 @@ enum FacilityType {
   ALARM_CLOCK
   LATE_CHECKOUT
   DEPARTURE_CLEANING
+
+  @@schema("public")
 }
 
 enum FacilitySource {
   PMS
   MANUAL
+
+  @@schema("public")
 }
 
 enum RatePlanCancellationPolicy {
   FLEXIBLE
   MODERATE
   NON_REFUNDABLE
+
+  @@schema("public")
 }
 
 enum RatePlanStatus {
   ACTIVE
   INACTIVE
+
+  @@schema("public")
 }
 
 enum RestrictionType {
@@ -390,6 +447,8 @@ enum RestrictionType {
   CLOSED_TO_DEPARTURE
   NO_CHECK_IN
   NO_CHECK_OUT
+
+  @@schema("public")
 }
 
 // ── B2B ("Företag") Enums ───────────────────────────────────────
@@ -397,17 +456,23 @@ enum RestrictionType {
 enum CompanyStatus {
   ACTIVE
   ARCHIVED
+
+  @@schema("public")
 }
 
 enum TaxSetting {
   COLLECT
   EXEMPT
   COLLECT_UNLESS_EXEMPT
+
+  @@schema("public")
 }
 
 enum CheckoutMode {
   AUTO_SUBMIT
   DRAFT_FOR_REVIEW
+
+  @@schema("public")
 }
 
 
@@ -416,11 +481,15 @@ enum PaymentTermsType {
   DUE_ON_FULFILLMENT
   NET
   FIXED_DATE
+
+  @@schema("public")
 }
 
 enum CatalogStatus {
   ACTIVE
   DRAFT
+
+  @@schema("public")
 }
 
 enum StoreCreditReason {
@@ -429,12 +498,16 @@ enum StoreCreditReason {
   ORDER_PAYMENT
   EXPIRATION
   ADJUSTMENT
+
+  @@schema("public")
 }
 
 enum AccountRequestStatus {
   PENDING
   APPROVED
   REJECTED
+
+  @@schema("public")
 }
 
 /// Idempotency lock for PMS booking creation.
@@ -446,6 +519,8 @@ model PendingBookingLock {
   createdAt DateTime @default(now())
 
   @@index([expiresAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -627,6 +702,8 @@ model Tenant {
 
   @@index([slug])
   @@index([clerkOrgId])
+
+  @@schema("public")
 }
 
 /// Tenant-scoped policy documents (booking terms, house rules, etc.).
@@ -650,6 +727,8 @@ model TenantPolicy {
 
   @@unique([tenantId, policyId])
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 /// Juridisk person / företagsenhet kopplad till en organisation.
@@ -672,6 +751,8 @@ model BusinessEntity {
   updatedAt DateTime @updatedAt
 
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 model Booking {
@@ -812,6 +893,8 @@ model Booking {
   @@index([tenantId, cancelledAt])
   @@index([holdExpiresAt])
   @@index([tenantId, integrityFlag])
+
+  @@schema("public")
 }
 
 model MagicLink {
@@ -826,6 +909,8 @@ model MagicLink {
 
   @@index([token])
   @@index([bookingId])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -867,6 +952,8 @@ model TenantIntegration {
 
   @@index([provider, externalTenantId])
   @@index([reconciliationEnabled, status])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -894,6 +981,8 @@ model SyncJob {
 
   @@index([tenantId, status])
   @@index([scheduledAt, status])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -918,6 +1007,8 @@ model SyncEvent {
 
   @@index([tenantId, createdAt])
   @@index([tenantId, eventType])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -934,6 +1025,8 @@ model RateLimit {
   tokens     Float    @default(200)
   lastRefill DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -956,6 +1049,8 @@ model BookingSyncError {
 
   @@unique([tenantId, externalId])
   @@index([tenantId, resolvedAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1021,6 +1116,8 @@ model PmsWebhookInbox {
   @@index([tenantId, status])
   @@index([status, nextRetryAt])
   @@index([receivedAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1073,6 +1170,8 @@ model PmsIdempotencyKey {
 
   @@index([tenantId, firstSeenAt])
   @@index([status, firstSeenAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1145,6 +1244,8 @@ model PmsOutboundJob {
   @@index([tenantId, status])
   @@index([status, lastAttemptAt])
   @@index([status, compensationLastAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1181,6 +1282,8 @@ model ReconciliationCursor {
   @@unique([tenantId, provider, tier])
   @@index([lastRunAt])
   @@index([tier, lastRunAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1198,6 +1301,8 @@ model WebhookDedup {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1213,6 +1318,8 @@ model WebhookEvent {
   processedAt DateTime @default(now())
 
   @@index([id])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1276,6 +1383,8 @@ model MediaAsset {
   @@index([tenantId, createdAt])
   @@index([tenantId, mimeType])
   @@index([deletedAt]) // For cleanup job: find soft-deleted assets
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1290,6 +1399,8 @@ enum EmailSendStatus {
   COMPLAINED
   FAILED
   PERMANENTLY_FAILED
+
+  @@schema("public")
 }
 
 enum EmailEventType {
@@ -1308,12 +1419,16 @@ enum EmailEventType {
   PRE_ARRIVAL_REMINDER
   POST_STAY_FEEDBACK
   MARKETING_OPT_IN_CONFIRM
+
+  @@schema("public")
 }
 
 enum TranslationNamespace {
   PLATFORM
   TENANT
   LOCKED
+
+  @@schema("public")
 }
 
 model TenantLocale {
@@ -1330,6 +1445,8 @@ model TenantLocale {
 
   @@unique([tenantId, locale])
   @@index([tenantId, published])
+
+  @@schema("public")
 }
 
 model TenantTranslation {
@@ -1351,6 +1468,8 @@ model TenantTranslation {
   @@unique([tenantId, locale, resourceId])
   @@index([tenantId, locale])
   @@index([tenantId, resourceId])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1382,6 +1501,8 @@ model EmailTemplate {
 
   @@unique([tenantId, eventType])
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1417,6 +1538,8 @@ model EmailSendLog {
   @@index([status, nextRetryAt])
   @@index([orderId, eventType])
   @@index([bookingId, eventType])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1440,6 +1563,8 @@ model EmailUnsubscribe {
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([email])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1450,6 +1575,8 @@ enum EmailDomainStatus {
   PENDING // added, DNS not yet configured
   VERIFIED // Resend confirmed DNS records are correct
   FAILED // verification failed
+
+  @@schema("public")
 }
 
 /// Per-tenant sender domain. Once verified, emails are sent from
@@ -1469,6 +1596,8 @@ model EmailDomain {
 
   @@unique([tenantId, domain])
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1493,6 +1622,8 @@ model MagicLinkToken {
   @@index([token])
   @@index([tenantId, email])
   @@index([expiresAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1511,6 +1642,8 @@ model EmailRateLimit {
   sentAt    DateTime       @default(now())
 
   @@index([tenantId, email, eventType, sentAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1582,6 +1715,8 @@ model GuestAccount {
   @@index([tenantId, state])
   @@index([tenantId, emailMarketingState])
   @@index([tenantId, createdAt])
+
+  @@schema("public")
 }
 
 /// OTP codes for guest authentication.
@@ -1599,6 +1734,8 @@ model GuestOtpCode {
   guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
 
   @@index([guestAccountId])
+
+  @@schema("public")
 }
 
 /// Guest tags — tenant-scoped, lowercase, for segmentation and filtering.
@@ -1617,6 +1754,8 @@ model GuestTag {
   @@unique([tenantId, guestAccountId, tag])
   @@index([tenantId, tag])
   @@index([guestAccountId])
+
+  @@schema("public")
 }
 
 /// Internal staff notes on a guest. Never shown to the guest.
@@ -1635,6 +1774,8 @@ model GuestNote {
   guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, guestAccountId])
+
+  @@schema("public")
 }
 
 /// Append-only audit trail for guest account lifecycle events.
@@ -1659,6 +1800,8 @@ model GuestAccountEvent {
   @@index([tenantId, guestAccountId])
   @@index([tenantId, type])
   @@index([guestAccountId, createdAt])
+
+  @@schema("public")
 }
 
 /// Guest addresses — one per entry, one marked as default.
@@ -1686,6 +1829,8 @@ model GuestAddress {
 
   @@index([tenantId, guestAccountId])
   @@index([guestAccountId, isDefault])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1696,11 +1841,15 @@ enum ProductStatus {
   ACTIVE
   DRAFT
   ARCHIVED
+
+  @@schema("public")
 }
 
 enum ProductType {
   STANDARD
   GIFT_CARD
+
+  @@schema("public")
 }
 
 enum InventoryChangeReason {
@@ -1710,6 +1859,8 @@ enum InventoryChangeReason {
   RESERVATION
   RESERVATION_RELEASED
   INITIAL
+
+  @@schema("public")
 }
 
 /// Core product model. Every sellable item — breakfast buffet, bike rental,
@@ -1809,6 +1960,8 @@ model Product {
   @@index([tenantId, productType])
   @@index([tenantId, sortOrder])
   @@index([tenantId, archivedAt])
+
+  @@schema("public")
 }
 
 /// Product media — images and videos attached to a product.
@@ -1840,6 +1993,8 @@ model ProductMedia {
 
   @@index([productId])
   @@index([productId, sortOrder])
+
+  @@schema("public")
 }
 
 /// Product option — a named axis of variation (e.g. "Tid", "Storlek").
@@ -1867,6 +2022,8 @@ model ProductOption {
 
   @@unique([productId, name])
   @@index([productId])
+
+  @@schema("public")
 }
 
 /// Product variant — a specific combination of option values.
@@ -1925,6 +2082,8 @@ model ProductVariant {
   @@index([productId])
   @@index([productId, sortOrder])
   @@index([productId, sku])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -1960,6 +2119,8 @@ model ProductTemplate {
   @@unique([tenantId, suffix])
   @@index([tenantId])
   @@index([tenantId, isDefault])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -2007,6 +2168,8 @@ model ProductCollection {
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, sortOrder])
+
+  @@schema("public")
 }
 
 /// Join table: Product ↔ Collection (many-to-many with sort order).
@@ -2027,6 +2190,8 @@ model ProductCollectionItem {
   @@unique([collectionId, productId])
   @@index([collectionId, sortOrder])
   @@index([productId])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -2126,6 +2291,8 @@ model Accommodation {
   @@index([tenantId, sortOrder])
   @@index([tenantId, archivedAt])
   @@index([tenantId, pmsProvider, externalId])
+
+  @@schema("public")
 }
 
 /// Highlight / selling point on an accommodation.
@@ -2144,6 +2311,8 @@ model AccommodationHighlight {
 
   @@index([accommodationId])
   @@index([accommodationId, sortOrder])
+
+  @@schema("public")
 }
 
 /// Physical room/unit within an accommodation category.
@@ -2172,6 +2341,8 @@ model AccommodationUnit {
   @@index([tenantId])
   @@index([accommodationId])
   @@index([tenantId, status])
+
+  @@schema("public")
 }
 
 /// Normalized facility on an accommodation — enum-based, not JSON.
@@ -2189,6 +2360,8 @@ model AccommodationFacility {
 
   @@unique([accommodationId, facilityType])
   @@index([accommodationId])
+
+  @@schema("public")
 }
 
 /// Bed configuration for an accommodation — normalized, not JSON.
@@ -2203,6 +2376,8 @@ model BedConfiguration {
 
   @@unique([accommodationId, bedType])
   @@index([accommodationId])
+
+  @@schema("public")
 }
 
 /// Rate plan for an accommodation — pricing option (flexible, non-refundable, etc.).
@@ -2237,6 +2412,8 @@ model RatePlan {
   @@index([tenantId])
   @@index([accommodationId])
   @@index([accommodationId, status])
+
+  @@schema("public")
 }
 
 /// Per-date restriction on an accommodation — min stay, CTA/CTD, etc.
@@ -2260,6 +2437,8 @@ model AccommodationRestriction {
   @@index([tenantId])
   @@index([accommodationId])
   @@index([accommodationId, date])
+
+  @@schema("public")
 }
 
 /// Media (images) attached to an accommodation. Ordered by sortOrder.
@@ -2276,6 +2455,8 @@ model AccommodationMedia {
 
   @@index([accommodationId])
   @@index([accommodationId, sortOrder])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -2317,6 +2498,8 @@ model AccommodationCategory {
   @@index([tenantId, status])
   @@index([tenantId, visibleInSearch])
   @@index([tenantId, sortOrder])
+
+  @@schema("public")
 }
 
 /// Join table: Accommodation ↔ AccommodationCategory (many-to-many with sort order).
@@ -2333,6 +2516,8 @@ model AccommodationCategoryItem {
   @@unique([categoryId, accommodationId])
   @@index([categoryId, sortOrder])
   @@index([accommodationId])
+
+  @@schema("public")
 }
 
 /// Links an AccommodationCategory to a ProductCollection whose products
@@ -2350,6 +2535,8 @@ model AccommodationCategoryAddon {
   @@unique([categoryId, collectionId])
   @@index([categoryId, sortOrder])
   @@index([collectionId])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -2366,11 +2553,15 @@ enum CheckoutSessionStatus {
   COMPLETED // Payment successful, order created
   EXPIRED // Timed out (30min TTL)
   ABANDONED // Guest navigated away
+
+  @@schema("public")
 }
 
 enum CheckoutSessionType {
   ACCOMMODATION
   CART
+
+  @@schema("public")
 }
 
 model CheckoutSession {
@@ -2426,6 +2617,8 @@ model CheckoutSession {
 
   @@index([tenantId, status])
   @@index([expiresAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -2448,6 +2641,8 @@ model ProductTag {
 
   @@unique([tenantId, name])
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 /// Join table: Product ↔ Tag (many-to-many).
@@ -2463,6 +2658,8 @@ model ProductTagItem {
   @@unique([productId, tagId])
   @@index([productId])
   @@index([tagId])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -2516,6 +2713,8 @@ model InventoryChange {
   @@index([tenantId, productId])
   @@index([tenantId, createdAt])
   @@index([reason])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -2550,6 +2749,8 @@ model PriceChange {
   @@index([productId])
   @@index([tenantId, productId])
   @@index([tenantId, createdAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -2587,6 +2788,8 @@ model InventoryReservation {
   @@index([tenantId, variantId])
   @@index([expiresAt])
   @@index([sessionId])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -2699,6 +2902,8 @@ model Order {
   @@index([tenantId, fulfillmentStatus])
   @@index([companyLocationId, paymentDueAt])
   @@index([companyId])
+
+  @@schema("public")
 }
 
 /// Tracks which products are published to which sales channels.
@@ -2719,6 +2924,8 @@ model ProductChannelPublication {
   @@unique([tenantId, productId, channelHandle])
   @@index([tenantId, channelHandle])
   @@index([tenantId, productId])
+
+  @@schema("public")
 }
 
 model OrderLineItem {
@@ -2746,6 +2953,8 @@ model OrderLineItem {
 
   @@index([orderId])
   @@index([productId])
+
+  @@schema("public")
 }
 
 model OrderEvent {
@@ -2763,6 +2972,8 @@ model OrderEvent {
 
   @@index([orderId, createdAt])
   @@index([tenantId, orderId])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -2828,6 +3039,8 @@ model Discount {
   @@index([tenantId, status])
   @@index([tenantId, method])
   @@index([tenantId, startsAt, endsAt])
+
+  @@schema("public")
 }
 
 /// Discount codes — one discount can have multiple codes (e.g. "SUMMER2026", "VIP10").
@@ -2850,6 +3063,8 @@ model DiscountCode {
   @@unique([tenantId, code])
   @@index([discountId])
   @@index([tenantId, isActive])
+
+  @@schema("public")
 }
 
 /// Conditions that must ALL be met for the discount to apply.
@@ -2867,6 +3082,8 @@ model DiscountCondition {
 
   @@index([discountId])
   @@index([discountId, type])
+
+  @@schema("public")
 }
 
 /// Normalized product targeting — replaces SPECIFIC_PRODUCTS jsonValue.
@@ -2882,6 +3099,8 @@ model DiscountProduct {
   @@unique([discountId, productId])
   @@index([discountId])
   @@index([tenantId, productId])
+
+  @@schema("public")
 }
 
 /// Normalized collection targeting.
@@ -2897,6 +3116,8 @@ model DiscountCollection {
   @@unique([discountId, collectionId])
   @@index([discountId])
   @@index([tenantId, collectionId])
+
+  @@schema("public")
 }
 
 /// Normalized customer segment targeting.
@@ -2912,6 +3133,8 @@ model DiscountSegment {
   @@unique([discountId, segmentId])
   @@index([discountId])
   @@index([tenantId, segmentId])
+
+  @@schema("public")
 }
 
 /// Normalized specific customer targeting.
@@ -2927,6 +3150,8 @@ model DiscountCustomer {
   @@unique([discountId, guestAccountId])
   @@index([discountId])
   @@index([tenantId, guestAccountId])
+
+  @@schema("public")
 }
 
 /// Records how a discount was distributed across an order.
@@ -2949,6 +3174,8 @@ model DiscountAllocation {
   @@index([orderId])
   @@index([discountId])
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 /// Tracks each time a discount was used on an order.
@@ -2974,6 +3201,8 @@ model DiscountUsage {
   @@index([discountId, createdAt])
   @@index([tenantId, guestEmail])
   @@index([tenantId, discountId])
+
+  @@schema("public")
 }
 
 /// Append-only audit log for discount lifecycle events.
@@ -2993,6 +3222,8 @@ model DiscountEvent {
 
   @@index([discountId, createdAt])
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 /// Stripe webhook event deduplication — prevents double-processing.
@@ -3005,6 +3236,8 @@ model StripeWebhookEvent {
   eventType     String
 
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 /// Atomic counter for sequential order numbers per tenant.
@@ -3013,6 +3246,8 @@ model OrderNumberSequence {
   tenantId   String   @id
   lastNumber Int      @default(1000)
   updatedAt  DateTime @updatedAt
+
+  @@schema("public")
 }
 
 /// Atomic counter for sequential draft-order display numbers per tenant.
@@ -3023,6 +3258,8 @@ model DraftOrderNumberSequence {
   tenantId   String   @id
   lastNumber Int      @default(1000)
   updatedAt  DateTime @updatedAt
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -3049,6 +3286,8 @@ model GiftCardProduct {
 
   @@unique([tenantId, slug])
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 /// Visual design template for gift cards. Tenant picks from these.
@@ -3070,6 +3309,8 @@ model GiftCardDesign {
 
   @@index([tenantId]) // admin list: all designs for a tenant
   @@index([productId]) // product detail: designs for this gift card product
+
+  @@schema("public")
 }
 
 /// The actual gift card. Created when Order transitions PENDING → PAID.
@@ -3102,6 +3343,8 @@ model GiftCard {
   @@index([tenantId]) // admin list: all gift cards for tenant
   @@index([orderId]) // order detail: gift card for this order
   @@index([tenantId, status, scheduledAt]) // cron: unsent cards ready for delivery
+
+  @@schema("public")
 }
 
 /// Append-only ledger of gift card redemptions (phase 2).
@@ -3119,6 +3362,8 @@ model GiftCardRedemption {
 
   @@index([giftCardId]) // gift card detail: all redemptions
   @@index([tenantId]) // admin: all redemptions for tenant
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -3147,6 +3392,8 @@ model PaymentSession {
 
   @@index([providerKey, status])
   @@index([tenantId, status])
+
+  @@schema("public")
 }
 
 /// Which payment provider a tenant uses. One active provider per tenant.
@@ -3163,6 +3410,8 @@ model TenantPaymentConfig {
   credentials String?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -3176,6 +3425,8 @@ enum AppStatus {
   ERROR // configuration error, needs attention
   PAUSED // manually paused by tenant
   UNINSTALLED // soft delete — kept for billing history
+
+  @@schema("public")
 }
 
 /// Lifecycle event types for app audit trail.
@@ -3190,6 +3441,8 @@ enum AppEventType {
   UNINSTALLED
   SETTINGS_UPDATED
   TIER_CHANGED
+
+  @@schema("public")
 }
 
 /// Per-tenant app installation. App definitions live in code (registry.ts),
@@ -3218,6 +3471,8 @@ model TenantApp {
 
   @@unique([tenantId, appId])
   @@index([tenantId, status])
+
+  @@schema("public")
 }
 
 /// Append-only audit trail for app lifecycle events.
@@ -3235,6 +3490,8 @@ model TenantAppEvent {
 
   @@index([tenantId, appId])
   @@index([tenantId, createdAt])
+
+  @@schema("public")
 }
 
 /// Wizard state for app install flow. Tracks progress through
@@ -3258,6 +3515,8 @@ model TenantAppWizard {
 
   @@unique([tenantId, appId])
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -3284,6 +3543,8 @@ model TenantAppHealth {
   @@unique([tenantId, appId])
   @@index([tenantId])
   @@index([nextCheckAt])
+
+  @@schema("public")
 }
 
 /// Append-only health check history. One row per check execution.
@@ -3301,6 +3562,8 @@ model TenantAppHealthHistory {
 
   @@index([tenantId, appId, checkedAt])
   @@index([checkedAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -3320,6 +3583,8 @@ model PlatformEventLog {
 
   @@index([tenantId, emittedAt])
   @@index([tenantId, eventType])
+
+  @@schema("public")
 }
 
 /// Tracks delivery of a platform event to a specific app's handler route.
@@ -3349,6 +3614,8 @@ model AppWebhookDelivery {
   @@index([tenantId, appId, createdAt])
   @@index([status, nextRetryAt])
   @@index([tenantId, appId, status])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -3368,6 +3635,8 @@ model TenantBillingSettings {
   updatedAt        DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@schema("public")
 }
 
 /// Monthly billing period. One per tenant per month.
@@ -3391,6 +3660,8 @@ model TenantBillingPeriod {
   @@unique([tenantId, periodStart])
   @@index([tenantId, status])
   @@index([status, periodEnd])
+
+  @@schema("public")
 }
 
 /// Individual billing line item within a period.
@@ -3415,6 +3686,8 @@ model BillingLineItem {
   @@index([periodId])
   @@index([tenantId, appId])
   @@index([tenantId, createdAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -3426,6 +3699,8 @@ enum EmailSyncStatus {
   PENDING
   FAILED
   UNSUBSCRIBED
+
+  @@schema("public")
 }
 
 /// Tracks sync state per contact per provider app per tenant.
@@ -3445,6 +3720,8 @@ model EmailMarketingSync {
   @@unique([tenantId, appId, email])
   @@index([tenantId, appId])
   @@index([tenantId, status])
+
+  @@schema("public")
 }
 
 /// Revenue attribution from email marketing campaigns.
@@ -3464,6 +3741,8 @@ model EmailAttribution {
   @@index([tenantId, appId])
   @@index([tenantId, attributedAt])
   @@index([orderId])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -3490,6 +3769,8 @@ model GuestSegment {
 
   @@index([tenantId])
   @@index([tenantId, isDefault])
+
+  @@schema("public")
 }
 
 /// Segment membership — tracks which guests belong to which segments.
@@ -3510,6 +3791,8 @@ model GuestSegmentMembership {
   @@index([tenantId, segmentId])
   @@index([tenantId, guestAccountId])
   @@index([segmentId, leftAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -3520,6 +3803,8 @@ enum CheckoutIdempotencyStatus {
   PROCESSING
   COMPLETED
   FAILED
+
+  @@schema("public")
 }
 
 /// Prevents duplicate checkout requests from creating duplicate orders.
@@ -3537,6 +3822,8 @@ model CheckoutIdempotencyKey {
 
   @@unique([tenantId, key, routeType])
   @@index([expiresAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -3564,6 +3851,8 @@ model RumEvent {
   @@index([tenantId, createdAt])
   @@index([tenantId, sessionId])
   @@index([tenantId, deviceType, createdAt])
+
+  @@schema("public")
 }
 
 /// DB-backed rate limiting for beacon endpoint — replaces in-memory Map.
@@ -3576,6 +3865,8 @@ model RumRateLimit {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 /// Daily RUM aggregates — retained 90 days. Used for trend dashboards.
@@ -3616,6 +3907,8 @@ model RumDailyAggregate {
 
   @@unique([tenantId, date])
   @@index([tenantId, date])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -3649,6 +3942,8 @@ enum AnalyticsEventType {
   ORDER_PAID
   ORDER_CANCELLED
   ORDER_REFUNDED
+
+  @@schema("public")
 }
 
 enum AnalyticsMetric {
@@ -3658,6 +3953,8 @@ enum AnalyticsMetric {
   ORDERS
   AVERAGE_ORDER_VALUE
   RETURNING_CUSTOMER_RATE
+
+  @@schema("public")
 }
 
 enum AnalyticsDimension {
@@ -3666,12 +3963,16 @@ enum AnalyticsDimension {
   CITY
   DEVICE
   PRODUCT
+
+  @@schema("public")
 }
 
 enum DeviceType {
   DESKTOP
   MOBILE
   TABLET
+
+  @@schema("public")
 }
 
 /// Normalized geo — one row per unique city.
@@ -3687,6 +3988,8 @@ model AnalyticsLocation {
 
   @@unique([country, city])
   @@index([country])
+
+  @@schema("public")
 }
 
 /// Raw event log — append-only, immutable.
@@ -3724,6 +4027,8 @@ model AnalyticsEvent {
   @@index([tenantId, visitorId])
   @@index([tenantId, occurredAt])
   @@index([tenantId, occurredAt, eventType])
+
+  @@schema("public")
 }
 
 /// Pre-aggregated metrics — written by cron.
@@ -3743,6 +4048,8 @@ model AnalyticsDailyMetric {
   @@index([tenantId, date])
   @@index([tenantId, metric, date])
   @@index([tenantId, dimension, date])
+
+  @@schema("public")
 }
 
 // ── Spot Booking (Platsbokning) ────────────────────────────────
@@ -3772,6 +4079,8 @@ model SpotMap {
   accommodationItems SpotMapAccommodation[]
 
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 /// Join table: which accommodations belong to a SpotMap.
@@ -3788,6 +4097,8 @@ model SpotMapAccommodation {
 
   @@unique([accommodationId])
   @@index([spotMapId])
+
+  @@schema("public")
 }
 
 /// A bookable spot on a SpotMap — pinned to an Accommodation unit.
@@ -3815,6 +4126,8 @@ model SpotMarker {
   @@index([tenantId])
   @@index([spotMapId])
   @@index([accommodationUnitId])
+
+  @@schema("public")
 }
 
 // ── Pending Spot Reservation (soft lock during checkout) ────────────────────
@@ -3835,6 +4148,8 @@ model PendingSpotReservation {
 
   @@index([tenantId, accommodationUnitId, checkIn, checkOut])
   @@index([expiresAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -3845,12 +4160,16 @@ enum EmailAppStatus {
   ACTIVE
   PAUSED
   UNINSTALLED
+
+  @@schema("public")
 }
 
 enum EmailTemplateType {
   CAMPAIGN
   AUTOMATION
   SYSTEM
+
+  @@schema("public")
 }
 
 enum CampaignStatus {
@@ -3859,6 +4178,8 @@ enum CampaignStatus {
   SENDING
   SENT
   CANCELLED
+
+  @@schema("public")
 }
 
 enum RecipientStatus {
@@ -3866,18 +4187,24 @@ enum RecipientStatus {
   SENT
   FAILED
   SUPPRESSED
+
+  @@schema("public")
 }
 
 enum AutomationTrigger {
   GUEST_CREATED
   ORDER_COMPLETED
   GUEST_INACTIVE
+
+  @@schema("public")
 }
 
 enum AutomationStatus {
   DRAFT
   ACTIVE
   PAUSED
+
+  @@schema("public")
 }
 
 enum EnrollmentStatus {
@@ -3886,6 +4213,8 @@ enum EnrollmentStatus {
   COMPLETED
   CANCELLED
   FAILED
+
+  @@schema("public")
 }
 
 enum SuppressionReason {
@@ -3893,6 +4222,8 @@ enum SuppressionReason {
   BOUNCE
   COMPLAINT
   MANUAL
+
+  @@schema("public")
 }
 
 model EmailAppInstallation {
@@ -3904,6 +4235,8 @@ model EmailAppInstallation {
   uninstalledAt DateTime?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
+  @@schema("public")
 }
 
 model EmailAppTemplate {
@@ -3923,6 +4256,8 @@ model EmailAppTemplate {
   steps     EmailAutomationStep[]
 
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 model EmailCampaign {
@@ -3944,6 +4279,8 @@ model EmailCampaign {
   analytics  EmailCampaignAnalytics?
 
   @@index([tenantId, status])
+
+  @@schema("public")
 }
 
 model CampaignRecipient {
@@ -3965,6 +4302,8 @@ model CampaignRecipient {
   @@unique([campaignId, guestId])
   @@index([resendMessageId])
   @@index([campaignId, status])
+
+  @@schema("public")
 }
 
 model EmailAutomation {
@@ -3983,6 +4322,8 @@ model EmailAutomation {
   analytics EmailAutomationAnalytics?
 
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 model EmailAutomationStep {
@@ -3998,6 +4339,8 @@ model EmailAutomationStep {
   enrollments AutomationEnrollment[]
 
   @@unique([automationId, order])
+
+  @@schema("public")
 }
 
 model AutomationEnrollment {
@@ -4017,6 +4360,8 @@ model AutomationEnrollment {
 
   @@index([scheduledAt, status])
   @@index([tenantId, automationId])
+
+  @@schema("public")
 }
 
 model EmailSuppression {
@@ -4030,11 +4375,15 @@ model EmailSuppression {
 
   @@unique([tenantId, email])
   @@index([tenantId, email])
+
+  @@schema("public")
 }
 
 enum BounceType {
   HARD
   SOFT
+
+  @@schema("public")
 }
 
 model EmailBounceEvent {
@@ -4048,6 +4397,8 @@ model EmailBounceEvent {
 
   @@index([tenantId, email])
   @@index([createdAt])
+
+  @@schema("public")
 }
 
 model EmailCampaignAnalytics {
@@ -4061,6 +4412,8 @@ model EmailCampaignAnalytics {
   complained   Int           @default(0)
   unsubscribed Int           @default(0)
   updatedAt    DateTime      @updatedAt
+
+  @@schema("public")
 }
 
 model EmailAutomationAnalytics {
@@ -4074,6 +4427,8 @@ model EmailAutomationAnalytics {
   complained   Int             @default(0)
   unsubscribed Int             @default(0)
   updatedAt    DateTime        @updatedAt
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -4113,6 +4468,8 @@ model Company {
   @@unique([tenantId, externalId])
   @@index([tenantId, status])
   @@index([tenantId, orderingApproved])
+
+  @@schema("public")
 }
 
 /// A location owned by a Company. Carries billing, tax, credit, and payment-terms context.
@@ -4153,6 +4510,8 @@ model CompanyLocation {
 
   @@unique([tenantId, companyId, externalId])
   @@index([tenantId, companyId])
+
+  @@schema("public")
 }
 
 /// Three-layer B2B membership model — mirrors Shopify:
@@ -4203,6 +4562,8 @@ model CompanyContact {
   @@unique([companyId, guestAccountId], name: "one_membership_per_guest_per_company")
   @@index([tenantId, companyId])
   @@index([guestAccountId])
+
+  @@schema("public")
 }
 
 /// Explicit location-level access grants for a CompanyContact.
@@ -4224,6 +4585,8 @@ model CompanyLocationAccess {
   @@unique([companyContactId, companyLocationId], name: "one_access_per_contact_per_location")
   @@index([companyLocationId])
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 // ── Payment Terms ───────────────────────────────────────────────
@@ -4250,6 +4613,8 @@ model PaymentTerms {
   companyLocations CompanyLocation[]
 
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 // ── Catalogs ────────────────────────────────────────────────────
@@ -4275,6 +4640,8 @@ model Catalog {
   assignments   CompanyLocationCatalog[]
 
   @@index([tenantId, status])
+
+  @@schema("public")
 }
 
 /// Fixed price override for a single ProductVariant within a Catalog.
@@ -4298,6 +4665,8 @@ model CatalogFixedPrice {
   productVariantId String?
 
   fixedPriceCents BigInt
+
+  @@schema("public")
 }
 
 /// Scopes a Catalog to a subset of inventory when includeAllProducts = false.
@@ -4319,6 +4688,8 @@ model CatalogInclusion {
 
   productVariantId String?
   collectionId     String?
+
+  @@schema("public")
 }
 
 /// Per-variant quantity constraints and volume pricing inside a Catalog.
@@ -4344,6 +4715,8 @@ model CatalogQuantityRule {
 
   /// Optional volume-price ladder: [{ minQty, priceCents }]
   volumePricing Json?
+
+  @@schema("public")
 }
 
 /// Assigns a Catalog to a CompanyLocation. A location may have multiple assigned catalogs;
@@ -4357,6 +4730,8 @@ model CompanyLocationCatalog {
   createdAt DateTime @default(now())
 
   @@unique([companyLocationId, catalogId])
+
+  @@schema("public")
 }
 
 // ── Support entities ────────────────────────────────────────────
@@ -4382,6 +4757,8 @@ model VaultedCard {
 
   @@index([companyLocationId])
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 /// Append-only ledger of store-credit movement per CompanyLocation.
@@ -4403,6 +4780,8 @@ model StoreCreditTransaction {
 
   @@index([companyLocationId, createdAt])
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 /// Self-service B2B account application submitted through the storefront.
@@ -4424,6 +4803,8 @@ model CompanyAccountRequest {
   createdAt DateTime @default(now())
 
   @@index([tenantId, status])
+
+  @@schema("public")
 }
 
 /// Per-tenant, per-page-type SEO defaults (Shopify "Theme SEO settings").
@@ -4441,6 +4822,8 @@ model PageTypeSeoDefault {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, pageType])
+
+  @@schema("public")
 }
 
 enum SeoPageType {
@@ -4456,6 +4839,8 @@ enum SeoPageType {
   BLOG
   SEARCH
   NOT_FOUND
+
+  @@schema("public")
 }
 
 /// 301/302 redirect table for handle changes and merchant-authored
@@ -4524,6 +4909,8 @@ model SeoRedirect {
 
   /// Tenant-scoped scan for admin list view (sort by recency).
   @@index([tenantId, createdAt])
+
+  @@schema("public")
 }
 
 /// Append-only per-redirect hit log. Written by middleware via a
@@ -4549,6 +4936,8 @@ model SeoRedirectHit {
 
   /// redirectId scan for the roll-up group-by.
   @@index([redirectId])
+
+  @@schema("public")
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -4566,6 +4955,8 @@ enum CancellationStatus {
   CANCELED
   CLOSED
   EXPIRED
+
+  @@schema("public")
 }
 
 /// Who triggered the cancellation. GUEST = portal self-service.
@@ -4576,6 +4967,8 @@ enum CancellationInitiator {
   STAFF
   PMS
   SYSTEM
+
+  @@schema("public")
 }
 
 /// Reasons a staff member may cite when declining a REQUESTED cancellation.
@@ -4586,6 +4979,8 @@ enum CancellationDeclineReason {
   NO_SHOW
   FORCE_MAJEURE_DECLINED
   OTHER
+
+  @@schema("public")
 }
 
 /// Refund side of the saga. NOT_APPLICABLE = zero-refund (100% fee or
@@ -4597,6 +4992,8 @@ enum CancellationRefundStatus {
   PROCESSING
   SUCCEEDED
   FAILED
+
+  @@schema("public")
 }
 
 /// Append-only event stream — one row per lifecycle event.
@@ -4618,6 +5015,8 @@ enum CancellationEventType {
   EMAIL_FAILED
   CLOSED
   NOTE_ADDED
+
+  @@schema("public")
 }
 
 /// One cancellation lifecycle. Shopify-parity with Return entity.
@@ -4700,6 +5099,8 @@ model CancellationRequest {
   @@index([status, expiresAt]) // auto-expire cron
   @@index([status, nextAttemptAt]) // saga-retry cron
   @@index([tenantId, requestedAt]) // admin queue sort
+
+  @@schema("public")
 }
 
 /// Append-only audit log. Rows are never UPDATEd — new state = new row.
@@ -4718,6 +5119,8 @@ model CancellationEvent {
 
   @@index([cancellationRequestId, createdAt])
   @@index([tenantId, type, createdAt])
+
+  @@schema("public")
 }
 
 /// Merchant-configured policy attached to accommodations or rate plans.
@@ -4753,6 +5156,8 @@ model CancellationPolicy {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, active])
+
+  @@schema("public")
 }
 
 /// Merchant-defined cancellation reason taxonomy. Matches Shopify's
@@ -4772,6 +5177,8 @@ model CancellationReasonDefinition {
 
   @@unique([tenantId, handle])
   @@index([tenantId, deleted, sortOrder])
+
+  @@schema("public")
 }
 
 // ── Company Events (B2B tidslinje, speglar GuestAccountEvent) ──
@@ -4792,6 +5199,8 @@ enum CompanyEventType {
   CATALOG_ASSIGNED
   CATALOG_UNASSIGNED
   STORE_CREDIT_ISSUED
+
+  @@schema("public")
 }
 
 /// Append-only audit trail för företagets livscykel. Matchar
@@ -4813,6 +5222,8 @@ model CompanyEvent {
   @@index([tenantId, companyId])
   @@index([tenantId, type])
   @@index([companyId, createdAt])
+
+  @@schema("public")
 }
 
 /// Idempotency lock for cancellation sagas. Prevents concurrent saga runs
@@ -4829,6 +5240,8 @@ model PendingCancellationLock {
 
   @@unique([tenantId, dedupKey])
   @@index([expiresAt])
+
+  @@schema("public")
 }
 
 // ============================================================================
@@ -4862,18 +5275,24 @@ enum DraftOrderStatus {
   COMPLETING
   COMPLETED
   CANCELLED
+
+  @@schema("public")
 }
 
 enum DraftBuyerKind {
   GUEST
   COMPANY
   WALK_IN
+
+  @@schema("public")
 }
 
 enum DraftLineItemType {
   ACCOMMODATION
   PRODUCT
   CUSTOM
+
+  @@schema("public")
 }
 
 enum DraftHoldState {
@@ -4883,6 +5302,8 @@ enum DraftHoldState {
   RELEASED
   FAILED
   CONFIRMED
+
+  @@schema("public")
 }
 
 /// Aggregate root for a staff-authored order draft. Carries buyer context,
@@ -4995,6 +5416,8 @@ model DraftOrder {
   @@index([tenantId, expiresAt])
   @@index([tenantId, companyLocationId])
   @@index([tenantId, guestAccountId])
+
+  @@schema("public")
 }
 
 /// Polymorphic line item (ACCOMMODATION | PRODUCT | CUSTOM) with a flat
@@ -5065,6 +5488,8 @@ model DraftLineItem {
 
   @@index([draftOrderId, position])
   @@index([tenantId])
+
+  @@schema("public")
 }
 
 /// Soft hold against the PMS for an accommodation line. 1:1 with a
@@ -5108,6 +5533,8 @@ model DraftReservation {
   /// Supports sweep A (expired PLACED) and sweep B (stuck PLACING) in
   /// the release-expired-draft-holds cron (FAS 6.5C).
   @@index([holdState, holdLastAttemptAt])
+
+  @@schema("public")
 }
 
 /// Append-only audit log for a draft. Mirrors OrderEvent / CompanyEvent
@@ -5132,4 +5559,107 @@ model DraftOrderEvent {
 
   @@index([draftOrderId, createdAt])
   @@index([tenantId, type])
+
+  @@schema("public")
+}
+
+// ============================================================================
+// ANALYTICS PIPELINE (Phase 0 foundation — `analytics` schema)
+// ============================================================================
+//
+// Greenfield event pipeline running in parallel to the legacy `public.AnalyticsEvent`
+// table. The legacy emitter (app/_lib/analytics/emit.ts) is left untouched. Cutover
+// from legacy to this pipeline happens after Phase 5 — out of scope here.
+//
+// All three models live in the `analytics` Postgres schema (see datasource.schemas).
+// Column names are snake_case in the database (@map) but camelCase on the Prisma
+// client side, matching the rest of the codebase's TS naming convention.
+//
+// DSL escape hatches (handled in raw SQL inside the migration):
+//   - PARTITION BY RANGE on AnalyticsPipelineEvent — Prisma's DSL cannot model
+//     partitioning. The migration rewrites the generated CREATE TABLE.
+//   - Composite PRIMARY KEY (event_id, occurred_at) on AnalyticsPipelineEvent —
+//     Postgres requires the partition key to be part of every UNIQUE constraint,
+//     including the PRIMARY KEY. A single-column PK on event_id is impossible
+//     once the table is partitioned by occurred_at.
+//   - All CHECK constraints (tenant_id non-empty, actor_type enum, actor_type
+//     ↔ actor_id cross-validation, schema_version semver shape, received_at ≥
+//     occurred_at − 60s, failed_count ≥ 0, retention > 0, pipeline_enabled
+//     consistency) — Prisma DSL cannot express CHECK. Defense-in-depth: Zod
+//     enforces upstream; Postgres enforces at the row level.
+//   - Partial unique index on AnalyticsPipelineOutbox(published_at, created_at)
+//     WHERE published_at IS NULL — Prisma DSL cannot express WHERE clauses.
+
+model AnalyticsPipelineEvent {
+  /// ULID — 26-char Crockford Base32. Generation lives at the emitter (Phase 1).
+  eventId       String   @map("event_id")
+  /// Internal Tenant.id (CUID v1). Not a foreign key — analytics schema is
+  /// intentionally decoupled from the public schema for pipeline isolation.
+  tenantId      String   @map("tenant_id")
+  /// Domain event name, e.g. "booking_completed". Lowercase snake_case.
+  eventName     String   @map("event_name")
+  /// Semver "MAJOR.MINOR.PATCH" of the concrete event payload schema.
+  schemaVersion String   @map("schema_version")
+  /// When the event happened in the source domain. UTC. Partition key.
+  occurredAt    DateTime @map("occurred_at")
+  /// When the pipeline ingested the event. UTC. Server-assigned.
+  receivedAt    DateTime @default(now()) @map("received_at")
+  /// Cross-event tracing id. Optional.
+  correlationId String?  @map("correlation_id")
+  /// One of: guest, merchant, system, anonymous. CHECK constraint enforces.
+  actorType     String   @map("actor_type")
+  /// Required when actor_type ∈ {guest, merchant}; NULL when system/anonymous.
+  actorId       String?  @map("actor_id")
+  /// Event-specific payload. Validated against schema_version upstream.
+  payload       Json
+  /// Request context (ip, user_agent, locale, page_url, …). Optional.
+  context       Json?
+
+  /// Composite PK forced by Postgres partitioning — see comment block above.
+  @@id([eventId, occurredAt])
+  @@index([tenantId, occurredAt(sort: Desc)])
+  @@index([tenantId, eventName, occurredAt(sort: Desc)])
+  @@map("event")
+  @@schema("analytics")
+}
+
+model AnalyticsPipelineOutbox {
+  id            String    @id @default(cuid())
+  tenantId      String    @map("tenant_id")
+  /// ULID assigned at write time. Becomes analytics.event.event_id once the
+  /// drainer (Phase 1) publishes successfully.
+  eventId       String    @map("event_id")
+  eventName     String    @map("event_name")
+  schemaVersion String    @map("schema_version")
+  payload       Json
+  actorType     String    @map("actor_type")
+  actorId       String?   @map("actor_id")
+  correlationId String?   @map("correlation_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  /// NULL = pending. Drainer sets this on successful publish.
+  publishedAt   DateTime? @map("published_at")
+  failedCount   Int       @default(0) @map("failed_count")
+  lastError     String?   @map("last_error") @db.Text
+
+  /// Outbox-level idempotency: the same logical event can never sit in the
+  /// queue twice for the same tenant.
+  @@unique([tenantId, eventId])
+  @@map("outbox")
+  @@schema("analytics")
+}
+
+model AnalyticsPipelineTenantConfig {
+  /// Internal Tenant.id (CUID v1). Same convention as AnalyticsPipelineEvent.tenant_id.
+  tenantId          String    @id @map("tenant_id")
+  /// Master switch. False = pipeline is dormant for this tenant; emitters short-circuit.
+  pipelineEnabled   Boolean   @default(false) @map("pipeline_enabled")
+  /// Set when pipeline_enabled flips to true. CHECK constraint enforces consistency.
+  enabledAt         DateTime? @map("enabled_at")
+  /// Days to retain raw events before drop-partition GC (Phase 9). Default 730 (2 years).
+  dataRetentionDays Int       @default(730) @map("data_retention_days")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@map("tenant_config")
+  @@schema("analytics")
 }
