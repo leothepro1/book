@@ -21,6 +21,7 @@ const nextConfig: NextConfig = {
         "localhost:3005",
         "localhost:3007",
         "localhost:3009",
+        "localhost:3030",
         "localhost:3333",
         "localhost:3334",
         "localhost:3335",
