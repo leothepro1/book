@@ -142,7 +142,7 @@ describe("updateAccommodation — SEO merge semantics", () => {
 
     expect(result).toEqual({ ok: true, data: { id: "acc_1" } });
     expect(capturedData).not.toBeNull();
-    const merged = (capturedData as { seo?: Record<string, unknown> })?.seo;
+    const merged = (capturedData as unknown as { seo?: Record<string, unknown> })?.seo;
     // Incoming override wins.
     expect(merged).toMatchObject({ title: "Ny titel" });
     // Untouched stored fields survive.
@@ -310,7 +310,7 @@ describe("updateAccommodation — SEO merge semantics", () => {
     });
 
     expect(capturedData).not.toBeNull();
-    const seoValue = (capturedData as { seo?: unknown }).seo;
+    const seoValue = (capturedData as unknown as { seo?: unknown }).seo;
     // Prisma's InputJsonValue doesn't allow `undefined` fields —
     // the serialized value must round-trip cleanly.
     const stringified = JSON.stringify(seoValue);
@@ -361,7 +361,7 @@ describe("updateAccommodation — SEO merge semantics", () => {
     });
 
     expect(capturedData).not.toBeNull();
-    const merged = (capturedData as { seo?: Record<string, unknown> })?.seo;
+    const merged = (capturedData as unknown as { seo?: Record<string, unknown> })?.seo;
     // "" is stripped; stored title ("Previous title") survives;
     // the non-empty description override wins.
     expect(merged).toMatchObject({
