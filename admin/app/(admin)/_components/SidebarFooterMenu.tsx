@@ -1,10 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useUser, useClerk } from '@clerk/nextjs';
-import { useDevClerkUser } from './DevClerkContext';
-
-const IS_DEV = process.env.NODE_ENV === 'development';
+import { useClerkUser } from './useClerkUser';
 
 /**
  * Footer "more" menu — popup anchored above the more_horiz button in the
@@ -17,49 +14,6 @@ const IS_DEV = process.env.NODE_ENV === 'development';
  * currently mocked as "operational"; see `usePlatformStatus()` for the
  * Sentry swap point.
  */
-
-// ── Clerk user (dev/prod split, same pattern as UserMenu.tsx) ────────────
-//
-// ClerkProvider is not mounted in dev (see app/layout.tsx) — calling
-// Clerk hooks would throw. Bind one implementation at module load via
-// the build-time IS_DEV constant; each variant calls hooks unconditionally,
-// so React hook order is stable for the lifetime of the build.
-
-type ClerkUserShape = {
-  fullName?: string | null;
-  firstName?: string | null;
-  username?: string | null;
-  primaryEmailAddress?: { emailAddress?: string | null } | null;
-};
-
-type ClerkUserResult = {
-  user: ClerkUserShape | null | undefined;
-  signOut: () => void;
-  openUserProfile: () => void;
-};
-
-function useClerkUserDev(): ClerkUserResult {
-  const dev = useDevClerkUser();
-  if (!dev) return { user: null, signOut: () => {}, openUserProfile: () => {} };
-  return {
-    user: {
-      fullName: dev.fullName,
-      firstName: dev.firstName,
-      username: dev.username,
-      primaryEmailAddress: dev.emailAddress ? { emailAddress: dev.emailAddress } : null,
-    },
-    signOut: () => {},
-    openUserProfile: () => {},
-  };
-}
-
-function useClerkUserProd(): ClerkUserResult {
-  const { user } = useUser();
-  const { signOut, openUserProfile } = useClerk();
-  return { user, signOut: () => signOut(), openUserProfile: () => openUserProfile() };
-}
-
-const useClerkUser: () => ClerkUserResult = IS_DEV ? useClerkUserDev : useClerkUserProd;
 
 // ── Platform status (mock — Sentry swap point) ───────────────────────────
 //
@@ -135,11 +89,10 @@ export function SidebarFooterMenu({
   // Item links — placeholder hrefs, to be replaced with the real targets.
   // newTab defaults to true (most are external resources).
   const items: MenuItem[] = [
-    { kind: 'link', label: 'Feedback', icon: 'open_in_new', href: '#', newTab: true },
-    { kind: 'link', label: 'Startsida', icon: 'open_in_new', href: '#', newTab: true },
-    { kind: 'link', label: 'Changelog', icon: 'open_in_new', href: '#', newTab: true },
-    { kind: 'link', label: 'Hjälp', icon: 'open_in_new', href: '#', newTab: true },
-    { kind: 'link', label: 'Docs', icon: 'open_in_new', href: '#', newTab: true },
+    { kind: 'link', label: 'Feedback', icon: 'add_reaction', href: '#', newTab: true },
+    { kind: 'link', label: 'Changelog', icon: 'history', href: '#', newTab: true },
+    { kind: 'link', label: 'Hjälp', icon: 'help', href: '#', newTab: true },
+    { kind: 'link', label: 'Docs', icon: 'document_search', href: '#', newTab: true },
     {
       kind: 'action',
       label: 'Logga ut',
