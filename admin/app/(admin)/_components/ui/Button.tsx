@@ -8,13 +8,13 @@ import {
   type Ref,
 } from 'react';
 import Link from 'next/link';
+import { Spinner } from './Spinner';
 import './Button.css';
 
 /**
  * Button — Phase 1 primitive. See `_components/ui/README.md` for the
  * contract this component satisfies (composite Polaris-pattern,
- * discriminated-union props, no `...rest` spread, dual-emit during
- * migration, lift-and-shift).
+ * discriminated-union props, no `...rest` spread).
  *
  * Variants govern *color only* — background, foreground, hover/active
  * tints. Sizes govern *padding + font-size only*. All other behaviour
@@ -32,7 +32,7 @@ import './Button.css';
  * button.
  */
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+export type ButtonVariant = 'primary' | 'secondary' | 'accent' | 'ghost' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 type ButtonShared = {
@@ -62,22 +62,6 @@ type ButtonAsLink = ButtonShared & {
 
 export type ButtonProps = ButtonAsButton | ButtonAsLink;
 
-// Maps the new variant to the legacy `.admin-btn--<x>` class for
-// dual-emit during Phase 1 migration. See README §3.1 for sunset
-// criterion. The mapping picks the closest legacy match:
-//   primary  → admin-btn--accent           (today's most-used filled CTA)
-//   secondary → admin-btn--outline
-//   ghost    → admin-btn--ghost
-//   danger   → admin-btn--danger           (filled red; `danger-secondary`
-//                                           tint variant is dropped — its
-//                                           5 call-sites map to `danger`)
-const LEGACY_VARIANT_CLASS: Record<ButtonVariant, string> = {
-  primary: 'admin-btn--accent',
-  secondary: 'admin-btn--outline',
-  ghost: 'admin-btn--ghost',
-  danger: 'admin-btn--danger',
-};
-
 function buildClassName(
   variant: ButtonVariant,
   size: ButtonSize,
@@ -89,10 +73,6 @@ function buildClassName(
     `ui-btn--${variant}`,
     `ui-btn--${size}`,
     loading && 'ui-btn--loading',
-    // Dual-emit
-    'admin-btn',
-    LEGACY_VARIANT_CLASS[variant],
-    size === 'sm' && 'admin-btn--sm',
     extra,
   ]
     .filter(Boolean)
@@ -107,21 +87,28 @@ export const Button = forwardRef<HTMLButtonElement | HTMLAnchorElement, ButtonPr
     const disabled = props.disabled ?? false;
     const className = buildClassName(variant, size, loading, props.className);
 
-    const content = (
+    const hasLabel = props.children !== undefined && props.children !== null;
+
+    const content = loading ? (
+      // Dedicated loading wrapper so size-specific tweaks (gap, label
+      // visibility) can target `.ui-btn__loading` instead of leaking
+      // into the regular content layout. The spinner is the standalone
+      // <Spinner> component; its size matches the button's size, and
+      // it inherits `currentColor` from the button text — no per-
+      // variant overrides needed.
+      <span className="ui-btn__loading">
+        <Spinner size={size} aria-hidden />
+        {hasLabel && <span className="ui-btn__label">{props.children}</span>}
+      </span>
+    ) : (
       <>
-        {loading ? (
-          <span className="material-symbols-rounded ui-btn__spinner" aria-hidden>
-            progress_activity
-          </span>
-        ) : props.leadingIcon ? (
+        {props.leadingIcon && (
           <span className="material-symbols-rounded ui-btn__icon" aria-hidden>
             {props.leadingIcon}
           </span>
-        ) : null}
-        {props.children !== undefined && props.children !== null && (
-          <span className="ui-btn__label">{props.children}</span>
         )}
-        {!loading && props.trailingIcon && (
+        {hasLabel && <span className="ui-btn__label">{props.children}</span>}
+        {props.trailingIcon && (
           <span className="material-symbols-rounded ui-btn__icon" aria-hidden>
             {props.trailingIcon}
           </span>

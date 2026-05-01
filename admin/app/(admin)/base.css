@@ -52,6 +52,247 @@
   --admin-danger:        #EE0000;
   --admin-danger-tint:   #FFEBEB;
 
+  /* Button — Phase 1 primitive tokens (light)
+     5 variants: primary, secondary, accent, ghost, danger.
+     Hover goes darker except primary which goes lighter (it's already
+     near-black, so darkening would flatten the affordance).
+     Active is one step further from base than hover. */
+  --btn-primary-bg:           #171717;
+  --btn-primary-bg-hover:     #2A2A2A;
+  --btn-primary-bg-active:    #3A3A3A;
+  --btn-primary-fg:           #FFFFFF;
+
+  --btn-secondary-bg:         #FFFFFF;
+  --btn-secondary-bg-hover:   #F5F5F5;
+  --btn-secondary-bg-active:  #EBEBEB;
+  --btn-secondary-fg:         #171717;
+  --btn-secondary-border:     #EBEBEB;
+
+  --btn-accent-bg:            #0072F5;
+  --btn-accent-bg-hover:      #005FCC;
+  --btn-accent-bg-active:     #004FA8;
+  --btn-accent-fg:            #FFFFFF;
+
+  --btn-ghost-bg:             #EBEBEB;
+  --btn-ghost-bg-hover:       #DEDEDE;
+  --btn-ghost-bg-active:      #D1D1D1;
+  --btn-ghost-fg:             #171717;
+
+  --btn-danger-bg:            #DA2F35;
+  --btn-danger-bg-hover:      #C42228;
+  --btn-danger-bg-active:     #A8181D;
+  --btn-danger-fg:            #FFFFFF;
+
+  /* Loading state overrides every variant — the loading look is
+     unified across primary/secondary/accent/ghost/danger so the
+     spinner reads as "in progress" rather than "still your CTA".
+     Spinner stays dark (#303030) regardless so it remains legible
+     on the light grey background. */
+  --btn-loading-bg:           #F2F2F2;
+  --btn-loading-fg:           #8F8F98;
+  --btn-loading-spinner:      #303030;
+
+  /* Modal — Phase 2 primitive tokens (light)
+     Shared across default / sticky / single-button variants.
+     Width is a max constraint, not a fixed width — actual modal is
+     `min(viewport - margin, --modal-max-width)` so it responds on
+     narrow viewports without manual breakpoints.
+     Shadow is iOS-style: large soft offset + tighter rim, gives a
+     "floating sheet" feel against the dimmed backdrop. */
+  /* Toggle — Phase 1 primitive tokens
+     Reuses existing --admin-toggle-on / --admin-toggle-off for the
+     track color (single source of truth across legacy + new toggle).
+     Thumb gets its own tokens since the legacy CSS hardcoded them
+     inline. */
+  --toggle-thumb-bg:          #FFFFFF;
+  --toggle-thumb-shadow:      0 1px 3px rgba(0, 0, 0, 0.2);
+
+  /* Checkbox — Phase 1 primitive tokens
+     Mirrors the legacy `.fac-check` look (the user-validated 10/10).
+     Checked state uses --dark-primary so it stays in sync with the
+     site's dark-primary palette (other dark-filled chrome). */
+  --checkbox-bg:              #FFFFFF;
+  --checkbox-border:          var(--admin-border);
+  --checkbox-border-hover:    #999999;
+  --checkbox-checked-bg:      var(--dark-primary);
+  --checkbox-checked-border:  var(--dark-primary);
+  --checkbox-icon:            #FFFFFF;
+
+  /* Toast — Phase 2 primitive tokens
+     All 10 toast variants share the same chrome (shadow, padding,
+     radius, font-size, close-icon affordance). Variant differs only
+     in colour treatment / leading icon. Shadow is the same 5-stack
+     used by Modal for visual coherence between floating surfaces. */
+  --toast-bg:                 #FFFFFF;
+  --toast-fg:                 #171717;
+  --toast-radius:             12px;
+  --toast-padding:            16px;
+  --toast-stack-gap:          8px;
+  --toast-stack-bottom:       24px;
+  --toast-stack-right:        24px;
+  --toast-transition:         220ms;
+  --toast-shadow:
+    0 0 0 1px #00000014,
+    0px 1px 1px #00000005,
+    0px 4px 8px -4px #0000000a,
+    0px 16px 24px -8px #0000000f,
+    0 0 0 1px hsla(0, 0%, 98%, 1);
+  --toast-close-color:        #8F8F98;
+  --toast-close-hover:        #303030;
+  --toast-max-width:          480px;
+  /* Coloured variants — bg + fg as a pair so close-button colour
+     auto-derives from `currentColor`. Hex values match the brand
+     palette already used in Button (accent #0072F5, danger #DA2F35)
+     plus a warning orange. */
+  --toast-success-bg:         #0072F5;
+  --toast-success-fg:         #FFFFFF;
+  --toast-warning-bg:         #FF990A;
+  --toast-warning-fg:         #171717;
+  --toast-error-bg:           #DA2F35;
+  --toast-error-fg:           #FFFFFF;
+
+  /* Textarea — Phase 1 primitive tokens
+     Reference: legacy `.admin-textarea`. The new primitive owns its
+     own token namespace (instead of reusing --admin-* directly) so a
+     future redesign of textareas doesn't ripple into other admin
+     surfaces that share the same base tokens. */
+  --textarea-bg:              #FFFFFF;
+  --textarea-fg:              var(--admin-text);
+  --textarea-placeholder:     var(--admin-text-tertiary);
+  --textarea-border:          var(--admin-border);
+  --textarea-border-hover:    #B0B0B0;
+  --textarea-border-focus:    #999999;
+  --textarea-border-error:    #CB2A2F;
+  /* Light-red halo for the invalid state — same shape as the focus
+     ring (4px spread) but tinted red and applied by default (not
+     just on focus). Communicates "this is wrong" without needing
+     the user to interact first. */
+  --textarea-error-ring:      0 0 0 4px rgba(203, 42, 47, 0.12);
+  --textarea-radius:          10px;
+  --textarea-padding:         12px;
+  --textarea-min-height:      96px;
+  --textarea-disabled-bg:     #F2F2F2;
+
+  /* Menu — Phase 2 primitive tokens
+     Action menu (NOT a select dropdown — see legacy `.admin-dropdown`
+     for that). Shadow is the same 5-stack as Modal/Toast for visual
+     coherence between floating surfaces. */
+  --menu-bg:                  #FFFFFF;
+  --menu-radius:              12px;
+  --menu-padding:             6px;
+  --menu-min-width:           200px;
+  --menu-shadow:
+    0 0 0 1px #00000014,
+    0px 1px 1px #00000005,
+    0px 4px 8px -4px #0000000a,
+    0px 16px 24px -8px #0000000f,
+    0 0 0 1px hsla(0, 0%, 98%, 1);
+  --menu-item-fg:             #171717;
+  --menu-item-fg-danger:      #DA2F35;
+  --menu-item-bg-hover:       #F5F5F5;
+  /* Light-red hover for danger items so they share the same
+     "no border, no extra space" layout as regular items but still
+     read as destructive on hover. 8% alpha matches the toast
+     error-ring's subtlety. */
+  --menu-item-bg-danger-hover: rgba(218, 47, 53, 0.08);
+  --menu-item-radius:         6px;
+  --menu-item-padding:        8px 10px;
+  --menu-divider:             #EBEBEB;
+  --menu-transition:          180ms;
+
+  /* Badge — Phase 2 primitive tokens
+     Status pills used in lists (products, orders, customers etc).
+     Six tones cover every existing status palette in the admin —
+     consolidates products.css `.products-status--*` and the
+     OrderBadge BUCKET_STYLES into one tokenised system.
+
+     Tone mapping (existing → new):
+       Aktiv (product)        → success    (#AFFEBF / #223A5A)
+       Utkast (product)       → info       (#D5EBFF / #223A5A)
+       Arkiverad (product)    → neutral    (#E8E8E8 / #616161)
+       AVSLUTAD (order)       → neutral    (same)
+       VÄNTANDE (order)       → warning    (#FFD6A4 / #5E4200)
+       PÅGÅENDE (order)       → attention  (#FFEB78 / #4F4700)
+       PROBLEM (order)        → critical   (#FED1D7 / #8E0B21) */
+  --badge-radius:             7px;
+  --badge-padding:            2px 8px;
+  --badge-font-size:          12px;
+  --badge-font-weight:        500;
+
+  --badge-success-bg:         #AFFEBF;
+  --badge-success-fg:         #223A5A;
+  --badge-info-bg:            #D5EBFF;
+  --badge-info-fg:            #223A5A;
+  --badge-warning-bg:         #FFD6A4;
+  --badge-warning-fg:         #5E4200;
+  --badge-attention-bg:       #FFEB78;
+  --badge-attention-fg:       #4F4700;
+  --badge-critical-bg:        #FED1D7;
+  --badge-critical-fg:        #8E0B21;
+  --badge-neutral-bg:         #E8E8E8;
+  --badge-neutral-fg:         #616161;
+
+  /* Choicebox — Phase 2 primitive tokens
+     Larger tap-target alternative to Radio/Checkbox. The whole
+     card is the click surface.
+
+     Three states:
+       rest      — white bg, light border
+       hover     — #F2F2F2 bg, darker border on both card + indicator
+       selected  — slightly darker bg, accent-coloured indicator
+                   (border + fill) so the chosen card reads via the
+                   indicator first, card chrome second */
+  --choicebox-bg:                     #FFFFFF;
+  --choicebox-bg-hover:               #F2F2F2;
+  --choicebox-bg-selected:            #F0F7FF;
+  --choicebox-border:                 var(--admin-border);
+  --choicebox-border-hover:           #999999;
+  --choicebox-border-selected:        #0068D6;
+  --choicebox-fg:                     var(--admin-text);
+  --choicebox-fg-secondary:           var(--admin-text-secondary);
+  --choicebox-fg-selected:            #0068D6;
+  --choicebox-radius:                 6px;
+  --choicebox-padding:                12px;
+  --choicebox-gap:                    12px;
+  /* Indicator: light at rest, darker on hover, accent blue (#0068D6)
+     when selected. Fill + border share the same accent so the
+     indicator reads as one solid blue surface with a white inner
+     mark. Selected card bg is a very light tint of the same blue
+     so the whole card reads as a single coherent "blue family". */
+  --choicebox-indicator-bg:           #FFFFFF;
+  --choicebox-indicator-bg-selected:  #0068D6;
+  --choicebox-indicator-border:       var(--admin-border);
+  --choicebox-indicator-border-hover: #999999;
+  --choicebox-indicator-border-selected: #0068D6;
+  --choicebox-indicator-fg-selected:  #FFFFFF;
+  /* Soft grey halo that grows behind the textarea on focus. Spread
+     0 → 4px transitioned via box-shadow so the ring "grows in"
+     rather than appearing instantly. */
+  --textarea-focus-ring:      0 0 0 4px rgba(0, 0, 0, 0.10);
+
+  --modal-bg:                 #FFFFFF;
+  /* iOS-style frosted overlay — white at 78% opacity instead of
+     black-dim. The page behind reads as a softened wash rather
+     than a darkened scrim. */
+  --modal-overlay-bg:         rgba(255, 255, 255, 0.78);
+  --modal-radius:             14px;
+  /* Layered shadow: outer dark hairline + tight micro-shadow +
+     medium soft + large soft + inner light hairline. The two 1px
+     spread shadows give the modal a subtle double-edge that lifts
+     it cleanly off the white-frosted overlay; the three distance
+     shadows do the actual depth lifting. */
+  --modal-shadow:
+    0 0 0 1px #00000014,
+    0px 1px 1px #00000005,
+    0px 8px 16px -4px #0000000a,
+    0px 24px 32px -8px #0000000f,
+    0 0 0 1px hsla(0, 0%, 98%, 1);
+  --modal-max-width:          480px;
+  --modal-max-height:         85vh;
+  --modal-transition:         220ms;
+  --modal-divider:            #EBEBEB;
+  --modal-footer-bg:          #FAFAFA;
+
   /* Toggle / switch */
   --admin-toggle-off:    #dcdcd7;
   --admin-toggle-on:     #2783DE;
@@ -180,10 +421,6 @@
   --badge-radius:                var(--radius-md);
   --badge-font-size:             var(--font-xs);
   --badge-font-weight:           var(--font-weight-medium);
-
-  /* ── Modal ── */
-  --modal-radius:                var(--radius-2xl);
-  --modal-shadow:                var(--shadow-modal);
 
   /* ── File upload empty state ── */
   --upload-empty-min-height:     96px;

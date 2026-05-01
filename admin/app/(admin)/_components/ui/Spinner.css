@@ -1,0 +1,66 @@
+/* ── Spinner — iOS-style activity indicator ──
+   12 capsule-shaped bars, each fading from opacity 1 → 0.15 over a
+   1s linear cycle. The per-bar animation-delay is set inline (in
+   Spinner.tsx), so the keyframe + animation declaration here is
+   shared by every bar.
+
+   Color: `currentColor` on the SVG line stroke. Size: fixed via the
+   SVG's `width`/`height` attributes (set by the `size` prop) —
+   independent of parent font-size, so the spinner is size-stable
+   wherever it's placed. */
+
+.ui-spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.ui-spinner__bar {
+  animation: ui-spinner-fade 1s linear infinite;
+}
+
+/* iOS UIActivityIndicatorView fade curve. Fall-off spans the first
+   ~50% of the cycle to a baseline of 0.30 — clear leading edge,
+   smooth comet trail over 5–6 bars, baseline bars still visibly
+   present (not dim-to-invisible).
+
+   Bar at progress p sees:
+     0%    1.00   leading edge
+     10%   0.80   1 step behind   (clearly bright)
+     20%   0.65   2 steps         (visible trail)
+     30%   0.50   3 steps         (mid-trail)
+     40%   0.40   4 steps         (dimming)
+     50%   0.35   5 steps         (near baseline)
+     100%  0.30   rest of cycle   (visible baseline)
+   With 12 bars at 8.33% spacing, this maps neatly to the position
+   of each bar relative to the leading one — see Spinner.tsx for
+   the per-bar `animationDelay` derivation. */
+@keyframes ui-spinner-fade {
+  0% {
+    opacity: 1;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  20% {
+    opacity: 0.65;
+  }
+  30% {
+    opacity: 0.5;
+  }
+  40% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.35;
+  }
+  100% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-spinner__bar {
+    animation-duration: 2s;
+  }
+}

@@ -1,0 +1,97 @@
+/* ── Menu — Phase 2 primitive ──
+   Action menu (NOT a select dropdown). Rendered via portal at the
+   computed position; positioning is handled by the JS, this file
+   only owns visual chrome.
+
+   Shadow uses the same 5-stack as Modal/Toast for a consistent
+   "floating surface" feel across the system. */
+
+.ui-menu {
+  background: var(--menu-bg);
+  border-radius: var(--menu-radius);
+  box-shadow: var(--menu-shadow);
+  padding: var(--menu-padding);
+  min-width: var(--menu-min-width);
+  z-index: 9000;
+  font-family: var(--admin-font);
+  /* Slide-down + fade enter animation. No exit animation — the
+     menu is rendered conditionally and unmounts immediately on
+     close (snappier feel for an action menu). */
+  animation: ui-menu-in var(--menu-transition) var(--ease-default) both;
+}
+
+@keyframes ui-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-menu {
+    animation-duration: 1ms;
+  }
+}
+
+/* ── Item ── */
+
+.ui-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: var(--menu-item-padding);
+  font-size: 13px;
+  font-weight: 400;
+  font-family: inherit;
+  color: var(--menu-item-fg);
+  background: none;
+  border: none;
+  border-radius: var(--menu-item-radius);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-default);
+}
+
+.ui-menu__item:hover:not(:disabled) {
+  background: var(--menu-item-bg-hover);
+}
+
+.ui-menu__item:focus-visible {
+  outline: 2px solid var(--admin-input-focus, var(--admin-accent));
+  outline-offset: -2px;
+}
+
+.ui-menu__item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Danger tone — only color + hover-bg differ from the default
+   item. Same padding, same row layout, no border-top, no extra
+   space above. The visual separation comes from colour alone. */
+.ui-menu__item--danger {
+  color: var(--menu-item-fg-danger);
+}
+
+.ui-menu__item--danger:hover:not(:disabled) {
+  background: var(--menu-item-bg-danger-hover);
+}
+
+.ui-menu__label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ── Divider ── */
+
+.ui-menu__divider {
+  height: 1px;
+  background: var(--menu-divider);
+  margin: 4px 0;
+  border: none;
+}

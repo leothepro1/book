@@ -42,39 +42,33 @@ describe('Button — rendering', () => {
   });
 });
 
-describe('Button — dual-emit (Phase 1)', () => {
-  it('emits both ui-btn and admin-btn classes', () => {
-    render(<Button variant="primary">X</Button>);
+describe('Button — class emission', () => {
+  it('emits ui-btn base + variant + size class', () => {
+    render(<Button variant="primary" size="md">X</Button>);
     const btn = screen.getByRole('button');
     expect(btn.className).toContain('ui-btn');
     expect(btn.className).toContain('ui-btn--primary');
-    expect(btn.className).toContain('admin-btn');
-    expect(btn.className).toContain('admin-btn--accent');
+    expect(btn.className).toContain('ui-btn--md');
   });
 
-  it('maps each variant to its legacy admin-btn--<x>', () => {
-    const cases: Array<['primary' | 'secondary' | 'ghost' | 'danger', string]> = [
-      ['primary', 'admin-btn--accent'],
-      ['secondary', 'admin-btn--outline'],
-      ['ghost', 'admin-btn--ghost'],
-      ['danger', 'admin-btn--danger'],
+  it('emits the correct ui-btn--<variant> class for each variant', () => {
+    const variants: Array<'primary' | 'secondary' | 'accent' | 'ghost' | 'danger'> = [
+      'primary',
+      'secondary',
+      'accent',
+      'ghost',
+      'danger',
     ];
-    for (const [variant, legacy] of cases) {
+    for (const variant of variants) {
       const { unmount } = render(<Button variant={variant}>X</Button>);
-      expect(screen.getByRole('button').className).toContain(legacy);
+      expect(screen.getByRole('button').className).toContain(`ui-btn--${variant}`);
       unmount();
     }
   });
 
-  it('emits admin-btn--sm only for size="sm"', () => {
-    const { rerender } = render(<Button size="sm">X</Button>);
-    expect(screen.getByRole('button').className).toContain('admin-btn--sm');
-
-    rerender(<Button size="md">X</Button>);
-    expect(screen.getByRole('button').className).not.toContain('admin-btn--sm');
-
-    rerender(<Button size="lg">X</Button>);
-    expect(screen.getByRole('button').className).not.toContain('admin-btn--sm');
+  it('does not emit the legacy admin-btn class (dual-emit removed)', () => {
+    render(<Button variant="primary">X</Button>);
+    expect(screen.getByRole('button').className).not.toContain('admin-btn');
   });
 });
 
@@ -151,14 +145,15 @@ describe('Button — icons + spinner', () => {
     expect(icon?.textContent).toBe('arrow_forward');
   });
 
-  it('replaces the leading icon with a spinner while loading', () => {
+  it('replaces the leading icon with a Spinner while loading', () => {
     const { container } = render(
       <Button loading leadingIcon="add">
         Saving
       </Button>,
     );
-    expect(container.querySelector('.ui-btn__spinner')).not.toBeNull();
-    // Spinner takes the leading icon's slot — no .ui-btn__icon should render.
+    // Loading state renders the standalone <Spinner> inside .ui-btn__loading
+    expect(container.querySelector('.ui-btn__loading .ui-spinner')).not.toBeNull();
+    // Regular icons are not rendered — loading branch replaces them entirely.
     expect(container.querySelectorAll('.ui-btn__icon').length).toBe(0);
   });
 });

@@ -1,0 +1,217 @@
+/* ── Toast — Phase 2 primitive ──
+   Bottom-centred portal-rendered stack of pill notifications. All
+   8 variants share radius, shadow, padding, font, and the close-
+   button affordance (except `action`, which swaps close for two
+   action buttons). Variants change colour and (for `action`)
+   layout. Animation: symmetric enter / exit driven by data-state. */
+
+.ui-toast-stack {
+  position: fixed;
+  bottom: var(--toast-stack-bottom);
+  right: var(--toast-stack-right);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--toast-stack-gap);
+  pointer-events: none;
+}
+
+.ui-toast {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: var(--toast-padding);
+  background: var(--toast-bg);
+  color: var(--toast-fg);
+  border-radius: var(--toast-radius);
+  box-shadow: var(--toast-shadow);
+  font-family: var(--admin-font);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0.005em;
+  /* min-width keeps short messages from collapsing to a tiny pill;
+     max-width caps wide ones and triggers wrapping for multi-line. */
+  min-width: 400px;
+  max-width: var(--toast-max-width);
+  pointer-events: auto;
+}
+
+/* Inner row: icon + message + close (or, for action, just icon + message). */
+.ui-toast__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Long-content variants need multi-line alignment — close button
+   sticks to the top of a wrapped paragraph rather than centre.
+   For short single-line messages this also reads as "centred" so
+   no separate rule is needed for default. */
+.ui-toast--multi-line .ui-toast__row,
+.ui-toast--with-jsx .ui-toast__row,
+.ui-toast--with-link .ui-toast__row {
+  align-items: flex-start;
+}
+
+.ui-toast .ui-toast__icon {
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 1;
+  font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+}
+
+.ui-toast__message {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Inline JSX patterns: bold spans + linked text inherit the toast's
+   colour and the link picks up the underline. Both variants share
+   these rules — the variant name documents intent at the call site. */
+.ui-toast strong,
+.ui-toast b {
+  font-weight: 600;
+}
+
+.ui-toast a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ui-toast a:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* ── Close button ── */
+
+.ui-toast__close {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-left: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  /* Inherits currentColor by default so the icon stays legible on
+     any variant background. Default + neutral variants override to
+     the muted grey. */
+  color: currentColor;
+  opacity: 1;
+  border-radius: var(--radius-full);
+  transition: color var(--duration-normal) var(--ease-default),
+    background-color var(--duration-normal) var(--ease-default);
+}
+
+.ui-toast--default .ui-toast__close,
+.ui-toast--multi-line .ui-toast__close,
+.ui-toast--with-jsx .ui-toast__close,
+.ui-toast--with-link .ui-toast__close,
+.ui-toast--action .ui-toast__close {
+  color: var(--toast-close-color);
+}
+
+.ui-toast--default .ui-toast__close:hover,
+.ui-toast--multi-line .ui-toast__close:hover,
+.ui-toast--with-jsx .ui-toast__close:hover,
+.ui-toast--with-link .ui-toast__close:hover,
+.ui-toast--action .ui-toast__close:hover {
+  color: var(--toast-close-hover);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.ui-toast__close:hover {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.ui-toast__close:focus-visible {
+  outline: 2px solid var(--admin-input-focus, var(--admin-accent));
+  outline-offset: 2px;
+}
+
+.ui-toast__close .material-symbols-rounded {
+  font-size: 19px;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* ── Coloured variants ──
+   Each variant is a (bg, fg) pair. Close button rules above pick
+   up `currentColor` so it stays legible on any of these. */
+
+.ui-toast--success {
+  background: var(--toast-success-bg);
+  color: var(--toast-success-fg);
+}
+
+.ui-toast--warning {
+  background: var(--toast-warning-bg);
+  color: var(--toast-warning-fg);
+}
+
+.ui-toast--error {
+  background: var(--toast-error-bg);
+  color: var(--toast-error-fg);
+}
+
+/* ── Action variant ──
+   Vertical: message row on top, action buttons bottom-right.
+   No close button; the action buttons are the only dismiss
+   affordance (and they don't auto-dismiss). */
+
+.ui-toast--action {
+  /* Action toasts often carry slightly longer messages (a question
+     plus context), so allow them to be wider than a status pill. */
+  max-width: 420px;
+}
+
+.ui-toast__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ── Enter / exit animations ──
+   Same data-state pattern as Modal — `data-state` flip restarts the
+   animation cleanly. Both directions take --toast-transition. */
+
+.ui-toast[data-state='enter'] {
+  animation: ui-toast-in var(--toast-transition) var(--ease-default) both;
+}
+
+.ui-toast[data-state='exit'] {
+  animation: ui-toast-out var(--toast-transition) var(--ease-default) both;
+}
+
+@keyframes ui-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ui-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-toast {
+    animation-duration: 1ms;
+  }
+}

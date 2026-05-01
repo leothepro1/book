@@ -1,0 +1,98 @@
+/* ── Input — Phase 1 primitive ──
+   Shares Textarea's chrome (border, radius, focus ring, error
+   ring, hover, disabled). Tokens are referenced directly from
+   `--textarea-*` so "default / error / disabled all look identical
+   to textarea" is guaranteed at the source — no value duplication
+   to drift over time. If inputs and textareas need to diverge
+   later, add an `--input-*` token namespace then.
+
+   Differences from textarea:
+     - single-line (no rows, no resize)
+     - 1-row min-height (textarea is 96px / 4 rows)
+     - type attribute pass-through */
+
+.ui-input {
+  font-family: var(--admin-font);
+  font-weight: 400;
+  color: var(--textarea-fg);
+  background: var(--textarea-bg);
+  border: 1.5px solid var(--textarea-border);
+  border-radius: var(--textarea-radius);
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  line-height: 1.5;
+  display: block;
+  /* `box-shadow: 0 0 0 0 transparent` on rest is the start state for
+     the focus-ring grow animation — without it, the ring would just
+     pop in (no spread to interpolate from). */
+  box-shadow: 0 0 0 0 transparent;
+  transition:
+    border-color 0.15s var(--ease-default),
+    box-shadow 0.15s var(--ease-default);
+}
+
+/* ── Sizes ──
+   Heights are locked via `height` + box-sizing: border-box. Vertical
+   padding is 0 — the text vertically centres within the locked height
+   via the input's native baseline behaviour. Horizontal padding is
+   12px across all sizes.
+     sm: 32 / 13
+     md: 40 / 13
+     lg: 48 / 14 */
+
+.ui-input--sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.ui-input--md {
+  height: 40px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.ui-input--lg {
+  height: 48px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.ui-input::placeholder {
+  color: var(--textarea-placeholder);
+}
+
+.ui-input:hover:not(:disabled):not(:focus) {
+  border-color: var(--textarea-border-hover);
+}
+
+.ui-input:focus {
+  border-color: var(--textarea-border-focus);
+  box-shadow: var(--textarea-focus-ring);
+}
+
+.ui-input:disabled {
+  background: var(--textarea-disabled-bg);
+  color: var(--admin-text-secondary);
+  cursor: not-allowed;
+}
+
+/* Invalid modifier — red border + light-red halo in BOTH rest and
+   focus states. Mirrors the focus-ring effect on default inputs
+   but applied by default so errors are obvious without interaction. */
+.ui-input--invalid,
+.ui-input--invalid:focus {
+  border-color: var(--textarea-border-error);
+  box-shadow: var(--textarea-error-ring);
+}
+
+/* Hover on an invalid input reverts to the default neutral look
+   (gray hover border, no halo) — matches the textarea behaviour
+   so error styling is consistent across both primitives. The
+   :not(:focus) guard means focus still trumps hover, keeping the
+   red ring while editing. */
+.ui-input--invalid:hover:not(:disabled):not(:focus) {
+  border-color: var(--textarea-border-hover);
+  box-shadow: 0 0 0 0 transparent;
+}
