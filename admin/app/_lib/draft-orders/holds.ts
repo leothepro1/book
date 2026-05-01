@@ -204,11 +204,10 @@ export async function placeHoldForDraftLine(
 ): Promise<PlaceHoldForDraftLineResult> {
   const params = PlaceHoldForDraftLineInputSchema.parse(input);
 
-  // Pre-tx: validate draft, line, reservation, adapter, accommodation.
-  const draft = await loadDraft(params.tenantId, params.draftLineItemId);
-  // Note: we loaded by draftLineItemId as a "draftOrderId" guess above —
-  // that's wrong. The pattern: find the line first, then the draft.
-  // Re-fetch correctly.
+  // Pre-tx: validate line first, then the parent draft, then
+  // reservation/adapter/accommodation. The line lookup gives us the
+  // authoritative `draftOrderId`; loading the draft any earlier
+  // would have to guess at the id and would always miss.
   const line = await prisma.draftLineItem.findFirst({
     where: { id: params.draftLineItemId, tenantId: params.tenantId },
     select: {
@@ -235,10 +234,9 @@ export async function placeHoldForDraftLine(
     });
   }
 
-  // Reload the correct draft by line's parent.
+  // Load the parent draft by the line's draftOrderId.
   const parentDraft = await loadDraft(params.tenantId, line.draftOrderId);
   assertDraftMutable(parentDraft);
-  void draft; // silence — replaced by parentDraft above
 
   const reservation = await loadReservationForLine(
     params.tenantId,
