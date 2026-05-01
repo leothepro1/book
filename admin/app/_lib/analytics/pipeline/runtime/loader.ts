@@ -38,6 +38,7 @@
  *   pageView(opts?)                  — emit page_viewed (auto-classifies)
  */
 
+import { showConsentBanner } from "./consent-banner";
 import {
   buildStorefrontContext,
   precomputeUserAgentHash,
@@ -287,10 +288,10 @@ function track(
   if (!bootstrapped) return; // still resolving UA hash
   const decision = decideConsent();
   if (decision !== "grant") {
-    // "deny" and "prompt" both no-op the dispatch path. The consent
-    // banner (Commit G) handles "prompt" by mounting UI and on
-    // accept/decline writes the cookie + retries by re-running
-    // bootstrap. Until G lands, "prompt" is functionally "deny".
+    // "deny" and "prompt" both no-op the dispatch path here. The
+    // banner mounts asynchronously from `bootstrap()` and re-runs
+    // pageView() after the visitor chooses, so this `track` call
+    // simply drops while the banner is still pending.
     return;
   }
   const manifest = window.__bedfront_runtime;
@@ -339,10 +340,23 @@ async function bootstrap(): Promise<void> {
   // Expose the public API once we can produce real envelopes.
   window.bedfrontAnalytics = { track, pageView };
 
-  // Auto page_view: fire once now, then again on each SPA navigation
-  // (popstate + a custom event Next.js emits). The dispatch path is
-  // idempotent at the outbox level (UNIQUE (tenant_id, event_id))
-  // so duplicate fires from rapid navigations are deduped server-side.
+  // Consent gate: if no cookie + EEA + !DNT, mount the banner and
+  // wait for the visitor to choose. The banner writes the cookie
+  // before resolving, so the next decideConsent() call returns
+  // either "grant" or "deny".
+  if (decideConsent() === "prompt") {
+    try {
+      await showConsentBanner();
+    } catch (err) {
+      reportToSentry("consent banner failed", err);
+    }
+  }
+
+  // Auto page_view: fire once now (will silently no-op if the
+  // visitor declined), then again on each SPA navigation. The
+  // dispatch path is idempotent at the outbox level
+  // (UNIQUE (tenant_id, event_id)) so duplicate fires from rapid
+  // navigations are deduped server-side.
   pageView();
   window.addEventListener("popstate", () => pageView());
   // Next.js doesn't emit a built-in route-change event in App Router.
