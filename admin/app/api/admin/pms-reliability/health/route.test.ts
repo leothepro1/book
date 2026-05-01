@@ -16,6 +16,7 @@ const mockOutboundCount = vi.fn();
 const mockIdempotencyGroupBy = vi.fn();
 const mockCursorCount = vi.fn();
 const mockBookingCount = vi.fn();
+const mockBookingGroupBy = vi.fn();
 const mockIntegrationCount = vi.fn();
 const mockInboxGroupByTenant = vi.fn();
 const mockOutboundGroupByTenant = vi.fn();
@@ -49,6 +50,12 @@ vi.mock("@/app/_lib/db/prisma", () => ({
     },
     booking: {
       count: (...a: unknown[]) => mockBookingCount(...a),
+      // route.ts:164 — groupBy({ by: ["tenantId"], where: {
+      // integrityFlag: { not: null } } }) returns one row per
+      // tenant with at least one integrity-flagged booking. The
+      // route then takes `.length` to count tenants. Default
+      // [] keeps the count at 0 unless a test overrides.
+      groupBy: (...a: unknown[]) => mockBookingGroupBy(...a),
     },
     tenantIntegration: {
       count: (...a: unknown[]) => mockIntegrationCount(...a),
@@ -79,6 +86,7 @@ beforeEach(() => {
   mockOutboundCount.mockResolvedValue(0);
   mockCursorCount.mockResolvedValue(0);
   mockBookingCount.mockResolvedValue(0);
+  mockBookingGroupBy.mockResolvedValue([]);
   mockIntegrationCount.mockResolvedValue(0);
   mockInboxGroupByTenant.mockResolvedValue([]);
   mockOutboundGroupByTenant.mockResolvedValue([]);

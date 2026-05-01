@@ -40,6 +40,18 @@ vi.mock("@/app/_lib/orders/events", () => ({
   createOrderEventInTx: (...args: unknown[]) => mockCreateOrderEventInTx(...args),
 }));
 
+// commitDiscountApplication calls emitAnalyticsEvent (Phase 2 Commit G)
+// to record discount_used in the analytics pipeline. The emitter would
+// otherwise call $queryRaw / $executeRaw on our mock tx, throwing off
+// the spy-counts assertions in this file. Mock it to a no-op — this
+// file's contract is the operational discount-mutation sequence, not
+// the analytics pipeline (which has its own dedicated tests in
+// app/_lib/analytics/pipeline/emitter.test.ts).
+const mockEmitAnalyticsEvent = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/app/_lib/analytics/pipeline/emitter", () => ({
+  emitAnalyticsEvent: (...args: unknown[]) => mockEmitAnalyticsEvent(...args),
+}));
+
 // Import after mocks so the SUT wires to them.
 const { calculateDiscountImpact, commitDiscountApplication } = await import("./apply");
 
@@ -131,7 +143,19 @@ function makeTx() {
     ]),
     $executeRaw: vi.fn().mockResolvedValue(0),
     discountAllocation: { create: vi.fn().mockResolvedValue({}) },
-    order: { update: vi.fn().mockResolvedValue({}) },
+    order: {
+      update: vi.fn().mockResolvedValue({}),
+      // commitDiscountApplication reads the order back via
+      // findUniqueOrThrow to capture totals for the order event
+      // payload. Default returns a minimal shape sufficient for
+      // the assertions in this file.
+      findUniqueOrThrow: vi.fn().mockResolvedValue({
+        id: "order_1",
+        totalAmount: 10000,
+        discountAmount: 0,
+        currency: "SEK",
+      }),
+    },
     orderLineItem: { update: vi.fn().mockResolvedValue({}) },
     discountUsage: { upsert: vi.fn().mockResolvedValue({}) },
     discountEvent: { create: vi.fn().mockResolvedValue({}) },

@@ -4,6 +4,14 @@ vi.mock("@/app/_lib/db/prisma", () => ({
   prisma: {
     guestAccount: {
       findUnique: vi.fn(),
+      // route.ts:69 — updates lastLoginAt after successful verify.
+      update: vi.fn().mockResolvedValue({}),
+    },
+    // createGuestAccountEvent (called by route.ts:84) writes an audit
+    // row for the GUEST_AUTHENTICATED event. Stub it so the route
+    // path completes; the analytics/audit assertions live elsewhere.
+    guestAccountEvent: {
+      create: vi.fn().mockResolvedValue({}),
     },
   },
 }));
@@ -29,7 +37,10 @@ const { resolveTenantFromHost } = await import(
 );
 
 const mockPrisma = prisma as unknown as {
-  guestAccount: { findUnique: ReturnType<typeof vi.fn> };
+  guestAccount: {
+    findUnique: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+  };
 };
 const mockVerifyOtp = verifyOtp as ReturnType<typeof vi.fn>;
 const mockSetSession = setGuestSession as ReturnType<typeof vi.fn>;
@@ -50,7 +61,14 @@ describe("POST /api/guest-auth/verify-otp", () => {
   });
 
   it("returns 200 + redirectTo /home on correct code", async () => {
-    mockPrisma.guestAccount.findUnique.mockResolvedValue({ id: "ga_1" });
+    mockPrisma.guestAccount.findUnique.mockResolvedValue({
+      id: "ga_1",
+      tenantId: "t1",
+    });
+    // route.ts:84 calls createGuestAccountEvent which validates the
+    // guestAccount.tenantId matches the resolved tenant — without
+    // tenantId the isolation guard fires.
+    mockPrisma.guestAccount.update.mockResolvedValue({});
     mockVerifyOtp.mockResolvedValue(true);
     mockSetSession.mockResolvedValue(undefined);
 
