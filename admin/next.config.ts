@@ -57,6 +57,51 @@ const nextConfig: NextConfig = {
           { key: "Cache-Control", value: "public, max-age=3600, stale-while-revalidate=86400" },
         ],
       },
+      // Phase 3 PR-B analytics pixel runtime + loader. Hashed filenames
+      // are content-addressable, so they get a year-long immutable
+      // cache. Cross-Origin-Resource-Policy: same-origin prevents
+      // third-party domains from loading our bundles via <script>
+      // injection (defense-in-depth on top of the origin gate at the
+      // dispatch endpoint).
+      {
+        source: "/analytics/runtime.:hash.js",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+        ],
+      },
+      {
+        source: "/analytics/runtime.:hash.js.map",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+        ],
+      },
+      {
+        source: "/analytics/loader.:hash.js",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+        ],
+      },
+      {
+        source: "/analytics/loader.:hash.js.map",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+        ],
+      },
+      // Manifest must be fresh for cache invalidation to work — when a
+      // new build ships, the loader reads this to learn the new hashed
+      // filename. 60s TTL + must-revalidate keeps it from going stale
+      // on the CDN while still respecting client caches under load.
+      {
+        source: "/analytics/runtime-manifest.json",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=60, must-revalidate" },
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+        ],
+      },
       {
         source: "/api/:path*",
         headers: [
