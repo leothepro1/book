@@ -72,6 +72,19 @@ export interface EmitAnalyticsEventParams<TEventName extends RegisteredEventName
   context?: Record<string, unknown>;
   correlationId?: string | null;
   idempotencyKey?: string;
+  /**
+   * Caller-supplied ULID to use as the outbox row's `event_id`. Takes
+   * precedence over `idempotencyKey` derivation. Used by the Phase 3
+   * dispatch endpoint (`/api/analytics/collect`), which receives an
+   * already-ULID'd event from the worker and wants that exact id to
+   * land on the analytics.event row — so the worker's
+   * sessionStorage-tracked id matches the warehouse id 1:1.
+   *
+   * Must be a valid 26-char Crockford Base32 ULID (validated at the
+   * dispatch endpoint, not re-validated here — one boundary check is
+   * enough). When this is set, `idempotencyKey` is ignored.
+   */
+  eventId?: string;
 }
 
 export interface EmitAnalyticsEventResult {
@@ -122,14 +135,24 @@ export async function emitAnalyticsEvent<TEventName extends RegisteredEventName>
     context,
     correlationId,
     idempotencyKey,
+    eventId: explicitEventId,
   } = params;
 
-  // 1. Compute event_id. Deterministic when an idempotency key is given;
-  //    random otherwise. Tenant + event_name are part of the seed so the
-  //    same key across different tenants / events never collides.
-  const eventId = idempotencyKey
-    ? deterministicULIDFromKey(`${tenantId}:${eventName}:${idempotencyKey}`)
-    : randomULID();
+  // 1. Compute event_id. Precedence:
+  //      a) explicit `eventId` (Phase 3 dispatch endpoint passes the
+  //         worker's ULID through so the warehouse row's id matches
+  //         the worker's sessionStorage record exactly);
+  //      b) deterministic from `${tenantId}:${eventName}:${idempotencyKey}`
+  //         when an idempotency key is given (server-side mutation
+  //         retry collapses to the existing outbox row);
+  //      c) random otherwise.
+  //    Tenant + event_name are part of (b)'s seed so the same key
+  //    across different tenants / events never collides.
+  const eventId = explicitEventId
+    ? explicitEventId
+    : idempotencyKey
+      ? deterministicULIDFromKey(`${tenantId}:${eventName}:${idempotencyKey}`)
+      : randomULID();
 
   // 2. Look up the registered schema. Throws if event_name unknown
   //    (AnalyticsSchemaNotRegisteredError) — short-circuits before payload
@@ -287,6 +310,11 @@ export async function emitAnalyticsEvent<TEventName extends RegisteredEventName>
     event_id: eventId,
     outbox_id: canonicalOutboxId,
     idempotent: idempotencyKey !== undefined,
+    event_id_source: explicitEventId
+      ? "explicit"
+      : idempotencyKey
+        ? "deterministic"
+        : "random",
   });
 
   return { event_id: eventId, outbox_id: canonicalOutboxId };
