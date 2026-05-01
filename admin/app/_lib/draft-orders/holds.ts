@@ -127,6 +127,49 @@ function assertDraftMutable(draft: DraftRow): void {
   }
 }
 
+/**
+ * Phase E.1 — gate for *hold placement* (distinct from edit mutability).
+ *
+ * Hold placement is permitted on drafts that are awaiting payment. Edit
+ * mutability is a separate, narrower concern — see `assertDraftMutable`
+ * for the OPEN-only edit guard, which preserves Phase D's
+ * unlink-on-mutation contract.
+ *
+ * Accept-list:
+ *   - OPEN     — initial creation flow (`createDraftWithLines` post-tx)
+ *   - INVOICED — lazy session creation in Phase E (v1.3 §7.3) and
+ *                hold-refresh release-and-replace in Phase I (v1.3 §6.5)
+ *   - OVERDUE  — same buyer-pays-late semantics as INVOICED; the
+ *                state machine permits buyer payment from OVERDUE
+ *                (Phase H webhook upgrades OVERDUE → PAID per
+ *                §5 invariant 12)
+ *
+ * Reject everything else (PAID, COMPLETED, CANCELLED, …) and the
+ * soft-deleted state (cancelledAt or completedAt set), matching
+ * `assertDraftMutable`'s ValidationError shape so upstream error
+ * handling does not fork.
+ */
+function assertDraftCanPlaceHolds(draft: DraftRow): void {
+  if (
+    draft.status !== "OPEN" &&
+    draft.status !== "INVOICED" &&
+    draft.status !== "OVERDUE"
+  ) {
+    throw new ValidationError(
+      "Draft cannot place holds (wrong status)",
+      {
+        draftOrderId: draft.id,
+        status: draft.status,
+      },
+    );
+  }
+  if (draft.cancelledAt !== null || draft.completedAt !== null) {
+    throw new ValidationError("Draft cannot place holds", {
+      draftOrderId: draft.id,
+    });
+  }
+}
+
 async function loadReservationForLine(
   tenantId: string,
   draftLineItemId: string,
@@ -606,7 +649,7 @@ export async function placeHoldsForDraft(
   const params = PlaceHoldsForDraftInputSchema.parse(input);
 
   const draft = await loadDraft(params.tenantId, params.draftOrderId);
-  assertDraftMutable(draft);
+  assertDraftCanPlaceHolds(draft);
 
   const reservations = (await prisma.draftReservation.findMany({
     where: {
