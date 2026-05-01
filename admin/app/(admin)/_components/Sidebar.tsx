@@ -11,6 +11,7 @@ import { SidebarSearchInput } from './SidebarSearchInput';
 import { useSettings } from './SettingsContext';
 import { useSidebarNav } from './SidebarNavContext';
 import { SidebarNavSwap } from './SidebarNavSwap';
+import { SidebarNavTrail } from './SidebarNavTrail';
 import { SettingsSidebar } from './SettingsSidebar';
 import { RouteSidebar } from './RouteSidebar';
 import { AppSidebar } from './AppSidebar';
@@ -26,10 +27,10 @@ function itemClass(...mods: (string | false | null | undefined)[]): string {
 }
 
 export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
-  const { currentSection, enterSection, setNavigatingTo } = useSidebarNav();
+  const { currentSection, setNavigatingTo } = useSidebarNav();
   const { isCollapsed } = useSidebar();
   const pathname = usePathname();
-  const { navigate, guardAction, isGuarded } = useNavigationGuard();
+  const { navigate, isGuarded } = useNavigationGuard();
   const { open: openSettings } = useSettings();
   const { isAdmin } = useRole();
 
@@ -42,30 +43,19 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + '/');
   const inferredSection = inferSectionFromPath(pathname);
 
+  // All sidebar links — flat or section trigger — share the same path:
+  // mark navigation pending, then let Next.js commit the route. The
+  // pathname-driven auto-sync in SidebarNavContext picks up the new
+  // section after the commit, which keeps the drill-in slide animation
+  // synced with the page transition (Vercel pattern). Switching the
+  // panel synchronously on click would race the route and arrive ahead
+  // of the page.
   const guardedClick = (e: MouseEvent<HTMLAnchorElement>, href: string) => {
     if (isGuarded) {
       e.preventDefault();
       navigate(href);
       return;
     }
-    markPending(href);
-  };
-
-  // Section trigger — opens the drill-in AND navigates to the section's
-  // first item (its parent route, when the section has one). The auto-sync
-  // in SidebarNavContext would also pick up the navigation, but we call
-  // `enterSection` synchronously so the slide animation starts on click
-  // instead of after navigation lands.
-  const triggerClick = (e: MouseEvent<HTMLAnchorElement>, sectionId: string, href: string) => {
-    if (isGuarded) {
-      e.preventDefault();
-      guardAction(() => {
-        enterSection(sectionId);
-        navigate(href);
-      });
-      return;
-    }
-    enterSection(sectionId);
     markPending(href);
   };
 
@@ -77,12 +67,12 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
     return (
       <Link
         href={firstHref}
-        onClick={(e) => triggerClick(e, section.id, firstHref)}
+        onClick={(e) => guardedClick(e, firstHref)}
         className={itemClass(active && 'sb__item--active', isCollapsed && 'sb__item--collapsed')}
       >
         <span className="material-symbols-rounded sb__icon">{section.icon}</span>
         <span className="sb__label">{section.label}</span>
-        <span className="material-symbols-rounded sb__item-trail">arrow_forward_ios</span>
+        <SidebarNavTrail defaultIcon="arrow_forward_ios" />
       </Link>
     );
   };
@@ -139,6 +129,7 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
                   >
                     <span className="material-symbols-rounded sb__icon">home_app_logo</span>
                     <span className="sb__label">Startsida</span>
+                    <SidebarNavTrail />
                   </Link>
                 );
               })()}
@@ -160,6 +151,7 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
                   >
                     <span className="material-symbols-rounded sb__icon">percent_discount</span>
                     <span className="sb__label">Rabatter</span>
+                    <SidebarNavTrail />
                   </Link>
                 );
               })()}
@@ -177,6 +169,7 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
                   >
                     <span className="material-symbols-rounded sb__icon">account_balance_wallet</span>
                     <span className="sb__label">Ekonomi</span>
+                    <SidebarNavTrail />
                   </Link>
                 );
               })()}
@@ -198,6 +191,7 @@ export function Sidebar({ sidebarApps = [] }: { sidebarApps?: SidebarApp[] }) {
                   >
                     <span className="material-symbols-rounded sb__icon">home_storage</span>
                     <span className="sb__label">Appar</span>
+                    <SidebarNavTrail />
                   </Link>
                 );
               })()}
