@@ -38,11 +38,22 @@
  *   pageView(opts?)                  — emit page_viewed (auto-classifies)
  */
 
+import { ulid as makeUlid } from "ulidx";
+
+import {
+  dispatchBeacon,
+  dispatchKeepalive,
+  DEFAULT_DISPATCH_URL,
+} from "./beacon";
 import { showConsentBanner } from "./consent-banner";
 import {
   buildStorefrontContext,
   precomputeUserAgentHash,
 } from "./loader-context";
+import {
+  STOREFRONT_SCHEMA_VERSIONS,
+  validatePayload,
+} from "./worker-validate";
 import type {
   RequestEnvelope,
   StorefrontEventName,
@@ -100,7 +111,7 @@ interface ConsentCookie {
 
 // ── Constants ───────────────────────────────────────────────────────
 
-const DISPATCH_URL = "/api/analytics/collect";
+const DISPATCH_URL = DEFAULT_DISPATCH_URL;
 const CONSENT_COOKIE = "bf_consent";
 const ANALYTICS_BUNDLE_PATH = "/analytics/";
 
@@ -120,6 +131,15 @@ const EEA_COUNTRIES = new Set([
 let worker: Worker | null = null;
 let workerSpawnFailed = false;
 let bootstrapped = false;
+/**
+ * `unloading` is set true on the first `pagehide` or
+ * `visibilitychange === 'hidden'`. While true, dispatchEnvelope routes
+ * through sendBeacon (rather than fetch keepalive) and `track()`
+ * bypasses the worker entirely — we build + validate + dispatch
+ * synchronously on the main thread because the worker round-trip is
+ * too slow to complete reliably on tab close.
+ */
+let unloading = false;
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -262,20 +282,53 @@ function onWorkerMessage(e: MessageEvent<WorkerOutboundMessage>): void {
 }
 
 function dispatchEnvelope(envelope: RequestEnvelope): void {
-  // fetch keepalive: works through pagehide/unload, doesn't block UI.
-  // Commit H adds the unload-time sendBeacon path for higher delivery
-  // reliability on tab close.
-  try {
-    fetch(DISPATCH_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(envelope),
-      credentials: "include",
-      keepalive: true,
-    }).catch((err) => reportToSentry("dispatch fetch rejected", err));
-  } catch (err) {
-    reportToSentry("dispatch threw synchronously", err);
+  // Two transports: fetch keepalive during the page lifetime, sendBeacon
+  // during unload. Both are best-effort; the dispatch endpoint is
+  // idempotent at the outbox UNIQUE (tenant_id, event_id) constraint
+  // so a duplicate retry from either path is harmless.
+  const ok = unloading
+    ? dispatchBeacon(envelope, DISPATCH_URL)
+    : dispatchKeepalive(envelope, DISPATCH_URL);
+  if (!ok) {
+    reportToSentry("dispatch transport unavailable", {
+      eventName: envelope.event_name,
+      via: unloading ? "beacon" : "keepalive",
+    });
   }
+}
+
+/**
+ * Build a complete RequestEnvelope on the main thread, bypassing the
+ * worker. Used during unload (refinement #6 fast path) — the worker
+ * round-trip can't reliably complete after `pagehide`. Validation
+ * uses the SAME hand-rolled validators the worker uses (they're
+ * imported from `worker-validate.ts`), so the contract holds.
+ *
+ * Returns `null` when validation fails — caller should drop the
+ * event silently (consistent with the worker's behavior of
+ * postMessaging an error and not dispatching).
+ */
+function buildEnvelopeInline(
+  eventName: StorefrontEventName,
+  payload: Record<string, unknown>,
+  correlationId?: string,
+): RequestEnvelope | null {
+  const result = validatePayload(eventName, payload);
+  if (!result.ok) {
+    reportToSentry("inline validation failed (unload path)", {
+      eventName,
+      issues: result.issues,
+    });
+    return null;
+  }
+  return {
+    event_id: makeUlid(),
+    event_name: eventName,
+    schema_version: STOREFRONT_SCHEMA_VERSIONS[eventName],
+    occurred_at: new Date().toISOString(),
+    payload,
+    ...(correlationId ? { correlation_id: correlationId } : {}),
+  };
 }
 
 // ── Public-API implementations ──────────────────────────────────────
@@ -299,15 +352,29 @@ function track(
     reportToSentry("track called without tenantId in manifest", { eventName });
     return;
   }
+  const ctx = buildStorefrontContext();
+  const fullPayload = { ...ctx, ...payload };
+
+  // Refinement #6 — unload fast path. Once we're unloading, the
+  // worker postMessage can't reliably round-trip before the tab
+  // closes. Build the envelope inline and dispatch via sendBeacon.
+  if (unloading) {
+    const env = buildEnvelopeInline(
+      eventName,
+      fullPayload,
+      opts?.correlationId,
+    );
+    if (env) dispatchEnvelope(env);
+    return;
+  }
+
   const w = ensureWorker();
   if (!w) return;
-
-  const ctx = buildStorefrontContext();
   const message: WorkerInboundEventMessage = {
     type: "event",
     tenantId: manifest.tenantId,
     eventName,
-    payload: { ...ctx, ...payload },
+    payload: fullPayload,
     ...(opts?.correlationId ? { correlationId: opts.correlationId } : {}),
   };
   try {
@@ -315,6 +382,24 @@ function track(
   } catch (err) {
     reportToSentry("worker postMessage threw", err);
   }
+}
+
+/**
+ * Wires `pagehide` and `visibilitychange` listeners that flip the
+ * `unloading` flag once the page is on its way out. Idempotent and
+ * irreversible — once `unloading=true`, every subsequent dispatch
+ * uses sendBeacon. This is fine because the page is genuinely going
+ * away; if the user returns to the tab from bfcache the loader
+ * module evaluates fresh and the flag is false again.
+ */
+function installUnloadHandlers(): void {
+  const flip = () => {
+    unloading = true;
+  };
+  window.addEventListener("pagehide", flip);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flip();
+  });
 }
 
 function pageView(opts?: { page_type?: PageType }): void {
@@ -336,6 +421,11 @@ async function bootstrap(): Promise<void> {
   }
 
   bootstrapped = true;
+
+  // Install unload handlers BEFORE exposing the API so a track()
+  // landing during the same task as bootstrap completion still gets
+  // routed correctly.
+  installUnloadHandlers();
 
   // Expose the public API once we can produce real envelopes.
   window.bedfrontAnalytics = { track, pageView };
