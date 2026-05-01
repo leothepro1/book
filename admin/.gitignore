@@ -51,3 +51,12 @@ next-env.d.ts
 
 # GeoLite2 database (too large for git, downloaded at build time)
 lib/geo/GeoLite2-City.mmdb
+
+# Phase 3 PR-B analytics runtime — built artifacts (hashed bundles +
+# manifest) produced by `npm run build:analytics-runtime`. Never
+# commit; the build step regenerates them.
+/public/analytics/runtime.*.js
+/public/analytics/runtime.*.js.map
+/public/analytics/loader.*.js
+/public/analytics/loader.*.js.map
+/public/analytics/runtime-manifest.json

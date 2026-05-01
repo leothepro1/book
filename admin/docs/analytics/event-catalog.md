@@ -702,3 +702,42 @@ SERVER-side `payment_succeeded` to compute checkout conversion.
 - **Consent category:** `analytics`.
 - **Payload:** shared context + `cart_id` + `items_count` (≥ 1) +
   `cart_total`.
+
+---
+
+## Legacy analytics coexistence
+
+Phase 3 PR-B introduces a new web pixel runtime that emits storefront
+events through `/api/analytics/collect` → outbox → analytics pipeline.
+The previously-existing `AnalyticsProvider`
+(`app/(guest)/_components/AnalyticsProvider.tsx`) continues to fire
+its own server-side `track()` calls to the v1 endpoint, writing to
+`public.AnalyticsEvent`.
+
+Both systems run **in parallel** during the Phase 3 → Phase 5 parity
+window. This is intentional — duplicate emissions of conceptually-
+overlapping events (`PAGE_VIEWED` v1 vs `page_viewed` v0.1.0) are the
+mechanism that lets us validate the new pipeline's aggregations match
+the legacy data before we cut over.
+
+| Path | Endpoint | Storage | Lifecycle |
+|---|---|---|---|
+| Legacy (v1) | `/api/...` (AnalyticsProvider) | `public.AnalyticsEvent` table | Active, **kept untouched** through Phase 5 |
+| PR-B (v0.1.0) | `/api/analytics/collect` | `analytics.event` via outbox | Active from Phase 3 PR-B onwards |
+
+**Cutover plan:** post-Phase 5 — once the new pipeline's aggregations
+have been production-validated against the legacy data for at least
+30 days. The cutover PR removes:
+
+- `app/(guest)/_components/AnalyticsProvider.tsx`
+- The inline `<AnalyticsProvider>` mount in `app/(guest)/layout.tsx`
+- The legacy v1 endpoint route + its associated DB writes
+- The `public.AnalyticsEvent` table (drop migration after backup)
+
+Until that PR ships, do **not** remove `AnalyticsProvider` from the
+guest layout. The intent + cutover plan are also called out in the
+JSX comment block above the `<AnalyticsLoader>` mount in the layout.
+
+`RumCollector` is a separate concern (Real User Monitoring vitals,
+not analytics events) and is kept untouched by both Phase 3 PR-B
+and the future Phase 5 cutover.

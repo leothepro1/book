@@ -15,7 +15,8 @@
  *     ▼
  *   This route
  *     1. Resolve tenant from Host header (NEVER from body)
- *     2. Origin / Host check (Q7: <slug>.bedfront.com format)
+ *     2. Origin / Host check (Q7: <slug>.<getPlatformBaseDomain()>
+ *        format; preview also accepts *.bedfront.com + *.vercel.app)
  *     3. Rate limit (Q6: 429 + Retry-After on excess)
  *     4. Parse body (tolerant of beacon's `text/plain`)
  *     5. Validate envelope shape; refuse non-storefront event_name
@@ -60,6 +61,7 @@ import { emitAnalyticsEventStandalone } from "@/app/_lib/analytics/pipeline/emit
 import { isAnalyticsEnabledForTenant } from "@/app/_lib/analytics/pipeline/feature-flag";
 import { checkAnalyticsOrigin } from "@/app/_lib/analytics/pipeline/origin-check";
 import { checkAnalyticsRateLimit } from "@/app/_lib/analytics/pipeline/rate-limit";
+import { getPlatformBaseDomain } from "@/app/_lib/platform/constants";
 import { AnalyticsValidationError } from "@/app/_lib/analytics/pipeline/errors";
 import {
   type RegisteredEventName,
@@ -167,6 +169,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     origin: req.headers.get("origin"),
     nodeEnv: process.env.NODE_ENV,
     vercelEnv: process.env.VERCEL_ENV,
+    baseDomain: getPlatformBaseDomain(),
   });
   if (!originResult.ok) {
     log("warn", "analytics.collect.origin_rejected", { reason: originResult.reason });
