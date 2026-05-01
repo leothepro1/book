@@ -495,3 +495,201 @@
   max-height: 240px;
   opacity: 1;
 }
+
+/* ── Pending nav trail (route transition in flight) ──
+   Replaces the chevron with a rotating spinner while `useLinkStatus()`
+   reports `pending: true`. Visually distinct from `.sb__item-trail`:
+   no hover background tint, slightly larger glyph, no padding. The
+   spinner is the sole click-registered signal until the route commits
+   and the panel swap animation runs. */
+
+.sb__item-pending {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--admin-text-secondary, #737373);
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  animation: sb-pending-spin 0.8s linear infinite;
+}
+
+.sb__item--collapsed .sb__item-pending {
+  display: none;
+}
+
+@keyframes sb-pending-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb__item-pending {
+    animation-duration: 1.6s;
+  }
+}
+
+/* ── Footer "more" menu (popup above the more_horiz button) ──
+   Anchored to `.sb__footer-more`, opens upward. No transition —
+   instant show/hide on toggle (Vercel pattern). Width fits the
+   sidebar (270px) with footer padding. */
+
+.sb__footer-more {
+  position: relative;
+}
+
+.sb__more-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  width: 260px;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-dropdown);
+  padding: 6px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+
+.sb__more-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--admin-text);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.sb__more-item:hover,
+.sb__more-item:focus-visible {
+  background: var(--admin-surface-hover);
+  outline: none;
+}
+
+.sb__more-item:active {
+  background: var(--admin-surface-active);
+}
+
+.sb__more-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sb__more-icon {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--admin-text-tertiary);
+  font-size: 18px;
+  line-height: 1;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.sb__more-item:hover .sb__more-icon,
+.sb__more-item:focus-visible .sb__more-icon {
+  color: var(--admin-text-secondary);
+}
+
+/* Item 1 — Clerk user row, two stacked text rows */
+.sb__more-item--user {
+  align-items: center;
+  padding: 10px;
+}
+
+.sb__more-user {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sb__more-user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--admin-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sb__more-user-email {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--admin-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Full-width divider — extends beyond the menu's 6px padding */
+.sb__more-divider {
+  height: 1px;
+  background: var(--admin-border);
+  margin: 6px -6px;
+}
+
+/* Footer — platform status. Separated by border-top, full-width. */
+.sb__more-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px;
+  margin: 6px -6px -6px;
+  border-top: 1px solid var(--admin-border);
+}
+
+.sb__more-status-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sb__more-status-label {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--admin-text-secondary);
+}
+
+.sb__more-status-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--admin-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sb__more-status-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 2px;
+  background: var(--admin-text-tertiary);
+}
+
+.sb__more-status-dot[data-status='operational'] {
+  background: #398E4A;
+}
+
+.sb__more-status-dot[data-status='degraded'],
+.sb__more-status-dot[data-status='down'] {
+  background: #DA2F35;
+}

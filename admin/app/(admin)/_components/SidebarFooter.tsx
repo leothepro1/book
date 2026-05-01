@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { UserButton } from '@clerk/nextjs';
 import { useSidebar } from './SidebarContext';
 import { useDevClerkUser } from './DevClerkContext';
+import { SidebarFooterMenu } from './SidebarFooterMenu';
 
 const IS_DEV = process.env.NODE_ENV === 'development';
 
@@ -22,6 +24,7 @@ const IS_DEV = process.env.NODE_ENV === 'development';
  */
 export function SidebarFooter() {
   const { isCollapsed } = useSidebar();
+  const [moreOpen, setMoreOpen] = useState(false);
   return (
     <div className="sb__footer">
       <div className="sb__footer-user">
@@ -29,9 +32,19 @@ export function SidebarFooter() {
       </div>
       {!isCollapsed && (
         <div className="sb__footer-actions">
-          <button type="button" className="sb__footer-btn" aria-label="Mer">
-            <span className="material-symbols-rounded">more_horiz</span>
-          </button>
+          <div className="sb__footer-more">
+            <button
+              type="button"
+              className="sb__footer-btn"
+              aria-label="Mer"
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+              onClick={() => setMoreOpen((v) => !v)}
+            >
+              <span className="material-symbols-rounded">more_horiz</span>
+            </button>
+            <SidebarFooterMenu open={moreOpen} onClose={() => setMoreOpen(false)} />
+          </div>
           <button type="button" className="sb__footer-btn" aria-label="Notiser">
             <span className="material-symbols-rounded">notifications</span>
           </button>
