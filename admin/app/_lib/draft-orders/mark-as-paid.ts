@@ -26,7 +26,8 @@ import {
   ValidationError,
 } from "@/app/_lib/errors/service-errors";
 import { transitionDraftStatusInTx } from "./lifecycle";
-import { convertDraftToOrder } from "./convert";
+import { unlinkActiveCheckoutSession, type UnlinkResult } from "./unlink";
+import { runUnlinkSideEffects } from "./unlink-side-effects";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -51,21 +52,13 @@ export type MarkDraftAsPaidResult = {
 
 const PAYABLE_STATUSES: DraftOrderStatus[] = ["INVOICED", "OVERDUE"];
 
-/**
- * Mirrors the private helper in get.ts. Reading from metafields rather
- * than a dedicated column keeps the schema unchanged.
- */
-function readStripePaymentIntentId(
-  metafields: DraftOrder["metafields"],
-): string | null {
-  if (metafields === null || metafields === undefined) return null;
-  if (typeof metafields !== "object" || Array.isArray(metafields)) return null;
-  const v = (metafields as Record<string, unknown>).stripePaymentIntentId;
-  return typeof v === "string" && v.length > 0 ? v : null;
-}
-
 // ── markDraftAsPaid ────────────────────────────────────────────
 
+// §13.1 fix: unlink the active DraftCheckoutSession before recording
+// manual payment. This prevents the double-charge race where a buyer
+// completes Stripe payment after the merchant marked the draft as
+// paid manually.
+// Refs: draft-orders-invoice-flow.md v1.2 §6.1, §13.1, invariant 5.
 export async function markDraftAsPaid(
   input: MarkDraftAsPaidArgs,
 ): Promise<MarkDraftAsPaidResult> {
@@ -88,9 +81,13 @@ export async function markDraftAsPaid(
     );
   }
 
-  // Tx: re-validate + transition + audit. Race-safe via updateMany filter
-  // inside transitionDraftStatusInTx.
-  const transitioned = await prisma.$transaction(async (tx) => {
+  // Tx: unlink → re-validate → transition → audit. The unlink runs as
+  // the FIRST in-tx step (per §13.1 fix) so the session is invalidated
+  // BEFORE we commit PAID. If the buyer's Stripe webhook arrives
+  // between commit and side-effects, Phase H's webhook handler will
+  // see status=UNLINKED and refund instead of double-charging
+  // (v1.2 §6.4).
+  const txResult = await prisma.$transaction(async (tx) => {
     const fresh = (await tx.draftOrder.findFirst({
       where: { id: draft.id, tenantId: draft.tenantId },
       select: { status: true },
@@ -106,6 +103,20 @@ export async function markDraftAsPaid(
         { draftOrderId: draft.id, status: fresh.status },
       );
     }
+
+    // §13.1 fix — unlink BEFORE transition. The session's PI must be
+    // cancelled before we commit PAID; the order is critical because
+    // Phase H's webhook routes off session.status (ACTIVE = pay,
+    // UNLINKED = refund). If we transitioned first then unlinked, a
+    // buyer's parallel Stripe webhook could see ACTIVE briefly and
+    // capture the payment.
+    const unlink = await unlinkActiveCheckoutSession(
+      tx,
+      draft.id,
+      draft.tenantId,
+      "marked_paid_manually",
+      { source: "admin_ui", userId: params.actorUserId },
+    );
 
     const result = await transitionDraftStatusInTx(tx, {
       tenantId: draft.tenantId,
@@ -125,48 +136,53 @@ export async function markDraftAsPaid(
         { draftOrderId: draft.id },
       );
     }
-    return true;
+    return { unlink };
   });
 
-  if (!transitioned) {
-    // Defensive — transition helper threw above. Should be unreachable.
-    throw new ValidationError("mark-as-paid did not commit", {
-      draftOrderId: draft.id,
-    });
+  if (txResult.unlink.unlinked) {
+    schedulePostCommitUnlinkSideEffects(draft.tenantId, draft.id, txResult.unlink);
   }
 
   log("info", "draft_order.marked_paid_manually", {
     tenantId: draft.tenantId,
     draftOrderId: draft.id,
     reference: params.reference ?? null,
+    sessionUnlinked: txResult.unlink.unlinked,
   });
 
-  // Auto-convert (Q14) — mirror the Stripe webhook flow. PAID is already
-  // committed; if convert fails the draft is left at PAID and the
-  // service rethrows so the caller surfaces the error. This matches the
-  // webhook handler's semantics where convert failure triggers Stripe
-  // retries but PAID stays committed.
-  const stripePaymentIntentId = readStripePaymentIntentId(draft.metafields);
-  if (stripePaymentIntentId === null) {
-    // Edge case: draft was INVOICED but PI ID missing from metafields
-    // (data inconsistency). Keep PAID committed; skip auto-convert.
-    log("warn", "draft_order.mark_paid.no_pi_id_skip_convert", {
-      tenantId: draft.tenantId,
-      draftOrderId: draft.id,
+  // TODO: Phase E + Phase H — auto-convert flow. Pre-Phase C this
+  // function read `metafields.stripePaymentIntentId` and forwarded it
+  // to `convertDraftToOrder` (which requires a PI ID). Phase B deleted
+  // the metafields-based storage of PI; Phase E moves the PI to
+  // `DraftCheckoutSession.stripePaymentIntentId`. Until Phase E +
+  // Phase H wire the session-aware lookup, mark-as-paid stops at PAID
+  // and does NOT auto-convert. Production has zero drafts, so this
+  // regression has zero exposure (Phase B verification VP4).
+  const refreshed = (await prisma.draftOrder.findFirst({
+    where: { id: draft.id, tenantId: draft.tenantId },
+  })) as DraftOrder;
+  return { draft: refreshed };
+}
+
+/** Same fire-and-forget post-commit dispatcher as in lines/discount/update-*. */
+function schedulePostCommitUnlinkSideEffects(
+  tenantId: string,
+  draftOrderId: string,
+  unlink: UnlinkResult,
+): void {
+  if (!unlink.unlinked || unlink.sessionId === null) return;
+  void runUnlinkSideEffects({
+    tenantId,
+    draftOrderId,
+    sessionId: unlink.sessionId,
+    releasedHoldExternalIds: unlink.releasedHoldExternalIds,
+    stripePaymentIntentId: unlink.stripePaymentIntentId,
+  }).catch((err) => {
+    log("error", "draft_invoice.side_effects_failed", {
+      tenantId,
+      draftOrderId,
+      sessionId: unlink.sessionId,
+      error: err instanceof Error ? err.message : String(err),
     });
-    const refreshed = (await prisma.draftOrder.findFirst({
-      where: { id: draft.id, tenantId: draft.tenantId },
-    })) as DraftOrder;
-    return { draft: refreshed };
-  }
-
-  const convertResult = await convertDraftToOrder({
-    tenantId: draft.tenantId,
-    draftOrderId: draft.id,
-    stripePaymentIntentId,
-    actorSource: "admin_manual_recovery",
-    actorUserId: params.actorUserId,
   });
-
-  return { draft: convertResult.draft, order: convertResult.order };
 }

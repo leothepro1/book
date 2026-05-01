@@ -29,9 +29,12 @@ export type RawDraftOrder = {
   currency: string;
   taxesIncluded: boolean;
   shippingCents: bigint;
-  pricesFrozenAt: Date | null;
+  /** Optimistic-concurrency version — needed for in-tx CAS by callers. */
+  version: number;
   appliedDiscountCode: string | null;
-  // Persisted snapshot (only used on the frozen path in orchestrator)
+  // Persisted snapshot — historically used on the frozen path; today
+  // always recomputed since `pricesFrozenAt` was removed in Phase B.
+  // Phase E will introduce session-scoped frozen totals.
   subtotalCents: bigint;
   orderDiscountCents: bigint;
   totalTaxCents: bigint;

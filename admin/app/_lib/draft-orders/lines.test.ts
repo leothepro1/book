@@ -16,8 +16,14 @@ const mockTx = {
   draftReservation: {
     create: vi.fn(),
     findFirst: vi.fn(),
+    findMany: vi.fn(),
     updateMany: vi.fn(),
     deleteMany: vi.fn(),
+  },
+  // Phase D — unlink reads/writes the session table.
+  draftCheckoutSession: {
+    findFirst: vi.fn(),
+    updateMany: vi.fn(),
   },
   draftOrderEvent: {
     create: vi.fn(),
@@ -62,6 +68,17 @@ vi.mock("./calculator", () => ({
   computeAndPersistDraftTotalsInTx: mockComputeAndPersist,
 }));
 
+// Phase D — unlink-side-effects mocked so post-commit fire-and-forget
+// doesn't try to import the live integrations resolver in tests.
+vi.mock("./unlink-side-effects", () => ({
+  runUnlinkSideEffects: vi.fn().mockResolvedValue({
+    holdReleaseAttempted: 0,
+    holdReleaseErrors: [],
+    stripePaymentIntentCancelAttempted: false,
+    stripePaymentIntentCancelError: null,
+  }),
+}));
+
 const { addLineItem, updateLineItem, removeLineItem } = await import("./lines");
 
 // ── Fixtures ────────────────────────────────────────────────────
@@ -88,7 +105,6 @@ function makeDraft(overrides: Partial<DraftOrder> = {}): DraftOrder {
     totalCents: BigInt(0),
     currency: "SEK",
     taxesIncluded: true,
-    pricesFrozenAt: null,
     appliedDiscountId: null,
     appliedDiscountCode: null,
     appliedDiscountAmount: null,
@@ -200,6 +216,11 @@ beforeEach(() => {
       }) as never,
   );
   mockTx.draftOrderEvent.create.mockResolvedValue({ id: "ev_1" });
+  // Phase D — unlink defaults: no active session (silent no-op).
+  mockTx.draftCheckoutSession.findFirst.mockResolvedValue(null);
+  mockTx.draftCheckoutSession.updateMany.mockResolvedValue({ count: 1 });
+  mockTx.draftReservation.findMany.mockResolvedValue([]);
+  mockTx.draftReservation.updateMany.mockResolvedValue({ count: 1 });
   mockComputeAndPersist.mockResolvedValue({
     source: "COMPUTED",
     frozenAt: null,
@@ -595,25 +616,6 @@ describe("addLineItem — mutability guards", () => {
     ).rejects.toThrow(/not editable/);
   });
 
-  it("rejects when draft has pricesFrozenAt set", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ pricesFrozenAt: new Date() }),
-    );
-
-    await expect(
-      addLineItem({
-        tenantId: "tenant_1",
-        draftOrderId: "draft_1",
-        line: {
-          lineType: "CUSTOM",
-          title: "x",
-          quantity: 1,
-          unitPriceCents: BigInt(100),
-        },
-      }),
-    ).rejects.toThrow(/frozen/);
-  });
-
   it("rejects when draft is cancelled", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(
       makeDraft({ status: "CANCELLED", cancelledAt: new Date() }),
@@ -995,19 +997,6 @@ describe("updateLineItem — mutability + validation", () => {
     ).rejects.toThrow(/Patch lineType does not match/);
   });
 
-  it("rejects when draft is frozen", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ pricesFrozenAt: new Date() }),
-    );
-    await expect(
-      updateLineItem({
-        tenantId: "tenant_1",
-        draftOrderId: "draft_1",
-        lineItemId: "dli_existing",
-        patch: { lineType: "PRODUCT", taxable: false },
-      }),
-    ).rejects.toThrow(/frozen/);
-  });
 });
 
 // ═══════════════════════════════════════════════════════════════

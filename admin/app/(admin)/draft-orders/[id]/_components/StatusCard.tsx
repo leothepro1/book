@@ -33,7 +33,6 @@ type StatusCardDraft = Pick<
   | "createdAt"
   | "expiresAt"
   | "invoiceSentAt"
-  | "pricesFrozenAt"
   | "invoiceUrl"
   | "completedAt"
   | "cancelledAt"
@@ -101,12 +100,6 @@ export function StatusCard({ draft, stripePaymentIntent }: StatusCardProps) {
         <div style={ROW}>
           <span style={LABEL}>Faktura skickad</span>
           <span>{fmtDateTime(draft.invoiceSentAt)}</span>
-        </div>
-      )}
-      {draft.pricesFrozenAt !== null && (
-        <div style={ROW}>
-          <span style={LABEL}>Priser låsta</span>
-          <span>{fmtDateTime(draft.pricesFrozenAt)}</span>
         </div>
       )}
       {draft.invoiceUrl !== null && (

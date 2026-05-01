@@ -332,22 +332,6 @@ export type PreviewDiscountResult =
       error: string; // DiscountEvaluationError string literal
     };
 
-// ── FAS 6.5B lifecycle: freezePrices ────────────────────────────
-
-export const FreezePricesInputSchema = z.object({
-  tenantId: z.string().min(1),
-  draftOrderId: z.string().min(1),
-  actorUserId: z.string().optional(),
-});
-
-export type FreezePricesInput = z.infer<typeof FreezePricesInputSchema>;
-
-export type FreezePricesResult = {
-  draft: DraftOrder;
-  totals: DraftTotals;
-  frozenAt: Date;
-};
-
 // ── FAS 6.5C: hold services ─────────────────────────────────────
 
 /** Source of a hold lifecycle event — surfaces in event metadata + webhooks. */
@@ -420,19 +404,20 @@ export type PlaceHoldsForDraftResult = {
   skipped: Array<{ draftLineItemId: string; reason: string }>;
 };
 
-// ── FAS 6.5D lifecycle: sendInvoice ──────────────────────────────
+// ── lifecycle: sendInvoice ──────────────────────────────────────
 
 /**
  * Invoice sending moves a draft from OPEN / APPROVED → INVOICED.
  *
- * REQUIRES all ACCOMMODATION DraftReservations in PLACED state. Prevents
- * the "invoiced but not held" failure mode. Admin workflow:
- *   addLineItem → placeHoldsForDraft → freezePrices → sendInvoice.
+ * Per `draft-orders-invoice-flow.md` v1.2 §2.1 (lazy creation), this
+ * service performs ZERO external calls — no Stripe API, no PMS adapter.
+ * It only writes the share-link token + URL + status transition + the
+ * INVOICE_SENT event. The Stripe PaymentIntent and the PMS hold are
+ * created lazily by `createDraftCheckoutSession` (Phase E §7.3) on the
+ * buyer's first GET to `/invoice/[token]`.
  *
- * S5 is an intentional escalation of commitment level:
- *   - freezePrices is a calculation decision (no hold requirement)
- *   - placeHoldForDraftLine is optional for admin
- *   - sendInvoice is a customer commitment (requires holds)
+ * Idempotent on status: calling on an already-`INVOICED` draft returns
+ * the existing share link without state mutation.
  */
 export const SendInvoiceInputSchema = z.object({
   tenantId: z.string().min(1),
@@ -455,11 +440,6 @@ export type SendInvoiceResult = {
   invoiceUrl: string;
   /** Opaque token embedded in invoiceUrl; also stored on DraftOrder.shareLinkToken. */
   shareLinkToken: string;
-  shareLinkExpiresAt: Date;
-  /** Stripe PaymentIntent client_secret — returned so the admin UI can inline-preview. */
-  clientSecret: string;
-  /** Stripe PaymentIntent ID (pi_...). Stored on DraftOrder.metafields.stripePaymentIntentId. */
-  stripePaymentIntentId: string;
 };
 
 // ── FAS 6.5D lifecycle: cancelDraft ──────────────────────────────
@@ -542,30 +522,7 @@ export type ConvertDraftToOrderResult = {
   alreadyConverted: boolean;
 };
 
-// ── FAS 6.5D typed accessors for DraftOrder.metafields ───────────
-
-/**
- * Typed read of the Stripe PaymentIntent ID stored on a DraftOrder.
- *
- * Per Q5 (audit §15.2), we store the PaymentIntent ID in
- * `DraftOrder.metafields.stripePaymentIntentId` rather than adding a
- * dedicated column, to minimise schema churn in 6.5D. This accessor
- * is the ONLY type-safe read path — consumers must not touch
- * `metafields` directly, so a future migration to a column stays
- * a one-line refactor here.
- *
- * Returns null when no invoice has been sent (metafields absent or
- * missing the key) or when the stored value is not a non-empty string.
- */
-export function getDraftStripePaymentIntentId(
-  draft: Pick<DraftOrder, "metafields">,
-): string | null {
-  const mf = draft.metafields;
-  if (mf === null || mf === undefined) return null;
-  if (typeof mf !== "object" || Array.isArray(mf)) return null;
-  const v = (mf as Record<string, unknown>).stripePaymentIntentId;
-  return typeof v === "string" && v.length > 0 ? v : null;
-}
+// ── Typed accessors for DraftOrder fields ──────────────────────
 
 /**
  * Typed read of a draft's public invoice URL. Simple passthrough today —

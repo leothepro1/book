@@ -7,6 +7,15 @@ type TxMock = {
   draftOrder: {
     findFirst: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
+  };
+  draftCheckoutSession: {
+    findFirst: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
+  };
+  draftReservation: {
+    findMany: ReturnType<typeof vi.fn>;
+    updateMany: ReturnType<typeof vi.fn>;
   };
   draftOrderEvent: {
     create: ReturnType<typeof vi.fn>;
@@ -17,6 +26,15 @@ const mockTx: TxMock = {
   draftOrder: {
     findFirst: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  draftCheckoutSession: {
+    findFirst: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  draftReservation: {
+    findMany: vi.fn(),
+    updateMany: vi.fn(),
   },
   draftOrderEvent: {
     create: vi.fn(),
@@ -36,6 +54,15 @@ const mockPrisma = {
 };
 
 vi.mock("@/app/_lib/db/prisma", () => ({ prisma: mockPrisma }));
+vi.mock("@/app/_lib/logger", () => ({ log: vi.fn() }));
+vi.mock("./unlink-side-effects", () => ({
+  runUnlinkSideEffects: vi.fn().mockResolvedValue({
+    holdReleaseAttempted: 0,
+    holdReleaseErrors: [],
+    stripePaymentIntentCancelAttempted: false,
+    stripePaymentIntentCancelError: null,
+  }),
+}));
 
 const { updateDraftCustomer } = await import("./update-customer");
 
@@ -57,8 +84,13 @@ beforeEach(() => {
   mockPrisma.draftOrder.findFirst.mockResolvedValue(null);
   mockPrisma.guestAccount.findFirst.mockResolvedValue({ id: "guest_new" });
   mockTx.draftOrder.findFirst.mockResolvedValue(null);
-  mockTx.draftOrder.update.mockResolvedValue(makeDraft({ version: 2 }));
+  mockTx.draftOrder.updateMany.mockResolvedValue({ count: 1 });
   mockTx.draftOrderEvent.create.mockResolvedValue({ id: "ev_1" });
+  // Phase D — unlink defaults: no active session.
+  mockTx.draftCheckoutSession.findFirst.mockResolvedValue(null);
+  mockTx.draftCheckoutSession.updateMany.mockResolvedValue({ count: 1 });
+  mockTx.draftReservation.findMany.mockResolvedValue([]);
+  mockTx.draftReservation.updateMany.mockResolvedValue({ count: 1 });
   mockPrisma.$transaction.mockImplementation(
     async (cb: (tx: TxMock) => Promise<unknown>) => cb(mockTx),
   );
@@ -72,9 +104,10 @@ describe("updateDraftCustomer — happy path", () => {
   it("changes customer on OPEN draft → ok, version++, event with diff", async () => {
     const draft = makeDraft({ guestAccountId: "guest_old" });
     mockPrisma.draftOrder.findFirst.mockResolvedValue(draft);
-    mockTx.draftOrder.findFirst.mockResolvedValue({ status: "OPEN" });
     const updated = makeDraft({ version: 2, guestAccountId: "guest_new" });
-    mockTx.draftOrder.update.mockResolvedValue(updated);
+    mockTx.draftOrder.findFirst
+      .mockResolvedValueOnce({ status: "OPEN", version: 1 })
+      .mockResolvedValueOnce(updated);
 
     const result = await updateDraftCustomer(
       "draft_1",
@@ -88,7 +121,7 @@ describe("updateDraftCustomer — happy path", () => {
       expect(result.draft.version).toBe(2);
       expect(result.draft.guestAccountId).toBe("guest_new");
     }
-    expect(mockTx.draftOrder.update).toHaveBeenCalledWith(
+    expect(mockTx.draftOrder.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           guestAccountId: "guest_new",
@@ -113,9 +146,10 @@ describe("updateDraftCustomer — happy path", () => {
   it("clears customer (guestAccountId: null) → ok, draft.guestAccountId === null", async () => {
     const draft = makeDraft({ guestAccountId: "guest_old" });
     mockPrisma.draftOrder.findFirst.mockResolvedValue(draft);
-    mockTx.draftOrder.findFirst.mockResolvedValue({ status: "OPEN" });
     const updated = makeDraft({ version: 2, guestAccountId: null });
-    mockTx.draftOrder.update.mockResolvedValue(updated);
+    mockTx.draftOrder.findFirst
+      .mockResolvedValueOnce({ status: "OPEN", version: 1 })
+      .mockResolvedValueOnce(updated);
 
     const result = await updateDraftCustomer(
       "draft_1",
@@ -257,10 +291,15 @@ describe("updateDraftCustomer — status gate", () => {
       mockPrisma.guestAccount.findFirst.mockResolvedValue({ id: "g" });
       const draft = makeDraft({ status, guestAccountId: null });
       mockPrisma.draftOrder.findFirst.mockResolvedValue(draft);
-      mockTx.draftOrder.findFirst.mockResolvedValue({ status });
-      mockTx.draftOrder.update.mockResolvedValue(
-        makeDraft({ status, version: 2, guestAccountId: "guest_new" }),
-      );
+      mockTx.draftOrder.findFirst
+        .mockResolvedValueOnce({ status, version: 1 })
+        .mockResolvedValueOnce(
+          makeDraft({ status, version: 2, guestAccountId: "guest_new" }),
+        );
+      mockTx.draftOrder.updateMany.mockResolvedValue({ count: 1 });
+      // Phase D defaults — no active session.
+      mockTx.draftCheckoutSession.findFirst.mockResolvedValue(null);
+      mockTx.draftReservation.findMany.mockResolvedValue([]);
       mockPrisma.$transaction.mockImplementation(
         async (cb: (tx: TxMock) => Promise<unknown>) => cb(mockTx),
       );
@@ -299,7 +338,7 @@ describe("updateDraftCustomer — in-tx race", () => {
     if (!result.ok) {
       expect(result.error).toBe(DRAFT_ERRORS.TERMINAL_STATUS("INVOICED"));
     }
-    expect(mockTx.draftOrder.update).not.toHaveBeenCalled();
+    expect(mockTx.draftOrder.updateMany).not.toHaveBeenCalled();
     expect(mockTx.draftOrderEvent.create).not.toHaveBeenCalled();
   });
 

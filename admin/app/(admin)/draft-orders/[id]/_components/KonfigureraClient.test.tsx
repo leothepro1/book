@@ -122,7 +122,6 @@ const baseDraft: KonfigureraClientDraft = {
   createdAt: new Date("2026-04-20T10:00:00Z"),
   expiresAt: new Date("2026-04-27T00:00:00Z"),
   invoiceSentAt: null,
-  pricesFrozenAt: null,
   cancelledAt: null,
   completedAt: null,
   cancellationReason: null,
@@ -275,12 +274,12 @@ describe("KonfigureraClient — header & layout (status-agnostic)", () => {
     );
   });
 
-  it("StatusCard shows Priser låsta row when pricesFrozenAt is set", () => {
+  it("StatusCard shows Faktura skickad row when invoiceSentAt is set", () => {
     render(
       <KonfigureraClient
         draft={{
           ...baseDraft,
-          pricesFrozenAt: new Date("2026-04-22T08:00:00Z"),
+          invoiceSentAt: new Date("2026-04-22T08:00:00Z"),
         }}
         reservations={[]}
         customer={null}
@@ -291,7 +290,7 @@ describe("KonfigureraClient — header & layout (status-agnostic)", () => {
         events={[]}
       />,
     );
-    expect(screen.getByText("Priser låsta")).toBeTruthy();
+    expect(screen.getByText("Faktura skickad")).toBeTruthy();
   });
 });
 
@@ -449,12 +448,12 @@ describe("KonfigureraClient — edit mode (editable status)", () => {
     expect(screen.getByTestId("discount-card-mock")).toBeTruthy();
   });
 
-  it("hides DiscountCardEditable when pricesFrozenAt set, falls back to read-only DiscountCard", () => {
+  it("hides DiscountCardEditable when status !== OPEN, falls back to read-only DiscountCard", () => {
     render(
       <KonfigureraClient
         draft={{
           ...baseDraft,
-          pricesFrozenAt: new Date("2026-04-22T08:00:00Z"),
+          status: "INVOICED",
         }}
         reservations={[]}
         customer={null}
@@ -471,28 +470,9 @@ describe("KonfigureraClient — edit mode (editable status)", () => {
     expect(screen.getByText("Ingen rabatt tillämpad.")).toBeTruthy();
   });
 
-  it("PricesFrozenBanner renders when pricesFrozenAt is set", () => {
-    render(
-      <KonfigureraClient
-        draft={{
-          ...baseDraft,
-          pricesFrozenAt: new Date("2026-04-22T08:00:00Z"),
-        }}
-        reservations={[]}
-        customer={null}
-        stripePaymentIntent={null}
-        prev={null}
-        next={null}
-        paymentTerms={null}
-        events={[]}
-      />,
-    );
-    expect(
-      screen.getByText(
-        /Priserna är låsta sedan fakturan skickades\. Rader och rabatt kan inte ändras\./,
-      ),
-    ).toBeTruthy();
-  });
+  // PricesFrozenBanner test removed in Phase C — banner deleted with
+  // `pricesFrozenAt` column. Phase F may reintroduce a session-aware
+  // banner if the design requires it.
 });
 
 describe("KonfigureraClient — linesEditable gate", () => {
@@ -531,12 +511,12 @@ describe("KonfigureraClient — linesEditable gate", () => {
     expect(screen.getByText("+ Lägg till kund")).toBeTruthy();
   });
 
-  it("OPEN + pricesFrozenAt set → lines read-only", () => {
+  it("INVOICED → lines read-only", () => {
     render(
       <KonfigureraClient
         draft={{
           ...baseDraft,
-          pricesFrozenAt: new Date("2026-04-22T08:00:00Z"),
+          status: "INVOICED",
         }}
         reservations={[]}
         customer={null}

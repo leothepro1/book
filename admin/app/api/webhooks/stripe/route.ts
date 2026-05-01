@@ -40,6 +40,7 @@ import { upsertGuestAccountFromOrder } from "@/app/_lib/guest-auth/account";
 import { createGiftCard } from "@/app/_lib/gift-cards/create";
 import { releaseDiscountUsageInTx } from "@/app/_lib/discounts/release";
 import { handleDraftOrderPaymentIntentSucceeded } from "./handle-draft-order-pi";
+import { setSentryTenantContext } from "@/app/_lib/observability/sentry";
 
 export async function POST(req: Request) {
   const stripe = getStripe();
@@ -95,6 +96,12 @@ export async function POST(req: Request) {
     // Platform webhook — trust metadata
     tenantId = obj.metadata?.tenantId ?? "unknown";
   }
+
+  // CLAUDE.md observability mandate: tag every webhook request with
+  // tenantId BEFORE any business logic. Errors raised in dedup,
+  // dispatch, or downstream handlers all land in Sentry tagged with
+  // the tenant they affected. Phase H is on-path for this fix.
+  setSentryTenantContext(tenantId);
 
   // ── Event-level dedup with self-healing ──────────────────────
   // UPSERT ensures we record receipt. processedAt=null means "received

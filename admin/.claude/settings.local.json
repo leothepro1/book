@@ -136,7 +136,25 @@
       "Bash(done)",
       "Bash(mkdir -p app/api/admin/guests/[guestAccountId]/stats)",
       "Bash(mkdir -p app/api/admin/guests/[guestAccountId]/events)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(npx eslint *)",
+      "Bash(awk '/^model DraftCheckoutSession/,/^}$/' prisma/schema.prisma)",
+      "Bash(awk '/^model DraftOrder /,/^}$/' prisma/schema.prisma)",
+      "Bash(chmod +x scripts/verify-phase-h.sh)",
+      "Bash(./scripts/verify-phase-h.sh)",
+      "Bash(bash *)",
+      "Bash(xxd)",
+      "Bash(awk '/^model Accommodation /,/^}$/' prisma/schema.prisma)",
+      "Bash(awk '/^model DraftLineItem /,/^}$/' prisma/schema.prisma)",
+      "Bash(chmod +x scripts/verify-phase-e1.sh)",
+      "Bash(command -v docker)",
+      "Bash(docker --version)",
+      "Bash(docker run *)",
+      "Bash(docker exec *)",
+      "Bash(DATABASE_URL=postgresql://postgres:postgres@localhost:5434/bedfront_test DIRECT_URL=postgresql://postgres:postgres@localhost:5434/bedfront_test npx prisma migrate deploy)",
+      "Bash(DATABASE_URL_TEST=postgresql://postgres:postgres@localhost:5434/bedfront_test npm run test:integration)",
+      "Bash(DATABASE_URL=postgresql://postgres:postgres@localhost:5434/bedfront_test DIRECT_URL=postgresql://postgres:postgres@localhost:5434/bedfront_test DATABASE_URL_TEST=postgresql://postgres:postgres@localhost:5434/bedfront_test npm run test:integration)",
+      "Bash(DATABASE_URL=postgresql://postgres:postgres@localhost:5434/bedfront_test DIRECT_URL=postgresql://postgres:postgres@localhost:5434/bedfront_test DATABASE_URL_TEST=postgresql://postgres:postgres@localhost:5434/bedfront_test npx vitest run app/_lib/draft-orders/holds.integration.test.ts)"
     ]
   }
 }

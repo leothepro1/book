@@ -42,6 +42,8 @@ import {
   type RawDraftOrder,
 } from "./calculator";
 import { createDraftOrderEventInTx } from "./events";
+import { unlinkActiveCheckoutSession, type UnlinkResult } from "./unlink";
+import { runUnlinkSideEffects } from "./unlink-side-effects";
 import {
   ApplyDiscountCodeInputSchema,
   PreviewApplyDiscountCodeInputSchema,
@@ -100,11 +102,6 @@ function assertDraftMutable(draft: RawDraftOrder): void {
     throw new ValidationError("Draft is not editable (wrong status)", {
       draftOrderId: draft.id,
       status: draft.status,
-    });
-  }
-  if (draft.pricesFrozenAt !== null) {
-    throw new ValidationError("Draft prices are frozen; cannot modify", {
-      draftOrderId: draft.id,
     });
   }
 }
@@ -197,6 +194,7 @@ export async function applyDiscountCode(
       tx,
       draft.tenantId,
       draft.id,
+      fresh.version,
     );
 
     // Race safety: if the Discount's usage count was exhausted between
@@ -210,12 +208,25 @@ export async function applyDiscountCode(
       );
     }
 
+    // Phase D — v1.2 §6.1.
+    const unlink = await unlinkActiveCheckoutSession(
+      tx,
+      draft.id,
+      draft.tenantId,
+      "draft_mutated",
+      { source: "admin_ui", userId: params.actorUserId },
+    );
+
     const refreshed = (await tx.draftOrder.findFirst({
       where: { id: draft.id, tenantId: draft.tenantId },
     })) as DraftOrder;
 
-    return { draft: refreshed, totals };
+    return { draft: refreshed, totals, unlink };
   });
+
+  if (result.unlink.unlinked) {
+    schedulePostCommitUnlinkSideEffects(draft.tenantId, draft.id, result.unlink);
+  }
 
   log("info", "draft_order.discount_applied", {
     tenantId: draft.tenantId,
@@ -246,7 +257,8 @@ export async function applyDiscountCode(
     });
   });
 
-  return { ...result, discount: summary };
+  const { unlink: _unlinkApply, ...publicApply } = result;
+  return { ...publicApply, discount: summary };
 }
 
 // ── removeDiscountCode ─────────────────────────────────────────
@@ -314,14 +326,28 @@ export async function removeDiscountCode(
       tx,
       draft.tenantId,
       draft.id,
+      fresh.version,
+    );
+
+    // Phase D — v1.2 §6.1.
+    const unlink = await unlinkActiveCheckoutSession(
+      tx,
+      draft.id,
+      draft.tenantId,
+      "draft_mutated",
+      { source: "admin_ui", userId: params.actorUserId },
     );
 
     const refreshed = (await tx.draftOrder.findFirst({
       where: { id: draft.id, tenantId: draft.tenantId },
     })) as DraftOrder;
 
-    return { draft: refreshed, totals };
+    return { draft: refreshed, totals, unlink };
   });
+
+  if (result.unlink.unlinked) {
+    schedulePostCommitUnlinkSideEffects(draft.tenantId, draft.id, result.unlink);
+  }
 
   log("info", "draft_order.discount_removed", {
     tenantId: draft.tenantId,
@@ -350,7 +376,34 @@ export async function removeDiscountCode(
     });
   });
 
-  return result;
+  const { unlink: _unlinkRemove, ...publicRemove } = result;
+  return publicRemove;
+}
+
+/**
+ * Fire-and-forget post-commit dispatcher for unlink side effects.
+ * Mirrors the same helper in `lines.ts`.
+ */
+function schedulePostCommitUnlinkSideEffects(
+  tenantId: string,
+  draftOrderId: string,
+  unlink: UnlinkResult,
+): void {
+  if (!unlink.unlinked || unlink.sessionId === null) return;
+  void runUnlinkSideEffects({
+    tenantId,
+    draftOrderId,
+    sessionId: unlink.sessionId,
+    releasedHoldExternalIds: unlink.releasedHoldExternalIds,
+    stripePaymentIntentId: unlink.stripePaymentIntentId,
+  }).catch((err) => {
+    log("error", "draft_invoice.side_effects_failed", {
+      tenantId,
+      draftOrderId,
+      sessionId: unlink.sessionId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
 }
 
 // ── previewApplyDiscountCode (read-only) ───────────────────────

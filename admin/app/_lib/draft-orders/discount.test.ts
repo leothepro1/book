@@ -6,6 +6,8 @@ import type { CalculatedDiscountImpact } from "@/app/_lib/discounts/apply";
 
 const mockTx = {
   draftOrder: { findFirst: vi.fn(), update: vi.fn() },
+  draftCheckoutSession: { findFirst: vi.fn(), updateMany: vi.fn() },
+  draftReservation: { findMany: vi.fn(), updateMany: vi.fn() },
   draftOrderEvent: { create: vi.fn() },
 };
 
@@ -38,6 +40,15 @@ vi.mock("./calculator", async () => {
     computeAndPersistDraftTotalsInTx: mockComputeAndPersist,
   };
 });
+
+vi.mock("./unlink-side-effects", () => ({
+  runUnlinkSideEffects: vi.fn().mockResolvedValue({
+    holdReleaseAttempted: 0,
+    holdReleaseErrors: [],
+    stripePaymentIntentCancelAttempted: false,
+    stripePaymentIntentCancelError: null,
+  }),
+}));
 
 const { applyDiscountCode, removeDiscountCode, previewApplyDiscountCode } =
   await import("./discount");
@@ -110,7 +121,6 @@ function makeDraft(overrides: Partial<RawDraft> = {}): RawDraft {
     totalCents: BigInt(10_000),
     currency: "SEK",
     taxesIncluded: true,
-    pricesFrozenAt: null,
     appliedDiscountId: null,
     appliedDiscountCode: null,
     appliedDiscountAmount: null,
@@ -189,6 +199,11 @@ beforeEach(() => {
   mockTx.draftOrder.findFirst.mockResolvedValue(makeDraft());
   mockTx.draftOrder.update.mockResolvedValue(makeDraft());
   mockTx.draftOrderEvent.create.mockResolvedValue({ id: "ev_1" });
+  // Phase D — unlink defaults: no active session.
+  mockTx.draftCheckoutSession.findFirst.mockResolvedValue(null);
+  mockTx.draftCheckoutSession.updateMany.mockResolvedValue({ count: 1 });
+  mockTx.draftReservation.findMany.mockResolvedValue([]);
+  mockTx.draftReservation.updateMany.mockResolvedValue({ count: 1 });
   mockComputeAndPersist.mockResolvedValue(makeValidTotals());
   mockEmit.mockResolvedValue(undefined);
   mockPrisma.accommodation.findMany.mockResolvedValue([]);
@@ -355,18 +370,6 @@ describe("applyDiscountCode — mutability guards", () => {
     ).rejects.toThrow(/not editable/i);
   });
 
-  it("rejects frozen draft", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ pricesFrozenAt: new Date() }),
-    );
-    await expect(
-      applyDiscountCode({
-        tenantId: "tenant_1",
-        draftOrderId: "draft_1",
-        code: "X",
-      }),
-    ).rejects.toThrow(/frozen/i);
-  });
 });
 
 describe("applyDiscountCode — buyer context threading", () => {
@@ -452,23 +455,6 @@ describe("removeDiscountCode — no-discount rejection", () => {
   });
 });
 
-describe("removeDiscountCode — mutability guards", () => {
-  it("rejects frozen draft even if a discount is applied", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({
-        pricesFrozenAt: new Date(),
-        appliedDiscountCode: "X",
-      }),
-    );
-    await expect(
-      removeDiscountCode({
-        tenantId: "tenant_1",
-        draftOrderId: "draft_1",
-      }),
-    ).rejects.toThrow(/frozen/i);
-  });
-});
-
 // ═══════════════════════════════════════════════════════════════
 // previewApplyDiscountCode
 // ═══════════════════════════════════════════════════════════════
@@ -520,20 +506,6 @@ describe("previewApplyDiscountCode — invalid code", () => {
 });
 
 describe("previewApplyDiscountCode — mutability guards", () => {
-  it("throws DRAFT_IMMUTABLE on frozen draft (operator Q3)", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ pricesFrozenAt: new Date() }),
-    );
-
-    await expect(
-      previewApplyDiscountCode({
-        tenantId: "tenant_1",
-        draftOrderId: "draft_1",
-        code: "X",
-      }),
-    ).rejects.toThrow(/frozen/i);
-  });
-
   it("throws on INVOICED draft", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(
       makeDraft({ status: "INVOICED" }),

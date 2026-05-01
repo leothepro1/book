@@ -14,8 +14,12 @@
 import { z } from "zod";
 import type { DraftOrder, DraftOrderStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/app/_lib/db/prisma";
+import { log } from "@/app/_lib/logger";
+import { VersionConflictError } from "@/app/_lib/errors/service-errors";
 import { createDraftOrderEventInTx } from "./events";
 import { DRAFT_ERRORS } from "./errors";
+import { unlinkActiveCheckoutSession, type UnlinkResult } from "./unlink";
+import { runUnlinkSideEffects } from "./unlink-side-effects";
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -133,19 +137,11 @@ export async function updateDraftMeta(
   }
 
   try {
-    const updated = await prisma.$transaction(async (tx) => {
-      const data: Prisma.DraftOrderUpdateInput = {
-        version: { increment: 1 },
-      };
-      if (patch.expiresAt !== undefined) data.expiresAt = patch.expiresAt;
-      if (patch.internalNote !== undefined) data.internalNote = patch.internalNote;
-      if (patch.customerNote !== undefined) data.customerNote = patch.customerNote;
-      if (patch.tags !== undefined) data.tags = { set: patch.tags };
-
+    const txResult = await prisma.$transaction(async (tx) => {
       // Re-validate inside tx (defensive against concurrent transitions).
       const fresh = await tx.draftOrder.findFirst({
         where: { id: draftId, tenantId },
-        select: { status: true },
+        select: { status: true, version: true },
       });
       if (!fresh) {
         throw new Error("__VANISHED__");
@@ -154,10 +150,27 @@ export async function updateDraftMeta(
         throw new Error(`__TERMINAL__:${fresh.status}`);
       }
 
-      const result = (await tx.draftOrder.update({
-        where: { id: draftId },
+      // Phase D — assemble the patch + version increment, then write
+      // via updateMany with version-CAS filter.
+      const data: Prisma.DraftOrderUpdateManyMutationInput = {
+        version: { increment: 1 },
+      };
+      if (patch.expiresAt !== undefined) data.expiresAt = patch.expiresAt;
+      if (patch.internalNote !== undefined) data.internalNote = patch.internalNote;
+      if (patch.customerNote !== undefined) data.customerNote = patch.customerNote;
+      if (patch.tags !== undefined) data.tags = { set: patch.tags };
+
+      const updateRes = await tx.draftOrder.updateMany({
+        where: { id: draftId, tenantId, version: fresh.version },
         data,
-      })) as DraftOrder;
+      });
+      if (updateRes.count === 0) {
+        throw new VersionConflictError(DRAFT_ERRORS.VERSION_CONFLICT, {
+          draftOrderId: draftId,
+          tenantId,
+          expectedVersion: fresh.version,
+        });
+      }
 
       await createDraftOrderEventInTx(tx, {
         tenantId,
@@ -168,11 +181,31 @@ export async function updateDraftMeta(
         actorSource: actor.source,
       });
 
-      return result;
+      // Phase D — v1.2 §6.1.
+      const unlink = await unlinkActiveCheckoutSession(
+        tx,
+        draftId,
+        tenantId,
+        "draft_mutated",
+        { source: actor.source, userId: actor.userId },
+      );
+
+      const refreshed = (await tx.draftOrder.findFirst({
+        where: { id: draftId, tenantId },
+      })) as DraftOrder;
+
+      return { draft: refreshed, unlink };
     });
 
-    return { ok: true, draft: updated };
+    if (txResult.unlink.unlinked) {
+      schedulePostCommitUnlinkSideEffects(tenantId, draftId, txResult.unlink);
+    }
+
+    return { ok: true, draft: txResult.draft };
   } catch (err) {
+    if (err instanceof VersionConflictError) {
+      return { ok: false, error: DRAFT_ERRORS.VERSION_CONFLICT };
+    }
     const msg = err instanceof Error ? err.message : String(err);
     if (msg === "__VANISHED__") {
       return { ok: false, error: DRAFT_ERRORS.NOT_FOUND };
@@ -183,4 +216,27 @@ export async function updateDraftMeta(
     }
     throw err;
   }
+}
+
+/** Same fire-and-forget pattern as in `update-customer.ts`. */
+function schedulePostCommitUnlinkSideEffects(
+  tenantId: string,
+  draftOrderId: string,
+  unlink: UnlinkResult,
+): void {
+  if (!unlink.unlinked || unlink.sessionId === null) return;
+  void runUnlinkSideEffects({
+    tenantId,
+    draftOrderId,
+    sessionId: unlink.sessionId,
+    releasedHoldExternalIds: unlink.releasedHoldExternalIds,
+    stripePaymentIntentId: unlink.stripePaymentIntentId,
+  }).catch((err) => {
+    log("error", "draft_invoice.side_effects_failed", {
+      tenantId,
+      draftOrderId,
+      sessionId: unlink.sessionId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
 }

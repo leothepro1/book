@@ -73,10 +73,19 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
   private async _initiatePaymentIntent(
     request: PaymentSessionRequest,
   ): Promise<PaymentSessionInit> {
-    const { sessionId, tenantId, amount, currency, metadata } = request;
+    const { sessionId, tenantId, amount, currency, metadata, idempotencyKey } =
+      request;
 
-    // DB-level lock: upsert placeholder PaymentSession to prevent
-    // concurrent PI creation for the same sessionId (race condition fix).
+    // PHASE H FOLLOW-UP: when called from Phase E
+    // `createDraftCheckoutSession`, `sessionId` is a `DraftCheckoutSession.id`
+    // — there is no corresponding `Order` row. The `paymentSession` table
+    // therefore accumulates rows whose `orderId` references a
+    // DraftCheckoutSession instead of an Order. This is intentional for
+    // Phase E (v1.3 §7.3) but Phase H's webhook rewrite will make the
+    // handler session-aware and either (a) rename the field, (b) split the
+    // table by kind, or (c) tolerate both sources via metadata. Until then
+    // D2C reconciliation crons read directly from `Order` and ignore
+    // `paymentSession` orphans, so this is observed but not load-bearing.
     const existing = await prisma.paymentSession.upsert({
       where: { orderId: sessionId },
       create: {
@@ -156,6 +165,14 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
 
     const stripe = getStripe();
 
+    // Stripe accepts both `stripeAccount` (Connect) and `idempotencyKey`
+    // in the same options object. Phase E (v1.3 §6.4) requires the
+    // idempotency key so a lost network response on `paymentIntents.create`
+    // produces the same PI on retry rather than a duplicate.
+    const stripeOpts: Stripe.RequestOptions = {};
+    if (useConnect) stripeOpts.stripeAccount = tenant.stripeAccountId!;
+    if (idempotencyKey) stripeOpts.idempotencyKey = idempotencyKey;
+
     const paymentIntent = await stripe.paymentIntents.create(
       {
         amount,
@@ -170,7 +187,7 @@ export class BedfrontPaymentsAdapter implements PaymentAdapter {
           feeBps: String(feeBps),
         },
       },
-      useConnect ? { stripeAccount: tenant.stripeAccountId! } : undefined,
+      Object.keys(stripeOpts).length > 0 ? stripeOpts : undefined,
     );
 
     await prisma.paymentSession.upsert({

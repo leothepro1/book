@@ -87,7 +87,6 @@ type DraftRow = {
   id: string;
   tenantId: string;
   status: string;
-  pricesFrozenAt: Date | null;
   cancelledAt: Date | null;
   completedAt: Date | null;
   currency: string;
@@ -100,7 +99,6 @@ async function loadDraft(tenantId: string, draftOrderId: string): Promise<DraftR
       id: true,
       tenantId: true,
       status: true,
-      pricesFrozenAt: true,
       cancelledAt: true,
       completedAt: true,
       currency: true,
@@ -122,13 +120,51 @@ function assertDraftMutable(draft: DraftRow): void {
       status: draft.status,
     });
   }
-  if (draft.pricesFrozenAt !== null) {
-    throw new ValidationError("Draft prices are frozen; cannot modify holds", {
+  if (draft.cancelledAt !== null || draft.completedAt !== null) {
+    throw new ValidationError("Draft is not editable", {
       draftOrderId: draft.id,
     });
   }
+}
+
+/**
+ * Phase E.1 — gate for *hold placement* (distinct from edit mutability).
+ *
+ * Hold placement is permitted on drafts that are awaiting payment. Edit
+ * mutability is a separate, narrower concern — see `assertDraftMutable`
+ * for the OPEN-only edit guard, which preserves Phase D's
+ * unlink-on-mutation contract.
+ *
+ * Accept-list:
+ *   - OPEN     — initial creation flow (`createDraftWithLines` post-tx)
+ *   - INVOICED — lazy session creation in Phase E (v1.3 §7.3) and
+ *                hold-refresh release-and-replace in Phase I (v1.3 §6.5)
+ *   - OVERDUE  — same buyer-pays-late semantics as INVOICED; the
+ *                state machine permits buyer payment from OVERDUE
+ *                (Phase H webhook upgrades OVERDUE → PAID per
+ *                §5 invariant 12)
+ *
+ * Reject everything else (PAID, COMPLETED, CANCELLED, …) and the
+ * soft-deleted state (cancelledAt or completedAt set), matching
+ * `assertDraftMutable`'s ValidationError shape so upstream error
+ * handling does not fork.
+ */
+function assertDraftCanPlaceHolds(draft: DraftRow): void {
+  if (
+    draft.status !== "OPEN" &&
+    draft.status !== "INVOICED" &&
+    draft.status !== "OVERDUE"
+  ) {
+    throw new ValidationError(
+      "Draft cannot place holds (wrong status)",
+      {
+        draftOrderId: draft.id,
+        status: draft.status,
+      },
+    );
+  }
   if (draft.cancelledAt !== null || draft.completedAt !== null) {
-    throw new ValidationError("Draft is not editable", {
+    throw new ValidationError("Draft cannot place holds", {
       draftOrderId: draft.id,
     });
   }
@@ -168,11 +204,10 @@ export async function placeHoldForDraftLine(
 ): Promise<PlaceHoldForDraftLineResult> {
   const params = PlaceHoldForDraftLineInputSchema.parse(input);
 
-  // Pre-tx: validate draft, line, reservation, adapter, accommodation.
-  const draft = await loadDraft(params.tenantId, params.draftLineItemId);
-  // Note: we loaded by draftLineItemId as a "draftOrderId" guess above —
-  // that's wrong. The pattern: find the line first, then the draft.
-  // Re-fetch correctly.
+  // Pre-tx: validate line first, then the parent draft, then
+  // reservation/adapter/accommodation. The line lookup gives us the
+  // authoritative `draftOrderId`; loading the draft any earlier
+  // would have to guess at the id and would always miss.
   const line = await prisma.draftLineItem.findFirst({
     where: { id: params.draftLineItemId, tenantId: params.tenantId },
     select: {
@@ -199,10 +234,9 @@ export async function placeHoldForDraftLine(
     });
   }
 
-  // Reload the correct draft by line's parent.
+  // Load the parent draft by the line's draftOrderId.
   const parentDraft = await loadDraft(params.tenantId, line.draftOrderId);
   assertDraftMutable(parentDraft);
-  void draft; // silence — replaced by parentDraft above
 
   const reservation = await loadReservationForLine(
     params.tenantId,
@@ -613,7 +647,7 @@ export async function placeHoldsForDraft(
   const params = PlaceHoldsForDraftInputSchema.parse(input);
 
   const draft = await loadDraft(params.tenantId, params.draftOrderId);
-  assertDraftMutable(draft);
+  assertDraftCanPlaceHolds(draft);
 
   const reservations = (await prisma.draftReservation.findMany({
     where: {

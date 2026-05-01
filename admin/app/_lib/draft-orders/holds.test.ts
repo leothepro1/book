@@ -83,7 +83,6 @@ function makeDraft(overrides: Record<string, unknown> = {}) {
     id: "draft_1",
     tenantId: "tenant_1",
     status: "OPEN",
-    pricesFrozenAt: null,
     cancelledAt: null,
     completedAt: null,
     currency: "SEK",
@@ -402,18 +401,6 @@ describe("placeHoldForDraftLine — preconditions", () => {
     ).rejects.toThrow(/only to ACCOMMODATION/i);
   });
 
-  it("rejects when draft is frozen", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ pricesFrozenAt: new Date() }),
-    );
-    await expect(
-      placeHoldForDraftLine({
-        tenantId: "tenant_1",
-        draftLineItemId: "dli_1",
-      }),
-    ).rejects.toThrow(/frozen/i);
-  });
-
   it("rejects when accommodation lacks externalId (not PMS-synced)", async () => {
     mockPrisma.accommodation.findFirst.mockResolvedValue({
       externalId: null,
@@ -694,20 +681,6 @@ describe("placeHoldsForDraft — partial failure tolerance", () => {
 });
 
 describe("placeHoldsForDraft — mutability guards", () => {
-  it("rejects frozen draft before touching any reservation", async () => {
-    mockPrisma.draftOrder.findFirst.mockResolvedValue(
-      makeDraft({ pricesFrozenAt: new Date() }),
-    );
-    await expect(
-      placeHoldsForDraft({
-        tenantId: "tenant_1",
-        draftOrderId: "draft_1",
-      }),
-    ).rejects.toThrow(/frozen/i);
-
-    expect(mockPrisma.draftReservation.findMany).not.toHaveBeenCalled();
-  });
-
   it("returns all-empty result for draft with no placeable reservations", async () => {
     mockPrisma.draftReservation.findMany.mockResolvedValue([]);
 
@@ -717,5 +690,126 @@ describe("placeHoldsForDraft — mutability guards", () => {
     });
 
     expect(result).toEqual({ placed: [], failed: [], skipped: [] });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Phase E.1 — assertDraftCanPlaceHolds (exercised via placeHoldsForDraft)
+//
+// `assertDraftCanPlaceHolds` is a private helper; its behaviour is
+// exercised through the public `placeHoldsForDraft` boundary. The
+// guard reads only `status`, `cancelledAt`, `completedAt` from the
+// draft row, so the matrix below covers every relevant input.
+// ═══════════════════════════════════════════════════════════════
+
+describe("placeHoldsForDraft — assertDraftCanPlaceHolds accept-list", () => {
+  it("accepts status=OPEN (initial-creation flow)", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeDraft({ status: "OPEN" }),
+    );
+    mockPrisma.draftReservation.findMany.mockResolvedValue([]);
+
+    await expect(
+      placeHoldsForDraft({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
+    ).resolves.toEqual({ placed: [], failed: [], skipped: [] });
+  });
+
+  it("accepts status=INVOICED (Phase E lazy session creation per v1.3 §7.3)", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeDraft({ status: "INVOICED" }),
+    );
+    mockPrisma.draftReservation.findMany.mockResolvedValue([]);
+
+    await expect(
+      placeHoldsForDraft({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
+    ).resolves.toEqual({ placed: [], failed: [], skipped: [] });
+  });
+
+  it("accepts status=OVERDUE (buyer-pays-late per v1.3 §5 invariant 12)", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeDraft({ status: "OVERDUE" }),
+    );
+    mockPrisma.draftReservation.findMany.mockResolvedValue([]);
+
+    await expect(
+      placeHoldsForDraft({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
+    ).resolves.toEqual({ placed: [], failed: [], skipped: [] });
+  });
+});
+
+describe("placeHoldsForDraft — assertDraftCanPlaceHolds reject-list", () => {
+  const rejectStatuses = ["PAID", "COMPLETED", "CANCELLED"] as const;
+
+  for (const status of rejectStatuses) {
+    it(`rejects status=${status} with ValidationError`, async () => {
+      mockPrisma.draftOrder.findFirst.mockResolvedValue(
+        makeDraft({ status }),
+      );
+
+      await expect(
+        placeHoldsForDraft({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
+      ).rejects.toThrow(/Draft cannot place holds/);
+    });
+  }
+
+  it("rejects soft-deleted draft (status=OPEN, cancelledAt set)", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeDraft({ status: "OPEN", cancelledAt: new Date() }),
+    );
+
+    await expect(
+      placeHoldsForDraft({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
+    ).rejects.toThrow(/Draft cannot place holds/);
+  });
+
+  it("rejects soft-deleted draft (status=INVOICED, completedAt set)", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeDraft({ status: "INVOICED", completedAt: new Date() }),
+    );
+
+    await expect(
+      placeHoldsForDraft({ tenantId: "tenant_1", draftOrderId: "draft_1" }),
+    ).rejects.toThrow(/Draft cannot place holds/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Phase E.1 — regression: assertDraftMutable contract preserved
+//
+// `assertDraftMutable` (the OPEN-only edit guard) is still used by
+// `placeHoldForDraftLine` and `releaseHoldForDraftLine`. These tests
+// guard against future drift where someone might be tempted to
+// "unify" the two guards — the edit guard MUST remain strict, or
+// Phase D's unlink-on-mutation contract breaks.
+// ═══════════════════════════════════════════════════════════════
+
+describe("placeHoldForDraftLine — assertDraftMutable contract preserved", () => {
+  it("accepts status=OPEN (existing behaviour, unchanged)", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeDraft({ status: "OPEN" }),
+    );
+    mockHoldAvailability.mockResolvedValue({
+      externalId: "ext_open",
+      expiresAt: new Date(),
+    });
+
+    const result = await placeHoldForDraftLine({
+      tenantId: "tenant_1",
+      draftLineItemId: "dli_1",
+    });
+    expect(result.holdExternalId).toBe("ext_open");
+  });
+
+  it("rejects status=INVOICED (proves edit guard was NOT loosened by Phase E.1)", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeDraft({ status: "INVOICED" }),
+    );
+
+    await expect(
+      placeHoldForDraftLine({
+        tenantId: "tenant_1",
+        draftLineItemId: "dli_1",
+      }),
+    ).rejects.toThrow(/Draft is not editable/);
   });
 });

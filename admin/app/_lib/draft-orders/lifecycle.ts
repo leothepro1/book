@@ -1,28 +1,26 @@
 /**
  * DraftOrder — lifecycle services.
  *
- * FAS 6.5B scope: `freezePrices` only. FAS 6.5D will add
- * `transitionStatus`, `sendInvoice`, `cancelDraft`, `convertToOrder`.
+ * Phase C (per `draft-orders-invoice-flow.md` v1.2 §2.1, lazy creation)
+ * stripped this module of all eager Stripe / PMS calls. Today it
+ * exposes:
  *
- * `freezePrices` semantics:
- *   - Snapshot current totals into DraftOrder row (subtotalCents /
- *     orderDiscountCents / totalTaxCents / totalCents).
- *   - Snapshot per-line totals into each DraftLineItem row
- *     (taxAmountCents / totalCents).
- *   - Set `DraftOrder.pricesFrozenAt = now`.
- *   - All of the above happen in a single write per row so `version`
- *     increments exactly once.
+ *   - `transitionDraftStatusInTx` — internal helper for status moves
+ *   - `sendInvoice` — OPEN/APPROVED → INVOICED, share-link token + URL,
+ *     INVOICE_SENT event. Idempotent on status. ZERO external calls.
+ *   - `cancelDraft` — non-terminal → CANCELLED, releases PMS holds.
  *
- * INVARIANT: `convertToOrder` (FAS 6.5D) will REQUIRE `pricesFrozenAt`
- * to be set. It will NOT call `freezePrices` internally — staff must
- * freeze explicitly before converting. See audit §7 for rationale
- * (separation of concerns, UX flow, failure-mode safety).
- *
- * Idempotency: calling `freezePrices` on an already-frozen draft throws
- * `ValidationError("ALREADY_FROZEN")` per operator decision — explicit
- * about state changes, not silent no-op.
- *
- * Empty draft: allowed. All totals freeze to `0n`.
+ * Removed in Phase C:
+ *   - `freezePrices` — the schema column it wrote (`pricesFrozenAt`)
+ *     was dropped in Phase B. Frozen totals now live on
+ *     `DraftCheckoutSession` (Phase E).
+ *   - `sendInvoiceIdempotentReplay` — the replay path was a workaround
+ *     for the eager-PI model. Under lazy creation, calling
+ *     `sendInvoice` on an INVOICED draft is a pure read.
+ *   - Stripe PI creation / cancellation in `sendInvoice` and
+ *     `cancelDraft`. Phase E creates PIs on lazy session creation;
+ *     Phase D will wire `unlinkActiveCheckoutSession` into
+ *     `cancelDraft`, which is the proper PI-cancel path.
  */
 
 import { randomBytes } from "node:crypto";
@@ -41,31 +39,22 @@ import {
   NotFoundError,
   ValidationError,
 } from "@/app/_lib/errors/service-errors";
-import {
-  computeDraftTotals,
-  type RawDraftOrder,
-} from "./calculator";
 import { createDraftOrderEventInTx, type DraftEventActorSource } from "./events";
 import { canTransition } from "./state-machine";
+import { unlinkActiveCheckoutSession, type UnlinkResult } from "./unlink";
+import { runUnlinkSideEffects } from "./unlink-side-effects";
 import {
   CancelDraftInputSchema,
-  FreezePricesInputSchema,
   SendInvoiceInputSchema,
-  getDraftStripePaymentIntentId,
   type CancelDraftArgs,
   type CancelDraftInput,
   type CancelDraftResult,
   type DraftOrder,
-  type FreezePricesInput,
-  type FreezePricesResult,
   type SendInvoiceArgs,
   type SendInvoiceInput,
   type SendInvoiceResult,
 } from "./types";
-import { z } from "zod";
 
-type FreezePricesArgs = z.input<typeof FreezePricesInputSchema>;
-void ({} as FreezePricesInput);
 // Silence unused-import noise — types are imported for surface clarity.
 void ({} as SendInvoiceInput);
 void ({} as CancelDraftInput);
@@ -74,172 +63,7 @@ void ({} as CancelDraftArgs);
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-async function loadDraftForFreeze(
-  tenantId: string,
-  draftOrderId: string,
-): Promise<RawDraftOrder> {
-  const draft = (await prisma.draftOrder.findFirst({
-    where: { id: draftOrderId, tenantId },
-    include: { lineItems: { orderBy: { position: "asc" } } },
-  })) as RawDraftOrder | null;
-  if (!draft) {
-    throw new NotFoundError("DraftOrder not found in tenant", {
-      tenantId,
-      draftOrderId,
-    });
-  }
-  return draft;
-}
-
-/**
- * Assert the draft is in a freezable state.
- *
- * TODO(FAS 6.5D): extend allowed statuses to include `APPROVED` once
- * that state is reachable via submitForApproval/approve services.
- */
-function assertDraftFreezable(draft: RawDraftOrder): void {
-  if (draft.status !== "OPEN") {
-    throw new ValidationError("Draft is not in a freezable status", {
-      draftOrderId: draft.id,
-      status: draft.status,
-    });
-  }
-  if (draft.pricesFrozenAt !== null) {
-    throw new ValidationError("Draft prices are already frozen", {
-      draftOrderId: draft.id,
-      pricesFrozenAt: draft.pricesFrozenAt?.toISOString(),
-    });
-  }
-}
-
-// ── freezePrices ─────────────────────────────────────────────────
-
-export async function freezePrices(
-  input: FreezePricesArgs,
-): Promise<FreezePricesResult> {
-  const params = FreezePricesInputSchema.parse(input);
-
-  // Pre-tx: fetch + fast-fail.
-  const draft = await loadDraftForFreeze(
-    params.tenantId,
-    params.draftOrderId,
-  );
-  assertDraftFreezable(draft);
-
-  const frozenAt = new Date();
-
-  const result = await prisma.$transaction(async (tx) => {
-    // Re-validate inside tx (defensive against concurrent freeze attempts).
-    const fresh = (await tx.draftOrder.findFirst({
-      where: { id: draft.id, tenantId: draft.tenantId },
-    })) as RawDraftOrder | null;
-    if (!fresh) {
-      throw new NotFoundError("DraftOrder vanished during mutation", {
-        draftOrderId: draft.id,
-      });
-    }
-    assertDraftFreezable(fresh);
-
-    // Compute totals via the injected tx (read-only — NOT the persist
-    // variant, because we want to combine totals + pricesFrozenAt +
-    // version+1 into a single update).
-    const totals = await computeDraftTotals(
-      draft.tenantId,
-      draft.id,
-      {},
-      tx,
-    );
-
-    // Single DraftOrder write — all totals + pricesFrozenAt + version+1.
-    await tx.draftOrder.update({
-      where: { id: draft.id },
-      data: {
-        subtotalCents: totals.subtotalCents,
-        orderDiscountCents: totals.orderDiscountCents,
-        totalTaxCents: totals.taxCents,
-        totalCents: totals.totalCents,
-        pricesFrozenAt: frozenAt,
-        version: { increment: 1 },
-      },
-    });
-
-    // Per-line snapshot writes (taxAmountCents + totalCents).
-    for (const breakdown of totals.perLine) {
-      await tx.draftLineItem.update({
-        where: { id: breakdown.lineId },
-        data: {
-          taxAmountCents: breakdown.taxCents,
-          totalCents: breakdown.totalCents,
-        },
-      });
-    }
-
-    await createDraftOrderEventInTx(tx, {
-      tenantId: draft.tenantId,
-      draftOrderId: draft.id,
-      type: "PRICES_FROZEN",
-      metadata: {
-        frozenAt: frozenAt.toISOString(),
-        snapshot: {
-          subtotalCents: totals.subtotalCents.toString(),
-          orderDiscountCents: totals.orderDiscountCents.toString(),
-          totalTaxCents: totals.taxCents.toString(),
-          totalCents: totals.totalCents.toString(),
-        },
-      },
-      actorUserId: params.actorUserId ?? null,
-      actorSource: "admin_ui",
-    });
-
-    const refreshed = (await tx.draftOrder.findFirst({
-      where: { id: draft.id, tenantId: draft.tenantId },
-    })) as DraftOrder;
-
-    return { draft: refreshed, totals };
-  });
-
-  log("info", "draft_order.prices_frozen", {
-    tenantId: draft.tenantId,
-    draftOrderId: draft.id,
-    totalCents: result.totals.totalCents.toString(),
-    frozenAt: frozenAt.toISOString(),
-  });
-
-  emitPlatformEvent({
-    type: "draft_order.updated",
-    tenantId: draft.tenantId,
-    payload: {
-      draftOrderId: draft.id,
-      tenantId: draft.tenantId,
-      displayNumber: result.draft.displayNumber,
-      changeType: "prices_frozen",
-      frozenAt: frozenAt.toISOString(),
-      totalCents: result.totals.totalCents.toString(),
-      updatedAt: result.draft.updatedAt.toISOString(),
-    },
-  }).catch((err) => {
-    log("error", "draft_order.webhook_emit_failed", {
-      tenantId: draft.tenantId,
-      draftOrderId: draft.id,
-      eventType: "draft_order.updated",
-      error: err instanceof Error ? err.message : String(err),
-    });
-  });
-
-  // Shape the returned totals as FROZEN_SNAPSHOT so callers see the
-  // post-freeze state consistently with future reads.
-  return {
-    draft: result.draft,
-    totals: {
-      ...result.totals,
-      source: "FROZEN_SNAPSHOT",
-      frozenAt,
-    },
-    frozenAt,
-  };
-}
-
-// ── FAS 6.5D — transitionDraftStatusInTx ────────────────────────
+// ── transitionDraftStatusInTx ───────────────────────────────────
 
 /**
  * Internal helper: atomically transition a DraftOrder's status inside a
@@ -314,7 +138,7 @@ export async function transitionDraftStatusInTx(
   return { transitioned: true };
 }
 
-// ── FAS 6.5D — sendInvoice ──────────────────────────────────────
+// ── sendInvoice ─────────────────────────────────────────────────
 
 const DEFAULT_SHARE_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MIN_SHARE_LINK_TTL_MS = 1 * 24 * 60 * 60 * 1000;
@@ -352,67 +176,60 @@ async function loadDraftWithReservations(
 }
 
 /**
- * Enforce S1-S6 preconditions — S7 (Stripe readiness) is enforced separately
- * after tenant lookup. See the JSDoc on `SendInvoiceInputSchema` for rationale
- * on S5 (all ACCOMMODATION holds must be PLACED).
+ * Phase C preconditions for `sendInvoice` (v1.2 §2.1, lazy creation):
+ *
+ *   S1 — status is OPEN or APPROVED
+ *   S2 — draft has at least one line item
+ *   S4 — total is non-negative (zero-total invoices are rejected to
+ *        avoid accidental empty-bill sends)
+ *   S5 — at least one customer-association field is set so the
+ *        action layer can resolve a recipient email
+ *
+ * Dropped versus the eager-PI model (Phase B → C migration):
+ *   - S3 (pricesFrozenAt) — column was deleted in Phase B; frozen
+ *     totals now live on `DraftCheckoutSession` (Phase E)
+ *   - S5-old (accommodation holds PLACED) — moves to
+ *     `createDraftCheckoutSession` in Phase E §7.3 step 3
+ *   - S6 (Stripe readiness) — same, moves to Phase E §7.3 step 4
  */
 function assertSendInvoicePreconditions(
   draft: DraftWithLinesAndReservations,
 ): void {
-  // S2: status gate
+  // S1: status gate
   if (draft.status !== "OPEN" && draft.status !== "APPROVED") {
     throw new ValidationError("Draft is not in a sendable status", {
       draftOrderId: draft.id,
       status: draft.status,
     });
   }
-  // S3: prices must be frozen first (6.5B hard contract)
-  if (draft.pricesFrozenAt === null) {
-    throw new ValidationError(
-      "Draft prices must be frozen before sending invoice",
-      { draftOrderId: draft.id },
-    );
-  }
-  // S4: non-empty draft
+  // S2: non-empty draft
   if (draft.lineItems.length === 0) {
     throw new ValidationError("Cannot send invoice for an empty draft", {
       draftOrderId: draft.id,
     });
   }
-  // S6: total > 0
+  // S4: total > 0
   if (draft.totalCents <= BigInt(0)) {
     throw new ValidationError("Cannot send invoice for a zero-total draft", {
       draftOrderId: draft.id,
       totalCents: draft.totalCents.toString(),
     });
   }
-  // S5: every ACCOMMODATION line must have a PLACED reservation
-  const accLines = draft.lineItems.filter(
-    (l) => l.lineType === "ACCOMMODATION",
-  );
-  if (accLines.length > 0) {
-    const reservationByLine = new Map(
-      draft.reservations.map((r) => [r.draftLineItemId, r]),
+  // S5: customer-association — at least one of contactEmail,
+  // guestAccountId, or companyContactId must be present so the action
+  // layer has a recipient to email.
+  const hasCustomer =
+    (draft.contactEmail !== null && draft.contactEmail !== "") ||
+    draft.guestAccountId !== null ||
+    draft.companyContactId !== null;
+  if (!hasCustomer) {
+    throw new ValidationError(
+      "Cannot send invoice without a customer association",
+      {
+        draftOrderId: draft.id,
+        buyerKind: draft.buyerKind,
+      },
     );
-    for (const line of accLines) {
-      const r = reservationByLine.get(line.id);
-      if (!r) {
-        throw new ValidationError(
-          "Accommodation line is missing its DraftReservation",
-          { draftOrderId: draft.id, draftLineItemId: line.id },
-        );
-      }
-      if (r.holdState !== "PLACED") {
-        throw new ValidationError(
-          "All accommodation holds must be PLACED before invoicing",
-          {
-            draftOrderId: draft.id,
-            draftLineItemId: line.id,
-            holdState: r.holdState,
-          },
-        );
-      }
-    }
   }
 }
 
@@ -434,38 +251,6 @@ async function loadTenantForInvoice(tenantId: string): Promise<TenantForInvoice>
   return tenant;
 }
 
-/** S7 — tenant must have working Stripe Connect and a portal slug. */
-async function assertTenantStripeReady(tenant: TenantForInvoice): Promise<void> {
-  if (!tenant.stripeAccountId) {
-    throw new ValidationError("Tenant has no Stripe Connect account", {
-      tenantId: tenant.id,
-    });
-  }
-  if (!tenant.stripeOnboardingComplete) {
-    throw new ValidationError("Tenant Stripe onboarding is not complete", {
-      tenantId: tenant.id,
-    });
-  }
-  if (!tenant.portalSlug) {
-    throw new ValidationError(
-      "Tenant has no portalSlug — cannot build invoice URL",
-      { tenantId: tenant.id },
-    );
-  }
-  // Lazy-loaded so freezePrices and other services that don't touch Stripe
-  // can be imported in environments without STRIPE_* env vars (tests).
-  const { verifyChargesEnabled } = await import(
-    "@/app/_lib/stripe/verify-account"
-  );
-  const chargesOk = await verifyChargesEnabled(tenant.stripeAccountId);
-  if (!chargesOk) {
-    throw new ValidationError(
-      "Tenant Stripe account cannot accept charges",
-      { tenantId: tenant.id },
-    );
-  }
-}
-
 function clampShareLinkTtl(ms?: number): number {
   const raw = ms ?? DEFAULT_SHARE_LINK_TTL_MS;
   if (raw < MIN_SHARE_LINK_TTL_MS) return MIN_SHARE_LINK_TTL_MS;
@@ -481,125 +266,51 @@ function buildInvoiceUrl(portalSlug: string, token: string): string {
   return getTenantUrl({ portalSlug }, { path: `/invoice/${token}` });
 }
 
-function mergeMetafields(
-  existing: Prisma.JsonValue | null,
-  updates: Record<string, unknown>,
-): Prisma.InputJsonValue {
-  const base =
-    existing && typeof existing === "object" && !Array.isArray(existing)
-      ? (existing as Record<string, unknown>)
-      : {};
-  return { ...base, ...updates } as Prisma.InputJsonValue;
-}
-
-/**
- * Idempotent re-send: draft is already INVOICED with a stored PaymentIntent.
- * Re-issue a clientSecret against the adapter's PI-lookup path (same
- * sessionId returns the same PI from Stripe), and return the existing
- * invoice metadata without mutating state or emitting webhooks.
- */
-async function sendInvoiceIdempotentReplay(
-  draft: DraftWithLinesAndReservations,
-  storedPaymentIntentId: string,
-  tenant: TenantForInvoice,
-): Promise<SendInvoiceResult> {
-  if (
-    !draft.shareLinkToken ||
-    !draft.shareLinkExpiresAt ||
-    !draft.invoiceUrl
-  ) {
-    // Inconsistent state — PI stored but invoice artifacts missing. Operator
-    // must reconcile manually; refuse to silently re-create.
-    throw new ValidationError(
-      "Draft has PaymentIntent but missing invoice artifacts — manual recovery required",
-      { draftOrderId: draft.id, storedPaymentIntentId },
-    );
-  }
-
-  const { getPlatformFeeBps } = await import(
-    "@/app/_lib/payments/platform-fee"
-  );
-  const { initiateOrderPayment } = await import(
-    "@/app/_lib/payments/providers"
-  );
-  const feeBps = getPlatformFeeBps(
-    tenant.subscriptionPlan,
-    tenant.platformFeeBps,
-  );
-
-  const init = await initiateOrderPayment({
-    order: {
-      id: draft.id,
-      tenantId: draft.tenantId,
-      totalAmount: Number(draft.totalCents),
-      currency: draft.currency,
-    },
-    guest: {
-      email: draft.contactEmail ?? "",
-      name: `${draft.contactFirstName ?? ""} ${draft.contactLastName ?? ""}`.trim(),
-    },
-    locale: "sv-SE",
-    returnUrl: `${draft.invoiceUrl}/success`,
-    cancelUrl: `${draft.invoiceUrl}/cancelled`,
-    platformFeeBps: feeBps,
-    metadata: {
-      draftOrderId: draft.id,
-      tenantId: draft.tenantId,
-      kind: "draft_order_invoice",
-      draftDisplayNumber: draft.displayNumber,
-    },
-  });
-
-  if (init.mode !== "embedded") {
-    throw new ValidationError(
-      "Payment adapter returned non-embedded mode for draft invoice",
-      { draftOrderId: draft.id },
-    );
-  }
-
-  log("info", "draft_order.invoice_sent.idempotent_replay", {
-    tenantId: draft.tenantId,
-    draftOrderId: draft.id,
-    stripePaymentIntentId: storedPaymentIntentId,
-  });
-
-  return {
-    draft,
-    invoiceUrl: draft.invoiceUrl,
-    shareLinkToken: draft.shareLinkToken,
-    shareLinkExpiresAt: draft.shareLinkExpiresAt,
-    clientSecret: init.clientSecret,
-    stripePaymentIntentId: storedPaymentIntentId,
-  };
-}
-
 export async function sendInvoice(
   input: SendInvoiceArgs,
 ): Promise<SendInvoiceResult> {
   const params = SendInvoiceInputSchema.parse(input);
 
-  // Pre-tx: load draft + reservations
+  // Pre-tx: load draft (with lineItems for S2; reservations are loaded
+  // by the shared helper for cancelDraft's benefit and ignored here).
   const draft = await loadDraftWithReservations(
     params.tenantId,
     params.draftOrderId,
   );
 
-  // Tenant lookup needed for both replay (URL building) and fresh send.
-  const tenant = await loadTenantForInvoice(draft.tenantId);
-
-  // Idempotent replay path — already INVOICED + PI stored.
-  const existingPi = getDraftStripePaymentIntentId(draft);
-  if (draft.status === "INVOICED" && existingPi !== null) {
-    return sendInvoiceIdempotentReplay(draft, existingPi, tenant);
+  // Idempotent re-send: draft is already INVOICED. Return the existing
+  // share-link without state mutation, event emission, or post-commit
+  // webhook. Re-sending the email itself is the action layer's
+  // responsibility (`sendDraftInvoiceAction`).
+  if (draft.status === "INVOICED") {
+    if (!draft.shareLinkToken || !draft.invoiceUrl) {
+      // Data integrity: an INVOICED draft must have both fields.
+      throw new ValidationError(
+        "INVOICED draft is missing shareLinkToken or invoiceUrl — manual recovery required",
+        { draftOrderId: draft.id },
+      );
+    }
+    return {
+      draft,
+      invoiceUrl: draft.invoiceUrl,
+      shareLinkToken: draft.shareLinkToken,
+    };
   }
 
-  // Normal flow — S1-S6 preconditions.
+  // Fresh-send path: validate S1, S2, S4, S5.
   assertSendInvoicePreconditions(draft);
 
-  // S7 — Stripe readiness (includes portalSlug check).
-  await assertTenantStripeReady(tenant);
-  // From here portalSlug is guaranteed non-null.
-  const portalSlug = tenant.portalSlug as string;
+  // Tenant lookup for portalSlug. Stripe-readiness checks are deferred
+  // to `createDraftCheckoutSession` (Phase E) — `sendInvoice` itself
+  // makes no Stripe call.
+  const tenant = await loadTenantForInvoice(draft.tenantId);
+  if (!tenant.portalSlug) {
+    throw new ValidationError(
+      "Tenant has no portalSlug — cannot build invoice URL",
+      { tenantId: tenant.id },
+    );
+  }
+  const portalSlug = tenant.portalSlug;
 
   const shareLinkTtlMs = clampShareLinkTtl(params.shareLinkTtlMs);
   const shareLinkToken = generateShareLinkToken();
@@ -607,59 +318,8 @@ export async function sendInvoice(
   const shareLinkExpiresAt = new Date(now.getTime() + shareLinkTtlMs);
   const invoiceUrl = buildInvoiceUrl(portalSlug, shareLinkToken);
 
-  const { getPlatformFeeBps } = await import(
-    "@/app/_lib/payments/platform-fee"
-  );
-  const { initiateOrderPayment } = await import(
-    "@/app/_lib/payments/providers"
-  );
-
-  const feeBps = getPlatformFeeBps(
-    tenant.subscriptionPlan,
-    tenant.platformFeeBps,
-  );
-
-  // Create Stripe PaymentIntent OUTSIDE the tx — network call may take
-  // hundreds of ms. Adapter is idempotent per sessionId=draft.id.
-  const init = await initiateOrderPayment({
-    order: {
-      id: draft.id,
-      tenantId: draft.tenantId,
-      totalAmount: Number(draft.totalCents),
-      currency: draft.currency,
-    },
-    guest: {
-      email: draft.contactEmail ?? "",
-      name: `${draft.contactFirstName ?? ""} ${draft.contactLastName ?? ""}`.trim(),
-    },
-    locale: "sv-SE",
-    returnUrl: `${invoiceUrl}/success`,
-    cancelUrl: `${invoiceUrl}/cancelled`,
-    platformFeeBps: feeBps,
-    metadata: {
-      draftOrderId: draft.id,
-      tenantId: draft.tenantId,
-      kind: "draft_order_invoice",
-      draftDisplayNumber: draft.displayNumber,
-    },
-  });
-
-  if (init.mode !== "embedded") {
-    throw new ValidationError(
-      "Payment adapter returned non-embedded mode for draft invoice",
-      { draftOrderId: draft.id },
-    );
-  }
-  if (!init.providerSessionId) {
-    throw new ValidationError(
-      "Payment adapter did not return providerSessionId (required for draft invoices)",
-      { draftOrderId: draft.id },
-    );
-  }
-  const stripePaymentIntentId = init.providerSessionId;
-  const clientSecret = init.clientSecret;
-
-  // Tx (fast): re-validate + transition + persist invoice artifacts.
+  // Tx: re-validate status + transition + persist invoice artifacts +
+  // emit INVOICE_SENT event. All-or-nothing.
   const result = await prisma.$transaction(async (tx) => {
     const fresh = (await tx.draftOrder.findFirst({
       where: { id: draft.id, tenantId: draft.tenantId },
@@ -675,12 +335,6 @@ export async function sendInvoice(
         { draftOrderId: draft.id, status: fresh.status },
       );
     }
-    if (fresh.pricesFrozenAt === null) {
-      throw new ConflictError(
-        "Draft prices are no longer frozen — retry freeze + send",
-        { draftOrderId: draft.id },
-      );
-    }
 
     const transition = await transitionDraftStatusInTx(tx, {
       tenantId: draft.tenantId,
@@ -691,7 +345,6 @@ export async function sendInvoice(
       actorSource: "admin_ui",
       metadata: {
         invoiceUrl,
-        stripePaymentIntentId,
         shareLinkExpiresAt: shareLinkExpiresAt.toISOString(),
       },
     });
@@ -702,10 +355,6 @@ export async function sendInvoice(
       );
     }
 
-    const mergedMetafields = mergeMetafields(fresh.metafields, {
-      stripePaymentIntentId,
-    });
-
     await tx.draftOrder.update({
       where: { id: draft.id },
       data: {
@@ -715,7 +364,6 @@ export async function sendInvoice(
         invoiceSentAt: now,
         invoiceEmailSubject: params.invoiceEmailSubject ?? null,
         invoiceEmailMessage: params.invoiceEmailMessage ?? null,
-        metafields: mergedMetafields,
       },
     });
 
@@ -725,7 +373,6 @@ export async function sendInvoice(
       type: "INVOICE_SENT",
       metadata: {
         invoiceUrl,
-        stripePaymentIntentId,
         shareLinkExpiresAt: shareLinkExpiresAt.toISOString(),
         totalCents: draft.totalCents.toString(),
         currency: draft.currency,
@@ -743,7 +390,6 @@ export async function sendInvoice(
   log("info", "draft_order.invoice_sent", {
     tenantId: draft.tenantId,
     draftOrderId: draft.id,
-    stripePaymentIntentId,
     totalCents: draft.totalCents.toString(),
     invoiceUrl,
   });
@@ -756,7 +402,6 @@ export async function sendInvoice(
       tenantId: draft.tenantId,
       displayNumber: result.displayNumber,
       invoiceUrl,
-      stripePaymentIntentId,
       totalCents: draft.totalCents.toString(),
       currency: draft.currency,
       shareLinkExpiresAt: shareLinkExpiresAt.toISOString(),
@@ -775,13 +420,10 @@ export async function sendInvoice(
     draft: result,
     invoiceUrl,
     shareLinkToken,
-    shareLinkExpiresAt,
-    clientSecret,
-    stripePaymentIntentId,
   };
 }
 
-// ── FAS 6.5D — cancelDraft ──────────────────────────────────────
+// ── cancelDraft ─────────────────────────────────────────────────
 
 /**
  * Hold release is best-effort: a DraftReservation is classified as
@@ -793,44 +435,6 @@ function isReleasableHoldState(
   s: DraftReservation["holdState"],
 ): boolean {
   return s === "PLACED" || s === "FAILED";
-}
-
-/**
- * Best-effort Stripe PaymentIntent cancellation for drafts that had an
- * invoice sent. Fire-and-forget pattern — if Stripe call fails, the
- * PI will auto-expire server-side and the guest link stops working.
- * Mirrors the approach at `app/api/checkout/payment-intent/route.ts`
- * which tolerates PaymentIntent-cancel failures post-hoc.
- */
-async function tryCancelStripePaymentIntent(
-  tenantId: string,
-  stripePaymentIntentId: string,
-): Promise<{ attempted: true; error: string | null }> {
-  try {
-    const { getStripe } = await import("@/app/_lib/stripe/client");
-    const stripe = getStripe();
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { stripeAccountId: true, stripeOnboardingComplete: true },
-    });
-    const devOrTest =
-      process.env.NODE_ENV === "development" ||
-      (process.env.STRIPE_SECRET_KEY ?? "").startsWith("sk_test_");
-    const connectParams =
-      !devOrTest && tenant?.stripeAccountId && tenant.stripeOnboardingComplete
-        ? { stripeAccount: tenant.stripeAccountId }
-        : undefined;
-    await stripe.paymentIntents.cancel(stripePaymentIntentId, connectParams);
-    return { attempted: true, error: null };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    log("warn", "draft_order.cancel.stripe_pi_cancel_failed", {
-      tenantId,
-      stripePaymentIntentId,
-      error: msg,
-    });
-    return { attempted: true, error: msg };
-  }
 }
 
 export async function cancelDraft(
@@ -973,23 +577,45 @@ export async function cancelDraft(
       actorSource: params.actorSource,
     });
 
+    // Phase D — v1.2 §6.1: cancel the live checkout session (if any)
+    // atomically with the draft cancellation. The pre-tx hold-release
+    // loop above handles draft-owned holds; this catches session-owned
+    // PMS state + the Stripe PaymentIntent.
+    const unlink = await unlinkActiveCheckoutSession(
+      tx,
+      draft.id,
+      draft.tenantId,
+      "draft_cancelled",
+      {
+        source: params.actorSource,
+        userId: params.actorUserId,
+      },
+    );
+
     const refreshed = (await tx.draftOrder.findFirst({
       where: { id: draft.id, tenantId: draft.tenantId },
     })) as DraftOrder;
-    return refreshed;
+    return { draft: refreshed, unlink };
   });
 
-  // Post-commit: best-effort Stripe PI cancel for invoiced drafts.
+  // Phase D — post-commit unlink side effects (Stripe PI cancel +
+  // remaining PMS releases). Run AWAITED here, not fire-and-forget,
+  // because cancelDraft historically populated
+  // CancelDraftResult.stripePaymentIntentCancelAttempted/Error from
+  // these calls. `runUnlinkSideEffects` never throws, so awaiting is
+  // safe.
   let stripePiCancelAttempted = false;
   let stripePiCancelError: string | null = null;
-  const storedPi = getDraftStripePaymentIntentId(draft);
-  if (storedPi !== null) {
-    const piResult = await tryCancelStripePaymentIntent(
-      draft.tenantId,
-      storedPi,
-    );
-    stripePiCancelAttempted = piResult.attempted;
-    stripePiCancelError = piResult.error;
+  if (result.unlink.unlinked && result.unlink.sessionId !== null) {
+    const sideEffects = await runUnlinkSideEffects({
+      tenantId: draft.tenantId,
+      draftOrderId: draft.id,
+      sessionId: result.unlink.sessionId,
+      releasedHoldExternalIds: result.unlink.releasedHoldExternalIds,
+      stripePaymentIntentId: result.unlink.stripePaymentIntentId,
+    });
+    stripePiCancelAttempted = sideEffects.stripePaymentIntentCancelAttempted;
+    stripePiCancelError = sideEffects.stripePaymentIntentCancelError;
   }
 
   log("info", "draft_order.cancelled", {
@@ -1008,10 +634,10 @@ export async function cancelDraft(
     payload: {
       draftOrderId: draft.id,
       tenantId: draft.tenantId,
-      displayNumber: result.displayNumber,
+      displayNumber: result.draft.displayNumber,
       previousStatus: draft.status,
       reason: params.reason ?? null,
-      cancelledAt: (result.cancelledAt ?? new Date()).toISOString(),
+      cancelledAt: (result.draft.cancelledAt ?? new Date()).toISOString(),
       releasedHolds,
       holdReleaseErrorCount: holdReleaseErrors.length,
     },
@@ -1025,7 +651,7 @@ export async function cancelDraft(
   });
 
   return {
-    draft: result,
+    draft: result.draft,
     releasedHolds,
     holdReleaseErrors,
     stripePaymentIntentCancelAttempted: stripePiCancelAttempted,

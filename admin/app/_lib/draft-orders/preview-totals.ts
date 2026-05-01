@@ -221,7 +221,7 @@ export async function previewDraftTotals(
     currency,
     taxesIncluded: true,
     shippingCents: BigInt(0),
-    pricesFrozenAt: null,
+    version: 1,
     appliedDiscountCode: params.discountCode ?? null,
     subtotalCents: BigInt(0),
     orderDiscountCents: BigInt(0),

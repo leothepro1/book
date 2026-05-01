@@ -41,8 +41,6 @@ export {
   removeDiscountCode,
   previewApplyDiscountCode,
 } from "./discount";
-export { freezePrices } from "./lifecycle";
-
 // ── Services (FAS 6.5C) ──
 export {
   placeHoldForDraftLine,
@@ -116,3 +114,20 @@ export type {
   CreateDraftWithLinesInput,
   CreateDraftWithLinesResult,
 } from "./create-with-lines";
+
+// ── Phase D — unlink protocol (v1.2 §6) ──
+export { unlinkActiveCheckoutSession } from "./unlink";
+export type { UnlinkResult, UnlinkReason, UnlinkActor } from "./unlink";
+export { runUnlinkSideEffects } from "./unlink-side-effects";
+export type {
+  RunUnlinkSideEffectsArgs,
+  UnlinkSideEffectsResult,
+} from "./unlink-side-effects";
+
+// ── Phase E — lazy DraftCheckoutSession creation (v1.3 §7.3) ──
+export { createDraftCheckoutSession } from "./checkout-session";
+export type { CreateDraftCheckoutSessionResult } from "./checkout-session";
+
+// ── Phase F — token-resolution helpers (v1.3 §7.2) ──
+export { resolveDraftByToken, classifyTokenState } from "./resolve-token";
+export type { DraftForToken, TokenState } from "./resolve-token";

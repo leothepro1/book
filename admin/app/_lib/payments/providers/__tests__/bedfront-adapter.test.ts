@@ -130,6 +130,39 @@ describe("BedfrontPaymentsAdapter", () => {
       expect(createArgs.metadata.sessionId).toBe("order_1");
     });
 
+    it("forwards idempotencyKey to stripe.paymentIntents.create options arg", async () => {
+      mockPICreate.mockResolvedValue({
+        id: "pi_test_idem",
+        client_secret: "pi_test_idem_secret",
+      });
+
+      await adapter.initiatePayment(
+        { ...baseRequest, idempotencyKey: "idem_phase_e_xyz" },
+        ctx,
+      );
+
+      expect(mockPICreate).toHaveBeenCalledTimes(1);
+      const [, optsArg] = mockPICreate.mock.calls[0];
+      expect(optsArg).toBeDefined();
+      expect(optsArg.idempotencyKey).toBe("idem_phase_e_xyz");
+    });
+
+    it("omits the options arg entirely when no idempotencyKey nor Connect", async () => {
+      // STRIPE_SECRET_KEY mocked as sk_test_xxx → useConnect=false in
+      // this suite, so without idempotencyKey the options object must
+      // be undefined (preserves the legacy D2C call shape).
+      mockPICreate.mockResolvedValue({
+        id: "pi_test_no_opts",
+        client_secret: "pi_test_no_opts_secret",
+      });
+
+      await adapter.initiatePayment(baseRequest, ctx);
+
+      expect(mockPICreate).toHaveBeenCalledTimes(1);
+      const [, optsArg] = mockPICreate.mock.calls[0];
+      expect(optsArg).toBeUndefined();
+    });
+
     it("is idempotent — retrieves existing PI if session exists", async () => {
       mockSessionUpsert.mockResolvedValue({
         externalSessionId: "pi_existing",
