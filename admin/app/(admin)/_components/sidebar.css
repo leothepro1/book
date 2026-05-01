@@ -368,16 +368,91 @@
   gap: 8px;
 }
 
-.sb__footer-user {
+/* Trigger button — combines avatar, name, and a "more" icon as one
+   click target. Hovering anywhere on the trigger styles the inner
+   `.sb__footer-trigger-more` to look like `.sb__footer-btn` on hover.
+   We render the user row ourselves (rather than using Clerk's
+   `<UserButton>`) so the surrounding `<button>` owns the click and
+   opens our popup instead of Clerk's built-in menu. */
+.sb__footer-trigger {
   flex: 1;
   min-width: 0;
-}
-
-.sb__footer-actions {
-  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 9px;
+  padding: 4px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.sb__footer-trigger--collapsed {
+  flex: 0 0 auto;
+  justify-content: center;
+}
+
+.sb__footer-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.sb__footer-avatar--placeholder {
+  background: var(--admin-accent, #1f5cd8);
+  color: #FFFFFF;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.sb__footer-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4c4c4c;
+  letter-spacing: 0;
+  line-height: 1em;
+  white-space: nowrap;
+}
+
+/* The "more" icon styled as a 24x24 circular button matching
+   `.sb__footer-btn` — but it's a span, since the parent is the
+   actual button. */
+.sb__footer-trigger-more {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 1px solid var(--admin-border);
+  border-radius: 500px;
+  color: #4c4c4c;
+  transition: background 100ms ease-out, color 100ms ease-out, border-color 100ms ease-out;
+}
+
+/* Specificity boost (0,2,0) to beat Google Fonts'
+   `.material-symbols-rounded` 24px default. */
+.sb__footer-trigger-more .material-symbols-rounded {
+  font-size: 16px;
+}
+
+/* Hover anywhere on the trigger → more icon mirrors the
+   `.sb__footer-btn:hover` styling. */
+.sb__footer-trigger:hover .sb__footer-trigger-more {
+  background: #FAFAFA;
+  color: #202020;
+  border-color: #888;
 }
 
 .sb__footer-btn {
@@ -393,12 +468,13 @@
   border-radius: 500px;
   color: #4c4c4c;
   cursor: pointer;
-  transition: background 100ms ease-out, color 100ms ease-out;
+  transition: background 100ms ease-out, color 100ms ease-out, border-color 100ms ease-out;
 }
 
 .sb__footer-btn:hover {
   background: #FAFAFA;
   color: #202020;
+  border-color: #888;
 }
 
 /* Specificity boost (0,2,0) over the Google Fonts default 24px on
@@ -531,19 +607,25 @@
 }
 
 /* ── Footer "more" menu (popup above the more_horiz button) ──
-   Anchored to `.sb__footer-more`, opens upward. No transition —
-   instant show/hide on toggle (Vercel pattern). Width fits the
-   sidebar (270px) with footer padding. */
-
-.sb__footer-more {
-  position: relative;
-}
+   Anchored to the viewport via `position: fixed` because the parent
+   sidebar `<aside>` uses `overflow: hidden` to clip the section-swap
+   animation; an absolutely-positioned popup would be clipped at the
+   sidebar's right edge and capped at ~238px wide. Fixed positioning
+   escapes that clip — popup floats over the page area to the right
+   of the sidebar. `.sb__footer-more` is kept as a non-positioned
+   wrapper around button + popup for outside-click containment.
+   No transition — instant show/hide (Vercel pattern). */
 
 .sb__more-menu {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  right: 0;
-  width: 260px;
+  position: fixed;
+  /* `left` from viewport — sidebar starts at x=0, so 20px viewport
+     matches where the popup sat in the prior absolute layout.
+     `bottom` from viewport bottom — footer height (12 padding-top +
+     24 content row + 12 padding-bottom + 1 border-top = 49) plus a
+     5px gap above. If footer dimensions change, update this. */
+  left: 20px;
+  bottom: 54px;
+  width: 285px;
   background: var(--admin-surface);
   border: 1px solid var(--admin-border);
   border-radius: var(--radius-lg);
@@ -574,12 +656,12 @@
 
 .sb__more-item:hover,
 .sb__more-item:focus-visible {
-  background: var(--admin-surface-hover);
+  background: var(--admin-surface-active); /* #f3f3f3 */
   outline: none;
 }
 
 .sb__more-item:active {
-  background: var(--admin-surface-active);
+  background: #EBEBEB; /* matches `.sb__item:hover` in the main sidebar */
 }
 
 .sb__more-label {
@@ -590,18 +672,16 @@
   text-overflow: ellipsis;
 }
 
-.sb__more-icon {
+/* Specificity boost (0,2,0) — beats Google Fonts' default
+   `.material-symbols-rounded` (0,1,0) which would otherwise override
+   font-size to 24px. Mirrors the `.sb__item .sb__icon` pattern. */
+.sb__more-item .sb__more-icon {
   margin-left: auto;
   flex-shrink: 0;
-  color: var(--admin-text-tertiary);
+  color: var(--admin-text); /* #303030 */
   font-size: 18px;
   line-height: 1;
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-}
-
-.sb__more-item:hover .sb__more-icon,
-.sb__more-item:focus-visible .sb__more-icon {
-  color: var(--admin-text-secondary);
 }
 
 /* Item 1 — Clerk user row, two stacked text rows */

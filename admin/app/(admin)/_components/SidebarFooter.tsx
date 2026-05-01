@@ -1,142 +1,64 @@
 'use client';
 
 import { useState } from 'react';
-import { UserButton } from '@clerk/nextjs';
 import { useSidebar } from './SidebarContext';
-import { useDevClerkUser } from './DevClerkContext';
 import { SidebarFooterMenu } from './SidebarFooterMenu';
-
-const IS_DEV = process.env.NODE_ENV === 'development';
+import { useClerkUser } from './useClerkUser';
 
 /**
  * Sidebar footer — pinned at the bottom, persists across every drill-in
- * section swap (mirrors `SidebarOrgRow` in the header).
+ * section swap. The user row (avatar + name) and the more_horiz icon are
+ * a single click target: hovering anywhere styles the more_horiz "button"
+ * with its hover state, and clicking anywhere opens the same popup.
  *
- * Layout + visual style is intentionally identical to the org row, but
- * shows the PERSONAL user (not the organisation):
- *   - 20×20 round avatar
- *   - name in 13px / weight 500 / `#4c4c4c`
- *   - 9px gap between avatar and name
- *
- * Dev: reads `useDevClerkUser()` (server-fetched at admin layout boot).
- * Prod: Clerk's `<UserButton showName />` with `appearance` overrides
- * mirroring the org switcher's preview styling.
+ * We render the avatar + name ourselves (instead of using Clerk's
+ * `<UserButton>`) because UserButton owns its click handler and would
+ * pop Clerk's built-in menu instead of our footer popup. The popup's
+ * first item delegates to `openUserProfile()` to surface Clerk's
+ * profile UI when the user wants account management.
  */
 export function SidebarFooter() {
   const { isCollapsed } = useSidebar();
   const [moreOpen, setMoreOpen] = useState(false);
-  return (
-    <div className="sb__footer">
-      <div className="sb__footer-user">
-        {IS_DEV ? <DevUserRow isCollapsed={isCollapsed} /> : <ClerkUserRow isCollapsed={isCollapsed} />}
-      </div>
-      {!isCollapsed && (
-        <div className="sb__footer-actions">
-          <div className="sb__footer-more">
-            <button
-              type="button"
-              className="sb__footer-btn"
-              aria-label="Mer"
-              aria-haspopup="menu"
-              aria-expanded={moreOpen}
-              onClick={() => setMoreOpen((v) => !v)}
-            >
-              <span className="material-symbols-rounded">more_horiz</span>
-            </button>
-            <SidebarFooterMenu open={moreOpen} onClose={() => setMoreOpen(false)} />
-          </div>
-          <button type="button" className="sb__footer-btn" aria-label="Notiser">
-            <span className="material-symbols-rounded">notifications</span>
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
+  const { user } = useClerkUser();
 
-function ClerkUserRow({ isCollapsed }: { isCollapsed: boolean }) {
-  return (
-    <UserButton
-      showName={!isCollapsed}
-      appearance={{
-        elements: {
-          userButtonTrigger: {
-            padding: '4px',
-            borderRadius: '8px',
-            transition: 'background-color 150ms ease',
-            '&:hover': {
-              backgroundColor: '#E6E5E3',
-            },
-          },
-          userButtonBox: {
-            gap: '9px',
-          },
-          userButtonOuterIdentifier: {
-            fontSize: '13px',
-            fontWeight: 500,
-            color: '#4c4c4c',
-            letterSpacing: 0,
-            lineHeight: '1em',
-          },
-          userButtonAvatarBox: {
-            width: '20px',
-            height: '20px',
-            borderRadius: '50px',
-          },
-          userButtonAvatarImage: {
-            width: '20px',
-            height: '20px',
-            borderRadius: '50px',
-            objectFit: 'cover',
-          },
-        },
-      }}
-    />
-  );
-}
-
-// Dev replica of `<UserButton showName />` — static, no Clerk hooks.
-// Mirrors `DevOrgRow` exactly, but reads the personal user.
-function DevUserRow({ isCollapsed }: { isCollapsed: boolean }) {
-  const user = useDevClerkUser();
   const name = user?.fullName ?? user?.firstName ?? user?.username ?? '—';
   const initial = name.charAt(0).toUpperCase() || '·';
   const imageUrl = user?.imageUrl;
 
   return (
-    <div
-      className="flex items-center min-w-0"
-      style={{
-        padding: '4px',
-        borderRadius: '8px',
-        gap: 9,
-        justifyContent: isCollapsed ? 'center' : 'flex-start',
-      }}
-    >
-      {imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={imageUrl}
-          alt={name}
-          className="flex-shrink-0"
-          style={{ width: 20, height: 20, borderRadius: 50, objectFit: 'cover' }}
-        />
-      ) : (
-        <div
-          className="flex-shrink-0 flex items-center justify-center text-white"
-          style={{ width: 20, height: 20, borderRadius: 50, background: 'var(--admin-accent)', fontSize: 10, fontWeight: 600 }}
-        >
-          {initial}
-        </div>
-      )}
+    <div className="sb__footer">
+      <button
+        type="button"
+        className={`sb__footer-trigger${isCollapsed ? ' sb__footer-trigger--collapsed' : ''}`}
+        aria-label="Mer"
+        aria-haspopup="menu"
+        aria-expanded={moreOpen}
+        onClick={() => setMoreOpen((v) => !v)}
+      >
+        {imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imageUrl} alt={name} className="sb__footer-avatar" />
+        ) : (
+          <span className="sb__footer-avatar sb__footer-avatar--placeholder" aria-hidden>
+            {initial}
+          </span>
+        )}
+        {!isCollapsed && (
+          <>
+            <span className="sb__footer-name">{name}</span>
+            <span className="sb__footer-trigger-more" aria-hidden>
+              <span className="material-symbols-rounded">more_horiz</span>
+            </span>
+          </>
+        )}
+      </button>
       {!isCollapsed && (
-        <span
-          className="whitespace-nowrap"
-          style={{ fontSize: 13, fontWeight: 500, color: '#4c4c4c', letterSpacing: 0, lineHeight: '1em' }}
-        >
-          {name}
-        </span>
+        <button type="button" className="sb__footer-btn" aria-label="Notiser">
+          <span className="material-symbols-rounded">notifications</span>
+        </button>
       )}
+      <SidebarFooterMenu open={moreOpen} onClose={() => setMoreOpen(false)} />
     </div>
   );
 }
