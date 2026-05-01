@@ -1,0 +1,170 @@
+/* ── Button — Phase 1 primitive ──
+   Architecture: a base `.ui-btn.ui-btn` rule owns truly shared
+   properties (layout, transitions, focus, font-family, font-weight,
+   line-height). Each variant and each size is a separate rule using
+   the same chained-class pattern, so every selector here has
+   specificity (0,2,0) — guaranteed to beat the legacy `.admin-btn--*`
+   rules (0,1,0) emitted during Phase 1 dual-emit, regardless of the
+   CSS bundle order Next.js produces.
+
+   We avoided a custom-property indirection (`--ui-btn-bg` etc.)
+   because it interacted poorly with dual-emit: the property set on
+   the variant rule wasn't reliably reaching the base rule's
+   var() lookup at compute time. Direct declarations are more
+   verbose but cascade correctly without surprises.
+
+   After Phase 1 sunset (legacy classes deleted from base.css),
+   we can drop one of the chained `.ui-btn.ui-btn` doublings and
+   simplify back to single-class selectors. */
+
+.ui-btn.ui-btn {
+  /* Layout — shared */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--admin-font);
+  font-weight: var(--font-weight-medium); /* 500 */
+  line-height: 1rem;
+  border: none;
+  cursor: pointer;
+  user-select: none;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-normal) var(--ease-default),
+    color var(--duration-normal) var(--ease-default),
+    border-color var(--duration-normal) var(--ease-default),
+    opacity var(--duration-normal) var(--ease-default),
+    transform 200ms var(--ease-snappy);
+}
+
+.ui-btn.ui-btn:focus-visible {
+  outline: 2px solid var(--admin-input-focus-ring, var(--admin-border-focus));
+  outline-offset: 2px;
+}
+
+.ui-btn.ui-btn:active:not(:disabled):not([aria-disabled='true']) {
+  transform: scale(0.97);
+}
+
+.ui-btn.ui-btn:disabled,
+.ui-btn.ui-btn[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ui-btn--loading {
+  cursor: progress;
+}
+
+/* ── Variants (color only) ── */
+
+.ui-btn.ui-btn--primary {
+  background: var(--admin-accent);
+  color: var(--admin-accent-text);
+}
+.ui-btn.ui-btn--primary:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--admin-accent-hover);
+}
+
+.ui-btn.ui-btn--secondary {
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  border: 1px solid var(--admin-border-strong);
+}
+.ui-btn.ui-btn--secondary:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--admin-surface-hover);
+}
+
+.ui-btn.ui-btn--ghost {
+  background: transparent;
+  color: var(--admin-text);
+}
+.ui-btn.ui-btn--ghost:hover:not(:disabled):not([aria-disabled='true']) {
+  background: var(--admin-surface-muted);
+}
+
+.ui-btn.ui-btn--danger {
+  background: var(--admin-danger);
+  color: var(--admin-text-inverse);
+}
+.ui-btn.ui-btn--danger:hover:not(:disabled):not([aria-disabled='true']) {
+  /* color-mix is supported across all evergreen browsers; renders a
+     darker shade of the danger color for hover. */
+  background: color-mix(in srgb, var(--admin-danger) 88%, black);
+}
+
+/* ── Sizes (padding + font-size + radius only) ── */
+
+.ui-btn.ui-btn--sm {
+  /* 7/13 chosen visually for the small button — not in --space-*
+     tokens (4/8/12/16/20/24/32). Token-debt acknowledged. */
+  padding: 7px 13px;
+  font-size: var(--font-sm);
+  border-radius: var(--radius-sm); /* 6px */
+}
+
+.ui-btn.ui-btn--md {
+  /* 10/15 not in --space-* tokens. Hardcoded. */
+  padding: 10px 15px;
+  font-size: var(--font-md);
+  border-radius: var(--radius-md); /* 8px */
+}
+
+.ui-btn.ui-btn--lg {
+  /* lg overrides font-size + weight from the shared base. 14px isn't
+     in --font-* tokens (12/13/15/16/17) — hardcoded. */
+  padding: var(--space-3) var(--space-6);
+  font-size: 14px;
+  font-weight: var(--font-weight-semibold); /* 600 */
+  border-radius: var(--radius-md); /* 8px */
+}
+
+/* ── Icons + spinner ──
+   Specificity boost (.ui-btn .ui-btn__icon = 0,2,0) is mandatory:
+   Google Fonts ships `.material-symbols-rounded { font-size: 24px }`
+   at (0,1,0) and would otherwise win. Icon size scales with button
+   size; color tracks variant via currentColor. */
+
+.ui-btn .ui-btn__icon,
+.ui-btn .ui-btn__spinner {
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 1;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  color: currentColor;
+}
+
+.ui-btn--sm .ui-btn__icon,
+.ui-btn--sm .ui-btn__spinner {
+  font-size: 16px;
+}
+
+.ui-btn--lg .ui-btn__icon,
+.ui-btn--lg .ui-btn__spinner {
+  font-size: 20px;
+}
+
+.ui-btn .ui-btn__spinner {
+  animation: ui-btn-spin 0.8s linear infinite;
+}
+
+@keyframes ui-btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-btn .ui-btn__spinner {
+    animation-duration: 1.6s;
+  }
+  .ui-btn.ui-btn:active:not(:disabled):not([aria-disabled='true']) {
+    transform: none;
+  }
+}
+
+.ui-btn__label {
+  display: inline-block;
+}

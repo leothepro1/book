@@ -12,4 +12,4 @@
  * updated in the same PR.
  */
 
-export {};
+export { Button, type ButtonProps, type ButtonVariant, type ButtonSize } from './Button';
