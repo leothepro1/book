@@ -1,5 +1,5 @@
 import React from "react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/app/_lib/db/prisma";
 import { resolveTenantFromHost } from "../../_lib/tenant/resolveTenantFromHost";
 import { getTenantConfig } from "../../_lib/tenant/getTenantConfig";
@@ -12,6 +12,10 @@ import { format, parseISO } from "date-fns";
 import { sv } from "date-fns/locale";
 import { CheckoutCompletedTracker } from "./CheckoutCompletedTracker";
 import type { SelectedAddon } from "@/app/_lib/checkout/session-types";
+import { loadSessionForCheckout } from "@/app/_lib/draft-orders/load-session-for-checkout";
+import { getTenantUrl } from "@/app/_lib/tenant/tenant-url";
+import { log } from "@/app/_lib/logger";
+import { ProcessingState } from "../_components/ProcessingState";
 import "../checkout.css";
 
 const SANS_FALLBACK = "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
@@ -33,6 +37,25 @@ export default async function CheckoutSuccessPage({
   if (!tenant) return notFound();
 
   const sp = await searchParams;
+
+  // ── Draft-order invoice flow (v1.3 §2.2) ─────────────────────
+  //
+  // Stripe's `confirmPayment` returns synchronously on the buyer's
+  // client; the Order is created server-side by the Phase H webhook.
+  // Three landing states:
+  //   - PAID + completedOrderId set        → redirect to /invoice/{token}
+  //                                          where Phase F's PaidReceipt
+  //                                          renders the canonical receipt
+  //   - PAID without completedOrderId, or  → render <ProcessingState>:
+  //     ACTIVE                              3s polling against
+  //                                         /api/checkout/session-status,
+  //                                         60s hard cap
+  //   - UNLINKED / EXPIRED / CANCELLED     → redirect to /invoice/{token}
+  //                                          for Phase F re-classification
+  if (sp.draftSession) {
+    return renderDraftSuccess(tenant, sp.draftSession);
+  }
+
   const orderId = sp.orderId;
   if (!orderId) return notFound();
 
@@ -328,5 +351,81 @@ export default async function CheckoutSuccessPage({
       </div>
     </div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Draft-order invoice flow
+// ─────────────────────────────────────────────────────────────────────
+
+interface TenantForRender {
+  id: string;
+  portalSlug: string | null;
+}
+
+/**
+ * Render the post-payment landing for a draft-flow buyer.
+ *
+ * The webhook may not have run yet — Stripe's `confirmPayment`
+ * resolves on the client before the server-side handler creates the
+ * Order. ProcessingState handles the race locally (3s polling, 60s
+ * cap) and redirects to `/invoice/{token}` once the webhook lands.
+ */
+async function renderDraftSuccess(
+  tenant: TenantForRender,
+  draftSessionId: string,
+) {
+  if (!tenant.portalSlug) return notFound();
+
+  const session = await loadSessionForCheckout(draftSessionId, tenant.id);
+  if (!session) return notFound();
+
+  const portalBaseUrl = getTenantUrl({ portalSlug: tenant.portalSlug });
+  const invoiceUrl = getTenantUrl(
+    { portalSlug: tenant.portalSlug },
+    { path: `/invoice/${session.draftOrder.shareLinkToken}` },
+  );
+
+  // Terminal non-PAID statuses → re-classify via Phase F.
+  if (
+    session.status === "UNLINKED" ||
+    session.status === "EXPIRED" ||
+    session.status === "CANCELLED"
+  ) {
+    log("info", "draft_invoice.success_page_processing", {
+      tenantId: tenant.id,
+      draftSessionId: session.id,
+      sessionStatus: session.status,
+      hasOrderId: false,
+    });
+    redirect(invoiceUrl);
+  }
+
+  // PAID + completedOrderId set → canonical receipt.
+  if (session.status === "PAID" && session.draftOrder.completedOrderId) {
+    log("info", "draft_invoice.success_page_processing", {
+      tenantId: tenant.id,
+      draftSessionId: session.id,
+      sessionStatus: session.status,
+      hasOrderId: true,
+    });
+    redirect(invoiceUrl);
+  }
+
+  // ACTIVE, or PAID-without-Order: webhook race window. Render
+  // ProcessingState — client-side polling resolves to either of the
+  // two redirects above on the next status flip.
+  log("info", "draft_invoice.success_page_processing", {
+    tenantId: tenant.id,
+    draftSessionId: session.id,
+    sessionStatus: session.status,
+    hasOrderId: false,
+  });
+  return (
+    <ProcessingState
+      draftSessionId={session.id}
+      shareLinkToken={session.draftOrder.shareLinkToken}
+      portalBaseUrl={portalBaseUrl}
+    />
   );
 }

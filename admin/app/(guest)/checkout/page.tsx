@@ -14,6 +14,11 @@ import { format, parseISO } from "date-fns";
 import { sv } from "date-fns/locale";
 import { resolveContrastPalette } from "@/app/_lib/color/contrast";
 import { getGuestSession } from "@/app/_lib/magic-link/session";
+import { loadSessionForCheckout } from "@/app/_lib/draft-orders/load-session-for-checkout";
+import type { SessionForCheckout } from "@/app/_lib/draft-orders/load-session-for-checkout";
+import { getTenantUrl } from "@/app/_lib/tenant/tenant-url";
+import { log } from "@/app/_lib/logger";
+import type { SummaryRow } from "@/app/(guest)/_components/SummaryCol";
 
 const SANS_FALLBACK = "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial";
 
@@ -41,6 +46,29 @@ export default async function CheckoutPage({
   if (!tenant) return notFound();
 
   const sp = await searchParams;
+
+  // ── Draft-order invoice flow (v1.3 §2.2) ─────────────────────
+  //
+  // The `?draftSession={id}` param routes through the
+  // DraftCheckoutSession lookup; absence falls through to the
+  // storefront `?session={token}` path below. The two are mutually
+  // exclusive — the redirect target from `/invoice/[token]` (Phase F)
+  // always uses `?draftSession=`.
+  //
+  // Decisions baked into this branch:
+  //   Q3 (recon): DraftLineItem has no dates/guests fields. Summary
+  //               renders lineItems only — no checkIn/checkOut row.
+  //   Q4 (recon): /api/checkout/update-guest is skipped — DraftOrder
+  //               already carries the buyer snapshot from the merchant
+  //               flow (contactEmail/First/Last). CheckoutClient gates
+  //               the POST on `draftSessionId` truthiness.
+  //   Q5 (recon): /api/checkout/validate-discount UI is hidden — v1.3
+  //               §5 invariant 17 freezes the discount on the session
+  //               at creation, the buyer cannot change it.
+  if (sp.draftSession) {
+    return renderDraftCheckout(tenant, sp.draftSession);
+  }
+
   const sessionToken = sp.session;
 
   if (!sessionToken) redirect("/stays");
@@ -304,4 +332,213 @@ export default async function CheckoutPage({
       prefillContact={prefillContact}
     />
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Draft-order invoice flow
+// ─────────────────────────────────────────────────────────────────────
+
+interface TenantForRender {
+  id: string;
+  name: string;
+  portalSlug: string | null;
+}
+
+/**
+ * Render the buyer-side checkout for a `DraftCheckoutSession`.
+ *
+ * Resolves the session tenant-scoped, redirects non-ACTIVE sessions
+ * to `/invoice/{token}` so Phase F's classifier renders the right
+ * status page (cancelled / expired / unit_unavailable / paid receipt).
+ *
+ * On the ACTIVE path, builds the same `CheckoutClient` prop bag as
+ * the storefront branch, but seeded from the frozen snapshot on
+ * `DraftCheckoutSession` and the line items on `DraftOrder`.
+ */
+async function renderDraftCheckout(
+  tenant: TenantForRender,
+  draftSessionId: string,
+) {
+  const session = await loadSessionForCheckout(draftSessionId, tenant.id);
+  if (!session) return notFound();
+
+  log("info", "draft_invoice.checkout_loaded", {
+    tenantId: tenant.id,
+    draftSessionId: session.id,
+    status: session.status,
+  });
+
+  if (session.status !== "ACTIVE") {
+    if (!tenant.portalSlug) return notFound();
+    redirect(
+      getTenantUrl(
+        { portalSlug: tenant.portalSlug },
+        { path: `/invoice/${session.draftOrder.shareLinkToken}` },
+      ),
+    );
+  }
+
+  // Stripe client secret is persisted in step 5 of Phase E's pipeline
+  // atomically with the PI ID. ACTIVE without a secret is an
+  // invariant violation; treat as 404 rather than render a half-
+  // wired Elements form.
+  if (!session.stripeClientSecret) return notFound();
+
+  // ── Tenant config + page settings (identical to storefront branch) ──
+  const config = await getTenantConfig(tenant.id);
+  const ps = getPageSettings(config, "checkout");
+  const logoUrl = (ps.logoUrl as string) || (config.theme?.header?.logoUrl as string) || null;
+  const logoWidth = (ps.logoWidth as number) || (config.theme?.header?.logoWidth as number) || 120;
+
+  const bgColor = (ps.backgroundColor as string) || "#FFFFFF";
+  const contrast = resolveContrastPalette(bgColor);
+  const summaryBg = (ps.summaryBackgroundColor as string) || "#FFFFFF";
+  const summaryContrast = resolveContrastPalette(summaryBg);
+  const buttonBg = (ps.buttonColor as string) || "#207EA9";
+  const buttonContrast = resolveContrastPalette(buttonBg);
+
+  const pageStyles: Record<string, string> = {
+    "--background": bgColor,
+    "--accent": (ps.accentColor as string) || "#121212",
+    "--button-bg": buttonBg,
+    "--button-text": buttonContrast.text,
+    "--error": (ps.errorColor as string) || "#c13515",
+    "--text": contrast.text,
+    "--font-heading": fontStack((ps.headingFont as string) || "inter"),
+    "--font-body": fontStack((ps.bodyFont as string) || "inter"),
+    "--logo-align": (ps.logoAlignment as string) === "left" ? "flex-start" : "center",
+    "--field-bg": (ps.fieldStyle as string) === "transparent" ? "transparent" : "#fff",
+    "--field-text": (ps.fieldStyle as string) === "transparent" ? "inherit" : "#202020",
+    "--card-inputs-bg": (ps.fieldStyle as string) === "transparent" ? `color-mix(in srgb, ${contrast.text} 4%, transparent)` : "#f3f3f4",
+    "--summary-bg": summaryBg,
+    "--summary-text": summaryContrast.text,
+  };
+
+  const bookingTerms = await prisma.tenantPolicy.findUnique({
+    where: { tenantId_policyId: { tenantId: tenant.id, policyId: "booking-terms" } },
+    select: { content: true },
+  });
+
+  const tenantPayments = await prisma.tenant.findUnique({
+    where: { id: tenant.id },
+    select: { paymentMethodConfig: true },
+  });
+  const resolvedMethods = resolvePaymentMethods(
+    tenantPayments?.paymentMethodConfig as PaymentMethodConfig | null,
+  );
+
+  const summary = buildDraftSummary(session);
+
+  // Prefill the contact form with whatever the merchant captured on
+  // the draft. Address fields stay blank — DraftOrder doesn't carry
+  // billing-address columns. CheckoutClient relaxes address
+  // validation when `draftSessionId` is set, so the buyer can submit
+  // without re-entering data the merchant already collected.
+  const prefillContact: PrefillContact | null = session.draftOrder.contactEmail
+    ? {
+        email: session.draftOrder.contactEmail,
+        firstName: session.draftOrder.contactFirstName ?? "",
+        lastName: session.draftOrder.contactLastName ?? "",
+        address: "",
+        city: "",
+        postalCode: "",
+        country: "SE",
+      }
+    : null;
+
+  return (
+    <CheckoutClient
+      sessionToken={session.id}
+      product={summary.product}
+      summaryRows={summary.summaryRows}
+      checkIn={null}
+      checkOut={null}
+      guests={0}
+      bookingTerms={bookingTerms?.content ?? null}
+      header={{ logoUrl, logoWidth }}
+      availableMethods={resolvedMethods.availableMethods}
+      walletsEnabled={resolvedMethods.walletsEnabled}
+      klarnaEnabled={resolvedMethods.klarnaEnabled}
+      pageStyles={pageStyles}
+      prefillContact={prefillContact}
+      draftSessionId={session.id}
+      initialClientSecret={session.stripeClientSecret}
+    />
+  );
+}
+
+interface DraftSummary {
+  product: {
+    title: string;
+    image: string | null;
+    price: number;
+    currency: string;
+    ratePlanName: null;
+  };
+  summaryRows: SummaryRow[];
+}
+
+/**
+ * Build the `product` + `summaryRows` props from a frozen snapshot.
+ *
+ * Single-line drafts render that line as the product title.
+ * Multi-line drafts render "N produkter" — same convention as the
+ * storefront cart flow. Tax + total are read straight from the
+ * frozen snapshot per v1.3 §5 invariant 17.
+ */
+function buildDraftSummary(session: SessionForCheckout): DraftSummary {
+  const lineItems = session.draftOrder.lineItems;
+  const currency = session.currency;
+  const total = Number(session.frozenTotal);
+  const subtotal = Number(session.frozenSubtotal);
+  const tax = Number(session.frozenTaxAmount);
+  const discount = Number(session.frozenDiscountAmount);
+
+  const productTitle =
+    lineItems.length === 1
+      ? lineItems[0].title
+      : `${lineItems.length} produkter`;
+
+  const product: DraftSummary["product"] = {
+    title: productTitle,
+    image: null,
+    price: total,
+    currency,
+    ratePlanName: null,
+  };
+
+  const summaryRows: SummaryRow[] = [];
+  for (const item of lineItems) {
+    const qtySuffix = item.quantity > 1 ? ` x${item.quantity}` : "";
+    summaryRows.push({
+      label: item.title + qtySuffix,
+      value: `${formatPriceDisplay(Number(item.totalCents), currency)} kr`,
+    });
+  }
+  if (discount > 0) {
+    summaryRows.push({
+      label: "Rabatt",
+      value: `−${formatPriceDisplay(discount, currency)} kr`,
+      modifier: "discount",
+    });
+  }
+  summaryRows.push({
+    label: "Delsumma",
+    value: `${formatPriceDisplay(subtotal, currency)} kr`,
+    modifier: "sub",
+  });
+  if (tax > 0) {
+    summaryRows.push({
+      label: "Inkl. moms",
+      value: `${formatPriceDisplay(tax, currency)} kr`,
+      modifier: "sub",
+    });
+  }
+  summaryRows.push({
+    label: "Totalt",
+    value: `${formatPriceDisplay(total, currency)} kr`,
+    modifier: "total",
+  });
+
+  return { product, summaryRows };
 }

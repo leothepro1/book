@@ -32,8 +32,8 @@ For each phase you will find:
 - **Dependencies.** Phases that must be green before this one starts.
 - **Tasks.** Numbered, in execution order.
 - **Acceptance criteria.** Testable. Yes/no answers only.
-- **Invariants verified.** Cross-references to v1.2 §5.
-- **Pre-existing bugs addressed.** Cross-references to v1.2 §13.
+- **Invariants verified.** Cross-references to v1.3 §5.
+- **Pre-existing bugs addressed.** Cross-references to v1.3 §13.
 - **Effort estimate.** In Claude Code session-blocks (one block ≈
   one focused conversation, 30–90 min of work).
 - **Ready-for-next checklist.** What must be true before unblocking
@@ -101,8 +101,8 @@ None. This is the foundation.
 ### Tasks
 
 1. Edit `schema.prisma`:
-   - Add `DraftCheckoutSession` model per v1.2 §3.1 verbatim.
-   - Add `DraftCheckoutSessionStatus` enum per v1.2 §3.1.
+   - Add `DraftCheckoutSession` model per v1.3 §3.1 verbatim.
+   - Add `DraftCheckoutSessionStatus` enum per v1.3 §3.1.
    - Remove `pricesFrozenAt` column from `DraftOrder`.
    - Add `holdReleaseReason String?` to `DraftReservation`.
    - Add comment block on `DraftCheckoutSession` documenting the
@@ -430,7 +430,7 @@ biggest unknown — could be larger if many functions need it.
 
 ### Scope
 
-Implement `createDraftCheckoutSession(draftId)` per v1.2 §7.3. This is
+Implement `createDraftCheckoutSession(draftId)` per v1.3 §7.3. This is
 the heart of the new architecture — the function that actually
 creates the session, places the hold, creates the PI.
 
@@ -486,7 +486,7 @@ creates the session, places the hold, creates the PI.
    - Step 6 (persist PI): in new tx, update session with
      `stripePaymentIntentId`, `stripeClientSecret`. CAS on
      session.version.
-   - Return `{ session, redirectUrl: "/checkout?session={id}",
+   - Return `{ session, redirectUrl: "/checkout?draftSession={id}",
      clientSecret }`.
 
 3. Move `assertTenantStripeReady` from `lifecycle.ts` (where it was
@@ -594,8 +594,8 @@ renders a status page.
    - Calls `resolveDraftByToken(params.token)`.
    - On `not_found` → 404.
    - On `fresh` → call `createDraftCheckoutSession`, redirect to
-     `/checkout?session={id}`.
-   - On `resume` → redirect to `/checkout?session={existing.id}`.
+     `/checkout?draftSession={id}`.
+   - On `resume` → redirect to `/checkout?draftSession={existing.id}`.
    - On `paid` → render `<PaidReceipt order={...} />`.
    - On `cancelled` → render `<CancelledPage />`.
    - On `expired` → render `<ExpiredPage />`.
@@ -649,7 +649,7 @@ None directly.
 ### Scope
 
 The `/checkout` route already handles accommodation flows. Extend it
-to accept a `?session=` query param that loads a `DraftCheckoutSession`
+to accept a `?draftSession=` query param that loads a `DraftCheckoutSession`
 instead of a raw cart. Add the polling endpoint and unlink-detection UI.
 
 ### Files touched
@@ -666,7 +666,7 @@ instead of a raw cart. Add the polling endpoint and unlink-detection UI.
 
 ### Tasks
 
-1. Update `/checkout/page.tsx` to detect `?session={id}` param. If
+1. Update `/checkout/page.tsx` to detect `?draftSession={id}` param. If
    present, load the `DraftCheckoutSession`, validate it's `ACTIVE`,
    and pass `clientSecret`, `frozenTotal`, line items snapshot to
    `CheckoutClient`. If session is not `ACTIVE`, redirect to
@@ -681,7 +681,7 @@ instead of a raw cart. Add the polling endpoint and unlink-detection UI.
    - GET only.
    - Accept `id` query param.
    - Cache the response per session ID in Upstash Redis with 5s TTL
-     (per v1.2 §11.4). 4 req/min/tab × 10k tabs = 40k req/min, but
+     (per v1.3 §11.4). 4 req/min/tab × 10k tabs = 40k req/min, but
      against 5s-cached entries this collapses to 2 req/sec/session
      average DB load.
    - Return `{ status, lastBuyerActivityAt }` — minimal payload.
@@ -702,7 +702,7 @@ instead of a raw cart. Add the polling endpoint and unlink-detection UI.
 
 ### Acceptance criteria
 
-- [ ] Buyer who arrives at `/checkout?session={id}` sees fully
+- [ ] Buyer who arrives at `/checkout?draftSession={id}` sees fully
       functional Elements form, can pay successfully.
 - [ ] Polling detects `UNLINKED` within 15s and replaces form.
 - [ ] Submit during the polling window (before next poll) is handled
@@ -968,7 +968,7 @@ checkpoint.
 
 ### Scope
 
-End-to-end tests for all 23 edge cases in v1.2 §8. Sentry
+End-to-end tests for all 23 edge cases in v1.3 §8. Sentry
 instrumentation. Structured logging. SLO dashboards.
 
 ### Files touched

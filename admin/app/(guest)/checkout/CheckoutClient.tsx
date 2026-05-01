@@ -9,6 +9,7 @@ import { Elements, CardNumberElement, CardExpiryElement, CardCvcElement, Payment
 import type { PaymentRequest } from "@stripe/stripe-js";
 import { formatPriceDisplay } from "@/app/_lib/products/pricing";
 import { CheckoutModal } from "./CheckoutModal";
+import { UnlinkedNotice, type UnlinkedNoticeStatus } from "./_components/UnlinkedNotice";
 import { LoadingScreen } from "@/app/_components/Loading";
 import { track } from "@/app/_lib/analytics/client";
 import { SpinnerButton } from "@/app/(guest)/_components/SpinnerButton";
@@ -73,6 +74,26 @@ interface CheckoutProps {
   pageStyles?: Record<string, string>;
   /** Prefill from logged-in guest's GuestAccount. Null if not logged in. */
   prefillContact?: PrefillContact | null;
+  /**
+   * Phase G — draft-order invoice flow gate.
+   *
+   * When set, the client is rendering a `DraftCheckoutSession` rather
+   * than a storefront `CheckoutSession`:
+   *   - clientSecret is seeded from `initialClientSecret` (server-side)
+   *   - the existing PI-fetch effect short-circuits (its guard already
+   *     checks `clientSecret`)
+   *   - 15s polling against `/api/checkout/session-status` runs while
+   *     mounted; UNLINKED/EXPIRED/CANCELLED swap the form for
+   *     `<UnlinkedNotice />`; PAID redirects to the success page
+   *   - the `/api/checkout/update-guest` POST is skipped (DraftOrder
+   *     already carries the buyer snapshot)
+   *   - the discount-code UI is hidden (v1.3 §5 invariant 17 freezes
+   *     discount on the session at creation)
+   *   - address-field validation is relaxed (only email +
+   *     first/last name remain required)
+   */
+  draftSessionId?: string;
+  initialClientSecret?: string;
 }
 
 type PaymentMethod = "card" | "paypal" | "gpay" | "applepay" | "klarna";
@@ -361,6 +382,28 @@ function PaymentMethodAccordion({
   );
 }
 
+// ── Stripe error classifier ─────────────────────────────────
+
+/**
+ * Phase G — detect a Stripe error that indicates the PaymentIntent
+ * has been cancelled out from under the buyer.
+ *
+ * The merchant-side unlink protocol (v1.3 §6.2) cancels the PI as
+ * step 8. If the buyer submits between that cancel and the next 15s
+ * poll, Stripe rejects with `payment_intent_unexpected_state` and
+ * `error.payment_intent.status === "canceled"`. Either signal is
+ * enough to flip the UI to the unlinked notice without waiting for
+ * the polling effect to catch up.
+ */
+function isPaymentIntentCancelledError(err: {
+  code?: string;
+  payment_intent?: { status?: string };
+}): boolean {
+  if (err.code === "payment_intent_unexpected_state") return true;
+  if (err.payment_intent?.status === "canceled") return true;
+  return false;
+}
+
 // ── Confirm Button (inside Elements provider) ──────
 
 function ConfirmButton({
@@ -369,12 +412,22 @@ function ConfirmButton({
   onSuccess,
   clientSecret,
   onBeforeConfirm,
+  onPaymentIntentCancelled,
 }: {
   paymentMethod: PaymentMethod;
   disabled: boolean;
   onSuccess: () => void;
   clientSecret: string | null;
   onBeforeConfirm?: () => Promise<boolean>;
+  /**
+   * Phase G — invoked when Stripe rejects the confirmation because
+   * the PaymentIntent has been cancelled out from under the buyer
+   * (merchant unlink between the last poll and this submit). The
+   * draft-flow parent flips its session-status state to UNLINKED so
+   * `<UnlinkedNotice />` replaces the form without waiting for the
+   * next poll. Storefront flow leaves this prop unset.
+   */
+  onPaymentIntentCancelled?: () => void;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -409,7 +462,11 @@ function ConfirmButton({
           payment_method: { card: cardElement },
         });
 
-        if (result.error) { setError(result.error.message ?? "Betalningen misslyckades."); setProcessing(false); }
+        if (result.error) {
+          if (isPaymentIntentCancelledError(result.error)) onPaymentIntentCancelled?.();
+          setError(result.error.message ?? "Betalningen misslyckades.");
+          setProcessing(false);
+        }
         else if (result.paymentIntent?.status === "succeeded") onSuccess();
         else setProcessing(false);
 
@@ -417,14 +474,22 @@ function ConfirmButton({
         const result = await stripe.confirmPayPalPayment(clientSecret, {
           return_url: returnUrl,
         });
-        if (result.error) { setError(result.error.message ?? "PayPal-betalningen misslyckades."); setProcessing(false); }
+        if (result.error) {
+          if (isPaymentIntentCancelledError(result.error)) onPaymentIntentCancelled?.();
+          setError(result.error.message ?? "PayPal-betalningen misslyckades.");
+          setProcessing(false);
+        }
 
       } else if (paymentMethod === "klarna") {
         const result = await stripe.confirmKlarnaPayment(clientSecret, {
           payment_method: { billing_details: { email: "", address: { country: "SE" } } },
           return_url: returnUrl,
         });
-        if (result.error) { setError(result.error.message ?? "Klarna-betalningen misslyckades."); setProcessing(false); }
+        if (result.error) {
+          if (isPaymentIntentCancelledError(result.error)) onPaymentIntentCancelled?.();
+          setError(result.error.message ?? "Klarna-betalningen misslyckades.");
+          setProcessing(false);
+        }
 
       } else {
         onSuccess();
@@ -433,7 +498,7 @@ function ConfirmButton({
       setError(err instanceof Error ? err.message : "Betalningen misslyckades.");
       setProcessing(false);
     }
-  }, [stripe, elements, paymentMethod, clientSecret, onSuccess, returnUrl, onBeforeConfirm]);
+  }, [stripe, elements, paymentMethod, clientSecret, onSuccess, returnUrl, onBeforeConfirm, onPaymentIntentCancelled]);
 
   // Payment Request for Google Pay / Apple Pay
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
@@ -558,7 +623,7 @@ function FieldError({ error }: { error?: string }) {
 
 // ── Main Checkout ──────────────────────────────────────────
 
-export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, checkOut, guests, bookingTerms, header, availableMethods, walletsEnabled = true, klarnaEnabled = true, pageStyles, prefillContact }: CheckoutProps) {
+export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, checkOut, guests, bookingTerms, header, availableMethods, walletsEnabled = true, klarnaEnabled = true, pageStyles, prefillContact, draftSessionId, initialClientSecret }: CheckoutProps) {
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
   const fontLinkRef = useRef<HTMLLinkElement | null>(null);
@@ -618,8 +683,20 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
     value: number;
   } | null>(null);
   const [discountError, setDiscountError] = useState<string | null>(null);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  // Phase G: when `initialClientSecret` is passed in (draft flow),
+  // seed the state so the PI-fetch effect's existing
+  // `if (clientSecret || orderId || !product) return;` guard
+  // short-circuits and we render the Elements form on first paint.
+  const [clientSecret, setClientSecret] = useState<string | null>(
+    initialClientSecret ?? null,
+  );
   const [orderId, setOrderId] = useState<string | null>(null);
+
+  // Phase G — draft-flow polling state machine. Only ACTIVE when
+  // `draftSessionId` is unset; the storefront branch never reads it.
+  const [draftSessionStatus, setDraftSessionStatus] = useState<
+    "ACTIVE" | "UNLINKED" | "EXPIRED" | "PAID" | "CANCELLED"
+  >("ACTIVE");
 
   // ── Analytics: CHECKOUT_STARTED on mount ──
   useEffect(() => {
@@ -724,22 +801,34 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
   // ── Contact validation ────────────────────────────────
   const isTouched = (f: string) => contactTouched[f] || submitAttempted;
 
+  // Phase G: draft flow relaxes address validation. DraftOrder
+  // doesn't carry billing-address columns, so the buyer would have
+  // to retype data the merchant already collected. Email + first/
+  // last name remain required (the buyer must own the email used to
+  // sign the receipt; first/last name go into the Order at webhook
+  // time). Storefront flow keeps full validation.
   const contactErrors: Record<string, string> = {};
   if (isTouched("email") && !contactEmail) contactErrors.email = "Ange din e-postadress";
   else if (isTouched("email") && contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) contactErrors.email = "E-postadressen ser inte komplett ut";
   if (isTouched("firstName") && !contactFirstName.trim()) contactErrors.firstName = "Ange ditt förnamn";
   if (isTouched("lastName") && !contactLastName.trim()) contactErrors.lastName = "Ange ditt efternamn";
-  if (isTouched("address") && !contactAddress.trim()) contactErrors.address = "Ange din adress";
-  if (isTouched("postalCode") && !contactPostalCode.trim()) contactErrors.postalCode = "Ange postnummer";
-  if (isTouched("city") && !contactCity.trim()) contactErrors.city = "Ange stad";
+  if (!draftSessionId) {
+    if (isTouched("address") && !contactAddress.trim()) contactErrors.address = "Ange din adress";
+    if (isTouched("postalCode") && !contactPostalCode.trim()) contactErrors.postalCode = "Ange postnummer";
+    if (isTouched("city") && !contactCity.trim()) contactErrors.city = "Ange stad";
+  }
 
-  const contactValid =
+  const baseContactValid =
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail) &&
     contactFirstName.trim().length > 0 &&
-    contactLastName.trim().length > 0 &&
-    contactAddress.trim().length > 0 &&
-    contactPostalCode.trim().length > 0 &&
-    contactCity.trim().length > 0;
+    contactLastName.trim().length > 0;
+
+  const contactValid = draftSessionId
+    ? baseContactValid
+    : baseContactValid &&
+      contactAddress.trim().length > 0 &&
+      contactPostalCode.trim().length > 0 &&
+      contactCity.trim().length > 0;
 
   // Detect available wallets on mount
   useEffect(() => {
@@ -816,7 +905,55 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
       .finally(() => { piIsLoading.current = false; });
   }, [clientSecret, orderId, product, sessionToken, checkIn, checkOut, guests, paymentMethod, discountApplied]);
 
+  // ── Phase G — draft-flow polling (v1.3 §6.3 + §11.4) ────────
+  // 15s cadence, first call on mount. Detects merchant-side unlink
+  // / expiry / cancellation and swaps the form for <UnlinkedNotice>.
+  // PAID flips routing to the draft-success page; the success page
+  // owns the webhook-race resolution + receipt redirect.
+  useEffect(() => {
+    if (!draftSessionId) return;
+    let cancelled = false;
+
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetch(
+          `/api/checkout/session-status?id=${encodeURIComponent(draftSessionId)}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          status: "ACTIVE" | "UNLINKED" | "EXPIRED" | "PAID" | "CANCELLED";
+        };
+        if (cancelled) return;
+        setDraftSessionStatus((prev) => (prev === data.status ? prev : data.status));
+      } catch {
+        // Transient network error — next tick will retry.
+      }
+    };
+
+    void poll();
+    const handle = setInterval(poll, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(handle);
+    };
+  }, [draftSessionId]);
+
+  // Phase G — when polling reports PAID, route to the success page
+  // so the webhook-race resolver takes over.
+  useEffect(() => {
+    if (!draftSessionId) return;
+    if (draftSessionStatus === "PAID") {
+      router.push(`/checkout/success?draftSession=${draftSessionId}`);
+    }
+  }, [draftSessionStatus, draftSessionId, router]);
+
   const handlePaymentSuccess = () => {
+    if (draftSessionId) {
+      router.push(`/checkout/success?draftSession=${draftSessionId}`);
+      return;
+    }
     if (orderId) {
       router.push(`/checkout/success?orderId=${orderId}`);
     }
@@ -824,6 +961,12 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
 
   // Submit guest info before payment confirmation
   const submitGuestInfo = async (): Promise<boolean> => {
+    // Phase G: draft flow already has buyer info on the DraftOrder,
+    // captured by the merchant before sendInvoice. Skip the
+    // update-guest POST entirely — it is storefront-only (the route
+    // resolves via Order/CheckoutSession, neither of which exists
+    // in the draft pipeline at this point).
+    if (draftSessionId) return true;
     if (!orderId || !contactFirstName || !contactLastName || !contactEmail) return false;
     try {
       const res = await fetch("/api/checkout/update-guest", {
@@ -1055,6 +1198,8 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
                 </button>
               </section>
             </>
+          ) : draftSessionId && (draftSessionStatus === "UNLINKED" || draftSessionStatus === "EXPIRED" || draftSessionStatus === "CANCELLED") ? (
+            <UnlinkedNotice status={draftSessionStatus as UnlinkedNoticeStatus} />
           ) : clientSecret ? (
             <Elements stripe={stripePromise} options={{ clientSecret }}>
               {/* ── Payment method (card/paypal/wallet/klarna) ── */}
@@ -1094,6 +1239,11 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
                     }
                     return submitGuestInfo();
                   }}
+                  onPaymentIntentCancelled={
+                    draftSessionId
+                      ? () => setDraftSessionStatus("UNLINKED")
+                      : undefined
+                  }
                 />
               </section>
             </Elements>
@@ -1138,7 +1288,10 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
           image={product?.image}
           rows={summaryRows}
         >
-          {/* Rabattkod */}
+          {/* Rabattkod — hidden in draft flow per v1.3 §5 invariant 17:
+              the discount is frozen on the session at creation time;
+              the buyer cannot change it at checkout. */}
+          {!draftSessionId && (
           <div className="co__discount-wrap">
             <div className="co__discount">
               <div className="co__float" data-filled={discountCode ? "" : undefined}>
@@ -1203,6 +1356,7 @@ export function CheckoutClient({ sessionToken, product, summaryRows, checkIn, ch
               </div>
             )}
           </div>
+          )}
         </SummaryCol>
       </div>
 
