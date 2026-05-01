@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "dev:clean": "bash scripts/dev.sh",
+    "dev:link-env": "bash scripts/link-dev-env.sh",
     "prebuild": "bash scripts/download-geolite2.sh",
     "build": "prisma generate && next build",
     "geo:download": "bash scripts/download-geolite2.sh",
