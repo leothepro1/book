@@ -3,12 +3,42 @@
 The verify-phase3.ts verifier covers static checks + worker contract via direct
 module import. The actual `new Worker()` spawn, browser `sendBeacon` fallback,
 DNT/EEA decision matrix, and CSS-variable-themed banner rendering all live in
-the browser. This doc is the manual-smoke gate that has to pass on the Vercel
-preview before PR-B can merge.
+the browser. This doc is the manual-smoke gate that exercises those paths on
+a deployed environment.
 
 The PR description must include a copy of the checklist below with each box
 ticked. Each ticked box corresponds to a screenshot, cURL paste, or DevTools
 panel dump filed in the PR comment thread.
+
+---
+
+## ⚠️ Pre-flight: smoke environment
+
+This checklist requires a hostname that origin-check accepts AND
+that resolves to a real Tenant row in the database. Vercel preview
+deploys on *.vercel.app match origin-check (preview-mode relaxation)
+but fail tenant resolution because the auto-generated preview
+hostname doesn't match any Tenant.portalSlug.
+
+**Required setup before running this checklist:**
+
+1. A staging domain alias on the Vercel project, e.g.
+   `apelviken-staging.rutgr.com`, configured in Vercel project
+   Domains.
+2. A corresponding Tenant row with portalSlug = `apelviken-staging`
+   in the database the preview deployment uses.
+3. (Recommended) A separate `Tenant.environment` field
+   disambiguating staging from production tenants — staging
+   tenants must not appear in production aggregations.
+
+Without this setup, this checklist cannot run. The first valid
+run will be either:
+
+- After staging-domain infrastructure PR lands, OR
+- During Apelviken go-live (October 2026) on apelviken.rutgr.com
+
+This is a planning miss flagged for Phase 3 retrospective:
+manual smoke design did not account for preview-tenant resolution.
 
 ---
 
