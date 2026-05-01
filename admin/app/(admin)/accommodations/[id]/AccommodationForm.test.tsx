@@ -217,6 +217,7 @@ describe("AccommodationForm — SearchListingEditor integration", () => {
     expect(call[1].seo).toEqual({
       title: "Ny SEO-titel",
       description: "Ny SEO-beskrivning",
+      noindex: false,
     });
   });
 
@@ -239,6 +240,7 @@ describe("AccommodationForm — SearchListingEditor integration", () => {
     expect(call[1].seo).toEqual({
       title: "Stored titel",
       description: "Stored beskrivning",
+      noindex: false,
     });
   });
 });
@@ -272,11 +274,13 @@ describe("AccommodationForm — compose-at-parent (M6.4)", () => {
       await vi.advanceTimersByTimeAsync(500);
     });
 
-    // Composed value.title = parent accommodation's displayName.
+    // M6.4 — editor sends `overrides` (raw user input, empty here)
+    // and `entityFields` (parent fields) separately. Server composes.
+    // Parent accommodation's displayName arrives via entityFields.
     expect(previewSeoAction).toHaveBeenCalled();
     const call = vi.mocked(previewSeoAction).mock.calls[0][0];
-    const overrides = call.overrides as { title: string };
-    expect(overrides.title).toBe("Stuga Björk");
+    const entityFields = call.entityFields as { title: string };
+    expect(entityFields.title).toBe("Stuga Björk");
   });
 
   it("preview reflects SEO override when typed (override wins over parent)", async () => {

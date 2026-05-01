@@ -221,6 +221,7 @@ describe("ProductForm — /[id] edit path", () => {
     expect(payload.seo).toEqual({
       title: "Ny SEO-titel",
       description: "Ny SEO-beskrivning",
+      noindex: false,
     });
   });
 
@@ -242,6 +243,7 @@ describe("ProductForm — /[id] edit path", () => {
     expect(payload.seo).toEqual({
       title: "Stored titel",
       description: "Stored beskrivning",
+      noindex: false,
     });
   });
 });
@@ -294,6 +296,7 @@ describe("ProductForm — /new create path", () => {
     expect(payload.seo).toEqual({
       title: "SEO-titel för ny produkt",
       description: "",
+      noindex: false,
     });
   });
 });
@@ -331,12 +334,21 @@ describe("ProductForm — compose-at-parent (M6.4)", () => {
       await vi.advanceTimersByTimeAsync(500);
     });
 
-    // previewSeoAction was called with the composed value —
-    // override.title is empty, so value.title = parent title.
+    // M6.4 wires overrides + entityFields as SEPARATE props on the
+    // previewSeoAction call. The editor sends `overrides` for the raw
+    // user input (empty here, since no SEO override was typed) and
+    // `entityFields` for the parent product's title/description. The
+    // server-side previewEngine composes them. So when the SEO
+    // override is empty, the parent values arrive via entityFields,
+    // not via overrides.
     expect(previewSeoAction).toHaveBeenCalled();
     const call = vi.mocked(previewSeoAction).mock.calls[0][0];
     expect(call.overrides).toEqual({
-      title: "Frukost-buffé", // parent product title
+      title: "",
+      description: "",
+    });
+    expect(call.entityFields).toEqual({
+      title: "Frukost-buffé",
       description: "Morgonens vackraste ritual.",
     });
   });

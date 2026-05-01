@@ -175,6 +175,7 @@ describe("AccommodationCategoryForm — /[id] edit path", () => {
     expect(payload.seo).toEqual({
       title: "Ny SEO-titel",
       description: "",
+      noindex: false,
     });
   });
 });
@@ -233,10 +234,12 @@ describe("AccommodationCategoryForm — compose-at-parent", () => {
       await vi.advanceTimersByTimeAsync(500);
     });
 
+    // M6.4 — editor sends `overrides` (raw user input, empty here) and
+    // `entityFields` (parent fields) separately. Server composes.
     expect(previewSeoAction).toHaveBeenCalled();
     const call = vi.mocked(previewSeoAction).mock.calls[0][0];
-    const overrides = call.overrides as { title: string };
-    expect(overrides.title).toBe("Stugor");
+    const entityFields = call.entityFields as { title: string };
+    expect(entityFields.title).toBe("Stugor");
   });
 
   it("preview reflects SEO override when set (override wins)", async () => {

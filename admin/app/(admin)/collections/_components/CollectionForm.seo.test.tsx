@@ -171,6 +171,7 @@ describe("CollectionForm — /[id] edit path", () => {
     expect(payload.seo).toEqual({
       title: "Ny SEO-titel",
       description: "",
+      noindex: false,
     });
   });
 });
@@ -230,10 +231,12 @@ describe("CollectionForm — compose-at-parent", () => {
       await vi.advanceTimersByTimeAsync(500);
     });
 
+    // M6.4 — editor sends `overrides` (raw user input, empty here)
+    // and `entityFields` (parent fields) separately. Server composes.
     expect(previewSeoAction).toHaveBeenCalled();
     const call = vi.mocked(previewSeoAction).mock.calls[0][0];
-    const overrides = call.overrides as { title: string };
-    expect(overrides.title).toBe("Mat & Dryck");
+    const entityFields = call.entityFields as { title: string };
+    expect(entityFields.title).toBe("Mat & Dryck");
   });
 
   it("preview reflects SEO override when typed (override wins)", async () => {
