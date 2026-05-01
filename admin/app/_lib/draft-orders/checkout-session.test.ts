@@ -488,26 +488,64 @@ describe("createDraftCheckoutSession — stripe_unavailable (step 4)", () => {
 // ═══════════════════════════════════════════════════════════════
 
 describe("createDraftCheckoutSession — stripe_unavailable (step 5)", () => {
-  it("compensates including Stripe PI cancel when CAS persist returns count=0", async () => {
-    // First updateMany call is step 5 persist → count=0 (race lost).
-    // Second updateMany call is compensation CAS-cancel → count=1.
-    mockPrisma.draftCheckoutSession.updateMany
-      .mockResolvedValueOnce({ count: 0 })
-      .mockResolvedValueOnce({ count: 1 });
+  it("compensates with Connect-account context in production when CAS persist returns count=0", async () => {
+    // Defeat the dev/test bypass in `tryCancelStripePI` so the
+    // production code path runs — i.e. `connectParams =
+    // { stripeAccount: tenant.stripeAccountId }`. v1.3 §6.4 mandates
+    // Connect-account context on the cancel; this test pins it.
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_live_xxx");
+    try {
+      // First updateMany call is step 5 persist → count=0 (race lost).
+      // Second updateMany call is compensation CAS-cancel → count=1.
+      mockPrisma.draftCheckoutSession.updateMany
+        .mockResolvedValueOnce({ count: 0 })
+        .mockResolvedValueOnce({ count: 1 });
 
-    const result = await createDraftCheckoutSession("tenant_1", "draft_1");
+      const result = await createDraftCheckoutSession("tenant_1", "draft_1");
 
-    expect(result.kind).toBe("stripe_unavailable");
-    if (result.kind === "stripe_unavailable") {
-      expect(result.reason).toBe("session_no_longer_active");
+      expect(result.kind).toBe("stripe_unavailable");
+      if (result.kind === "stripe_unavailable") {
+        expect(result.reason).toBe("session_no_longer_active");
+      }
+      // Step 5 cleanup: cancel the PI we just created, with Connect.
+      expect(stripeCancelMock).toHaveBeenCalledWith(
+        "pi_test_123",
+        { stripeAccount: "acct_test_1" },
+      );
+      // Holds released too.
+      expect(releaseHoldMock).toHaveBeenCalledWith("tenant_1", "mews_a");
+    } finally {
+      vi.unstubAllEnvs();
     }
-    // Step 5 cleanup: cancel the PI we just created.
-    expect(stripeCancelMock).toHaveBeenCalledWith(
-      "pi_test_123",
-      expect.anything(),
-    );
-    // Holds released too.
-    expect(releaseHoldMock).toHaveBeenCalledWith("tenant_1", "mews_a");
+  });
+
+  it("compensates with bypass (undefined Connect params) in dev environment", async () => {
+    // Mirror the dev-bypass branch from `tryCancelStripePI`: when
+    // NODE_ENV === "development", Connect routing is skipped because
+    // local dev can't exercise Stripe Connect onboarding. Phase D's
+    // `unlink-side-effects.test.ts` covers the equivalent branch in
+    // `runUnlinkSideEffects` the same way.
+    vi.stubEnv("NODE_ENV", "development");
+    try {
+      mockPrisma.draftCheckoutSession.updateMany
+        .mockResolvedValueOnce({ count: 0 })
+        .mockResolvedValueOnce({ count: 1 });
+
+      const result = await createDraftCheckoutSession("tenant_1", "draft_1");
+
+      expect(result.kind).toBe("stripe_unavailable");
+      if (result.kind === "stripe_unavailable") {
+        expect(result.reason).toBe("session_no_longer_active");
+      }
+      expect(stripeCancelMock).toHaveBeenCalledWith(
+        "pi_test_123",
+        undefined,
+      );
+      expect(releaseHoldMock).toHaveBeenCalledWith("tenant_1", "mews_a");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 
