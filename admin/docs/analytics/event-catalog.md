@@ -16,6 +16,40 @@ validation), see `app/_lib/analytics/pipeline/schemas/`.
   emits it yet (placeholder for an upcoming integration).
 - **Planned** — slot reserved, schema not yet written.
 
+## Schema authoring rules
+
+Locked decisions every new event schema MUST follow.
+
+1. **Datetime fields use `z.union([z.string(), z.date()])`, NEVER
+   `z.coerce.date()`.** The Phase 2 Commit G fix is the canonical
+   pattern. `z.coerce.date()` inside a payload is a transform, and
+   Zod's intersection (`BaseEventSchema.and(z.object({payload: …}))`)
+   refuses to merge transforms with the wider
+   `z.record(z.string(), z.unknown())` payload on the base schema.
+   The drainer would reject every such event with
+   `Unmergable intersection`. The union accepts both `Date` (from
+   emitter callers) and ISO string (from JSONB → JS string after
+   `JSON.stringify` on emit). `base.ts`'s top-level `occurred_at`
+   keeps `z.coerce.date()` because it's outside the payload
+   intersection.
+
+2. **`z.union([z.string(), z.date()])` storage shape is unchanged.**
+   JSONB stores whatever JSON representation the emit produced;
+   Phase 5 readers parse as needed. The union is purely a
+   validation-side relaxation.
+
+3. **Storefront events use `StorefrontContextSchema`** — see
+   `schemas/_storefront-context.ts` — for `page_url`, `page_referrer`,
+   `user_agent_hash`, `viewport`, `locale`, and `session_id`.
+   Intersect it via `.and()` with the per-event payload object so the
+   browser-side context fields stay consistent across all storefront
+   events.
+
+4. **Idempotency-key composition** must include every dimension the
+   key should scope by. See Phase 1A's `tenant_id:event_name:custom`
+   pattern and Phase 2 Q6's counter-augmented keys for retry-prone
+   events.
+
 ## Events
 
 ### `booking_completed` v0.1.0 — Active
@@ -561,3 +595,110 @@ analytics-data backfill / re-encoding). Pay the small cost up front.
 Multiple versions of the same event can be live simultaneously
 during migration windows. Both must be in the registry; the emitter
 + drainer route by `(event_name, schema_version)` independently.
+
+## Storefront events (Phase 3)
+
+These fire from the analytics web worker (Phase 3 PR-B) running in the
+guest portal. They reach the outbox via the dispatch endpoint at
+`/api/analytics/collect` (Phase 3 PR-A Commit C), which validates each
+event against the registry, enforces consent, and emits via
+`emitAnalyticsEventStandalone`. Every storefront event carries the
+shared `StorefrontContextSchema` fields (`page_url`, `page_referrer`,
+`user_agent_hash`, `viewport`, `locale`, `session_id`).
+
+**Privacy posture (storefront):**
+- Raw `navigator.userAgent` never leaves the browser. We hash it to a
+  16-char prefix (`user_agent_hash`) for stability without
+  fingerprinting.
+- Raw email never enters the worker. When a guest authenticates, the
+  loader hashes the email to the `email_<sha256-16hex>` form (same
+  convention as Phase 1B's `deriveGuestId`) before passing it as
+  `actor_id` to the worker.
+- All storefront events default to `analytics` consent category.
+  Events that fire before consent is granted are queued in the
+  worker's pending buffer; on consent grant, queued events flush; on
+  deny, they're discarded.
+
+### `page_viewed` v0.1.0 — Active (PR-B emits, PR-A registers)
+
+Fires on every page load + SPA navigation in the guest portal. The
+foundational storefront event — most Phase 5 funnel aggregations join
+against `page_viewed` for the denominator.
+
+- **Trigger:** analytics worker (Phase 3 PR-B) on URL changes.
+- **Idempotency key:** client-generated ULID (worker), passed through
+  the dispatch endpoint as the outbox `event_id`.
+- **Consent category:** `analytics`.
+- **Payload:** shared `StorefrontContext` fields + `page_type` (enum:
+  home / stay / checkout / account / support / policy / other).
+
+### `accommodation_viewed` v0.1.0 — Active (PR-B emits, PR-A registers)
+
+Fires when a guest opens an accommodation detail page.
+
+- **Trigger:** worker on URL match for the storefront's accommodation-
+  detail route.
+- **Idempotency key:** client-generated ULID.
+- **Consent category:** `analytics`.
+- **Payload:** shared context + `accommodation_id` + `accommodation_type`
+  (hotel / cabin / camping / apartment / pitch).
+
+### `availability_searched` v0.1.0 — Active (PR-B emits, PR-A registers)
+
+Fires when the guest performs an availability search.
+
+- **Trigger:** worker on search-form submission.
+- **Idempotency key:** client-generated ULID.
+- **Consent category:** `analytics`.
+- **Payload:** shared context + `check_in_date` + `check_out_date` +
+  `number_of_guests` + `results_count` + `filters_applied: string[]`.
+
+### `cart_started` v0.1.0 — Active (PR-B emits, PR-A registers)
+
+Fires when the FIRST item lands in an empty cart. Pairs with
+`cart_updated` and `cart_abandoned` for funnel analysis.
+
+- **Trigger:** worker, subscribed to cart state.
+- **Idempotency key:** client-generated ULID; the cart's own
+  `cart_id` (also a client ULID) carries forward to subsequent
+  cart_* events for the same lifecycle.
+- **Consent category:** `analytics`.
+- **Payload:** shared context + `cart_id` + `accommodation_id` +
+  `cart_total: { amount, currency }`.
+
+### `cart_updated` v0.1.0 — Active (PR-B emits, PR-A registers)
+
+Fires on cart mutations after `cart_started`.
+
+- **Trigger:** worker, throttled to ~500 ms debounce so rapid quantity
+  changes don't flood dispatch.
+- **Idempotency key:** client-generated ULID.
+- **Consent category:** `analytics`.
+- **Payload:** shared context + `cart_id` + `items_count` +
+  `cart_total` + `action` (added / removed / quantity_changed).
+
+### `cart_abandoned` v0.1.0 — Active (PR-B emits, PR-A registers)
+
+Fires when the guest closes the tab / navigates away with a non-empty
+cart that wasn't moved into checkout. Dispatched via
+`navigator.sendBeacon()` from the unload handler so the event reaches
+the server even after page tear-down.
+
+- **Trigger:** worker on `pagehide` / `beforeunload` /
+  `visibilitychange` to hidden, when cart is non-empty.
+- **Idempotency key:** client-generated ULID.
+- **Consent category:** `analytics`.
+- **Payload:** shared context + `cart_id` + `items_count` (must be ≥
+  1; cart_abandoned only fires for non-empty carts) + `cart_total` +
+  `time_since_last_interaction_ms`.
+
+### `checkout_started` v0.1.0 — Active (PR-B emits, PR-A registers)
+
+Fires when the guest enters the checkout flow. Pairs with the
+SERVER-side `payment_succeeded` to compute checkout conversion.
+
+- **Trigger:** worker on URL match for `/checkout`.
+- **Idempotency key:** client-generated ULID.
+- **Consent category:** `analytics`.
+- **Payload:** shared context + `cart_id` + `items_count` (≥ 1) +
+  `cart_total`.

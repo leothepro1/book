@@ -23,6 +23,13 @@
 import type { ZodType } from "zod";
 
 import { AccommodationArchivedSchema } from "./accommodation-archived";
+import { AccommodationViewedSchema } from "./accommodation-viewed";
+import { AvailabilitySearchedSchema } from "./availability-searched";
+import { CartAbandonedSchema } from "./cart-abandoned";
+import { CartStartedSchema } from "./cart-started";
+import { CartUpdatedSchema } from "./cart-updated";
+import { CheckoutStartedSchema } from "./checkout-started";
+import { PageViewedSchema } from "./page-viewed";
 import { AccommodationPriceChangedSchema } from "./accommodation-price-changed";
 import { AccommodationPublishedSchema } from "./accommodation-published";
 import { DiscountCreatedSchema } from "./discount-created";
@@ -54,6 +61,12 @@ export const ANALYTICS_EVENT_REGISTRY = {
   accommodation_published: {
     "0.1.0": AccommodationPublishedSchema,
   },
+  accommodation_viewed: {
+    "0.1.0": AccommodationViewedSchema,
+  },
+  availability_searched: {
+    "0.1.0": AvailabilitySearchedSchema,
+  },
   booking_cancelled: {
     "0.1.0": BookingCancelledSchema,
   },
@@ -68,6 +81,18 @@ export const ANALYTICS_EVENT_REGISTRY = {
   },
   booking_no_show: {
     "0.1.0": BookingNoShowSchema,
+  },
+  cart_abandoned: {
+    "0.1.0": CartAbandonedSchema,
+  },
+  cart_started: {
+    "0.1.0": CartStartedSchema,
+  },
+  cart_updated: {
+    "0.1.0": CartUpdatedSchema,
+  },
+  checkout_started: {
+    "0.1.0": CheckoutStartedSchema,
   },
   discount_created: {
     "0.1.0": DiscountCreatedSchema,
@@ -89,6 +114,9 @@ export const ANALYTICS_EVENT_REGISTRY = {
   },
   guest_otp_sent: {
     "0.1.0": GuestOtpSentSchema,
+  },
+  page_viewed: {
+    "0.1.0": PageViewedSchema,
   },
   payment_disputed: {
     "0.1.0": PaymentDisputedSchema,

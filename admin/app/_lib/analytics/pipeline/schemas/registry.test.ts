@@ -8,6 +8,13 @@
 
 import { describe, expect, it } from "vitest";
 
+import { AccommodationViewedSchema } from "./accommodation-viewed";
+import { AvailabilitySearchedSchema } from "./availability-searched";
+import { CartAbandonedSchema } from "./cart-abandoned";
+import { CartStartedSchema } from "./cart-started";
+import { CartUpdatedSchema } from "./cart-updated";
+import { CheckoutStartedSchema } from "./checkout-started";
+import { PageViewedSchema } from "./page-viewed";
 import { DiscountCreatedSchema } from "./discount-created";
 import { DiscountExpiredSchema } from "./discount-expired";
 import { DiscountUsedSchema } from "./discount-used";
@@ -976,13 +983,249 @@ describe("PmsSyncRecoveredSchema", () => {
 });
 
 describe("ANALYTICS_EVENT_REGISTRY — totals after Phase 2", () => {
-  it("contains 21 event names (2 Phase 1A baseline + 19 Phase 2)", () => {
+  it("contains all registered event names at v0.1.0", () => {
     const names = Object.keys(ANALYTICS_EVENT_REGISTRY);
-    expect(names.length).toBe(21);
+    expect(names.length).toBeGreaterThanOrEqual(21);
     for (const name of names) {
       expect(
         (ANALYTICS_EVENT_REGISTRY as Record<string, Record<string, unknown>>)[name]["0.1.0"],
       ).toBeDefined();
     }
+  });
+});
+
+// ── Phase 3 PR-A Commit A — storefront events ───────────────────────────
+
+const VALID_STOREFRONT_CONTEXT = {
+  page_url: "https://apelviken.bedfront.com/stays",
+  page_referrer: "",
+  user_agent_hash: "abcdef0123456789",
+  viewport: { width: 1440, height: 900 },
+  locale: "sv-SE",
+  session_id: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+};
+
+const validPageViewedEvent = {
+  event_id: VALID_ULID,
+  tenant_id: TENANT,
+  event_name: "page_viewed",
+  schema_version: "0.1.0",
+  occurred_at: new Date(),
+  actor_type: "anonymous" as const,
+  actor_id: null,
+  payload: { ...VALID_STOREFRONT_CONTEXT, page_type: "home" as const },
+};
+
+describe("PageViewedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(PageViewedSchema.safeParse(validPageViewedEvent).success).toBe(true);
+  });
+  it("rejects unknown page_type", () => {
+    expect(
+      PageViewedSchema.safeParse({
+        ...validPageViewedEvent,
+        payload: { ...validPageViewedEvent.payload, page_type: "made_up" },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects empty page_url", () => {
+    expect(
+      PageViewedSchema.safeParse({
+        ...validPageViewedEvent,
+        payload: { ...validPageViewedEvent.payload, page_url: "" },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects empty session_id", () => {
+    expect(
+      PageViewedSchema.safeParse({
+        ...validPageViewedEvent,
+        payload: { ...validPageViewedEvent.payload, session_id: "" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validAccommodationViewedEvent = {
+  ...validPageViewedEvent,
+  event_name: "accommodation_viewed",
+  payload: {
+    ...VALID_STOREFRONT_CONTEXT,
+    accommodation_id: "acc_1",
+    accommodation_type: "cabin" as const,
+  },
+};
+
+describe("AccommodationViewedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(AccommodationViewedSchema.safeParse(validAccommodationViewedEvent).success).toBe(true);
+  });
+  it("rejects unknown accommodation_type", () => {
+    expect(
+      AccommodationViewedSchema.safeParse({
+        ...validAccommodationViewedEvent,
+        payload: { ...validAccommodationViewedEvent.payload, accommodation_type: "boat" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validAvailabilitySearchedEvent = {
+  ...validPageViewedEvent,
+  event_name: "availability_searched",
+  payload: {
+    ...VALID_STOREFRONT_CONTEXT,
+    check_in_date: "2026-06-01",
+    check_out_date: "2026-06-04",
+    number_of_guests: 2,
+    results_count: 7,
+    filters_applied: ["wifi", "pet-friendly"],
+  },
+};
+
+describe("AvailabilitySearchedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(AvailabilitySearchedSchema.safeParse(validAvailabilitySearchedEvent).success).toBe(true);
+  });
+  it("accepts empty filters_applied (no filters)", () => {
+    expect(
+      AvailabilitySearchedSchema.safeParse({
+        ...validAvailabilitySearchedEvent,
+        payload: { ...validAvailabilitySearchedEvent.payload, filters_applied: [] },
+      }).success,
+    ).toBe(true);
+  });
+  it("rejects negative results_count", () => {
+    expect(
+      AvailabilitySearchedSchema.safeParse({
+        ...validAvailabilitySearchedEvent,
+        payload: { ...validAvailabilitySearchedEvent.payload, results_count: -1 },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects non-ISO date", () => {
+    expect(
+      AvailabilitySearchedSchema.safeParse({
+        ...validAvailabilitySearchedEvent,
+        payload: { ...validAvailabilitySearchedEvent.payload, check_in_date: "2026/06/01" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validCartStartedEvent = {
+  ...validPageViewedEvent,
+  event_name: "cart_started",
+  payload: {
+    ...VALID_STOREFRONT_CONTEXT,
+    cart_id: "cart_1",
+    accommodation_id: "acc_1",
+    cart_total: { amount: 12900, currency: "SEK" },
+  },
+};
+
+describe("CartStartedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(CartStartedSchema.safeParse(validCartStartedEvent).success).toBe(true);
+  });
+  it("rejects empty cart_id", () => {
+    expect(
+      CartStartedSchema.safeParse({
+        ...validCartStartedEvent,
+        payload: { ...validCartStartedEvent.payload, cart_id: "" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validCartUpdatedEvent = {
+  ...validPageViewedEvent,
+  event_name: "cart_updated",
+  payload: {
+    ...VALID_STOREFRONT_CONTEXT,
+    cart_id: "cart_1",
+    items_count: 2,
+    cart_total: { amount: 25800, currency: "SEK" },
+    action: "added" as const,
+  },
+};
+
+describe("CartUpdatedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(CartUpdatedSchema.safeParse(validCartUpdatedEvent).success).toBe(true);
+  });
+  it("accepts items_count: 0 (cart emptied)", () => {
+    expect(
+      CartUpdatedSchema.safeParse({
+        ...validCartUpdatedEvent,
+        payload: { ...validCartUpdatedEvent.payload, items_count: 0, action: "removed" },
+      }).success,
+    ).toBe(true);
+  });
+  it("rejects unknown action", () => {
+    expect(
+      CartUpdatedSchema.safeParse({
+        ...validCartUpdatedEvent,
+        payload: { ...validCartUpdatedEvent.payload, action: "made_up" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validCartAbandonedEvent = {
+  ...validPageViewedEvent,
+  event_name: "cart_abandoned",
+  payload: {
+    ...VALID_STOREFRONT_CONTEXT,
+    cart_id: "cart_1",
+    items_count: 2,
+    cart_total: { amount: 25800, currency: "SEK" },
+    time_since_last_interaction_ms: 60_000,
+  },
+};
+
+describe("CartAbandonedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(CartAbandonedSchema.safeParse(validCartAbandonedEvent).success).toBe(true);
+  });
+  it("rejects items_count: 0 (only fires for non-empty carts)", () => {
+    expect(
+      CartAbandonedSchema.safeParse({
+        ...validCartAbandonedEvent,
+        payload: { ...validCartAbandonedEvent.payload, items_count: 0 },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+const validCheckoutStartedEvent = {
+  ...validPageViewedEvent,
+  event_name: "checkout_started",
+  payload: {
+    ...VALID_STOREFRONT_CONTEXT,
+    cart_id: "cart_1",
+    items_count: 2,
+    cart_total: { amount: 25800, currency: "SEK" },
+  },
+};
+
+describe("CheckoutStartedSchema", () => {
+  it("accepts a valid event", () => {
+    expect(CheckoutStartedSchema.safeParse(validCheckoutStartedEvent).success).toBe(true);
+  });
+  it("rejects items_count: 0 (checkout requires items)", () => {
+    expect(
+      CheckoutStartedSchema.safeParse({
+        ...validCheckoutStartedEvent,
+        payload: { ...validCheckoutStartedEvent.payload, items_count: 0 },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("ANALYTICS_EVENT_REGISTRY — totals after Phase 3 PR-A Commit A", () => {
+  it("contains 28 event names (21 baseline + 7 storefront)", () => {
+    const names = Object.keys(ANALYTICS_EVENT_REGISTRY);
+    expect(names.length).toBe(28);
   });
 });
