@@ -63,6 +63,13 @@ const envSchema = z.object({
    *  calls in dev mode where the session user is mocked as "dev_user".
    *  Must NOT be set in production. */
   DEV_OWNER_USER_ID: z.string().optional(),
+
+  /** Per-property access token for the operator's private Mews demo hotel.
+   *  When set, `npm run db:seed` writes an encrypted TenantIntegration row
+   *  binding the dev tenant to a real Mews demo property. The platform-side
+   *  client token is the public Mews demo identity (see demo-credentials.ts).
+   *  Must NOT be set in production. */
+  DEV_MEWS_DEMO_ACCESS_TOKEN: z.string().optional(),
 });
 
 // ── Validation ─────────────────────────────────────────────────
@@ -90,6 +97,11 @@ function validateEnv() {
   if (process.env.NODE_ENV === "production" && parsed.DEV_OWNER_USER_ID) {
     throw new Error(
       "[env] DEV_OWNER_USER_ID is set in production — this is a security risk. Remove it from the production environment.",
+    );
+  }
+  if (process.env.NODE_ENV === "production" && parsed.DEV_MEWS_DEMO_ACCESS_TOKEN) {
+    throw new Error(
+      "[env] DEV_MEWS_DEMO_ACCESS_TOKEN is set in production — this is a credential leak. Remove it from the production environment.",
     );
   }
   // Guard: DEV_* vars must be set in development
@@ -207,6 +219,7 @@ export const env = {
   },
   DEV_ORG_ID: parsed.DEV_ORG_ID,
   DEV_OWNER_USER_ID: parsed.DEV_OWNER_USER_ID,
+  DEV_MEWS_DEMO_ACCESS_TOKEN: parsed.DEV_MEWS_DEMO_ACCESS_TOKEN,
   SCREENSHOT_SECRET: parsed.SCREENSHOT_SECRET ?? null,
   SCREENSHOT_BASE_URL: parsed.SCREENSHOT_BASE_URL ?? null,
 } as const;

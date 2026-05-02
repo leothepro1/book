@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "npm run dev:bootstrap && next dev --turbopack",
+    "dev:bootstrap": "dotenv -e .env -- tsx scripts/dev-bootstrap.ts",
+    "dev:no-bootstrap": "next dev --turbopack",
     "dev:clean": "bash scripts/dev.sh",
     "dev:link-env": "bash scripts/link-dev-env.sh",
     "prebuild": "bash scripts/download-geolite2.sh",
