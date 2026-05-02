@@ -30,6 +30,16 @@ import { CartStartedSchema } from "./cart-started";
 import { CartUpdatedSchema } from "./cart-updated";
 import { CheckoutStartedSchema } from "./checkout-started";
 import { PageViewedSchema } from "./page-viewed";
+
+// Legacy v0.1.0 schemas — kept registered so the registry can validate
+// events that were emitted before the v0.2.0 migration drained from
+// the outbox. New emit-sites MUST target the v0.2.0 schemas above.
+// Removal plan: drop these imports + registry entries once the outbox
+// is confirmed empty of v0.1.0 cart-cluster events.
+import { CartAbandonedV010Schema } from "./legacy/cart-abandoned-v0.1.0";
+import { CartStartedV010Schema } from "./legacy/cart-started-v0.1.0";
+import { CartUpdatedV010Schema } from "./legacy/cart-updated-v0.1.0";
+import { CheckoutStartedV010Schema } from "./legacy/checkout-started-v0.1.0";
 import { AccommodationPriceChangedSchema } from "./accommodation-price-changed";
 import { AccommodationPublishedSchema } from "./accommodation-published";
 import { DiscountCreatedSchema } from "./discount-created";
@@ -83,16 +93,20 @@ export const ANALYTICS_EVENT_REGISTRY = {
     "0.1.0": BookingNoShowSchema,
   },
   cart_abandoned: {
-    "0.1.0": CartAbandonedSchema,
+    "0.1.0": CartAbandonedV010Schema,
+    "0.2.0": CartAbandonedSchema,
   },
   cart_started: {
-    "0.1.0": CartStartedSchema,
+    "0.1.0": CartStartedV010Schema,
+    "0.2.0": CartStartedSchema,
   },
   cart_updated: {
-    "0.1.0": CartUpdatedSchema,
+    "0.1.0": CartUpdatedV010Schema,
+    "0.2.0": CartUpdatedSchema,
   },
   checkout_started: {
-    "0.1.0": CheckoutStartedSchema,
+    "0.1.0": CheckoutStartedV010Schema,
+    "0.2.0": CheckoutStartedSchema,
   },
   discount_created: {
     "0.1.0": DiscountCreatedSchema,
