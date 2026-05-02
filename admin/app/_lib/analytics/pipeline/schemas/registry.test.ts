@@ -1116,15 +1116,16 @@ describe("AvailabilitySearchedSchema", () => {
 const validCartStartedEvent = {
   ...validPageViewedEvent,
   event_name: "cart_started",
+  schema_version: "0.2.0" as const,
   payload: {
     ...VALID_STOREFRONT_CONTEXT,
     cart_id: "cart_1",
-    accommodation_id: "acc_1",
+    product_id: "p_1",
     cart_total: { amount: 12900, currency: "SEK" },
   },
 };
 
-describe("CartStartedSchema", () => {
+describe("CartStartedSchema (v0.2.0)", () => {
   it("accepts a valid event", () => {
     expect(CartStartedSchema.safeParse(validCartStartedEvent).success).toBe(true);
   });
@@ -1136,31 +1137,61 @@ describe("CartStartedSchema", () => {
       }).success,
     ).toBe(false);
   });
+  it("rejects v0.1.0 shape (accommodation_id instead of product_id)", () => {
+    expect(
+      CartStartedSchema.safeParse({
+        ...validCartStartedEvent,
+        payload: {
+          ...VALID_STOREFRONT_CONTEXT,
+          cart_id: "cart_1",
+          accommodation_id: "acc_1",
+          cart_total: { amount: 12900, currency: "SEK" },
+        },
+      }).success,
+    ).toBe(false);
+  });
 });
 
 const validCartUpdatedEvent = {
   ...validPageViewedEvent,
   event_name: "cart_updated",
+  schema_version: "0.2.0" as const,
   payload: {
     ...VALID_STOREFRONT_CONTEXT,
     cart_id: "cart_1",
     items_count: 2,
+    line_items_count: 1,
     cart_total: { amount: 25800, currency: "SEK" },
     action: "added" as const,
   },
 };
 
-describe("CartUpdatedSchema", () => {
+describe("CartUpdatedSchema (v0.2.0)", () => {
   it("accepts a valid event", () => {
     expect(CartUpdatedSchema.safeParse(validCartUpdatedEvent).success).toBe(true);
   });
-  it("accepts items_count: 0 (cart emptied)", () => {
+  it("rejects items_count: 0 (v0.2.0 tightened from non-negative to positive)", () => {
     expect(
       CartUpdatedSchema.safeParse({
         ...validCartUpdatedEvent,
-        payload: { ...validCartUpdatedEvent.payload, items_count: 0, action: "removed" },
+        payload: {
+          ...validCartUpdatedEvent.payload,
+          items_count: 0,
+          line_items_count: 0,
+          action: "removed",
+        },
       }).success,
-    ).toBe(true);
+    ).toBe(false);
+  });
+  it("rejects missing line_items_count", () => {
+    const { line_items_count: _omit, ...payloadWithoutLic } = validCartUpdatedEvent.payload;
+    void _omit;
+    expect(
+      CartUpdatedSchema.safeParse({
+        ...validCartUpdatedEvent,
+        payload: payloadWithoutLic,
+      }).success,
+    ).toBe(false);
   });
   it("rejects unknown action", () => {
     expect(
@@ -1175,16 +1206,18 @@ describe("CartUpdatedSchema", () => {
 const validCartAbandonedEvent = {
   ...validPageViewedEvent,
   event_name: "cart_abandoned",
+  schema_version: "0.2.0" as const,
   payload: {
     ...VALID_STOREFRONT_CONTEXT,
     cart_id: "cart_1",
     items_count: 2,
+    line_items_count: 1,
     cart_total: { amount: 25800, currency: "SEK" },
     time_since_last_interaction_ms: 60_000,
   },
 };
 
-describe("CartAbandonedSchema", () => {
+describe("CartAbandonedSchema (v0.2.0)", () => {
   it("accepts a valid event", () => {
     expect(CartAbandonedSchema.safeParse(validCartAbandonedEvent).success).toBe(true);
   });
@@ -1192,7 +1225,21 @@ describe("CartAbandonedSchema", () => {
     expect(
       CartAbandonedSchema.safeParse({
         ...validCartAbandonedEvent,
-        payload: { ...validCartAbandonedEvent.payload, items_count: 0 },
+        payload: {
+          ...validCartAbandonedEvent.payload,
+          items_count: 0,
+          line_items_count: 0,
+        },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects missing line_items_count", () => {
+    const { line_items_count: _omit, ...payloadWithoutLic } = validCartAbandonedEvent.payload;
+    void _omit;
+    expect(
+      CartAbandonedSchema.safeParse({
+        ...validCartAbandonedEvent,
+        payload: payloadWithoutLic,
       }).success,
     ).toBe(false);
   });
@@ -1201,15 +1248,17 @@ describe("CartAbandonedSchema", () => {
 const validCheckoutStartedEvent = {
   ...validPageViewedEvent,
   event_name: "checkout_started",
+  schema_version: "0.2.0" as const,
   payload: {
     ...VALID_STOREFRONT_CONTEXT,
     cart_id: "cart_1",
     items_count: 2,
+    line_items_count: 1,
     cart_total: { amount: 25800, currency: "SEK" },
   },
 };
 
-describe("CheckoutStartedSchema", () => {
+describe("CheckoutStartedSchema (v0.2.0)", () => {
   it("accepts a valid event", () => {
     expect(CheckoutStartedSchema.safeParse(validCheckoutStartedEvent).success).toBe(true);
   });
@@ -1217,15 +1266,35 @@ describe("CheckoutStartedSchema", () => {
     expect(
       CheckoutStartedSchema.safeParse({
         ...validCheckoutStartedEvent,
-        payload: { ...validCheckoutStartedEvent.payload, items_count: 0 },
+        payload: {
+          ...validCheckoutStartedEvent.payload,
+          items_count: 0,
+          line_items_count: 0,
+        },
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects missing line_items_count", () => {
+    const { line_items_count: _omit, ...payloadWithoutLic } = validCheckoutStartedEvent.payload;
+    void _omit;
+    expect(
+      CheckoutStartedSchema.safeParse({
+        ...validCheckoutStartedEvent,
+        payload: payloadWithoutLic,
       }).success,
     ).toBe(false);
   });
 });
 
-describe("ANALYTICS_EVENT_REGISTRY — totals after Phase 3 PR-A Commit A", () => {
+describe("ANALYTICS_EVENT_REGISTRY — totals after Phase 3 PR-A Commit A + v0.2.0 cart-cluster bumps", () => {
   it("contains 28 event names (21 baseline + 7 storefront)", () => {
     const names = Object.keys(ANALYTICS_EVENT_REGISTRY);
     expect(names.length).toBe(28);
+  });
+  it("registers BOTH v0.1.0 and v0.2.0 for the four cart-cluster events", () => {
+    expect(Object.keys(ANALYTICS_EVENT_REGISTRY.cart_started)).toEqual(["0.1.0", "0.2.0"]);
+    expect(Object.keys(ANALYTICS_EVENT_REGISTRY.cart_updated)).toEqual(["0.1.0", "0.2.0"]);
+    expect(Object.keys(ANALYTICS_EVENT_REGISTRY.cart_abandoned)).toEqual(["0.1.0", "0.2.0"]);
+    expect(Object.keys(ANALYTICS_EVENT_REGISTRY.checkout_started)).toEqual(["0.1.0", "0.2.0"]);
   });
 });

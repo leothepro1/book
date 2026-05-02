@@ -33,13 +33,15 @@ const VALID_PAYLOADS = {
   cart_started: {
     ...CONTEXT,
     cart_id: "cart_01",
-    accommodation_id: "acc_svalan",
+    // v0.2.0: product_id (Product.id cuid), not accommodation_id.
+    product_id: "p_01",
     cart_total: { amount: 12900, currency: "SEK" },
   },
   cart_updated: {
     ...CONTEXT,
     cart_id: "cart_01",
     items_count: 2,
+    line_items_count: 1, // v0.2.0
     cart_total: { amount: 25800, currency: "SEK" },
     action: "added" as const,
   },
@@ -47,6 +49,7 @@ const VALID_PAYLOADS = {
     ...CONTEXT,
     cart_id: "cart_01",
     items_count: 2,
+    line_items_count: 1, // v0.2.0
     cart_total: { amount: 25800, currency: "SEK" },
     time_since_last_interaction_ms: 90_000,
   },
@@ -54,6 +57,7 @@ const VALID_PAYLOADS = {
     ...CONTEXT,
     cart_id: "cart_01",
     items_count: 2,
+    line_items_count: 1, // v0.2.0
     cart_total: { amount: 25800, currency: "SEK" },
   },
 };

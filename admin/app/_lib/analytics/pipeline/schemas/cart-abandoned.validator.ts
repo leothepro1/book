@@ -36,11 +36,17 @@ export function validateCartAbandonedPayload(
     if (!isNonEmptyString(payload.cart_id)) {
       issues.push({ path: "cart_id", message: "must be a non-empty string" });
     }
-    // Note: cart_abandoned requires items_count ≥ 1 (positive), unlike
-    // cart_updated which allows items_count=0.
+    // cart_abandoned requires items_count ≥ 1 — a cart with zero items
+    // is "absent", not "abandoned".
     if (!isIntPositive(payload.items_count)) {
       issues.push({
         path: "items_count",
+        message: "must be a positive integer",
+      });
+    }
+    if (!isIntPositive(payload.line_items_count)) {
+      issues.push({
+        path: "line_items_count",
         message: "must be a positive integer",
       });
     }

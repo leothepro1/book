@@ -653,55 +653,120 @@ Fires when the guest performs an availability search.
 - **Payload:** shared context + `check_in_date` + `check_out_date` +
   `number_of_guests` + `results_count` + `filters_applied: string[]`.
 
-### `cart_started` v0.1.0 — Active (PR-B emits, PR-A registers)
+### `cart_started` v0.2.0 — Current; v0.1.0 deprecated
 
-Fires when the FIRST item lands in an empty cart. Pairs with
-`cart_updated` and `cart_abandoned` for funnel analysis.
+Fires when the FIRST item lands in a previously-empty cart. Pairs
+with `cart_updated`, `cart_abandoned`, and `checkout_started` for
+funnel analysis.
 
-- **Trigger:** worker, subscribed to cart state.
-- **Idempotency key:** client-generated ULID; the cart's own
-  `cart_id` (also a client ULID) carries forward to subsequent
-  cart_* events for the same lifecycle.
+- **Trigger:** worker, subscribed to cart state. Fires only when
+  `cart.items.length === 0` immediately before the add.
+- **Idempotency key:** client-generated ULID per emit; the cart's
+  `cart_id` (separate client ULID) is what carries forward to
+  subsequent cart_* events for the same lifecycle.
 - **Consent category:** `analytics`.
-- **Payload:** shared context + `cart_id` + `accommodation_id` +
-  `cart_total: { amount, currency }`.
+- **Payload (v0.2.0):** shared context + `cart_id` + `product_id`
+  (Product.id cuid) + `cart_total: { amount, currency }`.
 
-### `cart_updated` v0.1.0 — Active (PR-B emits, PR-A registers)
+**Schema versions:**
 
-Fires on cart mutations after `cart_started`.
+| Version | Status | Notes |
+|---|---|---|
+| v0.2.0 | Current | `accommodation_id` replaced by `product_id`. |
+| v0.1.0 | **Deprecated** | Required `accommodation_id`. Mismatched the actual cart shape (Shop product cart, no accommodation concept). Kept registered at `schemas/legacy/cart-started-v0.1.0.ts` for outbox-drain backward compat only. Drop after the outbox is confirmed empty of v0.1.0 events. |
 
-- **Trigger:** worker, throttled to ~500 ms debounce so rapid quantity
-  changes don't flood dispatch.
-- **Idempotency key:** client-generated ULID.
+See `schemas/cart-started.ts` for the full Semantic Contract,
+including the `cart_id` lifecycle (localStorage-backed, multi-tab
+shared, regenerated on `clearCart()`).
+
+### `cart_updated` v0.2.0 — Current; v0.1.0 deprecated
+
+Fires on every cart mutation AFTER `cart_started` — adding, removing,
+or changing quantity of line items.
+
+- **Trigger:** worker, subscribed to cart state. The worker does NOT
+  throttle or debounce — every emit-site call produces a distinct
+  event with its own ULID. Outbox dedup is by
+  `UNIQUE (tenant_id, event_id)`.
+- **Idempotency key:** client-generated ULID per emit.
 - **Consent category:** `analytics`.
-- **Payload:** shared context + `cart_id` + `items_count` +
-  `cart_total` + `action` (added / removed / quantity_changed).
+- **Payload (v0.2.0):** shared context + `cart_id` + `items_count`
+  (positive — sum of quantities) + `line_items_count` (positive —
+  distinct line-item count) + `cart_total` + `action` (added /
+  removed / quantity_changed).
 
-### `cart_abandoned` v0.1.0 — Active (PR-B emits, PR-A registers)
+**Schema versions:**
 
-Fires when the guest closes the tab / navigates away with a non-empty
-cart that wasn't moved into checkout. Dispatched via
-`navigator.sendBeacon()` from the unload handler so the event reaches
-the server even after page tear-down.
+| Version | Status | Notes |
+|---|---|---|
+| v0.2.0 | Current | Adds required `line_items_count`. Tightens `items_count` from non-negative to positive. Sharpens `action` semantics (variant-swap → remove+add; coupon-only → no emit). |
+| v0.1.0 | **Deprecated** | Lacked `line_items_count`. Allowed `items_count = 0`. Kept registered at `schemas/legacy/cart-updated-v0.1.0.ts`. |
 
-- **Trigger:** worker on `pagehide` / `beforeunload` /
-  `visibilitychange` to hidden, when cart is non-empty.
-- **Idempotency key:** client-generated ULID.
+See `schemas/cart-updated.ts` for the full Semantic Contract.
+
+### `cart_abandoned` v0.2.0 — Current; v0.1.0 deprecated
+
+Fires when the guest closes the tab or navigates away with a non-
+empty cart that wasn't moved into checkout. Dispatched via
+`navigator.sendBeacon()` from the unload handler.
+
+- **Trigger:** worker on `pagehide` / `visibilitychange` to hidden,
+  when cart is non-empty AND the cart is not currently being pushed
+  to checkout.
+- **Idempotency key:** client-generated ULID per emit.
 - **Consent category:** `analytics`.
-- **Payload:** shared context + `cart_id` + `items_count` (must be ≥
-  1; cart_abandoned only fires for non-empty carts) + `cart_total` +
-  `time_since_last_interaction_ms`.
+- **Payload (v0.2.0):** shared context + `cart_id` + `items_count`
+  (positive) + `line_items_count` (positive) + `cart_total` +
+  `time_since_last_interaction_ms` (cart-mutation events strictly).
 
-### `checkout_started` v0.1.0 — Active (PR-B emits, PR-A registers)
+**Schema versions:**
 
-Fires when the guest enters the checkout flow. Pairs with the
-SERVER-side `payment_succeeded` to compute checkout conversion.
+| Version | Status | Notes |
+|---|---|---|
+| v0.2.0 | Current | Adds `line_items_count` for parity with `cart_updated`. Defines "interaction" strictly as cart-mutation events (addToCart / removeFromCart / updateQuantity). |
+| v0.1.0 | **Deprecated** | Lacked `line_items_count`; "interaction" was undefined. Kept registered at `schemas/legacy/cart-abandoned-v0.1.0.ts`. |
 
-- **Trigger:** worker on URL match for `/checkout`.
-- **Idempotency key:** client-generated ULID.
+See `schemas/cart-abandoned.ts` for the full Semantic Contract,
+including the `bf_cart_{tenantId}.lastMutationAt` storage location.
+
+### `checkout_started` v0.2.0 — Current; v0.1.0 deprecated
+
+Fires when the guest enters the checkout flow from the cart drawer.
+Pairs with the SERVER-side `payment_succeeded` for checkout-
+conversion analysis.
+
+- **Trigger:** cart-drawer's checkout-button click handler, BEFORE
+  the redirect to `/checkout?session=…`.
+- **Idempotency key:** client-generated ULID per emit.
 - **Consent category:** `analytics`.
-- **Payload:** shared context + `cart_id` + `items_count` (≥ 1) +
-  `cart_total`.
+- **Payload (v0.2.0):** shared context + `cart_id` + `items_count`
+  (positive) + `line_items_count` (positive) + `cart_total`.
+
+**Schema versions:**
+
+| Version | Status | Notes |
+|---|---|---|
+| v0.2.0 | Current | Adds `line_items_count`. Makes cart-only scope explicit — non-cart purchase flows MUST NOT emit `checkout_started`. |
+| v0.1.0 | **Deprecated** | Lacked `line_items_count`; cart-only scope was ambiguous. Kept registered at `schemas/legacy/checkout-started-v0.1.0.ts`. |
+
+See `schemas/checkout-started.ts` for the full Semantic Contract.
+
+### Out of scope: gift-card and one-shot purchase flows
+
+`/shop/gift-cards/[slug]` (and any future one-shot purchase flow that
+does NOT use the Shop product cart) MUST NOT emit `cart_started`,
+`cart_updated`, `cart_abandoned`, or `checkout_started`. The cart
+event family's `cart_id` is load-bearing for Phase 5 funnel joins; a
+synthetic non-cart identifier joins to nothing and corrupts
+conversion metrics.
+
+A separate `purchase_initiated` event family (and likely
+`purchase_completed` / `purchase_abandoned`) is deferred to a
+follow-up PR. Until that PR lands, gift-card revenue is captured
+via the server-side `payment_succeeded` event — what's missing is
+the storefront-side funnel signal (intent → completion). Phase 5
+gift-card dashboards will display revenue but not funnel rate
+until that follow-up ships.
 
 ---
 
