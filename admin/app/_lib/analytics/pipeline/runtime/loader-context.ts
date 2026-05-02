@@ -22,6 +22,26 @@ import { ulid } from "ulidx";
 const SESSION_KEY = "bf_sid";
 const UA_HASH_LEN = 16; // 16 hex chars from sha256
 
+/**
+ * Allowed query parameters on `page_url`. Everything else (including
+ * `?email=`, `?token=`, custom-tracking params not in this list) is
+ * stripped before emit. The URL fragment (`#hash`) is always stripped.
+ *
+ * Adding a new permitted parameter requires a v0.2.0 schema bump on
+ * `_storefront-context.page_url` per the Semantic Contract.
+ *
+ * Order doesn't matter — Set membership is the only check.
+ */
+const PAGE_URL_QUERY_ALLOWLIST = new Set([
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+  "fbclid",
+  "gclid",
+]);
+
 let cachedUaHash: string | null = null;
 let inMemorySessionId: string | null = null;
 
@@ -77,7 +97,11 @@ export function buildStorefrontContext(
   opts: BuildContextOptions = {},
 ): StorefrontContext {
   return {
-    page_url: window.location.href,
+    // page_url is sanitized — query string filtered against an
+    // allowlist, fragment stripped. page_referrer is intentionally
+    // NOT sanitized (the schema's contract assigns referrer
+    // sanitization to Phase 5 readers).
+    page_url: sanitizePageUrl(window.location.href),
     page_referrer: document.referrer,
     user_agent_hash: cachedUaHash ?? "ua_pending",
     viewport: {
@@ -91,6 +115,39 @@ export function buildStorefrontContext(
       "sv",
     session_id: getOrCreateSessionId(),
   };
+}
+
+/**
+ * Sanitize a page URL for emit:
+ *
+ *   1. Drop every query parameter whose name is not in
+ *      `PAGE_URL_QUERY_ALLOWLIST` (utm_*, fbclid, gclid).
+ *   2. Drop the URL fragment (`#hash`).
+ *
+ * Phase 5 readers MAY treat the resulting `page_url` as PII-clean
+ * once this function is in place — see `_storefront-context.ts`
+ * Semantic Contract.
+ *
+ * Malformed URLs (anything that throws in `new URL(...)`) are passed
+ * through unchanged. The schema's structural constraint is
+ * `z.string().min(1)`, which preserved-as-is satisfies. Crashing the
+ * emit path on a weird location.href would be a worse failure mode —
+ * we'd lose the event entirely. Sanitization is best-effort.
+ */
+export function sanitizePageUrl(rawUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return rawUrl;
+  }
+  const filtered = new URLSearchParams();
+  for (const [key, value] of url.searchParams) {
+    if (PAGE_URL_QUERY_ALLOWLIST.has(key)) filtered.set(key, value);
+  }
+  url.search = filtered.toString();
+  url.hash = "";
+  return url.toString();
 }
 
 function readDocLang(): string | null {

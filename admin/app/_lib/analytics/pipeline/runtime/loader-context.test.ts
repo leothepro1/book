@@ -6,6 +6,7 @@ import {
   _resetLoaderContextCacheForTests,
   buildStorefrontContext,
   precomputeUserAgentHash,
+  sanitizePageUrl,
 } from "./loader-context";
 
 beforeEach(() => {
@@ -34,8 +35,12 @@ describe("buildStorefrontContext", () => {
     );
   });
 
-  it("page_url reflects the current location", () => {
+  it("page_url reflects the current location (no query/fragment in test env)", () => {
     const ctx = buildStorefrontContext();
+    // jsdom default location has no query/fragment, so sanitized
+    // output equals the raw href. The sanitizer's behavior under
+    // query/fragment is exercised in the dedicated sanitizePageUrl
+    // describe block below.
     expect(ctx.page_url).toBe(window.location.href);
   });
 
@@ -131,6 +136,82 @@ describe("buildStorefrontContext", () => {
     } finally {
       window.sessionStorage.getItem = orig;
     }
+  });
+});
+
+describe("sanitizePageUrl", () => {
+  it("returns URL unchanged when there is no query and no fragment", () => {
+    expect(sanitizePageUrl("https://apelviken.rutgr.com/stays/svalan")).toBe(
+      "https://apelviken.rutgr.com/stays/svalan",
+    );
+  });
+
+  it("preserves allowlisted utm_* parameters", () => {
+    const out = sanitizePageUrl(
+      "https://apelviken.rutgr.com/stays/svalan?utm_source=newsletter&utm_medium=email&utm_campaign=spring",
+    );
+    expect(out).toContain("utm_source=newsletter");
+    expect(out).toContain("utm_medium=email");
+    expect(out).toContain("utm_campaign=spring");
+  });
+
+  it("preserves fbclid and gclid", () => {
+    const out = sanitizePageUrl(
+      "https://apelviken.rutgr.com/?fbclid=ABC&gclid=XYZ",
+    );
+    expect(out).toContain("fbclid=ABC");
+    expect(out).toContain("gclid=XYZ");
+  });
+
+  it("strips non-allowlisted query parameters (PII-bearing)", () => {
+    const out = sanitizePageUrl(
+      "https://apelviken.rutgr.com/?email=guest%40example.com&utm_source=email",
+    );
+    expect(out).not.toContain("email=");
+    expect(out).toContain("utm_source=email");
+  });
+
+  it("strips the URL fragment", () => {
+    const out = sanitizePageUrl(
+      "https://apelviken.rutgr.com/stays/svalan#booking-form",
+    );
+    expect(out).not.toContain("#");
+    expect(out).toBe("https://apelviken.rutgr.com/stays/svalan");
+  });
+
+  it("strips both fragment and disallowed query params on a mixed URL", () => {
+    const out = sanitizePageUrl(
+      "https://apelviken.rutgr.com/?email=foo&utm_source=newsletter&token=secret#section-2",
+    );
+    expect(out).not.toContain("email=");
+    expect(out).not.toContain("token=");
+    expect(out).not.toContain("#");
+    expect(out).toContain("utm_source=newsletter");
+  });
+
+  it("handles a URL with only disallowed params — produces clean URL with no query", () => {
+    const out = sanitizePageUrl(
+      "https://apelviken.rutgr.com/?email=foo&token=bar",
+    );
+    expect(out).toBe("https://apelviken.rutgr.com/");
+  });
+
+  it("preserves path and protocol", () => {
+    const out = sanitizePageUrl(
+      "https://apelviken.rutgr.com/stays/svalan/book?fbclid=A&_blah=B",
+    );
+    expect(out.startsWith("https://apelviken.rutgr.com/stays/svalan/book")).toBe(
+      true,
+    );
+    expect(out).toContain("fbclid=A");
+    expect(out).not.toContain("_blah=");
+  });
+
+  it("returns input unchanged for malformed URLs (best-effort)", () => {
+    // The schema accepts any non-empty string. We never want sanitization
+    // to drop an event — failure mode is "preserve as-is" rather than
+    // "throw and lose the event".
+    expect(sanitizePageUrl("not-a-url")).toBe("not-a-url");
   });
 });
 
