@@ -12,33 +12,38 @@ panel dump filed in the PR comment thread.
 
 ---
 
-## ⚠️ Pre-flight: smoke environment
+## ✓ Pre-flight: smoke environment
 
-This checklist requires a hostname that origin-check accepts AND
-that resolves to a real Tenant row in the database. Vercel preview
-deploys on *.vercel.app match origin-check (preview-mode relaxation)
-but fail tenant resolution because the auto-generated preview
-hostname doesn't match any Tenant.portalSlug.
+Phase 3.5 has unblocked manual smoke. The required infrastructure now
+exists in code:
 
-**Required setup before running this checklist:**
+- ✓ `Tenant.environment` field migrated (default `production`)
+- ✓ Aggregation filter helper at
+  `app/_lib/analytics/pipeline/environment.ts`
+- ✓ Staging tenant seed at `scripts/seed-staging-tenant.ts`
+  (idempotent, hard-fails on sentinel without `--allow-sentinel`)
+- ✓ Operator setup procedure documented at
+  [`docs/analytics/phase3-5-staging-setup.md`](./phase3-5-staging-setup.md)
+- ✓ Cron-pollution follow-up tracked at
+  [`docs/analytics/cron-staging-isolation.md`](./cron-staging-isolation.md)
 
-1. A staging domain alias on the Vercel project, e.g.
-   `apelviken-staging.rutgr.com`, configured in Vercel project
-   Domains.
-2. A corresponding Tenant row with portalSlug = `apelviken-staging`
-   in the database the preview deployment uses.
-3. (Recommended) A separate `Tenant.environment` field
-   disambiguating staging from production tenants — staging
-   tenants must not appear in production aggregations.
+**Operator action required before running this checklist:**
 
-Without this setup, this checklist cannot run. The first valid
-run will be either:
+1. Follow `phase3-5-staging-setup.md` Step 1 — provision a separate
+   Clerk org for staging, copy the org id.
+2. Follow Step 2 — run `STAGING_CLERK_ORG_ID=org_REAL_ID npx tsx
+   scripts/seed-staging-tenant.ts`.
+3. Follow Step 3 — configure `apelviken-staging.rutgr.com` domain
+   alias on the Vercel project, wait for SSL.
+4. Verify `https://apelviken-staging.rutgr.com` resolves with valid
+   SSL and the storefront renders (visual cue: orange button color
+   marks staging vs production purple).
+5. Then run the 20-item checklist below.
 
-- After staging-domain infrastructure PR lands, OR
-- During Apelviken go-live (October 2026) on apelviken.rutgr.com
-
-This is a planning miss flagged for Phase 3 retrospective:
-manual smoke design did not account for preview-tenant resolution.
+If a smoke item finds a bug, open a separate fix-PR per bug
+(per Phase 3.5 PR's stated scope discipline). The Phase 3.5 PR
+merges with the smoke results documented as
+"run/passed-or-flagged-as-bug-followup-PR".
 
 ---
 

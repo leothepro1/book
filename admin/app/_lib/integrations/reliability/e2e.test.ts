@@ -85,6 +85,20 @@ vi.mock("../sync/circuit-breaker", () => ({
   recordFailure: vi.fn(async () => {}),
 }));
 
+// upsertBookingFromPms (called transitively from processInboxRow)
+// emits analytics events inside the transaction. The real
+// emitAnalyticsEvent validates the tx via `isTransactionClient`,
+// which our minimal e2e mock tx (just `$queryRaw` + `booking.*`)
+// fails — same root cause as ingest.test.ts (Phase 3.5 D5). Mock to
+// no-op so processing completes; the analytics emit has its own
+// dedicated tests in app/_lib/analytics/pipeline/emitter.test.ts.
+vi.mock("@/app/_lib/analytics/pipeline/emitter", () => ({
+  emitAnalyticsEvent: vi.fn().mockResolvedValue({
+    event_id: "01HZ8WF7Z7Z7Z7Z7Z7Z7Z7Z7ZB",
+    outbox_id: "outbox_test",
+  }),
+}));
+
 // ── resolveAdapter → return a REAL FakeAdapter ──────────────
 
 import { FakeAdapter } from "../adapters/fake";

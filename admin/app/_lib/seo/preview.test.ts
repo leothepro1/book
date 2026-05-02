@@ -98,6 +98,7 @@ function tenantRow(overrides: Partial<Tenant> = {}): Tenant {
     updatedAt: new Date("2026-04-01T00:00:00Z"),
     discountsEnabled: true,
     showLoginLinks: true,
+    environment: "production",
     ...overrides,
   };
 }

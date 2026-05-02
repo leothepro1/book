@@ -27,23 +27,46 @@ describe("upsertGuestAccount", () => {
   });
 
   it("creates a new account with normalized email", async () => {
-    const fakeAccount = { id: "ga_1", tenantId: "t1", email: "alice@example.com" };
+    // account.ts:36 reads `account.createdAt.getTime()` for the
+    // emit-if-new-account heuristic — the mock must include a
+    // real Date or .getTime() throws "cannot read of undefined".
+    const fakeAccount = {
+      id: "ga_1",
+      tenantId: "t1",
+      email: "alice@example.com",
+      createdAt: new Date(),
+    };
     mockPrisma.guestAccount.upsert.mockResolvedValue(fakeAccount);
 
     const result = await upsertGuestAccount("t1", "  Alice@Example.COM  ");
 
-    expect(mockPrisma.guestAccount.upsert).toHaveBeenCalledWith({
-      where: {
-        tenantId_email: { tenantId: "t1", email: "alice@example.com" },
-      },
-      create: { tenantId: "t1", email: "alice@example.com" },
-      update: {},
-    });
+    // account.ts now passes the full GuestAccount profile shape on
+    // create (firstName, lastName, address fields, etc., all null
+    // for new accounts). Use objectContaining so this assertion
+    // tests the contract we care about (tenantId + email) without
+    // breaking on every future profile-field addition.
+    expect(mockPrisma.guestAccount.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tenantId_email: { tenantId: "t1", email: "alice@example.com" },
+        },
+        create: expect.objectContaining({
+          tenantId: "t1",
+          email: "alice@example.com",
+        }),
+        update: {},
+      }),
+    );
     expect(result).toEqual(fakeAccount);
   });
 
   it("returns the same account on second call (idempotent)", async () => {
-    const fakeAccount = { id: "ga_1", tenantId: "t1", email: "bob@example.com" };
+    const fakeAccount = {
+      id: "ga_1",
+      tenantId: "t1",
+      email: "bob@example.com",
+      createdAt: new Date(),
+    };
     mockPrisma.guestAccount.upsert.mockResolvedValue(fakeAccount);
 
     const first = await upsertGuestAccount("t1", "bob@example.com");
@@ -54,7 +77,12 @@ describe("upsertGuestAccount", () => {
   });
 
   it("normalizes email to lowercase", async () => {
-    const fakeAccount = { id: "ga_2", tenantId: "t1", email: "test@example.com" };
+    const fakeAccount = {
+      id: "ga_2",
+      tenantId: "t1",
+      email: "test@example.com",
+      createdAt: new Date(),
+    };
     mockPrisma.guestAccount.upsert.mockResolvedValue(fakeAccount);
 
     await upsertGuestAccount("t1", "TEST@EXAMPLE.COM");
@@ -64,14 +92,27 @@ describe("upsertGuestAccount", () => {
         where: {
           tenantId_email: { tenantId: "t1", email: "test@example.com" },
         },
-        create: { tenantId: "t1", email: "test@example.com" },
+        create: expect.objectContaining({
+          tenantId: "t1",
+          email: "test@example.com",
+        }),
       }),
     );
   });
 
   it("different tenants with same email create separate accounts", async () => {
-    const accountT1 = { id: "ga_t1", tenantId: "t1", email: "shared@example.com" };
-    const accountT2 = { id: "ga_t2", tenantId: "t2", email: "shared@example.com" };
+    const accountT1 = {
+      id: "ga_t1",
+      tenantId: "t1",
+      email: "shared@example.com",
+      createdAt: new Date(),
+    };
+    const accountT2 = {
+      id: "ga_t2",
+      tenantId: "t2",
+      email: "shared@example.com",
+      createdAt: new Date(),
+    };
 
     mockPrisma.guestAccount.upsert
       .mockResolvedValueOnce(accountT1)

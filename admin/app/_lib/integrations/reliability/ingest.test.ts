@@ -45,6 +45,27 @@ vi.mock("../sync/log", () => ({
   logSyncEvent: (...a: unknown[]) => mockLogSyncEvent(...a),
 }));
 
+// ingest.ts emits analytics events (booking.created, booking.cancelled,
+// etc.) inside the same transaction. The real `emitAnalyticsEvent`
+// validates that the supplied tx is a Prisma TransactionClient via
+// `isTransactionClient` (checks for $executeRaw + absence of
+// $transaction); our minimal mock tx above doesn't pass that check,
+// and the analytics pipeline has its own dedicated tests in
+// app/_lib/analytics/pipeline/emitter.test.ts. Mock to a no-op here so
+// this file's contract — the booking-ingest mutation sequence — stays
+// focused.
+//
+// Tests that genuinely exercise the analytics emit path should import
+// `createMockAnalyticsTransaction` from
+// `app/_lib/analytics/pipeline/__tests__/mocks.ts` instead.
+const mockEmitAnalyticsEvent = vi.fn().mockResolvedValue({
+  event_id: "01HZ8WF7Z7Z7Z7Z7Z7Z7Z7Z7ZB",
+  outbox_id: "outbox_test",
+});
+vi.mock("@/app/_lib/analytics/pipeline/emitter", () => ({
+  emitAnalyticsEvent: (...a: unknown[]) => mockEmitAnalyticsEvent(...a),
+}));
+
 // Import after mocks are registered
 const { upsertBookingFromPms } = await import("./ingest");
 

@@ -1,5 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// `@/app/_lib/integrations/crypto` validates required env vars at
+// module-load time (DATABASE_URL, INTEGRATION_ENCRYPTION_KEY,
+// CRON_SECRET). Vitest doesn't ship these, so this file's import
+// chain (provider modules → crypto → env) used to throw before the
+// first test even ran. Stub the env module to a known-good shape
+// before any other import resolves.
+vi.mock("@/app/_lib/env", () => ({
+  env: {
+    DATABASE_URL: "postgresql://test",
+    INTEGRATION_ENCRYPTION_KEY: "x".repeat(64),
+    CRON_SECRET: "test-cron-secret",
+    NODE_ENV: "test",
+  },
+}));
+
 // Mock prisma
 const mockWebhookEventCreate = vi.fn();
 const mockOrderFindUnique = vi.fn();

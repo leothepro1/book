@@ -700,8 +700,27 @@ model Tenant {
   // Feature toggle — tenant can disable all discount functionality
   discountsEnabled Boolean @default(true)
 
+  /// Phase 3.5 — deployment context for this tenant. Phase 5+
+  /// aggregations MUST filter on `environment = production` to keep
+  /// staging traffic out of production metrics.
+  /// See app/_lib/analytics/pipeline/environment.ts and
+  /// docs/analytics/phase3-5-staging-setup.md.
+  environment TenantEnvironment @default(production)
+
   @@index([slug])
   @@index([clerkOrgId])
+  @@index([environment])
+
+  @@schema("public")
+}
+
+/// Phase 3.5 — distinguishes production tenants from staging tenants.
+/// Staging events live in the SAME outbox/event tables as production;
+/// the filter is applied at query time. See
+/// app/_lib/analytics/pipeline/environment.ts for the canonical helper.
+enum TenantEnvironment {
+  production
+  staging
 
   @@schema("public")
 }
