@@ -35,11 +35,17 @@ export function validateCheckoutStartedPayload(
     if (!isNonEmptyString(payload.cart_id)) {
       issues.push({ path: "cart_id", message: "must be a non-empty string" });
     }
-    // Note: checkout_started requires items_count ≥ 1 (positive), unlike
-    // cart_updated which allows items_count=0.
+    // checkout_started requires items_count ≥ 1 — entering checkout
+    // with an empty cart is structurally impossible.
     if (!isIntPositive(payload.items_count)) {
       issues.push({
         path: "items_count",
+        message: "must be a positive integer",
+      });
+    }
+    if (!isIntPositive(payload.line_items_count)) {
+      issues.push({
+        path: "line_items_count",
         message: "must be a positive integer",
       });
     }

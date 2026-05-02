@@ -34,9 +34,9 @@ export function validateCartStartedPayload(
     if (!isNonEmptyString(payload.cart_id)) {
       issues.push({ path: "cart_id", message: "must be a non-empty string" });
     }
-    if (!isNonEmptyString(payload.accommodation_id)) {
+    if (!isNonEmptyString(payload.product_id)) {
       issues.push({
-        path: "accommodation_id",
+        path: "product_id",
         message: "must be a non-empty string",
       });
     }

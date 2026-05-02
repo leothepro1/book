@@ -17,7 +17,7 @@
  */
 
 import {
-  isIntNonNegative,
+  isIntPositive,
   isNonEmptyString,
   isPlainObject,
   isStringEnum,
@@ -38,10 +38,19 @@ export function validateCartUpdatedPayload(
     if (!isNonEmptyString(payload.cart_id)) {
       issues.push({ path: "cart_id", message: "must be a non-empty string" });
     }
-    if (!isIntNonNegative(payload.items_count)) {
+    // v0.2.0: items_count tightened from non-negative to positive.
+    // cart_updated by definition fires on a cart that already has items;
+    // remove-last-item triggers cart_id regeneration, not a count=0 emit.
+    if (!isIntPositive(payload.items_count)) {
       issues.push({
         path: "items_count",
-        message: "must be a non-negative integer",
+        message: "must be a positive integer",
+      });
+    }
+    if (!isIntPositive(payload.line_items_count)) {
+      issues.push({
+        path: "line_items_count",
+        message: "must be a positive integer",
       });
     }
     validateCartTotal(payload.cart_total, "cart_total", issues);
