@@ -5,6 +5,7 @@ import { Webhook } from 'svix';
 import { prisma } from '@/app/_lib/db/prisma';
 import { env } from '@/app/_lib/env';
 import { generatePortalSlug, tenantDefaultEmailFrom } from '@/app/_lib/tenant/portal-slug';
+import { generateAnalyticsSalt } from '@/app/_lib/analytics/pipeline/tenant-settings';
 
 const webhookSecret = env.CLERK_WEBHOOK_SECRET;
 
@@ -58,6 +59,13 @@ export async function POST(req: Request) {
         const { id, name, slug, created_by } = evt.data;
         const portalSlug = await generatePortalSlug(name);
         const emailFrom = tenantDefaultEmailFrom(portalSlug);
+        // Mint per-tenant analytics salt at creation time so new
+        // tenants never need the Phase 2 backfill. The salt is a
+        // namespace separator for user_agent_hash construction —
+        // not cryptographic-secret in the strong sense, but per-
+        // tenant rotation matters and minting at creation is the
+        // cheapest path to that.
+        const analyticsSalt = await generateAnalyticsSalt();
         const newTenant = await tx.tenant.create({
           data: {
             clerkOrgId: id,
@@ -66,7 +74,7 @@ export async function POST(req: Request) {
             ownerClerkUserId: created_by,
             portalSlug,
             emailFrom,
-            settings: getDefaultTenantSettings(name),
+            settings: getDefaultTenantSettings(name, analyticsSalt),
           },
         });
 
@@ -111,7 +119,7 @@ export async function POST(req: Request) {
   return new Response('Webhook received', { status: 200 });
 }
 
-function getDefaultTenantSettings(name: string) {
+function getDefaultTenantSettings(name: string, analyticsSalt: string) {
   return {
     property: {
       name,
@@ -142,5 +150,11 @@ function getDefaultTenantSettings(name: string) {
       notificationsEnabled: true,
       languageSwitcherEnabled: true,
     },
+    // Per-tenant analytics salt. Read by getAnalyticsSalt() server-
+    // side and injected into the storefront via SSR for the loader's
+    // user_agent_hash construction. See
+    // app/_lib/analytics/pipeline/tenant-settings.ts for the full
+    // contract.
+    analyticsSalt,
   };
 }

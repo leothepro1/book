@@ -1,5 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 
+import { generateAnalyticsSalt } from "../app/_lib/analytics/pipeline/tenant-settings";
+
 const prisma = new PrismaClient();
 
 async function syncOrg() {
@@ -12,6 +14,13 @@ async function syncOrg() {
     console.error("Usage: tsx scripts/sync-clerk-org.ts <clerkOrgId> <name> <slug> [ownerClerkUserId]");
     process.exit(1);
   }
+
+  // Mint analytics salt at create time so newly-synced tenants
+  // function with the loader without needing the Phase 2 backfill.
+  // The upsert-update branch leaves the existing salt alone — re-
+  // running this script on an existing tenant must NOT rotate the
+  // salt (rotation has its own ops-driven path).
+  const analyticsSalt = await generateAnalyticsSalt();
 
   // Skapa tenant kopplad till Clerk Organization
   const tenant = await prisma.tenant.upsert({
@@ -56,6 +65,7 @@ async function syncOrg() {
           notificationsEnabled: true,
           languageSwitcherEnabled: true,
         },
+        analyticsSalt,
       },
     },
   });
