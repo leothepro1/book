@@ -216,6 +216,11 @@ describe("sanitizePageUrl", () => {
 });
 
 describe("precomputeUserAgentHash", () => {
+  beforeEach(() => {
+    // Default each test to no salt — explicit setSalt below where needed.
+    setSalt(undefined);
+  });
+
   it("returns deterministic 16-hex-char output for same UA", async () => {
     const a = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
     _resetLoaderContextCacheForTests();
@@ -236,4 +241,68 @@ describe("precomputeUserAgentHash", () => {
     const b = await precomputeUserAgentHash("ua_y"); // ignored, returns cached
     expect(b).toBe(a);
   });
+
+  it("same UA + same salt → same hash (per-tenant stability)", async () => {
+    setSalt("salt_apelviken_xxxxxxxxxxxxxxxx");
+    const a = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
+    _resetLoaderContextCacheForTests();
+    setSalt("salt_apelviken_xxxxxxxxxxxxxxxx");
+    const b = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
+    expect(a).toBe(b);
+  });
+
+  it("same UA + different salt → different hashes (cross-tenant isolation)", async () => {
+    setSalt("salt_tenant_aaaa");
+    const a = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
+    _resetLoaderContextCacheForTests();
+    setSalt("salt_tenant_bbbb");
+    const b = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
+    expect(a).not.toBe(b);
+  });
+
+  it("absent salt produces structurally-valid 16-char hex (unsalted fallback)", async () => {
+    setSalt(undefined);
+    const hash = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
+    expect(hash).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("empty salt is treated identically to absent (both → unsalted)", async () => {
+    setSalt(undefined);
+    const a = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
+    _resetLoaderContextCacheForTests();
+    setSalt("");
+    const b = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
+    expect(a).toBe(b);
+  });
+
+  it("calls onMissingSalt callback when salt is absent", async () => {
+    setSalt(undefined);
+    const onMissingSalt = vi.fn();
+    await precomputeUserAgentHash("ua_x", onMissingSalt);
+    expect(onMissingSalt).toHaveBeenCalledOnce();
+  });
+
+  it("does NOT call onMissingSalt when salt is present", async () => {
+    setSalt("salt_present_xxxxxxxxxxxxxxxx");
+    const onMissingSalt = vi.fn();
+    await precomputeUserAgentHash("ua_x", onMissingSalt);
+    expect(onMissingSalt).not.toHaveBeenCalled();
+  });
+
+  it("calls onMissingSalt when salt is empty string", async () => {
+    setSalt("");
+    const onMissingSalt = vi.fn();
+    await precomputeUserAgentHash("ua_x", onMissingSalt);
+    expect(onMissingSalt).toHaveBeenCalledOnce();
+  });
 });
+
+/** Helper: install a salt on `window.__bedfront_analytics_salt`. */
+function setSalt(value: string | undefined): void {
+  const w = window as unknown as { __bedfront_analytics_salt?: string };
+  if (value === undefined) {
+    delete w.__bedfront_analytics_salt;
+  } else {
+    w.__bedfront_analytics_salt = value;
+  }
+}

@@ -50,11 +50,42 @@ let inMemorySessionId: string | null = null;
  * `buildStorefrontContext()` calls return synchronously using the
  * cached value. Call before exposing the public `bedfrontAnalytics`
  * API so the first event already has the real hash.
+ *
+ * The hash input is constructed as `tenantSalt + ":" + ua`, where
+ * `tenantSalt` is read from `window.__bedfront_analytics_salt` (set
+ * by the SSR-side AnalyticsLoader component). The salt provides
+ * per-tenant namespace isolation — the same browser visiting two
+ * tenants produces unrelated hashes.
+ *
+ * Phase 1 fallback: when the salt is absent or empty (pre-backfill
+ * tenant or boot-time race), the hash is computed UNSALTED — input
+ * is just the UA. Caller-supplied `onMissingSalt` lets the loader
+ * report the absence to Sentry; the hash itself still produces a
+ * structurally-valid 16-char hex string so the storefront keeps
+ * tracking.
  */
-export async function precomputeUserAgentHash(ua: string): Promise<string> {
+export async function precomputeUserAgentHash(
+  ua: string,
+  onMissingSalt?: () => void,
+): Promise<string> {
   if (cachedUaHash) return cachedUaHash;
-  cachedUaHash = await sha256Hex(ua);
+  const salt = readAnalyticsSalt();
+  if (!salt) onMissingSalt?.();
+  const input = salt ? `${salt}:${ua}` : ua;
+  cachedUaHash = await sha256Hex(input);
   return cachedUaHash;
+}
+
+/**
+ * Read `window.__bedfront_analytics_salt` defensively. Empty string
+ * is treated identically to absence — both cases trigger the
+ * unsalted-fallback path and the caller's `onMissingSalt` hook.
+ */
+function readAnalyticsSalt(): string {
+  const w = window as unknown as { __bedfront_analytics_salt?: unknown };
+  const v = w.__bedfront_analytics_salt;
+  if (typeof v !== "string") return "";
+  return v;
 }
 
 /**

@@ -77,6 +77,12 @@ declare global {
   interface Window {
     __bedfront_geo?: string | null;
     __bedfront_runtime?: BedfrontRuntimeManifest;
+    /**
+     * Per-tenant analytics salt (32 hex chars). Injected by
+     * `AnalyticsLoader.tsx` via SSR. Empty string = unsalted-fallback
+     * sentinel (Phase 1 — pre-backfill tenants).
+     */
+    __bedfront_analytics_salt?: string;
     bedfrontAnalytics?: BedfrontAnalyticsAPI;
   }
 }
@@ -412,9 +418,21 @@ async function bootstrap(): Promise<void> {
   // Precompute UA hash so the very first event has the real value.
   // Slice the UA at 200 chars — full strings can be megabytes-long
   // in some browsers/extensions, and we don't want to hash that.
+  //
+  // The salt is read inside precomputeUserAgentHash from
+  // `window.__bedfront_analytics_salt` (set by AnalyticsLoader at
+  // SSR). When the salt is absent/empty (Phase 1 — tenant not yet
+  // backfilled, or boot-time race), the hash is unsalted; we report
+  // that to Sentry so we can spot tenants that escaped the backfill
+  // without the storefront-emit flow breaking.
   try {
     await precomputeUserAgentHash(
       (navigator.userAgent ?? "unknown").slice(0, 200),
+      () =>
+        reportToSentry("analytics.salt.missing", {
+          tenantId: window.__bedfront_runtime?.tenantId ?? null,
+          location: "precomputeUserAgentHash",
+        }),
     );
   } catch (err) {
     reportToSentry("precomputeUserAgentHash failed", err);
