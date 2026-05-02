@@ -106,9 +106,24 @@ async function readGeoCountry(): Promise<string | null> {
 
 interface AnalyticsLoaderProps {
   tenantId: string;
+  /**
+   * Per-tenant analytics salt (32 hex chars expected). Server-resolved
+   * by the caller via `getAnalyticsSalt(tenant)` from
+   * `app/_lib/analytics/pipeline/tenant-settings.ts`. Phase 1 — may
+   * be `undefined` for tenants that have not yet been backfilled.
+   *
+   * Emitted to the client as `window.__bedfront_analytics_salt`. The
+   * loader uses it to construct `user_agent_hash` with per-tenant
+   * isolation. Empty string is treated identically to absence (the
+   * loader falls back to unsalted hashing and posts a Sentry warning).
+   */
+  tenantSalt?: string;
 }
 
-export async function AnalyticsLoader({ tenantId }: AnalyticsLoaderProps) {
+export async function AnalyticsLoader({
+  tenantId,
+  tenantSalt,
+}: AnalyticsLoaderProps) {
   if (!tenantId) {
     await captureSentryWarning("analytics.loader.tenant_missing", {
       tenantId: String(tenantId),
@@ -141,6 +156,11 @@ export async function AnalyticsLoader({ tenantId }: AnalyticsLoaderProps) {
   // id is alphanumeric + dash, geo is a 2-char ISO code) but we
   // double-encode via JSON.stringify on a sanitized object as a
   // belt-and-braces guard. JSON.stringify never produces `</script>`.
+  //
+  // `analyticsSalt` is normalized to a string before stringify —
+  // `JSON.stringify(undefined)` returns the JS literal `undefined`,
+  // which would render as a SyntaxError in the inline script.
+  // Empty string is the loader's "unsalted fallback" sentinel.
   const inlineGlobals = {
     geo,
     runtime: {
@@ -148,10 +168,14 @@ export async function AnalyticsLoader({ tenantId }: AnalyticsLoaderProps) {
       loader: manifest.loader,
       tenantId,
     },
+    analyticsSalt: tenantSalt ?? "",
   };
-  const inlineSource = `window.__bedfront_geo=${JSON.stringify(
-    inlineGlobals.geo,
-  )};window.__bedfront_runtime=${JSON.stringify(inlineGlobals.runtime)};`;
+  const inlineSource =
+    `window.__bedfront_geo=${JSON.stringify(inlineGlobals.geo)};` +
+    `window.__bedfront_runtime=${JSON.stringify(inlineGlobals.runtime)};` +
+    `window.__bedfront_analytics_salt=${JSON.stringify(
+      inlineGlobals.analyticsSalt,
+    )};`;
 
   return (
     <>
