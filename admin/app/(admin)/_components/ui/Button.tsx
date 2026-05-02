@@ -106,13 +106,19 @@ export const Button = forwardRef<HTMLButtonElement | HTMLAnchorElement, ButtonPr
     const content = (
       <>
         {props.leadingIcon && (
-          <span className="material-symbols-rounded ui-btn__icon" aria-hidden>
+          <span
+            className="material-symbols-rounded ui-btn__icon ui-btn__icon--leading"
+            aria-hidden
+          >
             {props.leadingIcon}
           </span>
         )}
         {hasLabel && <span className="ui-btn__label">{props.children}</span>}
         {props.trailingIcon && (
-          <span className="material-symbols-rounded ui-btn__icon" aria-hidden>
+          <span
+            className="material-symbols-rounded ui-btn__icon ui-btn__icon--trailing"
+            aria-hidden
+          >
             {props.trailingIcon}
           </span>
         )}

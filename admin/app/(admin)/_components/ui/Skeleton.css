@@ -1,0 +1,44 @@
+/* ── Skeleton — pulse placeholder ──
+   Flat-fill placeholder with an opacity pulse. Calmer and less
+   "marketing" than a sliding shimmer — reads as "data is loading"
+   without the sweeping highlight that some users find busy. Same
+   pattern as the existing `.skel` class used across admin pages
+   (settings → users, translations, etc.).
+
+   Color contract:
+     fill   = --admin-surface-sunken (subtle dim panel against
+              --admin-surface; flips correctly in dark mode)
+
+   Pulse parameters match the legacy `.skel`:
+     duration  1.4s
+     curve     ease-in-out
+     opacity   1.0 → 0.55 → 1.0
+
+   `--radius-sm` is the in-CSS fallback; the React layer overrides
+   border-radius via inline style based on the `radius` prop. */
+
+.ui-skeleton {
+  display: inline-block;
+  background: var(--admin-surface-sunken);
+  border-radius: var(--radius-sm);
+  animation: ui-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes ui-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Reduced motion: hold a steady mid-opacity tint. The placeholder
+   cue survives; the throb does not. */
+@media (prefers-reduced-motion: reduce) {
+  .ui-skeleton {
+    animation: none;
+    opacity: 0.75;
+  }
+}

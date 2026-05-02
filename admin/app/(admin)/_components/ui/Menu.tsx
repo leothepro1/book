@@ -103,6 +103,10 @@ function MenuRoot({
     top: -9999,
     left: -9999,
   });
+  // Placement is exposed as `data-placement` on the menu so the CSS
+  // can swap the enter animation (slide-down vs slide-up) to match
+  // the actual direction the menu opened in.
+  const [placement, setPlacement] = useState<'bottom' | 'top'>('bottom');
 
   // Position the menu after it mounts so we can read its rect for
   // viewport clamping + auto-flip. useLayoutEffect runs synchronously
@@ -116,10 +120,12 @@ function MenuRoot({
 
     let top = triggerRect.bottom + offset;
     let left = triggerRect.left;
+    let nextPlacement: 'bottom' | 'top' = 'bottom';
 
     // Auto-flip vertically if not enough room below
     if (top + listRect.height > window.innerHeight - margin) {
       top = triggerRect.top - listRect.height - offset;
+      nextPlacement = 'top';
     }
 
     // Clamp horizontally so the menu never extends past the viewport
@@ -129,11 +135,17 @@ function MenuRoot({
     if (left < margin) left = margin;
 
     setPosition({ top, left });
+    setPlacement(nextPlacement);
   }, [open, offset, children]);
 
-  // Close on outside click + ESC. Uses pointerdown so the close fires
-  // before any subsequent click handler — prevents the trigger's own
-  // click from re-toggling the menu when user clicks outside.
+  // Close on outside click + ESC + scroll. Uses pointerdown so the
+  // close fires before any subsequent click handler — prevents the
+  // trigger's own click from re-toggling the menu when user clicks
+  // outside. Scroll handler runs in the capture phase so we also
+  // catch scroll inside any scrollable ancestor of the trigger —
+  // the menu is `position: fixed` and would otherwise drift visually
+  // away from the trigger as the page moves. Mirrors Calendar's
+  // dismissal contract.
   useEffect(() => {
     if (!open) return;
     const handlePointerDown = (e: PointerEvent) => {
@@ -149,11 +161,19 @@ function MenuRoot({
         triggerRef.current?.focus();
       }
     };
+    const handleScroll = (e: Event) => {
+      // Ignore scrolls inside the menu list itself — long menus
+      // that scroll internally must not self-dismiss.
+      if (listRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
     document.addEventListener('pointerdown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', handleScroll, { capture: true });
     };
   }, [open, setOpen]);
 
@@ -206,6 +226,7 @@ function MenuRoot({
               ref={listRef}
               role="menu"
               className="ui-menu"
+              data-placement={placement}
               style={{
                 position: 'fixed',
                 top: position.top,
@@ -225,6 +246,18 @@ export type MenuItemProps = {
   children: ReactNode;
   variant?: MenuItemVariant;
   disabled?: boolean;
+  /**
+   * Material Symbols Rounded icon name rendered on the left of the
+   * label. Use for action affordances (`edit`, `delete`, `content_copy`).
+   * Same vocabulary as `Button.leadingIcon`.
+   */
+  prefix?: string;
+  /**
+   * Free-form content rendered flush-right on the row. Use for
+   * shortcuts (`⌘E`), counts, badges, or trailing icons. Accepts
+   * any ReactNode — an icon span, a Badge, plain text.
+   */
+  suffix?: ReactNode;
   onSelect?: () => void;
 };
 
@@ -232,6 +265,8 @@ function MenuItem({
   children,
   variant = 'default',
   disabled = false,
+  prefix,
+  suffix,
   onSelect,
 }: MenuItemProps) {
   const { close } = useMenuContext('Menu.Item');
@@ -254,7 +289,18 @@ function MenuItem({
       disabled={disabled}
       onClick={handleClick}
     >
+      {prefix && (
+        <span
+          className="material-symbols-rounded ui-menu__prefix"
+          aria-hidden
+        >
+          {prefix}
+        </span>
+      )}
       <span className="ui-menu__label">{children}</span>
+      {suffix !== undefined && suffix !== null && (
+        <span className="ui-menu__suffix">{suffix}</span>
+      )}
     </button>
   );
 }

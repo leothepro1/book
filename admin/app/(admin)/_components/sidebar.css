@@ -81,20 +81,25 @@
 
 /* ── Icon ── */
 
-/* Specificity boost on `.sb__item .sb__icon` (0,2,0) — beats the Google Fonts
-   default `.material-symbols-rounded { font-size: 24px }` (0,1,0). */
-.sb__item .sb__icon {
+/* Specificity hard-win (0,3,0) over the Google Fonts default
+   `.material-symbols-rounded { font-size: 24px }` (0,1,0). The
+   chained `.material-symbols-rounded` is redundant for matching
+   (every JSX usage of `.sb__icon` already carries the class) but
+   the chain bumps us to three classes — guarantees we win
+   regardless of how the runtime-injected Google stylesheet
+   slots into the cascade vs bundled component CSS. */
+.sb__item .sb__icon.material-symbols-rounded {
   flex-shrink: 0;
   font-size: 18px;
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
 
-.sb__item .sb__icon--sm {
+.sb__item .sb__icon--sm.material-symbols-rounded {
   font-size: 14px;
 }
 
 /* Section back chevron — slightly smaller than the standard 18px row icon. */
-.sb__item .sb__icon--back {
+.sb__item .sb__icon--back.material-symbols-rounded {
   font-size: 16px;
 }
 
@@ -129,7 +134,9 @@
   color: inherit;
 }
 
-.sb__item .sb__item-trail {
+/* (0,3,0) for the same reason as `.sb__icon` above — beats the
+   Google default `.material-symbols-rounded { font-size: 24px }`. */
+.sb__item .sb__item-trail.material-symbols-rounded {
   font-size: 11px;
   line-height: 1;
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;

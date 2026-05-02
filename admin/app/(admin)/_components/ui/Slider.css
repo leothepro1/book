@@ -1,0 +1,158 @@
+/* ── Slider — single-value horizontal range ──
+   Lift-and-shift of the editor's `.sf-range` pattern. The README
+   forbids `--sf-*` tokens in `ui/` (§4 "Explicitly NOT allowed"),
+   so the values are inlined here with token-debt comments. They
+   match the editor exactly so a Slider in admin and a slider in
+   the editor read as the same control. */
+
+.ui-slider {
+  display: flex;
+  align-items: center;
+  /* Fill container; track + input share via flex-grow / fixed
+     widths below. Caller controls outer width via parent layout. */
+  width: 100%;
+  /* Token-debt: editor uses --sf-range-row-gap = 10px. */
+  gap: 10px;
+}
+
+/* ── Track ──
+   Holds the fill, the draggable thumb, and the pin tooltip. The
+   12px vertical margin reserves space for the thumb (15px ⌀,
+   centred on the track) plus the pin tooltip floating above. */
+.ui-slider__track {
+  position: relative;
+  flex: 1;
+  /* Token-debt: editor track height = 4px, radius = 2px,
+     bg = #DBDBDB, margin = 12px 0. Hardcoded to match. */
+  height: 4px;
+  border-radius: 2px;
+  background: #dbdbdb;
+  margin: 12px 0;
+  cursor: pointer;
+  /* Stop default touch-scroll from competing with horizontal drag. */
+  touch-action: none;
+}
+
+.ui-slider__fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  /* Token-debt: editor accent = #3C3C3C. */
+  background: #3c3c3c;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+/* ── Thumb ──
+   Centred over the fill's leading edge. The hover/active halo is
+   a soft outer box-shadow (no layout impact) — the thumb itself
+   stays exactly 15×15 so its drop position is pixel-stable. */
+.ui-slider__thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #3c3c3c;
+  cursor: pointer;
+  transition: box-shadow 0.15s var(--ease-default);
+  z-index: 2;
+  outline: none;
+}
+
+.ui-slider__thumb:hover,
+.ui-slider__thumb:focus-visible,
+.ui-slider__thumb--active {
+  /* Token-debt: editor halo = rgba(26,26,26,0.14) at 9px spread. */
+  box-shadow: 0 0 0 9px rgba(26, 26, 26, 0.14);
+}
+
+.ui-slider__thumb--active {
+  cursor: grabbing;
+}
+
+/* ── Pin tooltip ──
+   Floats above the thumb on hover/active. Hidden by default
+   (opacity 0 + scale 0.8 — animates into view). Triangle pointer
+   on the bottom edge formed by a CSS border-trick. */
+.ui-slider__pin {
+  position: absolute;
+  bottom: calc(100% + 18px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.8);
+  background: #3c3c3c;
+  color: #fff;
+  border-radius: 6px;
+  padding: 2px 8px 3px 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 0.15s var(--ease-default),
+    transform 0.15s var(--ease-default);
+}
+
+.ui-slider__pin::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: #3c3c3c;
+}
+
+.ui-slider__thumb:hover .ui-slider__pin,
+.ui-slider__thumb:focus-visible .ui-slider__pin,
+.ui-slider__thumb--active .ui-slider__pin {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+.ui-slider__pin-value {
+  font-size: 13px;
+  line-height: 1em;
+  font-weight: 500;
+  /* Tabular numerals so the pin doesn't visibly twitch as digits
+     change width during a drag. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Input wrap ──
+   Holds the `<Input>` primitive (with optional `suffix={unit}`).
+   Fixed width so the slider track sweeps the rest of the row.
+   The Input itself defaults to width:100% within this box. */
+.ui-slider__input-wrap {
+  flex-shrink: 0;
+  width: 84px;
+}
+
+/* Strip the native number spinner inside the embedded Input — the
+   slider is the primary incrementer; the input is an exact-value
+   escape hatch and the up/down chevrons compete with the suffix. */
+.ui-slider__input-wrap input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+.ui-slider__input-wrap input[type='number']::-webkit-inner-spin-button,
+.ui-slider__input-wrap input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* ── Disabled ──
+   Dim the whole control + lock pointer interactions. The thumb
+   keeps its halo-on-focus suppressed via the parent class. */
+.ui-slider--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-slider__thumb,
+  .ui-slider__pin {
+    transition: none;
+  }
+}

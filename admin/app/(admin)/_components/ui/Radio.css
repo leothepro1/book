@@ -1,0 +1,120 @@
+/* ── Radio — round single-select primitive ──
+   Mirrors Checkbox's row + box structure, swapping square for
+   round and SVG-checkmark for a scaling inner dot. Visual reference:
+   `.disc-radio` in DiscountForm — same outer ring at rest, same
+   dark filled centre when active, plus a "grow" transition on
+   the dot for the spring-in fill animation. */
+
+.ui-radio-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--admin-text);
+  background: none;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+}
+
+.ui-radio-row:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ui-radio-row:focus-visible {
+  outline: 2px solid var(--admin-input-focus, var(--admin-accent));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Hover: darken the ring ONLY when not checked. Same rule as
+   Checkbox — checked state shouldn't acquire extra hover treatment. */
+.ui-radio-row:hover:not(:disabled) .ui-radio:not(.ui-radio--checked) {
+  border-color: #999999;
+}
+
+/* ── Box ──
+   The outer ring. `display: flex` centres the inner dot for
+   crisp positioning regardless of size. `box-sizing: border-box`
+   keeps the ring exactly the declared width even with the 1.5px
+   border. */
+.ui-radio {
+  border-radius: 50%;
+  border: 1.5px solid var(--admin-border);
+  background: var(--admin-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  transition: border-color 0.15s var(--ease-default);
+}
+
+/* ── Sizes ──
+   Match Checkbox's three sizes 1:1 so a Radio and a Checkbox in
+   the same row align perfectly. */
+.ui-radio--sm {
+  width: 16px;
+  height: 16px;
+}
+.ui-radio--md {
+  width: 18px;
+  height: 18px;
+}
+.ui-radio--lg {
+  width: 22px;
+  height: 22px;
+}
+
+.ui-radio--checked {
+  border-color: var(--admin-text);
+}
+
+/* ── Inner dot ──
+   The "grow" indicator. Hidden by default at scale(0); springs to
+   scale(1) when checked. The cubic-bezier curve overshoots ever
+   so slightly via the `0.72` y-axis to give a hint of bounce
+   without the dot wobbling. Same easing used in Switch's slider
+   indicator for system-wide motion cohesion. */
+.ui-radio__dot {
+  display: block;
+  border-radius: 50%;
+  background: var(--admin-text);
+  transform: scale(0);
+  transform-origin: center;
+  transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.ui-radio--checked .ui-radio__dot {
+  transform: scale(1);
+}
+
+/* Dot dimensions per size — ~55% of the box for a confident
+   filled-radio look that pairs with the thicker active border.
+   Sized against the active inner room (box − 2 × 2.5px border):
+     sm: inner 11px, dot 8px → 1.5px gap
+     md: inner 13px, dot 10px → 1.5px gap
+     lg: inner 17px, dot 12px → 2.5px gap */
+.ui-radio--sm .ui-radio__dot {
+  width: 8px;
+  height: 8px;
+}
+.ui-radio--md .ui-radio__dot {
+  width: 10px;
+  height: 10px;
+}
+.ui-radio--lg .ui-radio__dot {
+  width: 12px;
+  height: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-radio,
+  .ui-radio__dot {
+    transition-duration: 1ms;
+  }
+}

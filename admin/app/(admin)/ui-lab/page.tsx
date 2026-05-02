@@ -11,7 +11,13 @@ import {
   Input,
   Menu,
   Modal,
+  Radio,
+  SearchInput,
+  SearchSelect,
+  Skeleton,
+  Slider,
   Spinner,
+  Switch,
   Textarea,
   ToastProvider,
   Toggle,
@@ -132,6 +138,99 @@ function UILabPageInner() {
         </div>
       </Section>
 
+      <Section title="SearchInput" status="in-progress">
+        Sökfält. Plattformens enda input som använder en egen
+        SVG-ikon (Geist-style) istället för Material Symbols. Delar
+        chrome (border, fokus-ring, error-halo, hover, disabled)
+        med <code>Input</code> via <code>--textarea-*</code>-tokens.
+        Tre storlekar matchar <code>Input</code>:s höjder exakt
+        (32 / 40 / 48).
+        <div className="ui-lab__grid" style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>
+          <SearchInputDemo />
+        </div>
+      </Section>
+
+      <Section title="SearchSelect" status="in-progress">
+        <code>SearchInput</code> + dropdown med predictiva träffar.
+        Komponerar tre primitiver: <code>SearchInput</code> för
+        chrome, <code>Checkbox</code> för multi-select, och samma
+        portal-positionering / dismissal-kontrakt som{' '}
+        <code>Menu</code> och <code>Calendar</code> (drop-down /
+        drop-up auto-flip, stänger på scroll). Filtrering äger
+        anroparen — vi tar emot redan filtrerade items.
+        <div className="ui-lab__grid" style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 480 }}>
+          <SearchSelectSingleDemo />
+          <SearchSelectMultiDemo />
+          <SearchSelectSmallDemo />
+        </div>
+      </Section>
+
+      <Section title="Skeleton" status="in-progress">
+        Shimmer-effekt för platshållare. Komponenten är{' '}
+        <em>själva effekten</em> — dimensioner och layout sätts per
+        instans. Avatar (40×40, <code>radius=&quot;full&quot;</code>) +
+        innehållsblock (40px högt) bredvid varandra.
+        <div className="ui-lab__grid">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Skeleton width={40} height={40} radius="full" />
+            <Skeleton width={240} height={40} />
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Switch" status="in-progress">
+        Segmenterad single-select. iOS-style sliding indicator —
+        lyft från editorns <code>SegmentedControl</code> med
+        tokeniserade färger/skuggor, tre storlekar, controlled +
+        uncontrolled, riktig <code>radiogroup</code>-ARIA. Skiljer
+        sig från <code>Toggle</code> som är binär on/off.
+        <div className="ui-lab__grid" style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>
+          <SwitchSizeRow label="sm">
+            <SwitchDemo size="sm" />
+          </SwitchSizeRow>
+          <SwitchSizeRow label="md">
+            <SwitchDemo size="md" />
+          </SwitchSizeRow>
+          <SwitchSizeRow label="lg">
+            <SwitchDemo size="lg" />
+          </SwitchSizeRow>
+          <SwitchSizeRow label="3 alternativ">
+            <SwitchDemo size="md" options={[
+              { value: 'day', label: 'Dag' },
+              { value: 'week', label: 'Vecka' },
+              { value: 'month', label: 'Månad' },
+            ]} />
+          </SwitchSizeRow>
+          <SwitchSizeRow label="Disabled">
+            <SwitchDemo size="md" disabled />
+          </SwitchSizeRow>
+        </div>
+      </Section>
+
+      <Section title="Slider" status="in-progress">
+        Single-value horisontal range med dragbar handle.
+        Lyft-och-flytta från editorns <code>FieldRange</code> —
+        samma visuella kontrakt (4px track, 15px thumb, hover-halo,
+        pin-tooltip), plus uncontrolled-stöd, tangentbordsnav
+        (←/→/↑/↓/Home/End/PageUp/PageDown) och korrekt{' '}
+        <code>role=&quot;slider&quot;</code>-ARIA. Number-input
+        bredvid är opt-out via <code>showInput=&#123;false&#125;</code>.
+        <div className="ui-lab__grid" style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>
+          <SwitchSizeRow label="Med input + enhet (px)">
+            <SliderDemo unit="px" min={0} max={100} defaultValue={32} />
+          </SwitchSizeRow>
+          <SwitchSizeRow label="Utan input">
+            <SliderDemo showInput={false} min={0} max={100} defaultValue={64} />
+          </SwitchSizeRow>
+          <SwitchSizeRow label="Procent (steg 5)">
+            <SliderDemo unit="%" min={0} max={100} step={5} defaultValue={50} />
+          </SwitchSizeRow>
+          <SwitchSizeRow label="Disabled">
+            <SliderDemo unit="px" min={0} max={100} defaultValue={40} disabled />
+          </SwitchSizeRow>
+        </div>
+      </Section>
+
       <Section title="Spinner" status="in-progress">
         iOS-style activity indicator. 12 staplar, 1s cykel, fade
         opacity 1 → 0.15 i staggered rotation. Färgen följer{' '}
@@ -175,6 +274,18 @@ function UILabPageInner() {
         active state förblir oförändrad vid hover.
         <div className="ui-lab__grid">
           <CheckboxRow />
+        </div>
+      </Section>
+
+      <Section title="Radio" status="in-progress">
+        Round single-select. Speglar <code>Checkbox</code>-strukturen
+        exakt — samma row, samma sm/md/lg-storlekar (16/18/22),
+        samma hover-regel (bara unchecked darknar). Mörk inre dot
+        som skalas in från <code>0 → 1</code> via cubic-bezier
+        (samma kurva som Switch&apos;s indikator). Visuell
+        referens: <code>.disc-radio</code> i rabattkods-formuläret.
+        <div className="ui-lab__grid">
+          <RadioGroupDemo />
         </div>
       </Section>
 
@@ -242,13 +353,28 @@ function UILabPageInner() {
         Action-meny som öppnas vid klick på trigger. Stänger på
         ESC, klick utanför, eller item-val. Items kan ha ikon,
         danger-tone eller disabled. <code>&lt;Menu.Divider /&gt;</code>
-        för visuell separation.
-        <div className="ui-lab__grid" style={{ display: 'flex', gap: 16 }}>
+        för visuell separation. <code>prefix</code> = ikon till
+        vänster, <code>suffix</code> = fri ReactNode till höger
+        (kortkommando, badge, ikon).
+        <div className="ui-lab__grid" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <Menu trigger={<Button variant="secondary" trailingIcon="expand_more">Mer</Button>}>
             <Menu.Item onSelect={() => {}}>Redigera</Menu.Item>
             <Menu.Item onSelect={() => {}}>Duplicera</Menu.Item>
             <Menu.Item onSelect={() => {}}>Arkivera</Menu.Item>
             <Menu.Item variant="danger" onSelect={() => {}}>Ta bort</Menu.Item>
+          </Menu>
+          <Menu trigger={<Button variant="secondary" trailingIcon="expand_more">Prefix</Button>}>
+            <Menu.Item prefix="edit" onSelect={() => {}}>Redigera</Menu.Item>
+            <Menu.Item prefix="content_copy" onSelect={() => {}}>Duplicera</Menu.Item>
+            <Menu.Item prefix="archive" onSelect={() => {}}>Arkivera</Menu.Item>
+            <Menu.Divider />
+            <Menu.Item prefix="delete" variant="danger" onSelect={() => {}}>Ta bort</Menu.Item>
+          </Menu>
+          <Menu trigger={<Button variant="secondary" trailingIcon="expand_more">Suffix</Button>}>
+            <Menu.Item suffix="⌘E" onSelect={() => {}}>Redigera</Menu.Item>
+            <Menu.Item suffix="⌘D" onSelect={() => {}}>Duplicera</Menu.Item>
+            <Menu.Item suffix={<Badge variant="info">Ny</Badge>} onSelect={() => {}}>Mall</Menu.Item>
+            <Menu.Item suffix={<span className="material-symbols-rounded">open_in_new</span>} onSelect={() => {}}>Öppna i ny flik</Menu.Item>
           </Menu>
           <Menu trigger={<Button variant="ghost" leadingIcon="more_horiz" aria-label="Fler val" />}>
             <Menu.Item onSelect={() => {}}>Visa</Menu.Item>
@@ -308,6 +434,197 @@ function InputDemo() {
         <Input size="lg" aria-label="Default lg" placeholder="Skriv…" value={c} onChange={setC} />
         <Input size="lg" aria-label="Error lg" value="Fel" onChange={() => {}} invalid />
         <Input size="lg" aria-label="Disabled lg" disabled defaultValue="Låst" />
+      </InputSizeRow>
+    </>
+  );
+}
+
+const ROOM_OPTIONS = [
+  { id: 'cabin-s', label: 'Stuga Liten (2 personer)' },
+  { id: 'cabin-m', label: 'Stuga Mellan (4 personer)' },
+  { id: 'cabin-l', label: 'Stuga Stor (6 personer)' },
+  { id: 'apartment', label: 'Lägenhet (4 personer)' },
+  { id: 'campsite', label: 'Campingplats el-uttag' },
+  { id: 'campsite-no', label: 'Campingplats utan el', disabled: true },
+];
+
+const DEFAULT_SWITCH_OPTIONS = [
+  { value: 'list', label: 'Lista' },
+  { value: 'grid', label: 'Rutnät' },
+];
+
+function SwitchDemo({
+  size = 'md',
+  options = DEFAULT_SWITCH_OPTIONS,
+  disabled = false,
+}: {
+  size?: 'sm' | 'md' | 'lg';
+  options?: { value: string; label: string }[];
+  disabled?: boolean;
+}) {
+  const [value, setValue] = useState(options[0]?.value ?? '');
+  return (
+    <Switch
+      size={size}
+      options={options}
+      value={value}
+      onChange={setValue}
+      disabled={disabled}
+      aria-label="Vy"
+    />
+  );
+}
+
+function SliderDemo({
+  min = 0,
+  max = 100,
+  step = 1,
+  unit,
+  defaultValue,
+  showInput = true,
+  disabled = false,
+}: {
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+  defaultValue?: number;
+  showInput?: boolean;
+  disabled?: boolean;
+}) {
+  const [value, setValue] = useState(defaultValue ?? min);
+  return (
+    <Slider
+      value={value}
+      onChange={setValue}
+      min={min}
+      max={max}
+      step={step}
+      unit={unit}
+      showInput={showInput}
+      disabled={disabled}
+      aria-label="Värde"
+    />
+  );
+}
+
+function SwitchSizeRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span style={{ fontSize: 12, color: 'var(--admin-text-secondary)', fontWeight: 500 }}>
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function SearchSelectSingleDemo() {
+  const [value, setValue] = useState('');
+  const [selectedId, setSelectedId] = useState<string | undefined>();
+  const filtered = ROOM_OPTIONS.filter((o) =>
+    o.label.toLowerCase().includes(value.toLowerCase()),
+  );
+  const selectedLabel = ROOM_OPTIONS.find((o) => o.id === selectedId)?.label;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span style={{ fontSize: 12, color: 'var(--admin-text-secondary)', fontWeight: 500 }}>
+        Single — välj boende
+      </span>
+      <SearchSelect
+        value={value}
+        onChange={setValue}
+        items={filtered}
+        selectedId={selectedId}
+        onSelect={(id) => {
+          setSelectedId(id);
+          setValue(ROOM_OPTIONS.find((o) => o.id === id)?.label.toString() ?? '');
+        }}
+        placeholder="Sök boendetyp…"
+      />
+      {selectedLabel && (
+        <span style={{ fontSize: 12, color: 'var(--admin-text-tertiary)' }}>
+          Valt: {selectedLabel}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function SearchSelectMultiDemo() {
+  const [value, setValue] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const filtered = ROOM_OPTIONS.filter((o) =>
+    o.label.toLowerCase().includes(value.toLowerCase()),
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span style={{ fontSize: 12, color: 'var(--admin-text-secondary)', fontWeight: 500 }}>
+        Multi — välj flera boenden
+      </span>
+      <SearchSelect
+        multiple
+        value={value}
+        onChange={setValue}
+        items={filtered}
+        selectedIds={selectedIds}
+        onSelectedChange={setSelectedIds}
+        placeholder="Sök och kryssa…"
+      />
+      {selectedIds.length > 0 && (
+        <span style={{ fontSize: 12, color: 'var(--admin-text-tertiary)' }}>
+          {selectedIds.length} valda
+        </span>
+      )}
+    </div>
+  );
+}
+
+function SearchSelectSmallDemo() {
+  const [value, setValue] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const filtered = ROOM_OPTIONS.filter((o) =>
+    o.label.toLowerCase().includes(value.toLowerCase()),
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span style={{ fontSize: 12, color: 'var(--admin-text-secondary)', fontWeight: 500 }}>
+        Small (32px) — multi
+      </span>
+      <SearchSelect
+        size="sm"
+        multiple
+        value={value}
+        onChange={setValue}
+        items={filtered}
+        selectedIds={selectedIds}
+        onSelectedChange={setSelectedIds}
+        placeholder="Sök…"
+      />
+    </div>
+  );
+}
+
+function SearchInputDemo() {
+  const [a, setA] = useState('');
+  const [b, setB] = useState('Förhand­sökning');
+  const [c, setC] = useState('');
+  return (
+    <>
+      <InputSizeRow label="sm">
+        <SearchInput size="sm" value={a} onChange={setA} />
+        <SearchInput size="sm" value={b} onChange={setB} />
+        <SearchInput size="sm" disabled defaultValue="Låst" />
+      </InputSizeRow>
+      <InputSizeRow label="md">
+        <SearchInput size="md" value={c} onChange={setC} />
+        <SearchInput size="md" placeholder="Sök ordrar…" />
+        <SearchInput size="md" invalid defaultValue="Fel" />
+      </InputSizeRow>
+      <InputSizeRow label="lg">
+        <SearchInput size="lg" placeholder="Sök produkter…" />
+        <SearchInput size="lg" defaultValue="Cabin" />
+        <SearchInput size="lg" disabled placeholder="Sök…" />
       </InputSizeRow>
     </>
   );
@@ -541,6 +858,41 @@ function CheckboxRow() {
       <ButtonRow label="Utan label">
         <Checkbox checked={false} onChange={() => {}} aria-label="Off" />
         <Checkbox checked onChange={() => {}} aria-label="On" />
+      </ButtonRow>
+    </>
+  );
+}
+
+function RadioGroupDemo() {
+  const [discountType, setDiscountType] = useState<'percent' | 'amount' | 'free'>('percent');
+  const [size, setSize] = useState<'sm' | 'md' | 'lg'>('md');
+  return (
+    <>
+      <ButtonRow label="Grupp (rabatttyp — md)">
+        <Radio
+          checked={discountType === 'percent'}
+          onChange={() => setDiscountType('percent')}
+          label="Procent"
+        />
+        <Radio
+          checked={discountType === 'amount'}
+          onChange={() => setDiscountType('amount')}
+          label="Belopp"
+        />
+        <Radio
+          checked={discountType === 'free'}
+          onChange={() => setDiscountType('free')}
+          label="Gratis frakt"
+        />
+      </ButtonRow>
+      <ButtonRow label="Storlekar (sm/md/lg)">
+        <Radio size="sm" checked={size === 'sm'} onChange={() => setSize('sm')} label="sm" />
+        <Radio size="md" checked={size === 'md'} onChange={() => setSize('md')} label="md" />
+        <Radio size="lg" checked={size === 'lg'} onChange={() => setSize('lg')} label="lg" />
+      </ButtonRow>
+      <ButtonRow label="Disabled">
+        <Radio checked={false} onChange={() => {}} disabled label="Av (disabled)" />
+        <Radio checked onChange={() => {}} disabled label="På (disabled)" />
       </ButtonRow>
     </>
   );

@@ -14,16 +14,33 @@
   min-width: var(--menu-min-width);
   z-index: 9000;
   font-family: var(--admin-font);
-  /* Slide-down + fade enter animation. No exit animation — the
-     menu is rendered conditionally and unmounts immediately on
-     close (snappier feel for an action menu). */
-  animation: ui-menu-in var(--menu-transition) var(--ease-default) both;
+  /* Default = drop-down: slide in from a few px above. Drop-up
+     variant below swaps the origin direction so the slide always
+     "comes from" the trigger side. No exit animation — the menu
+     is rendered conditionally and unmounts immediately on close
+     (snappier feel for an action menu). */
+  animation: ui-menu-in-down var(--menu-transition) var(--ease-default) both;
 }
 
-@keyframes ui-menu-in {
+.ui-menu[data-placement='top'] {
+  animation: ui-menu-in-up var(--menu-transition) var(--ease-default) both;
+}
+
+@keyframes ui-menu-in-down {
   from {
     opacity: 0;
     transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ui-menu-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -42,7 +59,7 @@
 .ui-menu__item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   padding: var(--menu-item-padding);
   font-size: 14px;
@@ -54,7 +71,6 @@
   border-radius: var(--menu-item-radius);
   cursor: pointer;
   text-align: left;
-  transition: background-color var(--duration-fast) var(--ease-default);
 }
 
 .ui-menu__item:hover:not(:disabled) {
@@ -85,6 +101,44 @@
 .ui-menu__label {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* ── Prefix ──
+   Leading icon. Fixed 18px glyph (Material Symbols Rounded sizes
+   by font-size). Color is inherited from the item — `currentColor`
+   semantics — so the icon always matches the row's text:
+   default → text fg, danger → danger fg, hover-state inherited too.
+
+   Selector is chained with `.material-symbols-rounded` for (0,2,0)
+   specificity. Google Fonts ships `.material-symbols-rounded
+   { font-size: 24px }` at (0,1,0); a bare `.ui-menu__prefix` would
+   tie and lose to source order (Google CSS loads via runtime
+   `<link>` and slots after our bundled CSS). */
+.ui-menu__prefix.material-symbols-rounded {
+  flex-shrink: 0;
+  font-size: 18px;
+  /* Optical alignment: the glyph baseline sits a touch low against
+     14px label text. Pull up 1px so icon + label share visual
+     centre. */
+  margin-top: -1px;
+}
+
+/* ── Suffix ──
+   Flush-right slot for shortcuts, counts, badges, trailing icons.
+   `margin-left: auto` is redundant given the label's `flex: 1 1 auto`
+   already pushes us, but it's defensive — guarantees right-alignment
+   even if a future change removes the flex on `__label`. Color
+   inherited from the item; nested icons follow the same rule. */
+.ui-menu__suffix {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+}
+
+.ui-menu__suffix .material-symbols-rounded {
+  font-size: 18px;
 }
 
 /* ── Divider ── */

@@ -96,3 +96,58 @@
   border-color: var(--textarea-border-hover);
   box-shadow: 0 0 0 0 transparent;
 }
+
+/* ── Prefix / Suffix slots ──
+   When `prefix` or `suffix` props are set, Input wraps the
+   `<input>` in `.ui-input-wrap` and overlays the slot content
+   absolutely-positioned at left:12 / right:12. The input itself
+   gains a `.ui-input--has-prefix` / `--has-suffix` modifier that
+   widens its left/right padding so text never collides with the
+   slot. Color matches SearchInput's affordance grey (#8F8F8F) so
+   slot content reads as one soft system across input variants. */
+
+.ui-input-wrap {
+  position: relative;
+  width: 100%;
+  display: block;
+}
+
+.ui-input__prefix,
+.ui-input__suffix {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  pointer-events: none;
+  /* Token-debt: matches SearchInput's #8F8F8F. */
+  color: #8f8f8f;
+  font-size: 13px;
+  font-weight: 450;
+  line-height: 1;
+}
+
+.ui-input__prefix {
+  left: 12px;
+}
+
+.ui-input__suffix {
+  right: 12px;
+}
+
+/* Padding compensation. Default 12px each side → bump to ~36px on
+   the side that has a slot. Calibrated for short text suffixes
+   ("px", "%", "@") and 15-18px icons. Long suffixes can override
+   via className on the input (rare). */
+.ui-input--has-prefix {
+  padding-left: 36px;
+}
+
+.ui-input--has-suffix {
+  padding-right: 36px;
+}
+
+.ui-input-wrap--disabled .ui-input__prefix,
+.ui-input-wrap--disabled .ui-input__suffix {
+  opacity: 0.5;
+}

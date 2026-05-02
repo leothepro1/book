@@ -54,6 +54,19 @@ export type InputProps = {
   /** Error message below the input. Implies `invalid: true`. */
   error?: ReactNode;
 
+  /**
+   * Inline content rendered flush-left inside the field — typically
+   * an icon or short label (currency symbol, "@"). When set, the
+   * input's left padding expands to clear the slot.
+   */
+  prefix?: ReactNode;
+  /**
+   * Inline content rendered flush-right inside the field — typically
+   * a unit ("px", "%"), kbd shortcut, or trailing icon. When set,
+   * the input's right padding expands to clear the slot.
+   */
+  suffix?: ReactNode;
+
   type?: InputType;
   /** Visual size: sm (32 / 13), md (40 / 13), lg (48 / 14). */
   size?: InputSize;
@@ -99,6 +112,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     label,
     helpText,
     error,
+    prefix,
+    suffix,
     type = 'text',
     size = 'md',
     placeholder,
@@ -144,11 +159,18 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       .filter(Boolean)
       .join(' ') || undefined;
 
+  const hasSlot = prefix != null || suffix != null;
+
   const inputCls = [
     'ui-input',
     `ui-input--${size}`,
     effectiveInvalid && 'ui-input--invalid',
-    !isComposite && className,
+    prefix != null && 'ui-input--has-prefix',
+    suffix != null && 'ui-input--has-suffix',
+    // Forward `className` to the input ONLY when there's no outer
+    // wrapper. With a slot wrap or composite mode, the className
+    // belongs on the outermost element.
+    !isComposite && !hasSlot && className,
   ]
     .filter(Boolean)
     .join(' ');
@@ -188,7 +210,38 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     />
   );
 
-  if (!isComposite) return inputElement;
+  // Slot wrapper: positioning context for prefix/suffix overlays.
+  // The input's padding-left/right (set in CSS via the
+  // `--has-prefix` / `--has-suffix` modifiers) clears the slot
+  // content so text never collides with the icon/unit.
+  const inputWithSlots = hasSlot ? (
+    <div
+      className={[
+        'ui-input-wrap',
+        `ui-input-wrap--${size}`,
+        disabled && 'ui-input-wrap--disabled',
+        !isComposite && className,
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      {prefix != null && (
+        <span className="ui-input__prefix" aria-hidden>
+          {prefix}
+        </span>
+      )}
+      {inputElement}
+      {suffix != null && (
+        <span className="ui-input__suffix" aria-hidden>
+          {suffix}
+        </span>
+      )}
+    </div>
+  ) : (
+    inputElement
+  );
+
+  if (!isComposite) return inputWithSlots;
 
   const fieldCls = ['ui-field', className].filter(Boolean).join(' ');
 
@@ -200,7 +253,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           {required && <span className="ui-field__required" aria-hidden>*</span>}
         </label>
       )}
-      {inputElement}
+      {inputWithSlots}
       {error != null ? (
         <span id={errorId} className="ui-field__error">
           {error}

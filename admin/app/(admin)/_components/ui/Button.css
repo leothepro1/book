@@ -26,7 +26,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
+  gap: 6px;
   /* Anchor for the spinner overlay during loading state. The overlay
      uses `inset: 0` so it spans the entire button area; without
      position: relative here it would escape to the nearest positioned
@@ -51,17 +51,12 @@
     background-color var(--duration-normal) var(--ease-default),
     color var(--duration-normal) var(--ease-default),
     border-color var(--duration-normal) var(--ease-default),
-    opacity var(--duration-normal) var(--ease-default),
-    transform 200ms var(--ease-snappy);
+    opacity var(--duration-normal) var(--ease-default);
 }
 
 .ui-btn:focus-visible {
   outline: 2px solid var(--admin-input-focus-ring, var(--admin-border-focus));
   outline-offset: 2px;
-}
-
-.ui-btn:active:not(:disabled):not([aria-disabled='true']) {
-  transform: scale(0.97);
 }
 
 /* Disabled styling applies only when *truly* disabled — not while
@@ -258,18 +253,57 @@
   border-radius: var(--radius-md); /* 8px */
 }
 
+/* ── Optical padding compensation for trailing icons ──
+   Material Symbols glyphs sit inside an em-box with built-in
+   whitespace (~3-5px on each side depending on glyph + weight).
+   With equal padding-x, a button with a trailing icon reads as
+   over-padded on the right because the visible glyph ends well
+   before the box edge. Pull the right padding in by 4px per size
+   so the visible glyph aligns optically with where the right edge
+   "should" feel. `:has()` is supported in every browser the admin
+   targets (modern evergreen). */
+.ui-btn--sm:has(.ui-btn__icon--trailing) {
+  padding-right: 9px;
+}
+.ui-btn--md:has(.ui-btn__icon--trailing) {
+  padding-right: 11px;
+}
+.ui-btn--lg:has(.ui-btn__icon--trailing) {
+  padding-right: var(--space-3); /* 12px */
+}
+
+/* ── Trailing icon flip for disclosure triggers ──
+   When the button drives an expandable surface (menu, popover,
+   accordion) and is in the open state, rotate the trailing icon
+   180°. Hooks off `aria-expanded="true"` — Menu sets this on its
+   trigger automatically via cloneElement, so any
+   `<Button trailingIcon="expand_more">` used as a menu trigger
+   flips for free. The `transition: transform 220ms` declared on
+   `.ui-btn__icon` higher in this file animates the rotate.
+   `:not(.ui-btn--loading)` keeps the loading slide-out animation
+   from being overwritten if a button is somehow expanded + loading
+   at once. */
+.ui-btn[aria-expanded='true']:not(.ui-btn--loading) .ui-btn__icon--trailing {
+  transform: rotate(180deg);
+}
+
 /* ── Icons ──
    Specificity boost (.ui-btn .ui-btn__icon = 0,2,0) is mandatory:
    Google Fonts ships `.material-symbols-rounded { font-size: 24px }`
    at (0,1,0) and would otherwise win. Icon size scales with button
-   size; color tracks variant via currentColor. */
+   size. */
 
 .ui-btn .ui-btn__icon {
   flex-shrink: 0;
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1;
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+  /* Track variant via currentColor, but a touch softer than the
+     label so the icon supports rather than competes with the
+     text. Works across every variant: dark on primary, blue on
+     accent, red on danger — all tinted to ~80%. */
   color: currentColor;
+  opacity: 0.8;
 }
 
 .ui-btn--sm .ui-btn__icon {
@@ -282,10 +316,4 @@
 
 .ui-btn__label {
   display: inline-block;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ui-btn:active:not(:disabled):not([aria-disabled='true']) {
-    transform: none;
-  }
 }
