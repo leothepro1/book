@@ -19,16 +19,33 @@
  *
  * Consent category: `analytics`.
  *
- * Operational ↔ analytics field mapping:
- *   page_type           ← classified at emit time by the worker:
- *                         "home" | "stay" | "checkout" | "account"
- *                         | "support" | "policy" | "other".
- *                         Worker derives from URL pattern; route
- *                         changes that introduce new page types
- *                         require a v0.2.0 schema bump.
- *   storefront_context  ← shared StorefrontContextSchema fields
- *                         (page_url, page_referrer, user_agent_hash,
- *                          viewport, locale, session_id)
+ * ──────────────────────────────────────────────────────────────────────
+ * Semantic Contract
+ * ──────────────────────────────────────────────────────────────────────
+ *
+ * `page_type`. Closed enum with exactly seven values:
+ *
+ *     "home"      | "stay"   | "checkout" | "account"
+ *     "support"   | "policy" | "other"
+ *
+ *   Classified at emit time by the loader from `window.location.pathname`.
+ *   The fallback rule for any path that does not match a known prefix
+ *   is `"other"` — emit-sites MUST classify every page; there is no
+ *   null/empty option.
+ *
+ *   API routes (`/api/*`) NEVER produce `page_viewed` events. The worker
+ *   bootstrap excludes them by route classification before any emit.
+ *
+ *   Adding a new `page_type` value (introducing a new section of the
+ *   storefront) requires a v0.2.0 schema bump. Phase 5 readers MUST
+ *   tolerate unknown values during migration windows by bucketing them
+ *   into `"other"` until the reader is upgraded — discarding events with
+ *   unknown values is NOT acceptable behaviour.
+ *
+ * `storefront_context`. Shared StorefrontContextSchema fields
+ *   (`page_url`, `page_referrer`, `user_agent_hash`, `viewport`,
+ *   `locale`, `session_id`). See `_storefront-context.ts` for the
+ *   semantic contract on each field.
  */
 
 import { z } from "zod";
