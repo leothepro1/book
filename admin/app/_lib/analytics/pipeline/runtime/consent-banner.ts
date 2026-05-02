@@ -101,6 +101,39 @@ export function writeConsentCookie(choice: ConsentChoice): void {
   const value = encodeURIComponent(JSON.stringify(choice));
   const maxAge = COOKIE_MAX_AGE_DAYS * 24 * 60 * 60;
   document.cookie = `${CONSENT_COOKIE}=${value}; path=/; max-age=${maxAge}; SameSite=Lax`;
+
+  // Single-source session_id rotation: any caller that writes the
+  // cookie with `analytics: false` causes the existing tracking
+  // session to be discarded. The next emit after a re-grant mints
+  // a fresh ULID via getOrCreateSessionId().
+  //
+  // The on-emit consent-transition detector in loader.ts is the
+  // defense-in-depth complement — it catches paths that bypass
+  // this function (future Settings UI, DevTools cookie clear).
+  // Both mechanisms are intentional belt-and-braces.
+  if (choice.analytics === false) {
+    clearSessionStorageKeys();
+  }
+}
+
+/**
+ * Drop session_id + idle-tracking + prior-decision keys from
+ * sessionStorage. Best-effort — private browsing throws, which we
+ * swallow because the consent decision MUST take effect even when
+ * tracking storage is unavailable.
+ *
+ * Inline rather than imported from loader-context.ts to keep the
+ * banner module's dependency graph small (it ships in the loader
+ * bundle whose 12 KB gzip budget is enforced at build time).
+ */
+function clearSessionStorageKeys(): void {
+  try {
+    window.sessionStorage.removeItem("bf_sid");
+    window.sessionStorage.removeItem("bf_session_last_emit_at");
+    window.sessionStorage.removeItem("bf_session_prior_consent_decision");
+  } catch {
+    /* private mode — best effort */
+  }
 }
 
 // ── DOM helpers ─────────────────────────────────────────────────────

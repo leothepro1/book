@@ -48,7 +48,12 @@ import {
 import { showConsentBanner } from "./consent-banner";
 import {
   buildStorefrontContext,
+  clearSessionId,
+  isSessionIdle,
+  markSessionEmit,
   precomputeUserAgentHash,
+  readPriorConsentDecision,
+  writePriorConsentDecision,
 } from "./loader-context";
 import {
   STOREFRONT_SCHEMA_VERSIONS,
@@ -345,7 +350,25 @@ function track(
   opts?: { correlationId?: string },
 ): void {
   if (!bootstrapped) return; // still resolving UA hash
+
+  // ── session_id rotation pre-checks ────────────────────────────
+  //
+  // Three triggers per the schema contract:
+  //   1. 30-min idle since last emit (this module — isSessionIdle)
+  //   2. Consent deny→grant transition (this module —
+  //      maybeRotateOnConsentTransition; defense-in-depth detector
+  //      that catches paths bypassing writeConsentCookie)
+  //   3. Tab close+reopen (sessionStorage semantics — automatic)
+  //
+  // Both detectors clear bf_sid; the next call to
+  // buildStorefrontContext() mints a fresh ULID. The triggers run
+  // BEFORE consent gating so a still-denied visitor still rotates
+  // their stored id when they idle out — no point holding a
+  // half-stale id around.
   const decision = decideConsent();
+  if (isSessionIdle()) clearSessionId();
+  maybeRotateOnConsentTransition(decision);
+
   if (decision !== "grant") {
     // "deny" and "prompt" both no-op the dispatch path here. The
     // banner mounts asynchronously from `bootstrap()` and re-runs
@@ -370,7 +393,14 @@ function track(
       fullPayload,
       opts?.correlationId,
     );
-    if (env) dispatchEnvelope(env);
+    if (env) {
+      dispatchEnvelope(env);
+      // Stamp emit time so the next track() has a fresh idle
+      // baseline. Inline-dispatch is best-effort during unload but
+      // we still mark the timestamp — bfcache restore would
+      // otherwise see a stale "last emit" and rotate prematurely.
+      markSessionEmit();
+    }
     return;
   }
 
@@ -385,9 +415,38 @@ function track(
   };
   try {
     w.postMessage(message);
+    // Mark emit on the optimistic side — postMessage doesn't tell
+    // us whether the worker eventually dispatched. The schema's
+    // idle window is coarse (30 min) so a postMessage that fails
+    // downstream still legitimately resets the idle clock from a
+    // session-tracking standpoint.
+    markSessionEmit();
   } catch (err) {
     reportToSentry("worker postMessage threw", err);
   }
+}
+
+/**
+ * Defense-in-depth detector for consent transitions that bypass
+ * `writeConsentCookie` (future Settings UI, DevTools cookie clear,
+ * `/privacy` endpoint, etc.). Compares the prior decision tracked
+ * in sessionStorage against the current decision computed from the
+ * cookie + DNT + geo. On a `deny → grant` transition, clears
+ * `bf_sid` so the next emit mints a fresh session id.
+ *
+ * Always updates the prior-decision marker so a single rotation
+ * doesn't fire repeatedly. Treats "prompt" as "no decision yet"
+ * and skips comparison until the visitor has actually chosen.
+ */
+function maybeRotateOnConsentTransition(
+  current: ConsentDecision,
+): void {
+  if (current === "prompt") return;
+  const prior = readPriorConsentDecision();
+  if (prior === "deny" && current === "grant") {
+    clearSessionId();
+  }
+  writePriorConsentDecision(current);
 }
 
 /**

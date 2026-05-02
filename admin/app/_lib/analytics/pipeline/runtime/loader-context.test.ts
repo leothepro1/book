@@ -5,8 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   _resetLoaderContextCacheForTests,
   buildStorefrontContext,
+  clearSessionId,
+  isSessionIdle,
+  markSessionEmit,
   precomputeUserAgentHash,
+  readPriorConsentDecision,
   sanitizePageUrl,
+  writePriorConsentDecision,
 } from "./loader-context";
 
 beforeEach(() => {
@@ -306,3 +311,79 @@ function setSalt(value: string | undefined): void {
     w.__bedfront_analytics_salt = value;
   }
 }
+
+describe("session_id rotation — Trigger 1 (30-min idle, on emit)", () => {
+  it("isSessionIdle returns false when no last-emit timestamp is recorded", () => {
+    expect(isSessionIdle(Date.now())).toBe(false);
+  });
+
+  it("isSessionIdle returns false when last emit is < 30 min ago", () => {
+    const now = 1_700_000_000_000;
+    markSessionEmit(now - 29 * 60 * 1000);
+    expect(isSessionIdle(now)).toBe(false);
+  });
+
+  it("isSessionIdle returns true when last emit is > 30 min ago", () => {
+    const now = 1_700_000_000_000;
+    markSessionEmit(now - 31 * 60 * 1000);
+    expect(isSessionIdle(now)).toBe(true);
+  });
+
+  it("clearSessionId drops bf_sid and bf_session_last_emit_at", () => {
+    // Seed a session id + emit timestamp.
+    buildStorefrontContext();
+    markSessionEmit(Date.now());
+    expect(window.sessionStorage.getItem("bf_sid")).not.toBeNull();
+    expect(window.sessionStorage.getItem("bf_session_last_emit_at")).not.toBeNull();
+
+    clearSessionId();
+
+    expect(window.sessionStorage.getItem("bf_sid")).toBeNull();
+    expect(window.sessionStorage.getItem("bf_session_last_emit_at")).toBeNull();
+  });
+
+  it("after clearSessionId + idle clear, next buildStorefrontContext() mints a different id", () => {
+    const a = buildStorefrontContext().session_id;
+    clearSessionId();
+    const b = buildStorefrontContext().session_id;
+    expect(a).not.toBe(b);
+    expect(b).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+  });
+});
+
+describe("session_id rotation — Trigger 2 (consent revoke + regrant)", () => {
+  it("readPriorConsentDecision returns null when nothing recorded", () => {
+    expect(readPriorConsentDecision()).toBeNull();
+  });
+
+  it("write/read round-trip works for 'grant' and 'deny'", () => {
+    writePriorConsentDecision("grant");
+    expect(readPriorConsentDecision()).toBe("grant");
+    writePriorConsentDecision("deny");
+    expect(readPriorConsentDecision()).toBe("deny");
+  });
+
+  it("readPriorConsentDecision is null after sessionStorage.clear (tab close + reopen simulator)", () => {
+    writePriorConsentDecision("grant");
+    window.sessionStorage.clear();
+    expect(readPriorConsentDecision()).toBeNull();
+  });
+
+  // Consumer-side test (loader.ts maybeRotateOnConsentTransition) is
+  // covered indirectly by the clearSessionId regen test above plus
+  // the writePriorConsentDecision integration. The deny→grant
+  // detection logic itself is just a comparison, exercised by the
+  // emit-path integration tests in loader.test.ts (future PR — when
+  // emit-sites land, those tests will assert the rotation fires
+  // end-to-end through track()).
+});
+
+describe("session_id rotation — Trigger 3 (tab close + reopen)", () => {
+  it("sessionStorage.clear simulates tab close — next session_id is fresh", () => {
+    const a = buildStorefrontContext().session_id;
+    window.sessionStorage.clear();
+    _resetLoaderContextCacheForTests(); // also clears in-memory cache
+    const b = buildStorefrontContext().session_id;
+    expect(a).not.toBe(b);
+  });
+});

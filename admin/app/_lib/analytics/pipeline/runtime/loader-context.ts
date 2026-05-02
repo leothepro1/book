@@ -20,7 +20,16 @@
 import { ulid } from "ulidx";
 
 const SESSION_KEY = "bf_sid";
+const SESSION_LAST_EMIT_KEY = "bf_session_last_emit_at";
+const SESSION_PRIOR_DECISION_KEY = "bf_session_prior_consent_decision";
 const UA_HASH_LEN = 16; // 16 hex chars from sha256
+
+/**
+ * `session_id` rotates after this many ms of cart-emit idle. 30
+ * minutes per the schema's Semantic Contract for storefront-context
+ * `session_id`.
+ */
+const SESSION_IDLE_MS = 30 * 60 * 1000;
 
 /**
  * Allowed query parameters on `page_url`. Everything else (including
@@ -90,8 +99,11 @@ function readAnalyticsSalt(): string {
 
 /**
  * Test-only — clears the module-level UA hash cache so a fresh
- * `precomputeUserAgentHash()` runs on the next call. Production
- * code never invokes this.
+ * `precomputeUserAgentHash()` runs on the next call. Also resets
+ * the in-memory session-id fallback so private-mode tests start
+ * clean. Does NOT touch sessionStorage — tests that need that
+ * cleared call `window.sessionStorage.clear()` in their `beforeEach`
+ * (the existing pattern). Production code never invokes this.
  */
 export function _resetLoaderContextCacheForTests(): void {
   cachedUaHash = null;
@@ -205,6 +217,97 @@ function getOrCreateSessionId(): string {
     if (inMemorySessionId) return inMemorySessionId;
     inMemorySessionId = ulid();
     return inMemorySessionId;
+  }
+}
+
+// ── session_id rotation ────────────────────────────────────────────
+//
+// Three triggers per the schema contract:
+//
+//   1. 30-min idle since last emit  — checked on every emit (this
+//      module).
+//   2. Consent revoke + regrant     — clearSessionId() is called by
+//      writeConsentCookie when the new choice is `analytics: false`
+//      (single-source path), AND by maybeRotateOnConsentChange()
+//      from the emit path (defense-in-depth detector that catches
+//      paths bypassing writeConsentCookie — future Settings UI,
+//      DevTools, etc.).
+//   3. Tab close + reopen           — automatic via sessionStorage
+//      semantics; no code needed.
+//
+// Detection happens in the emit path rather than via setInterval —
+// timers are unreliable across bfcache and tab freezing.
+
+/**
+ * Test if the current session is idle past the 30-min threshold.
+ * Pure read — does not rotate. Caller is responsible for rotating
+ * via `clearSessionId()` when this returns true.
+ */
+export function isSessionIdle(now: number = Date.now()): boolean {
+  try {
+    const last = window.sessionStorage.getItem(SESSION_LAST_EMIT_KEY);
+    if (!last) return false;
+    const lastMs = parseInt(last, 10);
+    if (!Number.isFinite(lastMs)) return false;
+    return now - lastMs > SESSION_IDLE_MS;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Stamp the current emit time. Caller invokes after a successful
+ * emit so the next emit's idle check has a fresh baseline.
+ */
+export function markSessionEmit(now: number = Date.now()): void {
+  try {
+    window.sessionStorage.setItem(SESSION_LAST_EMIT_KEY, String(now));
+  } catch {
+    /* private mode — best effort */
+  }
+}
+
+/**
+ * Drop the current `session_id` from storage. The next call to
+ * `getOrCreateSessionId()` (i.e. the next `buildStorefrontContext()`)
+ * will mint a fresh ULID. Also clears the in-memory fallback so
+ * private-browsing tabs rotate too.
+ *
+ * Use after detecting an idle timeout, on consent revoke (via
+ * `writeConsentCookie`), or on a deny→grant transition observed in
+ * the emit path.
+ */
+export function clearSessionId(): void {
+  try {
+    window.sessionStorage.removeItem(SESSION_KEY);
+    window.sessionStorage.removeItem(SESSION_LAST_EMIT_KEY);
+  } catch {
+    /* private mode — best effort */
+  }
+  inMemorySessionId = null;
+}
+
+/**
+ * Read/write the prior consent decision tracked across emits.
+ * Returns `null` for "no prior decision recorded" (first emit, or
+ * sessionStorage cleared). The emit-path detector compares prior →
+ * current to spot deny→grant transitions.
+ */
+export function readPriorConsentDecision(): "grant" | "deny" | null {
+  try {
+    const v = window.sessionStorage.getItem(SESSION_PRIOR_DECISION_KEY);
+    if (v === "grant" || v === "deny") return v;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function writePriorConsentDecision(d: "grant" | "deny"): void {
+  try {
+    window.sessionStorage.setItem(SESSION_PRIOR_DECISION_KEY, d);
+  } catch {
+    /* private mode — best effort */
   }
 }
 
