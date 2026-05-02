@@ -7,18 +7,50 @@
  * rankings, conversion-from-view aggregations, and inventory-demand
  * heat maps.
  *
- * Triggered by: the analytics worker (Phase 3 PR-B) on URL match for
- * `/stay/[accommodationId]` (or whatever route shape the storefront
- * lands on).
+ * Triggered by: the analytics worker (Phase 3 PR-B) on the storefront's
+ * accommodation detail route (`/stays/[slug]`). Emit fires once per
+ * page mount inside the client component for that route.
  *
  * Consent category: `analytics`.
  *
- * Operational ↔ analytics field mapping:
- *   accommodation_id    ← Accommodation.id (read from URL)
- *   accommodation_type  ← read from a server-injected data attribute
- *                         on the page; the worker doesn't fetch DB
- *                         from inside the worker
- *   storefront_context  ← shared
+ * ──────────────────────────────────────────────────────────────────────
+ * Semantic Contract
+ * ──────────────────────────────────────────────────────────────────────
+ *
+ * `accommodation_id`. The `Accommodation.id` value (cuid) — NOT the URL
+ *   slug, NOT the `externalId`. The URL on `/stays/[slug]` carries the
+ *   slug; emit-sites MUST resolve slug → cuid via server-side data
+ *   plumbed into the client component as React props (the page's
+ *   server component fetches the row, passes the cuid down). The
+ *   worker CANNOT do this lookup itself — it has no database access
+ *   from inside the worker bundle.
+ *
+ *   Rationale: only `Accommodation.id` is immutable for the
+ *   accommodation's lifetime. `slug` is mutable by admin (rename
+ *   operation), `externalId` rotates on PMS reseat. Phase 5 joins
+ *   against this field expect immutability — a join key that drifts
+ *   silently corrupts trend analysis.
+ *
+ * `accommodation_type`. Lowercase enum:
+ *
+ *     "hotel" | "cabin" | "camping" | "apartment" | "pitch"
+ *
+ *   Prisma's `AccommodationType` enum is UPPERCASE
+ *   (`HOTEL` | `CABIN` | `CAMPING` | `APARTMENT` | `PITCH`); emit-sites
+ *   MUST lowercase before emit. The canonical mapper is exported from
+ *   `app/_lib/analytics/pipeline/storefront-mappers.ts`:
+ *
+ *       accommodationTypeToSchema(t: AccommodationType):
+ *         "hotel" | "cabin" | "camping" | "apartment" | "pitch"
+ *
+ *   Two emit-sites that both go through the mapper produce identical
+ *   values; emit-sites that hand-roll a `.toLowerCase()` are
+ *   structurally OK but strongly discouraged — adding a new
+ *   `AccommodationType` enum value would silently broaden the schema's
+ *   accepted set if the bridge is hand-rolled.
+ *
+ * `storefront_context`. Shared StorefrontContextSchema fields. See
+ *   `_storefront-context.ts` for the contract on each.
  */
 
 import { z } from "zod";
