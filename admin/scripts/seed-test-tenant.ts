@@ -8,6 +8,8 @@
 
 import { PrismaClient } from "@prisma/client";
 
+import { generateAnalyticsSalt } from "../app/_lib/analytics/pipeline/tenant-settings";
+
 const prisma = new PrismaClient();
 
 async function main() {
@@ -16,6 +18,10 @@ async function main() {
     console.error("ERROR: TEST_STRIPE_ACCOUNT_ID env var required");
     process.exit(1);
   }
+
+  // Mint analytics salt at create time so the test tenant doesn't
+  // need the Phase 2 backfill to function with the loader.
+  const analyticsSalt = await generateAnalyticsSalt();
 
   // Upsert tenant with Stripe Connect data
   const tenant = await prisma.tenant.upsert({
@@ -43,6 +49,7 @@ async function main() {
           latitude: 59.33,
           longitude: 18.07,
         },
+        analyticsSalt,
       },
     },
   });

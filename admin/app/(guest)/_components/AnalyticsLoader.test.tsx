@@ -54,6 +54,31 @@ afterEach(() => {
   _resetAnalyticsLoaderCacheForTests();
 });
 
+/**
+ * Pull the inline `<script dangerouslySetInnerHTML={{__html}}>` body
+ * out of the fragment AnalyticsLoader returns. Avoids a real React
+ * render — the test environment is `node`, no JSDOM. Returns "" if
+ * the structure isn't what we expect (lets the caller assert with a
+ * helpful contains-check rather than a deep-shape mismatch).
+ */
+function extractInlineScriptSource(result: unknown): string {
+  if (!result || typeof result !== "object") return "";
+  const children = (result as { props?: { children?: unknown } }).props
+    ?.children;
+  if (!Array.isArray(children)) return "";
+  for (const child of children) {
+    if (child && typeof child === "object") {
+      const html = (
+        child as {
+          props?: { dangerouslySetInnerHTML?: { __html?: string } };
+        }
+      ).props?.dangerouslySetInnerHTML?.__html;
+      if (typeof html === "string") return html;
+    }
+  }
+  return "";
+}
+
 describe("AnalyticsLoader — graceful degradation (refinement #4)", () => {
   it("returns null when manifest file does not exist", async () => {
     mockExistsSync.mockReturnValue(false);
@@ -141,6 +166,47 @@ describe("AnalyticsLoader — graceful degradation (refinement #4)", () => {
     await AnalyticsLoader({ tenantId: "tenant_a" });
     // mtime unchanged → cache hit → readFileSync NOT called again.
     expect(mockReadFileSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("injects window.__bedfront_analytics_salt with provided value", async () => {
+    mockExistsSync.mockReturnValue(true);
+    mockStatSync.mockReturnValue({ mtimeMs: 300 });
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        runtime: "runtime.aaaa.js",
+        loader: "loader.bbbb.js",
+      }),
+    );
+
+    const salt = "0123456789abcdef0123456789abcdef";
+    const result = await AnalyticsLoader({
+      tenantId: "tenant_a",
+      tenantSalt: salt,
+    });
+
+    const inlineSource = extractInlineScriptSource(result);
+    expect(inlineSource).toContain(
+      `window.__bedfront_analytics_salt="${salt}"`,
+    );
+  });
+
+  it("injects empty string when tenantSalt is undefined (Phase 1 — pre-backfill)", async () => {
+    mockExistsSync.mockReturnValue(true);
+    mockStatSync.mockReturnValue({ mtimeMs: 400 });
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        runtime: "runtime.aaaa.js",
+        loader: "loader.bbbb.js",
+      }),
+    );
+
+    const result = await AnalyticsLoader({ tenantId: "tenant_a" });
+
+    const inlineSource = extractInlineScriptSource(result);
+    // Empty string — NOT the literal "undefined" (which would be a
+    // SyntaxError in the inline script).
+    expect(inlineSource).toContain('window.__bedfront_analytics_salt=""');
+    expect(inlineSource).not.toContain("undefined");
   });
 
   it("re-reads when mtime changes (build pipeline shipped a new bundle)", async () => {

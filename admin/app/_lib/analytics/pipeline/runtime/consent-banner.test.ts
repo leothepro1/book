@@ -247,4 +247,52 @@ describe("writeConsentCookie", () => {
       JSON.stringify(choice),
     );
   });
+
+  // ── Single-source session_id rotation (Trigger 2) ────────────
+  //
+  // writeConsentCookie is the canonical writer for bf_consent.
+  // Whenever it's called with `analytics: false`, the existing
+  // tracking session must be discarded so a subsequent re-grant
+  // produces a fresh ULID. Defense-in-depth: the loader's emit-
+  // path detector (loader.ts maybeRotateOnConsentTransition) covers
+  // paths that bypass this writer.
+
+  it("clears bf_sid when called with analytics:false (revoke path)", () => {
+    window.sessionStorage.setItem("bf_sid", "01HZ8WF7Z7Z7Z7Z7Z7Z7Z7Z7ZB");
+    writeConsentCookie({ essential: true, analytics: false, marketing: false });
+    expect(window.sessionStorage.getItem("bf_sid")).toBeNull();
+  });
+
+  it("clears bf_session_last_emit_at and prior-decision keys on revoke", () => {
+    window.sessionStorage.setItem("bf_sid", "01HZ8WF7Z7Z7Z7Z7Z7Z7Z7Z7ZB");
+    window.sessionStorage.setItem("bf_session_last_emit_at", "1700000000000");
+    window.sessionStorage.setItem("bf_session_prior_consent_decision", "grant");
+
+    writeConsentCookie({ essential: true, analytics: false, marketing: false });
+
+    expect(window.sessionStorage.getItem("bf_sid")).toBeNull();
+    expect(window.sessionStorage.getItem("bf_session_last_emit_at")).toBeNull();
+    expect(
+      window.sessionStorage.getItem("bf_session_prior_consent_decision"),
+    ).toBeNull();
+  });
+
+  it("does NOT clear bf_sid when called with analytics:true (accept path)", () => {
+    window.sessionStorage.setItem("bf_sid", "01HZ8WF7Z7Z7Z7Z7Z7Z7Z7Z7ZB");
+    writeConsentCookie({ essential: true, analytics: true, marketing: false });
+    expect(window.sessionStorage.getItem("bf_sid")).toBe(
+      "01HZ8WF7Z7Z7Z7Z7Z7Z7Z7Z7ZB",
+    );
+  });
+
+  it("does NOT clear bf_sid when called with analytics:true even if marketing:false", () => {
+    // analytics:true is the gate — marketing's value is irrelevant
+    // to session tracking. Belt-and-braces test against any future
+    // mistake that conflates the two flags.
+    window.sessionStorage.setItem("bf_sid", "01HZ8WF7Z7Z7Z7Z7Z7Z7Z7Z7ZB");
+    writeConsentCookie({ essential: true, analytics: true, marketing: false });
+    expect(window.sessionStorage.getItem("bf_sid")).toBe(
+      "01HZ8WF7Z7Z7Z7Z7Z7Z7Z7Z7ZB",
+    );
+  });
 });

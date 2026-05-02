@@ -5,7 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   _resetLoaderContextCacheForTests,
   buildStorefrontContext,
+  clearSessionId,
+  isSessionIdle,
+  markSessionEmit,
   precomputeUserAgentHash,
+  readPriorConsentDecision,
+  sanitizePageUrl,
+  writePriorConsentDecision,
 } from "./loader-context";
 
 beforeEach(() => {
@@ -34,8 +40,12 @@ describe("buildStorefrontContext", () => {
     );
   });
 
-  it("page_url reflects the current location", () => {
+  it("page_url reflects the current location (no query/fragment in test env)", () => {
     const ctx = buildStorefrontContext();
+    // jsdom default location has no query/fragment, so sanitized
+    // output equals the raw href. The sanitizer's behavior under
+    // query/fragment is exercised in the dedicated sanitizePageUrl
+    // describe block below.
     expect(ctx.page_url).toBe(window.location.href);
   });
 
@@ -134,7 +144,88 @@ describe("buildStorefrontContext", () => {
   });
 });
 
+describe("sanitizePageUrl", () => {
+  it("returns URL unchanged when there is no query and no fragment", () => {
+    expect(sanitizePageUrl("https://apelviken.rutgr.com/stays/svalan")).toBe(
+      "https://apelviken.rutgr.com/stays/svalan",
+    );
+  });
+
+  it("preserves allowlisted utm_* parameters", () => {
+    const out = sanitizePageUrl(
+      "https://apelviken.rutgr.com/stays/svalan?utm_source=newsletter&utm_medium=email&utm_campaign=spring",
+    );
+    expect(out).toContain("utm_source=newsletter");
+    expect(out).toContain("utm_medium=email");
+    expect(out).toContain("utm_campaign=spring");
+  });
+
+  it("preserves fbclid and gclid", () => {
+    const out = sanitizePageUrl(
+      "https://apelviken.rutgr.com/?fbclid=ABC&gclid=XYZ",
+    );
+    expect(out).toContain("fbclid=ABC");
+    expect(out).toContain("gclid=XYZ");
+  });
+
+  it("strips non-allowlisted query parameters (PII-bearing)", () => {
+    const out = sanitizePageUrl(
+      "https://apelviken.rutgr.com/?email=guest%40example.com&utm_source=email",
+    );
+    expect(out).not.toContain("email=");
+    expect(out).toContain("utm_source=email");
+  });
+
+  it("strips the URL fragment", () => {
+    const out = sanitizePageUrl(
+      "https://apelviken.rutgr.com/stays/svalan#booking-form",
+    );
+    expect(out).not.toContain("#");
+    expect(out).toBe("https://apelviken.rutgr.com/stays/svalan");
+  });
+
+  it("strips both fragment and disallowed query params on a mixed URL", () => {
+    const out = sanitizePageUrl(
+      "https://apelviken.rutgr.com/?email=foo&utm_source=newsletter&token=secret#section-2",
+    );
+    expect(out).not.toContain("email=");
+    expect(out).not.toContain("token=");
+    expect(out).not.toContain("#");
+    expect(out).toContain("utm_source=newsletter");
+  });
+
+  it("handles a URL with only disallowed params — produces clean URL with no query", () => {
+    const out = sanitizePageUrl(
+      "https://apelviken.rutgr.com/?email=foo&token=bar",
+    );
+    expect(out).toBe("https://apelviken.rutgr.com/");
+  });
+
+  it("preserves path and protocol", () => {
+    const out = sanitizePageUrl(
+      "https://apelviken.rutgr.com/stays/svalan/book?fbclid=A&_blah=B",
+    );
+    expect(out.startsWith("https://apelviken.rutgr.com/stays/svalan/book")).toBe(
+      true,
+    );
+    expect(out).toContain("fbclid=A");
+    expect(out).not.toContain("_blah=");
+  });
+
+  it("returns input unchanged for malformed URLs (best-effort)", () => {
+    // The schema accepts any non-empty string. We never want sanitization
+    // to drop an event — failure mode is "preserve as-is" rather than
+    // "throw and lose the event".
+    expect(sanitizePageUrl("not-a-url")).toBe("not-a-url");
+  });
+});
+
 describe("precomputeUserAgentHash", () => {
+  beforeEach(() => {
+    // Default each test to no salt — explicit setSalt below where needed.
+    setSalt(undefined);
+  });
+
   it("returns deterministic 16-hex-char output for same UA", async () => {
     const a = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
     _resetLoaderContextCacheForTests();
@@ -154,5 +245,145 @@ describe("precomputeUserAgentHash", () => {
     const a = await precomputeUserAgentHash("ua_x");
     const b = await precomputeUserAgentHash("ua_y"); // ignored, returns cached
     expect(b).toBe(a);
+  });
+
+  it("same UA + same salt → same hash (per-tenant stability)", async () => {
+    setSalt("salt_apelviken_xxxxxxxxxxxxxxxx");
+    const a = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
+    _resetLoaderContextCacheForTests();
+    setSalt("salt_apelviken_xxxxxxxxxxxxxxxx");
+    const b = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
+    expect(a).toBe(b);
+  });
+
+  it("same UA + different salt → different hashes (cross-tenant isolation)", async () => {
+    setSalt("salt_tenant_aaaa");
+    const a = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
+    _resetLoaderContextCacheForTests();
+    setSalt("salt_tenant_bbbb");
+    const b = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
+    expect(a).not.toBe(b);
+  });
+
+  it("absent salt produces structurally-valid 16-char hex (unsalted fallback)", async () => {
+    setSalt(undefined);
+    const hash = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
+    expect(hash).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("empty salt is treated identically to absent (both → unsalted)", async () => {
+    setSalt(undefined);
+    const a = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
+    _resetLoaderContextCacheForTests();
+    setSalt("");
+    const b = await precomputeUserAgentHash("Mozilla/5.0 jsdom");
+    expect(a).toBe(b);
+  });
+
+  it("calls onMissingSalt callback when salt is absent", async () => {
+    setSalt(undefined);
+    const onMissingSalt = vi.fn();
+    await precomputeUserAgentHash("ua_x", onMissingSalt);
+    expect(onMissingSalt).toHaveBeenCalledOnce();
+  });
+
+  it("does NOT call onMissingSalt when salt is present", async () => {
+    setSalt("salt_present_xxxxxxxxxxxxxxxx");
+    const onMissingSalt = vi.fn();
+    await precomputeUserAgentHash("ua_x", onMissingSalt);
+    expect(onMissingSalt).not.toHaveBeenCalled();
+  });
+
+  it("calls onMissingSalt when salt is empty string", async () => {
+    setSalt("");
+    const onMissingSalt = vi.fn();
+    await precomputeUserAgentHash("ua_x", onMissingSalt);
+    expect(onMissingSalt).toHaveBeenCalledOnce();
+  });
+});
+
+/** Helper: install a salt on `window.__bedfront_analytics_salt`. */
+function setSalt(value: string | undefined): void {
+  const w = window as unknown as { __bedfront_analytics_salt?: string };
+  if (value === undefined) {
+    delete w.__bedfront_analytics_salt;
+  } else {
+    w.__bedfront_analytics_salt = value;
+  }
+}
+
+describe("session_id rotation — Trigger 1 (30-min idle, on emit)", () => {
+  it("isSessionIdle returns false when no last-emit timestamp is recorded", () => {
+    expect(isSessionIdle(Date.now())).toBe(false);
+  });
+
+  it("isSessionIdle returns false when last emit is < 30 min ago", () => {
+    const now = 1_700_000_000_000;
+    markSessionEmit(now - 29 * 60 * 1000);
+    expect(isSessionIdle(now)).toBe(false);
+  });
+
+  it("isSessionIdle returns true when last emit is > 30 min ago", () => {
+    const now = 1_700_000_000_000;
+    markSessionEmit(now - 31 * 60 * 1000);
+    expect(isSessionIdle(now)).toBe(true);
+  });
+
+  it("clearSessionId drops bf_sid and bf_session_last_emit_at", () => {
+    // Seed a session id + emit timestamp.
+    buildStorefrontContext();
+    markSessionEmit(Date.now());
+    expect(window.sessionStorage.getItem("bf_sid")).not.toBeNull();
+    expect(window.sessionStorage.getItem("bf_session_last_emit_at")).not.toBeNull();
+
+    clearSessionId();
+
+    expect(window.sessionStorage.getItem("bf_sid")).toBeNull();
+    expect(window.sessionStorage.getItem("bf_session_last_emit_at")).toBeNull();
+  });
+
+  it("after clearSessionId + idle clear, next buildStorefrontContext() mints a different id", () => {
+    const a = buildStorefrontContext().session_id;
+    clearSessionId();
+    const b = buildStorefrontContext().session_id;
+    expect(a).not.toBe(b);
+    expect(b).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+  });
+});
+
+describe("session_id rotation — Trigger 2 (consent revoke + regrant)", () => {
+  it("readPriorConsentDecision returns null when nothing recorded", () => {
+    expect(readPriorConsentDecision()).toBeNull();
+  });
+
+  it("write/read round-trip works for 'grant' and 'deny'", () => {
+    writePriorConsentDecision("grant");
+    expect(readPriorConsentDecision()).toBe("grant");
+    writePriorConsentDecision("deny");
+    expect(readPriorConsentDecision()).toBe("deny");
+  });
+
+  it("readPriorConsentDecision is null after sessionStorage.clear (tab close + reopen simulator)", () => {
+    writePriorConsentDecision("grant");
+    window.sessionStorage.clear();
+    expect(readPriorConsentDecision()).toBeNull();
+  });
+
+  // Consumer-side test (loader.ts maybeRotateOnConsentTransition) is
+  // covered indirectly by the clearSessionId regen test above plus
+  // the writePriorConsentDecision integration. The deny→grant
+  // detection logic itself is just a comparison, exercised by the
+  // emit-path integration tests in loader.test.ts (future PR — when
+  // emit-sites land, those tests will assert the rotation fires
+  // end-to-end through track()).
+});
+
+describe("session_id rotation — Trigger 3 (tab close + reopen)", () => {
+  it("sessionStorage.clear simulates tab close — next session_id is fresh", () => {
+    const a = buildStorefrontContext().session_id;
+    window.sessionStorage.clear();
+    _resetLoaderContextCacheForTests(); // also clears in-memory cache
+    const b = buildStorefrontContext().session_id;
+    expect(a).not.toBe(b);
   });
 });
