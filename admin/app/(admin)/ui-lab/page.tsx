@@ -4,6 +4,7 @@ import { useState } from 'react';
 import {
   Badge,
   Button,
+  Calendar,
   Checkbox,
   Choicebox,
   ChoiceboxGroup,
@@ -17,6 +18,7 @@ import {
   useToast,
   type ButtonSize,
   type ButtonVariant,
+  type DateRange,
   type ModalVariant,
 } from '@/app/(admin)/_components/ui';
 import './ui-lab.css';
@@ -76,11 +78,11 @@ function UILabPageInner() {
               ))}
             </ButtonRow>
           ))}
-          <ButtonRow label="Loading">
+          <ButtonRow label="Loading (klicka för att trigga)">
             {SIZES.map((size) => (
-              <Button key={size} variant="primary" size={size} loading>
-                Sparar
-              </Button>
+              <LoadingDemoButton key={size} size={size}>
+                Spara
+              </LoadingDemoButton>
             ))}
           </ButtonRow>
           <ButtonRow label="Disabled">
@@ -89,6 +91,27 @@ function UILabPageInner() {
                 Disabled
               </Button>
             ))}
+          </ButtonRow>
+        </div>
+      </Section>
+
+      <Section title="Calendar" status="in-progress">
+        Trigger formad som en input. Klick öppnar en portalerad
+        månadsvy som auto-flippar drop-down/drop-up beroende på
+        utrymme. Två lägen — single + range — och svenska lokalen
+        bakad in via <code>Intl.DateTimeFormat</code>.
+        <div className="ui-lab__grid">
+          <ButtonRow label="Single date">
+            <CalendarSingleDemo />
+          </ButtonRow>
+          <ButtonRow label="Date range">
+            <CalendarRangeDemo />
+          </ButtonRow>
+          <ButtonRow label="Disabled">
+            <Calendar mode="single" placeholder="Inaktiverad" disabled />
+          </ButtonRow>
+          <ButtonRow label="Min/Max bounds">
+            <CalendarBoundedDemo />
           </ButtonRow>
         </div>
       </Section>
@@ -205,12 +228,12 @@ function UILabPageInner() {
         ordrar, kunder).
         <div className="ui-lab__grid">
           <ButtonRow label="Tones">
-            <Badge tone="success">Aktiv</Badge>
-            <Badge tone="info">Utkast</Badge>
-            <Badge tone="warning">Väntande</Badge>
-            <Badge tone="attention">Pågående</Badge>
-            <Badge tone="critical">Problem</Badge>
-            <Badge tone="neutral">Arkiverad</Badge>
+            <Badge variant="success">Aktiv</Badge>
+            <Badge variant="info">Utkast</Badge>
+            <Badge variant="warning">Väntande</Badge>
+            <Badge variant="attention">Pågående</Badge>
+            <Badge variant="critical">Problem</Badge>
+            <Badge variant="neutral">Arkiverad</Badge>
           </ButtonRow>
         </div>
       </Section>
@@ -225,7 +248,7 @@ function UILabPageInner() {
             <Menu.Item onSelect={() => {}}>Redigera</Menu.Item>
             <Menu.Item onSelect={() => {}}>Duplicera</Menu.Item>
             <Menu.Item onSelect={() => {}}>Arkivera</Menu.Item>
-            <Menu.Item tone="danger" onSelect={() => {}}>Ta bort</Menu.Item>
+            <Menu.Item variant="danger" onSelect={() => {}}>Ta bort</Menu.Item>
           </Menu>
           <Menu trigger={<Button variant="ghost" leadingIcon="more_horiz" aria-label="Fler val" />}>
             <Menu.Item onSelect={() => {}}>Visa</Menu.Item>
@@ -679,6 +702,82 @@ function ButtonRow({ label, children }: { label: string; children: React.ReactNo
       <div className="ui-lab__grid-label">{label}</div>
       <div className="ui-lab__grid-cell">{children}</div>
     </>
+  );
+}
+
+function CalendarSingleDemo() {
+  const [date, setDate] = useState<Date | null>(null);
+  return (
+    <Calendar
+      mode="single"
+      value={date}
+      onChange={setDate}
+      placeholder="Välj datum"
+    />
+  );
+}
+
+function CalendarRangeDemo() {
+  const [range, setRange] = useState<DateRange>({ from: null, to: null });
+  return (
+    <Calendar
+      mode="range"
+      value={range}
+      onChange={setRange}
+      placeholder="Välj datumintervall"
+    />
+  );
+}
+
+function CalendarBoundedDemo() {
+  const today = new Date();
+  const min = new Date(today);
+  const max = new Date(today);
+  max.setDate(max.getDate() + 14);
+  const [date, setDate] = useState<Date | null>(null);
+  return (
+    <Calendar
+      mode="single"
+      value={date}
+      onChange={setDate}
+      placeholder="Inom 14 dagar"
+      minDate={min}
+      maxDate={max}
+    />
+  );
+}
+
+/**
+ * Demo wrapper that flips a button into its loading state on click
+ * and auto-reverts after `durationMs` so the CTA→spinner transition
+ * can be triggered repeatedly without page reload. Used only by the
+ * Loading row in the UI Lab — production buttons own their own
+ * loading state via the `loading` prop.
+ */
+function LoadingDemoButton({
+  size,
+  children,
+  durationMs = 2500,
+}: {
+  size: ButtonSize;
+  children: React.ReactNode;
+  durationMs?: number;
+}) {
+  const [loading, setLoading] = useState(false);
+
+  return (
+    <Button
+      variant="primary"
+      size={size}
+      loading={loading}
+      onClick={() => {
+        if (loading) return;
+        setLoading(true);
+        window.setTimeout(() => setLoading(false), durationMs);
+      }}
+    >
+      {children}
+    </Button>
   );
 }
 

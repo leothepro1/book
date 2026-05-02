@@ -40,6 +40,22 @@
   color: var(--textarea-placeholder);
 }
 
+/* ── Sizes ──
+   Md is the historical default — keeps the existing `--textarea-*`
+   token values. Sm/lg only override the typographic + padding feel,
+   not the radius or border, so the textarea reads as a denser or
+   roomier variant of the same component, not a different one. */
+.ui-textarea--sm {
+  font-size: 13px;
+  padding: 8px 10px;
+  min-height: 64px;
+}
+.ui-textarea--lg {
+  font-size: 15px;
+  padding: 14px 14px;
+  min-height: 120px;
+}
+
 .ui-textarea:hover:not(:disabled):not(:focus) {
   border-color: var(--textarea-border-hover);
 }

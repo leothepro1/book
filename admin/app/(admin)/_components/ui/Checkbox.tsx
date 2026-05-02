@@ -27,10 +27,13 @@ import './Checkbox.css';
  * just adds noise.
  */
 
+export type CheckboxSize = 'sm' | 'md' | 'lg';
+
 export type CheckboxProps = {
   checked: boolean;
   onChange: (next: boolean) => void;
   label?: ReactNode;
+  size?: CheckboxSize;
   disabled?: boolean;
   className?: string;
   'aria-label'?: string;
@@ -43,6 +46,7 @@ export const Checkbox = forwardRef<HTMLButtonElement, CheckboxProps>(
       checked,
       onChange,
       label,
+      size = 'md',
       disabled = false,
       className,
       'aria-label': ariaLabel,
@@ -50,8 +54,14 @@ export const Checkbox = forwardRef<HTMLButtonElement, CheckboxProps>(
     },
     ref,
   ) {
-    const cls = ['ui-checkbox-row', className].filter(Boolean).join(' ');
-    const boxCls = ['ui-checkbox', checked && 'ui-checkbox--checked']
+    const cls = ['ui-checkbox-row', `ui-checkbox-row--${size}`, className]
+      .filter(Boolean)
+      .join(' ');
+    const boxCls = [
+      'ui-checkbox',
+      `ui-checkbox--${size}`,
+      checked && 'ui-checkbox--checked',
+    ]
       .filter(Boolean)
       .join(' ');
 

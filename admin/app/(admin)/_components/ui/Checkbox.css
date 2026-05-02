@@ -42,8 +42,6 @@
 }
 
 .ui-checkbox {
-  width: 18px;
-  height: 18px;
   border-radius: 4px;
   border: 1.5px solid var(--checkbox-border);
   background: var(--checkbox-bg);
@@ -53,6 +51,23 @@
   flex-shrink: 0;
   transition: background-color 0.15s, border-color 0.15s;
   color: var(--checkbox-icon);
+}
+
+/* ── Sizes ──
+   Box dimensions only — the SVG checkmark scales naturally with the
+   parent flex centring. Md is the historical default (18×18); sm
+   matches the dense-row check, lg pairs with lg form fields. */
+.ui-checkbox--sm {
+  width: 16px;
+  height: 16px;
+}
+.ui-checkbox--md {
+  width: 18px;
+  height: 18px;
+}
+.ui-checkbox--lg {
+  width: 22px;
+  height: 22px;
 }
 
 .ui-checkbox--checked {

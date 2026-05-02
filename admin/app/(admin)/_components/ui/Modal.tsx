@@ -14,6 +14,7 @@ import {
   type MouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { getAdminPortalRoot } from './_lib/portal-root';
 import './Modal.css';
 
 /**
@@ -228,6 +229,9 @@ function ModalRoot({
     onClose,
   };
 
+  const portalRoot = getAdminPortalRoot();
+  if (!portalRoot) return null;
+
   return createPortal(
     <div
       className="ui-modal-overlay"
@@ -250,7 +254,7 @@ function ModalRoot({
         <ModalContext.Provider value={ctx}>{children}</ModalContext.Provider>
       </div>
     </div>,
-    document.body,
+    portalRoot,
   );
 }
 

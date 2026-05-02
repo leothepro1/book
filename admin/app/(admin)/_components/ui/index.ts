@@ -12,9 +12,24 @@
  * updated in the same PR.
  */
 
-export { Badge, type BadgeProps, type BadgeTone } from './Badge';
+/**
+ * Library-wide size enum. Components that support sizing (Button,
+ * Calendar, Checkbox, Input, Textarea, Toggle) accept this exact
+ * union; components that don't (Badge, Menu, Modal, Spinner, Toast)
+ * are intentionally sized intrinsically by their content/use-case.
+ */
+export type Size = 'sm' | 'md' | 'lg';
+
+export { Badge, type BadgeProps, type BadgeVariant } from './Badge';
 export { Button, type ButtonProps, type ButtonVariant, type ButtonSize } from './Button';
-export { Checkbox, type CheckboxProps } from './Checkbox';
+export {
+  Calendar,
+  type CalendarProps,
+  type CalendarMode,
+  type CalendarSize,
+  type DateRange,
+} from './Calendar';
+export { Checkbox, type CheckboxProps, type CheckboxSize } from './Checkbox';
 export {
   Choicebox,
   ChoiceboxGroup,
@@ -22,10 +37,10 @@ export {
   type ChoiceboxGroupProps,
 } from './Choicebox';
 export { Input, type InputProps, type InputType, type InputSize } from './Input';
-export { Menu, type MenuProps, type MenuItemProps, type MenuItemTone } from './Menu';
+export { Menu, type MenuProps, type MenuItemProps, type MenuItemVariant } from './Menu';
 export { Modal, type ModalProps, type ModalVariant } from './Modal';
 export { Spinner, type SpinnerProps, type SpinnerSize } from './Spinner';
-export { Textarea, type TextareaProps } from './Textarea';
+export { Textarea, type TextareaProps, type TextareaSize } from './Textarea';
 export {
   ToastProvider,
   useToast,

@@ -1,9 +1,13 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
-
 /* ══════════════════════════════════════════════════════════
    base.css — Admin global foundation
    Light + Dark mode via CSS custom properties
    Import in (admin)/layout.tsx
+
+   Fonts: Geist + Geist Mono are loaded by next/font/google in
+   (admin)/layout.tsx and exposed as --font-geist-sans /
+   --font-geist-mono. The admin font tokens below reference those
+   variables. Hardcoded font-family stacks are forbidden in admin
+   CSS — always use var(--admin-font) or var(--admin-font-mono).
    ══════════════════════════════════════════════════════════ */
 
 /* ── Light Mode (default) ── */
@@ -82,15 +86,6 @@
   --btn-danger-bg-hover:      #C42228;
   --btn-danger-bg-active:     #A8181D;
   --btn-danger-fg:            #FFFFFF;
-
-  /* Loading state overrides every variant — the loading look is
-     unified across primary/secondary/accent/ghost/danger so the
-     spinner reads as "in progress" rather than "still your CTA".
-     Spinner stays dark (#303030) regardless so it remains legible
-     on the light grey background. */
-  --btn-loading-bg:           #F2F2F2;
-  --btn-loading-fg:           #8F8F98;
-  --btn-loading-spinner:      #303030;
 
   /* Modal — Phase 2 primitive tokens (light)
      Shared across default / sticky / single-button variants.
@@ -322,7 +317,7 @@
   --admin-range-track:           #CAE6FF;
 
   /* Shared field tokens (sf-*) — used by editor + settings */
-  --sf-mono:                     "SF Mono", "Cascadia Code", "Fira Code", monospace;
+  --sf-mono:                     var(--admin-font-mono);
   --sf-input-height:             36px;
   --sf-input-font-size:          13px;
 
@@ -512,12 +507,27 @@
 
 
 /* ══════════════════════════════════════════════════════════
-   Typography — Inter-only (Notion-like)
+   Typography — Geist + Geist Mono (loaded via next/font in admin layout)
    ══════════════════════════════════════════════════════════ */
 
+/* Single-level definition at :root.
+ *
+ * "Geist" / "Geist Fallback" / "Geist Mono" / "Geist Mono Fallback"
+ * are the literal font-family names emitted by next/font/google
+ * (see (admin)/layout.tsx). The @font-face declarations live in the
+ * admin route's CSS bundle, so on admin routes the names resolve to
+ * the actual fonts. On any other route — base.css isn't loaded at
+ * all (it's imported only by admin layout), so this rule never
+ * runs there. Either way the system-font tail of the stack covers
+ * the fallback when @font-face hasn't loaded yet (display: swap).
+ *
+ * No wrapper class needed: html, body, and any portaled popover
+ * (Menu, Modal, Toast, Calendar) all inherit --admin-font from
+ * :root and resolve to Geist consistently. */
 :root {
   --admin-font:
-    "Inter",
+    "Geist",
+    "Geist Fallback",
     ui-sans-serif,
     -apple-system,
     BlinkMacSystemFont,
@@ -528,6 +538,17 @@
     sans-serif,
     "Segoe UI Emoji",
     "Segoe UI Symbol";
+
+  --admin-font-mono:
+    "Geist Mono",
+    "Geist Mono Fallback",
+    ui-monospace,
+    "SF Mono",
+    "Cascadia Code",
+    "Fira Code",
+    Menlo,
+    Consolas,
+    monospace;
 }
 
 /* ── Base body ── */
@@ -672,8 +693,8 @@ textarea::placeholder {
   border-radius: var(--radius-lg);
   border: none;
   font-family: var(--admin-font);
-  font-size: var(--font-md);
-  font-weight: var(--font-weight-medium);
+  font-size: 14px;
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
   transition:
     background var(--duration-slow) ease,
@@ -1069,7 +1090,7 @@ textarea::placeholder {
 
 .admin-input--color-hex {
   flex: 1;
-  font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+  font-family: var(--admin-font-mono);
   font-size: 12px;
   letter-spacing: 0.02em;
 }

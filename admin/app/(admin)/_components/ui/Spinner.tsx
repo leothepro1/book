@@ -1,24 +1,25 @@
 'use client';
 
-import { forwardRef, type CSSProperties } from 'react';
+import { forwardRef } from 'react';
 import './Spinner.css';
 
 /**
- * Spinner — iOS-style activity indicator. 12 capsule-shaped bars
- * arranged radially around a 24×24 viewBox. Each bar fades opacity
- * from 1 → 0.15 over a 1s linear cycle, with a per-bar staggered
- * `animation-delay` so a "leading bright bar" appears to rotate
- * clockwise around the circle (Apple UIActivityIndicatorView pattern).
+ * Spinner — continuous-arc activity indicator.
  *
- * Color: inherits `currentColor` — set color on a parent (or the
- * spinner itself) to match its surrounding context. This is what
- * lets one Spinner render correctly on Primary, Accent, Secondary,
- * Ghost, and Danger buttons without per-variant overrides.
+ * A single ~270° SVG arc that rotates clockwise at constant velocity.
+ * Same pattern shipped by Linear, Vercel, GitHub, and Stripe — reads
+ * cleanly at any size, no per-bar choreography, no "iOS legacy" feel.
  *
- * Size: fixed via the `size` prop ('sm' | 'md' | 'lg' or a number
- * in px). The SVG renders at exactly that pixel size — independent
- * of parent font-size, so the spinner is size-stable wherever it's
- * placed.
+ * Color: inherits `currentColor` on the stroke. Set color on a parent
+ * (or the spinner itself) to match the surrounding context. This is
+ * what lets one Spinner render correctly on Primary, Accent,
+ * Secondary, Ghost, and Danger buttons without per-variant overrides.
+ *
+ * Size: fixed via the `size` prop ('sm' | 'md' | 'lg' or a number in
+ * px). The SVG renders at exactly that pixel size — independent of
+ * parent font-size, so the spinner is size-stable wherever it's
+ * placed. Stroke width scales proportionally so thickness stays
+ * visually consistent across sizes.
  *
  * A11y: by default rendered as `role="status"` with the Swedish
  * label "Laddar" (overridable via `label`). When the spinner is
@@ -37,15 +38,42 @@ export type SpinnerProps = {
   'aria-hidden'?: boolean;
 };
 
-const NUM_BARS = 12;
-const CYCLE_SECONDS = 1;
-const BARS = Array.from({ length: NUM_BARS }, (_, i) => i);
-
 const SIZE_PX: Record<SpinnerSize, number> = {
   sm: 16,
   md: 20,
   lg: 24,
 };
+
+// Stroke-width is set in viewBox units (24×24), so the rendered
+// thickness on screen = px * stroke / 24. To keep the arc visually
+// readable at small sizes (where naive scaling produces a hairline),
+// per-size strokes target ~2px rendered thickness:
+//   sm  16px × 3 / 24    = 2.0px rendered
+//   md  20px × 2.5 / 24  = 2.08px rendered
+//   lg  24px × 2 / 24    = 2.0px rendered
+const SIZE_STROKE: Record<SpinnerSize, number> = {
+  sm: 3,
+  md: 2.5,
+  lg: 2,
+};
+
+// For numeric `size` props, interpolate stroke so the rendered
+// thickness stays at ~2px regardless of how big or small.
+function strokeWidthFor(size: SpinnerSize | number): number {
+  if (typeof size === 'string') return SIZE_STROKE[size];
+  return (2 * 24) / size;
+}
+
+// SVG geometry (inside a 24×24 viewBox):
+//   - circle radius 9 → circumference = 2π·9 ≈ 56.55
+//   - we want a ~270° arc (3/4 of the ring) → dash length 42.4, gap 14.15
+//   - stroke-linecap round so the leading edge has the "tapered" look
+//     that's standard in modern arc spinners
+const RADIUS = 9;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+const ARC_LENGTH = CIRCUMFERENCE * 0.75;
+const GAP = CIRCUMFERENCE - ARC_LENGTH;
+const DASH_ARRAY = `${ARC_LENGTH.toFixed(2)} ${GAP.toFixed(2)}`;
 
 export const Spinner = forwardRef<SVGSVGElement, SpinnerProps>(
   function Spinner(
@@ -53,6 +81,7 @@ export const Spinner = forwardRef<SVGSVGElement, SpinnerProps>(
     ref,
   ) {
     const px = typeof size === 'number' ? size : SIZE_PX[size];
+    const strokeWidth = strokeWidthFor(size);
     const cls = ['ui-spinner', className].filter(Boolean).join(' ');
 
     return (
@@ -67,39 +96,17 @@ export const Spinner = forwardRef<SVGSVGElement, SpinnerProps>(
         aria-hidden={ariaHidden || undefined}
         focusable="false"
       >
-        {BARS.map((i) => {
-          // Bar i is "brightest" at clock time t = i * CYCLE / N.
-          // Setting animation-delay = -(N-i)/N * CYCLE puts each
-          // bar at the right phase of its fade cycle so the leading
-          // bar rotates clockwise. (i / N - 1) is algebraically
-          // identical and reads cleanest at the call site.
-          const delay = ((i / NUM_BARS) - 1) * CYCLE_SECONDS;
-          const style: CSSProperties = { animationDelay: `${delay.toFixed(4)}s` };
-          // Geometry tuned to match Apple's UIActivityIndicatorView:
-          //   - viewBox 24, center (12,12)
-          //   - bars from y=2 → y=6 with strokeWidth 2 + round caps
-          //     → outer tip at radius 11, inner tip at radius 5
-          //   - 12 bars at 30° spacing → arc length at inner radius =
-          //     5 × π/6 ≈ 2.62 vs bar width 2, so each bar still has
-          //     ~0.62 of visual gap to its neighbour at the inner end
-          //     (no crowding, but bars reach satisfyingly close to
-          //     the centre).
-          return (
-            <line
-              key={i}
-              className="ui-spinner__bar"
-              x1="12"
-              y1="2"
-              x2="12"
-              y2="6"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              transform={`rotate(${i * 30} 12 12)`}
-              style={style}
-            />
-          );
-        })}
+        <circle
+          className="ui-spinner__arc"
+          cx="12"
+          cy="12"
+          r={RADIUS}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={DASH_ARRAY}
+        />
       </svg>
     );
   },

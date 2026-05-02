@@ -101,11 +101,11 @@ describe('Menu — close behaviour', () => {
 });
 
 describe('Menu — items', () => {
-  it('emits ui-menu__item--danger for tone="danger"', async () => {
+  it('emits ui-menu__item--danger for variant="danger"', async () => {
     const user = userEvent.setup();
     render(
       <Menu trigger={<button type="button">Open</button>}>
-        <Menu.Item tone="danger" onSelect={() => {}}>Delete</Menu.Item>
+        <Menu.Item variant="danger" onSelect={() => {}}>Delete</Menu.Item>
       </Menu>,
     );
     await user.click(screen.getByRole('button', { name: 'Open' }));

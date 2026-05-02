@@ -15,6 +15,7 @@ import {
   type MouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { getAdminPortalRoot } from './_lib/portal-root';
 import './Menu.css';
 
 /**
@@ -27,7 +28,7 @@ import './Menu.css';
  *     <Menu.Item icon="edit" onSelect={...}>Redigera</Menu.Item>
  *     <Menu.Item icon="content_copy" onSelect={...}>Duplicera</Menu.Item>
  *     <Menu.Divider />
- *     <Menu.Item icon="delete" tone="danger" onSelect={...}>Ta bort</Menu.Item>
+ *     <Menu.Item icon="delete" variant="danger" onSelect={...}>Ta bort</Menu.Item>
  *   </Menu>
  *
  * Behaviours (all default-on):
@@ -48,7 +49,7 @@ import './Menu.css';
  * preserved and runs alongside the toggle.
  */
 
-export type MenuItemTone = 'default' | 'danger';
+export type MenuItemVariant = 'default' | 'danger';
 
 export type MenuProps = {
   trigger: ReactElement<{
@@ -197,36 +198,39 @@ function MenuRoot({
     <>
       {triggerNode}
       {open &&
-        typeof document !== 'undefined' &&
-        createPortal(
-          <div
-            ref={listRef}
-            role="menu"
-            className="ui-menu"
-            style={{
-              position: 'fixed',
-              top: position.top,
-              left: position.left,
-            }}
-          >
-            <MenuContext.Provider value={ctx}>{children}</MenuContext.Provider>
-          </div>,
-          document.body,
-        )}
+        (() => {
+          const portalRoot = getAdminPortalRoot();
+          if (!portalRoot) return null;
+          return createPortal(
+            <div
+              ref={listRef}
+              role="menu"
+              className="ui-menu"
+              style={{
+                position: 'fixed',
+                top: position.top,
+                left: position.left,
+              }}
+            >
+              <MenuContext.Provider value={ctx}>{children}</MenuContext.Provider>
+            </div>,
+            portalRoot,
+          );
+        })()}
     </>
   );
 }
 
 export type MenuItemProps = {
   children: ReactNode;
-  tone?: MenuItemTone;
+  variant?: MenuItemVariant;
   disabled?: boolean;
   onSelect?: () => void;
 };
 
 function MenuItem({
   children,
-  tone = 'default',
+  variant = 'default',
   disabled = false,
   onSelect,
 }: MenuItemProps) {
@@ -238,7 +242,7 @@ function MenuItem({
     close();
   };
 
-  const cls = ['ui-menu__item', tone === 'danger' && 'ui-menu__item--danger']
+  const cls = ['ui-menu__item', variant === 'danger' && 'ui-menu__item--danger']
     .filter(Boolean)
     .join(' ');
 

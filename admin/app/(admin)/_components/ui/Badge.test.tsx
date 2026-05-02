@@ -16,18 +16,18 @@ describe('Badge — rendering', () => {
     expect(screen.getByText('X').className).toContain('ui-badge');
   });
 
-  it('defaults to tone="neutral"', () => {
+  it('defaults to variant="neutral"', () => {
     render(<Badge>X</Badge>);
     expect(screen.getByText('X').className).toContain('ui-badge--neutral');
   });
 
-  it('emits the correct tone class for each value', () => {
-    const tones: Array<
+  it('emits the correct variant class for each value', () => {
+    const variants: Array<
       'success' | 'info' | 'warning' | 'attention' | 'critical' | 'neutral'
     > = ['success', 'info', 'warning', 'attention', 'critical', 'neutral'];
-    for (const tone of tones) {
-      const { unmount } = render(<Badge tone={tone}>X</Badge>);
-      expect(screen.getByText('X').className).toContain(`ui-badge--${tone}`);
+    for (const variant of variants) {
+      const { unmount } = render(<Badge variant={variant}>X</Badge>);
+      expect(screen.getByText('X').className).toContain(`ui-badge--${variant}`);
       unmount();
     }
   });

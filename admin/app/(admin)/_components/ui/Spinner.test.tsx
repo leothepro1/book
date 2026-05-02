@@ -6,9 +6,11 @@ import { render, screen } from '@testing-library/react';
 import { Spinner } from './Spinner';
 
 describe('Spinner — rendering', () => {
-  it('renders an SVG with 12 bars', () => {
+  it('renders an SVG with a single arc circle', () => {
     const { container } = render(<Spinner />);
-    expect(container.querySelectorAll('.ui-spinner__bar').length).toBe(12);
+    const arcs = container.querySelectorAll('.ui-spinner__arc');
+    expect(arcs.length).toBe(1);
+    expect(arcs[0].tagName.toLowerCase()).toBe('circle');
   });
 
   it('emits the ui-spinner base class', () => {
@@ -19,6 +21,17 @@ describe('Spinner — rendering', () => {
   it('forwards extra className', () => {
     const { container } = render(<Spinner className="extra-class" />);
     expect(container.querySelector('.extra-class')).not.toBeNull();
+  });
+
+  it('renders the arc as a 3/4 circle via stroke-dasharray', () => {
+    const { container } = render(<Spinner />);
+    const arc = container.querySelector('.ui-spinner__arc');
+    const dash = arc?.getAttribute('stroke-dasharray');
+    expect(dash).toBeTruthy();
+    // dasharray: "<arc-length> <gap>" — arc length ≈ 75% of circumference
+    const [arcLen, gap] = dash!.split(' ').map(Number);
+    const total = arcLen + gap;
+    expect(arcLen / total).toBeCloseTo(0.75, 2);
   });
 });
 
@@ -62,16 +75,6 @@ describe('Spinner — a11y', () => {
     expect(svg?.getAttribute('role')).toBeNull();
     expect(svg?.getAttribute('aria-label')).toBeNull();
     expect(svg?.getAttribute('aria-hidden')).toBe('true');
-  });
-});
-
-describe('Spinner — staggered animation delays', () => {
-  it('assigns a staggered negative delay per bar', () => {
-    const { container } = render(<Spinner />);
-    const bars = Array.from(container.querySelectorAll('.ui-spinner__bar')) as SVGElement[];
-    expect(bars[0].style.animationDelay).toBe('-1.0000s');
-    expect(bars[6].style.animationDelay).toBe('-0.5000s');
-    expect(bars[11].style.animationDelay).toBe('-0.0833s');
   });
 });
 

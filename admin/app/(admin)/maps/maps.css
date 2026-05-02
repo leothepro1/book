@@ -665,7 +665,7 @@
   line-height: 1.6;
   color: var(--admin-text);
   outline: none;
-  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--admin-font);
 }
 
 .mk-rt-editor:empty::before {

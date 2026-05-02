@@ -28,7 +28,7 @@ import './Toggle.css';
  * use case demands.
  */
 
-export type ToggleSize = 'sm' | 'md';
+export type ToggleSize = 'sm' | 'md' | 'lg';
 
 export type ToggleProps = {
   checked: boolean;

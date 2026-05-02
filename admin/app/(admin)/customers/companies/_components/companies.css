@@ -450,7 +450,7 @@
 /* ── JSON viewer ── */
 
 .co-json {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--admin-font-mono);
   font-size: 12px;
   background: #fafafa;
   border: 1px solid var(--admin-border);
@@ -801,7 +801,7 @@
 /* ── JSON editor ── */
 
 .co-json-editor {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--admin-font-mono);
   font-size: 12px;
   line-height: 1.45;
   min-height: 160px;

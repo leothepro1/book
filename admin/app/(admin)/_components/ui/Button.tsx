@@ -21,9 +21,13 @@ import './Button.css';
  * (transitions, focus ring, disabled, loading, scale-on-press) is
  * shared across every (variant, size) combination.
  *
- * Loading state is unified — a spinner inherits the variant's text
- * colour via `currentColor` and replaces the leading icon while the
- * label stays visible (Geist pattern). The button is non-interactive
+ * Loading state animates a vertical CTA → spinner transition. The
+ * label and icons slide up and fade out while the spinner slides up
+ * from below into the centred position; reversing on exit. Both
+ * slots are always in the DOM so the button's width is identical
+ * idle and loading — the CTA→spinner swap is purely transform +
+ * opacity (no layout reflow). The spinner inherits the variant's
+ * text colour via `currentColor`. The button is non-interactive
  * while loading, with `aria-busy="true"`.
  *
  * Polymorphic: pass `href` to render a `next/link` <a>; otherwise a
@@ -89,18 +93,17 @@ export const Button = forwardRef<HTMLButtonElement | HTMLAnchorElement, ButtonPr
 
     const hasLabel = props.children !== undefined && props.children !== null;
 
-    const content = loading ? (
-      // Dedicated loading wrapper so size-specific tweaks (gap, label
-      // visibility) can target `.ui-btn__loading` instead of leaking
-      // into the regular content layout. The spinner is the standalone
-      // <Spinner> component; its size matches the button's size, and
-      // it inherits `currentColor` from the button text — no per-
-      // variant overrides needed.
-      <span className="ui-btn__loading">
-        <Spinner size={size} aria-hidden />
-        {hasLabel && <span className="ui-btn__label">{props.children}</span>}
-      </span>
-    ) : (
+    // Render BOTH slots unconditionally so each can transition into
+    // and out of view without layout reflow:
+    //   - Regular content (icons + label) — at its natural position
+    //     in flex flow; CSS slides it up and fades it out when
+    //     `.ui-btn--loading` is set.
+    //   - Spinner overlay — absolutely positioned over the button,
+    //     parked below (translated down + opacity 0) when idle, slides
+    //     up to centre when `.ui-btn--loading` is set.
+    // Width stays identical because neither slot is added/removed —
+    // only `transform` and `opacity` change.
+    const content = (
       <>
         {props.leadingIcon && (
           <span className="material-symbols-rounded ui-btn__icon" aria-hidden>
@@ -113,6 +116,9 @@ export const Button = forwardRef<HTMLButtonElement | HTMLAnchorElement, ButtonPr
             {props.trailingIcon}
           </span>
         )}
+        <span className="ui-btn__spinner-overlay" aria-hidden>
+          <Spinner size={size} aria-hidden />
+        </span>
       </>
     );
 

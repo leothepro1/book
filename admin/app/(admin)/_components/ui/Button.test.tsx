@@ -145,16 +145,19 @@ describe('Button — icons + spinner', () => {
     expect(icon?.textContent).toBe('arrow_forward');
   });
 
-  it('replaces the leading icon with a Spinner while loading', () => {
+  it('overlays a Spinner while keeping idle content in the DOM for width preservation', () => {
     const { container } = render(
       <Button loading leadingIcon="add">
         Saving
       </Button>,
     );
-    // Loading state renders the standalone <Spinner> inside .ui-btn__loading
-    expect(container.querySelector('.ui-btn__loading .ui-spinner')).not.toBeNull();
-    // Regular icons are not rendered — loading branch replaces them entirely.
-    expect(container.querySelectorAll('.ui-btn__icon').length).toBe(0);
+    // Spinner overlay renders the standalone <Spinner> inside .ui-btn__spinner-overlay
+    expect(container.querySelector('.ui-btn__spinner-overlay .ui-spinner')).not.toBeNull();
+    // The original icon and label remain in the DOM so the button's
+    // width stays identical between idle and loading. CSS hides them
+    // via `visibility: hidden` (asserted indirectly via class match).
+    expect(container.querySelectorAll('.ui-btn__icon').length).toBe(1);
+    expect(container.querySelector('.ui-btn__label')?.textContent).toBe('Saving');
   });
 });
 

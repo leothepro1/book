@@ -68,13 +68,13 @@
   line-height: 1.6;
   color: var(--admin-text);
   outline: none;
-  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--admin-font);
 }
 
 .rt-editor--html {
   white-space: pre-wrap;
   word-break: break-all;
-  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  font-family: var(--admin-font-mono);
   font-size: 12px;
   line-height: 1.5;
   color: var(--admin-text-secondary);

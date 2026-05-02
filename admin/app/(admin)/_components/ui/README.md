@@ -62,24 +62,70 @@ at that point — never pre-split.
 
 ### 2.2 Common field props
 
-Field-shaped components (TextField, Textarea, Checkbox, Toggle, …)
-share this base:
+Field-shaped components (Input, Textarea, Checkbox, Toggle, Calendar, …)
+share this optional base:
 
 ```ts
 type FieldBaseProps = {
-  label: string;                       // required — every field has a label
-  helpText?: string | ReactNode;       // descriptive text below input
-  error?: string | ReactNode;          // overrides helpText when set
-  required?: boolean;                  // visual + aria-required
+  label?: ReactNode;                   // composite-mode label
+  helpText?: ReactNode;                // descriptive text below control
+  error?: ReactNode;                   // overrides helpText, implies invalid
+  required?: boolean;                  // visual asterisk + aria-required
   disabled?: boolean;                  // visual + native disabled
   id?: string;                         // auto-generated if omitted
   name?: string;                       // form name
 };
 ```
 
+Input and Textarea use these props **optionally** to switch between
+two render modes:
+
+  - **Bare** — when no `label`/`helpText`/`error` is passed. Renders
+    just the underlying `<input>` / `<textarea>`. Use this in table
+    cells, custom row layouts, or wherever the page already provides
+    label chrome.
+  - **Composite** — when any of `label`, `helpText`, or `error` is
+    passed. Renders a wrapping `<div className="ui-field">` with the
+    label above the control and helper or error text below. The
+    control's `id`, `aria-describedby`, and `aria-invalid` are wired
+    automatically.
+
 `error` accepts `ReactNode` (not just `string`) so messages can include
 links or formatting:
 `error={<>Pris saknas — <a href="/help/pricing">se prissättning</a></>}`
+
+### 2.2.1 Width contract
+
+Every form-field primitive defaults to `width: 100%` of its container.
+This is the implicit contract — composing layouts (grid, flex, card)
+control how wide a field becomes; the field itself never imposes an
+intrinsic width. Components in this category:
+
+  - `Input` — bare or composite; both default to 100%
+  - `Textarea` — bare or composite; both default to 100%
+  - `Calendar` — trigger expands to container; popover is fixed-width
+
+Components that DON'T expand to 100% (intrinsic width):
+
+  - `Button`, `Badge`, `Spinner`, `Toggle`, `Checkbox` — sized to
+    their content; wrap in a flex/grid container or set
+    `width: 100%` via `className` to expand
+
+### 2.2.2 Variant vocabulary
+
+The colour/intent prop is `variant` everywhere — `Button`, `Badge`,
+`Toast`, `Menu.Item`, etc. Never `tone`, never `kind`, never
+`appearance`. Components that don't have semantic colour variants
+(Spinner, Modal, Calendar) simply omit the prop.
+
+### 2.2.3 Size vocabulary
+
+Components that vary in size accept `size: 'sm' | 'md' | 'lg'` —
+`Button`, `Calendar`, `Checkbox`, `Input`, `Textarea`, `Toggle`.
+The shared `Size` type is exported from `index.ts` for consumers
+that need to forward the value. Components without sizing
+(`Badge`, `Menu`, `Modal`, `Spinner`, `Toast`) intentionally omit
+the prop — their visual is intrinsic to their content/use case.
 
 ### 2.3 TypeScript: discriminated unions, no spread
 

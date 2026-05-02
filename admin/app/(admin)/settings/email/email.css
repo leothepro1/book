@@ -161,7 +161,7 @@
   padding: 10px;
   border: 1px solid var(--admin-border);
   border-radius: var(--radius-md);
-  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-family: var(--admin-font-mono);
   font-size: var(--font-sm);
   line-height: var(--line-height-normal);
   color: var(--admin-text);
@@ -202,7 +202,7 @@
   border: 1px solid var(--admin-border);
   border-radius: var(--radius-sm);
   background: var(--admin-surface);
-  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-family: var(--admin-font-mono);
   font-size: 11px;
   color: var(--admin-text-secondary);
   cursor: pointer;
@@ -841,7 +841,7 @@
 }
 
 .email-dns__text {
-  font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  font-family: var(--admin-font-mono);
   font-size: var(--font-xs);
   word-break: break-all;
   flex: 1;

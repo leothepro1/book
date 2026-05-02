@@ -27,8 +27,20 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
+  /* Anchor for the spinner overlay during loading state. The overlay
+     uses `inset: 0` so it spans the entire button area; without
+     position: relative here it would escape to the nearest positioned
+     ancestor. */
+  position: relative;
+  /* Clip the CTA → spinner transition so the label sliding up and
+     the spinner sliding up from below stay visually contained inside
+     the button. The focus ring uses `outline` (rendered outside the
+     box, unaffected by overflow) so this is safe. */
+  overflow: hidden;
   font-family: var(--admin-font);
-  font-weight: var(--font-weight-medium); /* 500 */
+  /* Base weight = 500 (medium). Sm + md inherit it; lg has its own
+     explicit 600 (semibold) override below for the heavier CTA feel. */
+  font-weight: var(--font-weight-medium);
   line-height: 1rem;
   border: 1px solid transparent;
   cursor: pointer;
@@ -66,6 +78,74 @@
 
 .ui-btn--loading {
   cursor: progress;
+}
+
+/* ── CTA → Spinner transition ──
+   The label/icons and the spinner overlay swap places via a
+   synchronised vertical slide:
+     forward (idle → loading): label exits upward, spinner enters
+       upward from below.
+     reverse (loading → idle):   spinner exits downward, label
+       enters downward from above.
+   Both directions interpolate from the same property pairs (transform
+   + opacity), so a single `transition` rule covers both. */
+
+.ui-btn__icon,
+.ui-btn__label,
+.ui-btn__spinner-overlay {
+  transition:
+    transform 220ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 180ms ease;
+}
+
+/* Idle resting state for the spinner overlay — parked below the
+   button, fully transparent. `inset: 0` makes the overlay span the
+   button so `translateY(100%)` moves it down by exactly one button
+   height (i.e. just out of view). */
+.ui-btn__spinner-overlay {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  transform: translateY(100%);
+  opacity: 0;
+  /* Decorative — never blocks clicks even before the loading state
+     toggles, so disabled-state interactions still target the button
+     itself. */
+  pointer-events: none;
+}
+
+/* Loading state — flip the two slots: label/icons exit up, spinner
+   slides up to the centred position. */
+.ui-btn--loading .ui-btn__icon,
+.ui-btn--loading .ui-btn__label {
+  transform: translateY(-100%);
+  opacity: 0;
+}
+
+.ui-btn--loading .ui-btn__spinner-overlay {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* Reduced motion — collapse the slide to a pure crossfade so the
+   axis-of-motion vanishes but the state change is still visible. */
+@media (prefers-reduced-motion: reduce) {
+  .ui-btn__icon,
+  .ui-btn__label,
+  .ui-btn__spinner-overlay {
+    transition: opacity 180ms ease;
+    transform: none;
+  }
+  .ui-btn--loading .ui-btn__icon,
+  .ui-btn--loading .ui-btn__label {
+    transform: none;
+  }
+  .ui-btn--loading .ui-btn__spinner-overlay {
+    transform: none;
+  }
 }
 
 /* ── Variants (color only) ── */
@@ -131,25 +211,12 @@
   background: var(--btn-danger-bg-active);
 }
 
-/* ── Loading override ──
-   When `loading` is true, every variant collapses to the same
-   neutral look: light grey fill, muted label, dark spinner. Placed
-   AFTER the variant rules so it wins on equal specificity (each
-   selector is 0,1,0). The spinner sits inside `.ui-btn__loading`
-   and inherits color via `currentColor` — overriding it back to
-   the dark spinner token via `.ui-btn--loading .ui-spinner`. */
-
-.ui-btn--loading {
-  background: var(--btn-loading-bg);
-  color: var(--btn-loading-fg);
-  /* Neutralise secondary's border so the loading look is uniform
-     across all variants. */
-  border-color: transparent;
-}
-
-.ui-btn--loading .ui-spinner {
-  color: var(--btn-loading-spinner);
-}
+/* Loading state preserves the variant's original colors —
+   background, label, border all unchanged. The spinner inherits
+   `currentColor` from the variant's foreground (e.g. white on
+   primary, dark on secondary), so it reads cleanly without any
+   per-variant override. The cursor change + the spinner replacing
+   the label are the only signals that the button is busy. */
 
 /* ── Sizes (padding + font-size + radius only) ── */
 
@@ -166,17 +233,18 @@
 .ui-btn--sm {
   /* 7/13 chosen visually for the small button — not in --space-*
      tokens (4/8/12/16/20/24/32). Token-debt acknowledged. */
-  height: 30px;
+  height: 33px;
   padding: 7px 13px;
   font-size: var(--font-sm);
   border-radius: var(--radius-sm); /* 6px */
 }
 
 .ui-btn--md {
-  /* 10/15 not in --space-* tokens. Hardcoded. */
+  /* 10/15 not in --space-* tokens. Hardcoded.
+     14px font-size hardcoded — not in --font-* tokens (12/13/15/16/17). */
   height: 38px;
   padding: 10px 15px;
-  font-size: var(--font-md);
+  font-size: 14px;
   border-radius: var(--radius-md); /* 8px */
 }
 
@@ -214,34 +282,6 @@
 
 .ui-btn__label {
   display: inline-block;
-}
-
-/* ── Loading state ──
-   `.ui-btn__loading` is the dedicated wrapper rendered when
-   `loading` is true. It replaces the normal icon+label layout. The
-   spinner inside is the standalone `<Spinner>` component (see
-   ./Spinner.tsx) — Button passes its own size token through, so the
-   spinner sizes itself via its `size` prop rather than via CSS here.
-
-   These per-size rules are intentionally identical today; they
-   exist as hooks so individual sizes can diverge later (e.g.
-   tighter gap on `sm`, hidden label on `lg`) without rewriting the
-   layout. */
-
-.ui-btn .ui-btn__loading {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.ui-btn--sm .ui-btn__loading {
-  gap: var(--space-2);
-}
-.ui-btn--md .ui-btn__loading {
-  gap: var(--space-2);
-}
-.ui-btn--lg .ui-btn__loading {
-  gap: var(--space-2);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { getAdminPortalRoot } from './_lib/portal-root';
 import { Button } from './Button';
 import './Toast.css';
 
@@ -64,7 +65,7 @@ export type ToastAction = {
 
 export type ToastOptions = {
   variant?: ToastVariant;
-  /** Auto-dismiss duration in ms. Defaults to 3000. Ignored for
+  /** Auto-dismiss duration in ms. Defaults to 5000. Ignored for
       variant: 'action' (those require user interaction). */
   duration?: number;
   /** Optional Material Symbols name to render as a leading icon. */
@@ -105,7 +106,10 @@ type ToastEntry = {
 const ToastContext = createContext<ToastApi | null>(null);
 
 const EXIT_ANIMATION_MS = 220;
-const DEFAULT_DURATION_MS = 19_000;
+// 5s — common modern toast default (Vercel/Linear/Stripe range).
+// Long enough to read a 1–2 sentence message; short enough to not
+// linger on the page during normal admin work.
+const DEFAULT_DURATION_MS = 5_000;
 
 let counter = 0;
 function genId(): string {
@@ -220,8 +224,9 @@ function ToastPortal({
   toasts: ToastEntry[];
   onDismiss: (id: string) => void;
 }) {
-  if (typeof document === 'undefined') return null;
   if (toasts.length === 0) return null;
+  const portalRoot = getAdminPortalRoot();
+  if (!portalRoot) return null;
   return createPortal(
     <div
       className="ui-toast-stack"
@@ -233,7 +238,7 @@ function ToastPortal({
         <ToastItem key={t.id} toast={t} onDismiss={onDismiss} />
       ))}
     </div>,
-    document.body,
+    portalRoot,
   );
 }
 
