@@ -61,6 +61,7 @@ delta-against-this-baseline, not absolute zero.
 | 7.3 | Customer-facing invoice payment surface (`/invoice/[token]` page + Stripe Elements + success/cancelled) | `7436c02` `7d8d105` `5a7fcbb` `1377bc1` `6e8ac2f` `e75a0ed` — verified: tsc 0 in Terminal B scope (project baseline 4 pre-existing, out of scope), tests 46/46, eslint 0 |
 | 7.4 | Invoice expiry / retry surface (resendInvoice service + action + konfigurera UI + timeline) | `b44da02` `5db420e` `2277407` `9ddd52c` — verified: tsc 0 in Terminal B scope (project baseline 4), tests 177/177, eslint 0 |
 | 7.5 | OVERDUE-cron + state transition (Path B / 7.5-lite) | `bc3c2c8` `3f6de25` `6841ce3` — verified: tsc 0 in Terminal B scope (project baseline 4), tests +21 net new, eslint 0 |
+| 7.8 | Bulk-actions på `/draft-orders` index (cancel/send/resend) | `a0e2311` `254a83f` `3758c82` `3725736` — verified: tsc 0 in Terminal B scope (project baseline 4), tests +40 net new (20 actions + 7 BulkActionBar + 10 BulkResultModal + 3 DraftOrdersClient wiring; 4th DraftOrdersClient case re-purposed BWB4), eslint 0 |
 
 ---
 
@@ -152,14 +153,9 @@ draft-konsumenten, Terminal A äger själva tax engine. Koordineringspunkt.
 
 ---
 
-### FAS 7.8 — Bulk-actions på `/draft-orders` index
-**Beroende:** Inget.
-
-**Problem:** Index visar drafts men man kan bara göra actions en-i-taget
-via `[id]/konfigurera`. Bulk = "expire X drafts", "cancel Y drafts",
-"send invoice for these N drafts".
-
-**Estimat:** 1 PR, 5–6 commits.
+_(FAS 7.8 — flyttad till "Klart" ovan via Path V1: bulk-cancel /
+send-invoice / resend-invoice. Recon: `7-8-recon.md`. Mark-as-paid,
+delete, export-CSV och freeze-prices skjuts till framtida fas.)_
 
 ---
 
