@@ -125,3 +125,11 @@ export type {
   PublicPaymentTerms,
   GetDraftByShareTokenResult,
 } from "./get-by-share-token";
+
+// ── Invoice resend (FAS 7.4) ──
+export { resendInvoice } from "./resend-invoice";
+export type {
+  ResendInvoiceInput,
+  ResendInvoiceArgs,
+  ResendInvoiceResult,
+} from "./types";

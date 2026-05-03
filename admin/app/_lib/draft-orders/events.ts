@@ -42,7 +42,9 @@ export type DraftEventType =
   // FAS 7.0
   | "META_UPDATED"
   // FAS 7.2b.4b.1
-  | "CUSTOMER_UPDATED";
+  | "CUSTOMER_UPDATED"
+  // FAS 7.4
+  | "INVOICE_RESENT";
 
 /** Where the event originated — freeform but these are the known sources. */
 export type DraftEventActorSource =
