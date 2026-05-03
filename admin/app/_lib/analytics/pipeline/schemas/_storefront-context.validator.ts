@@ -21,9 +21,12 @@ import {
   isNonEmptyString,
   isPlainObject,
   isString,
+  isStringEnum,
   isStringMinLength,
   type Issue,
 } from "./_validators-common";
+
+const DEVICE_TYPES = ["desktop", "mobile", "tablet", "unknown"] as const;
 
 /**
  * Mutates `issues` in place. Caller passes a path prefix (`""` if the
@@ -89,5 +92,24 @@ export function validateStorefrontContext(
       path: `${prefix}session_id`,
       message: "must be a non-empty string",
     });
+  }
+  // Optional device_type — present means valid enum member; absent
+  // means pre-X2 emit (or post-X2 SSR-context with no navigator).
+  if (payload.device_type !== undefined) {
+    if (!isStringEnum(payload.device_type, DEVICE_TYPES)) {
+      issues.push({
+        path: `${prefix}device_type`,
+        message: `must be one of: ${DEVICE_TYPES.join(", ")}`,
+      });
+    }
+  }
+  // Optional visitor_id — present means non-empty string.
+  if (payload.visitor_id !== undefined) {
+    if (!isNonEmptyString(payload.visitor_id)) {
+      issues.push({
+        path: `${prefix}visitor_id`,
+        message: "must be a non-empty string",
+      });
+    }
   }
 }
