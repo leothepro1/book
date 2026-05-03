@@ -52,8 +52,11 @@ export function InvoiceClient(props: InvoiceClientProps) {
   const cancelledRef = useRef(false);
 
   useEffect(() => {
+    // Initial state is already "loading" via useState, and the token is
+    // a URL param — a token change unmounts this component, so we don't
+    // need to re-reset state here. Keep all setState calls inside the
+    // async IIFE to satisfy react-hooks/set-state-in-effect.
     cancelledRef.current = false;
-    setState({ phase: "loading" });
 
     (async () => {
       const result = await getInvoiceClientSecretAction(props.token);
@@ -103,7 +106,7 @@ export function InvoiceClient(props: InvoiceClientProps) {
           appearance: { theme: "stripe" },
         }}
       >
-        <PaymentForm token={props.token} displayNumber={props.displayNumber} />
+        <PaymentForm token={props.token} />
       </Elements>
     </section>
   );
@@ -111,13 +114,7 @@ export function InvoiceClient(props: InvoiceClientProps) {
 
 // ── Inner form (inside Elements provider) ──────────────────────
 
-function PaymentForm({
-  token,
-  displayNumber: _displayNumber,
-}: {
-  token: string;
-  displayNumber: string;
-}) {
+function PaymentForm({ token }: { token: string }) {
   const stripe = useStripe();
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
