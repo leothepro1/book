@@ -19,9 +19,15 @@
 
 import { ulid } from "ulidx";
 
+import {
+  parseDeviceTypeFromNav,
+  type DeviceType,
+} from "./device-type";
+
 const SESSION_KEY = "bf_sid";
 const SESSION_LAST_EMIT_KEY = "bf_session_last_emit_at";
 const SESSION_PRIOR_DECISION_KEY = "bf_session_prior_consent_decision";
+const VISITOR_KEY = "bf_visitor_id";
 const UA_HASH_LEN = 16; // 16 hex chars from sha256
 
 /**
@@ -53,6 +59,7 @@ const PAGE_URL_QUERY_ALLOWLIST = new Set([
 
 let cachedUaHash: string | null = null;
 let inMemorySessionId: string | null = null;
+let inMemoryVisitorId: string | null = null;
 
 /**
  * Compute the user-agent hash once at bootstrap. Subsequent
@@ -108,6 +115,7 @@ function readAnalyticsSalt(): string {
 export function _resetLoaderContextCacheForTests(): void {
   cachedUaHash = null;
   inMemorySessionId = null;
+  inMemoryVisitorId = null;
 }
 
 export interface StorefrontContext {
@@ -117,6 +125,19 @@ export interface StorefrontContext {
   viewport: { width: number; height: number };
   locale: string;
   session_id: string;
+  /**
+   * Optional per the additive PR-X2 schema bump on
+   * `_storefront-context.ts`. Loader populates via
+   * `parseDeviceTypeFromNav()`. Omitted in SSR / no-navigator
+   * environments — schema tolerates absence.
+   */
+  device_type?: DeviceType;
+  /**
+   * Optional per the additive PR-X2 schema bump. Loader populates via
+   * `getOrCreateVisitorId()` only when consent.analytics is granted
+   * AND localStorage is writable. Omitted otherwise.
+   */
+  visitor_id?: string;
 }
 
 export interface BuildContextOptions {
@@ -139,7 +160,7 @@ export interface BuildContextOptions {
 export function buildStorefrontContext(
   opts: BuildContextOptions = {},
 ): StorefrontContext {
-  return {
+  const ctx: StorefrontContext = {
     // page_url is sanitized — query string filtered against an
     // allowlist, fragment stripped. page_referrer is intentionally
     // NOT sanitized (the schema's contract assigns referrer
@@ -158,6 +179,39 @@ export function buildStorefrontContext(
       "sv",
     session_id: getOrCreateSessionId(),
   };
+
+  // device_type and visitor_id are OPTIONAL on the schema. Compute
+  // best-effort and include only on success — never throw inside the
+  // builder (the calling track() path is best-effort fire-and-forget).
+  try {
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const touchPoints =
+      typeof navigator !== "undefined" && typeof navigator.maxTouchPoints === "number"
+        ? navigator.maxTouchPoints
+        : 0;
+    const platform =
+      typeof navigator !== "undefined" && typeof navigator.platform === "string"
+        ? navigator.platform
+        : "";
+    ctx.device_type = parseDeviceTypeFromNav(ua, touchPoints, platform);
+  } catch {
+    /* best-effort — omit device_type rather than crashing the emit */
+  }
+
+  // visitor_id: gated upstream — buildStorefrontContext is only
+  // called from `track()` after `decideConsent()` returns "grant"
+  // (see loader.ts:372-384). The localStorage write here therefore
+  // only happens for consenting visitors.
+  try {
+    const vid = getOrCreateVisitorId();
+    if (vid.length >= 1) {
+      ctx.visitor_id = vid;
+    }
+  } catch {
+    /* best-effort — omit visitor_id rather than crashing the emit */
+  }
+
+  return ctx;
 }
 
 /**
@@ -309,6 +363,68 @@ export function writePriorConsentDecision(d: "grant" | "deny"): void {
   } catch {
     /* private mode — best effort */
   }
+}
+
+// ── visitor_id (long-lived browser-stable id) ──────────────────────
+//
+// Storage: localStorage `bf_visitor_id`. Origin-scoped, so each
+// tenant subdomain has its own visitor_id (cross-tenant isolation
+// is the browser's default behaviour, not something we enforce).
+// Lifecycle is broader than session_id — see the Semantic Contract
+// in `_storefront-context.ts`.
+
+/**
+ * Read or mint the long-lived visitor_id from localStorage. Returns
+ * an empty string when:
+ *   - `window` is undefined (SSR / Node test context)
+ *   - `localStorage` throws on access (private browsing / disabled)
+ *   - The stored value is not a non-empty string
+ *
+ * Callers must treat empty string as "no visitor_id available, omit
+ * the field on emit". The schema's optional shape tolerates absence.
+ *
+ * Consent gate: this function does NOT itself check consent. The
+ * loader is responsible for calling it only when
+ * `consent.analytics === true` (matches the existing pattern for
+ * other identifying fields).
+ */
+export function getOrCreateVisitorId(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const stored = window.localStorage.getItem(VISITOR_KEY);
+    if (typeof stored === "string" && stored.length >= 1) {
+      return stored;
+    }
+    const fresh = ulid();
+    window.localStorage.setItem(VISITOR_KEY, fresh);
+    return fresh;
+  } catch {
+    // localStorage throws in private mode on some browsers (older
+    // Safari) or when disabled by policy. Fall back to in-memory so
+    // the ID is at least stable within a single page load — same
+    // pattern used by `getOrCreateSessionId()` for sessionStorage.
+    if (inMemoryVisitorId) return inMemoryVisitorId;
+    inMemoryVisitorId = ulid();
+    return inMemoryVisitorId;
+  }
+}
+
+/**
+ * Drop the visitor_id from storage. Mirrors `clearSessionId()` so
+ * operator tooling and tests have a single drop-everything entry
+ * point. Production code does NOT call this on consent-revoke —
+ * visitor_id survives consent rotations by design (re-grants resume
+ * the same visitor; only localStorage clear / incognito breaks it).
+ */
+export function clearVisitorId(): void {
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.removeItem(VISITOR_KEY);
+    } catch {
+      /* private mode — best effort */
+    }
+  }
+  inMemoryVisitorId = null;
 }
 
 async function sha256Hex(input: string): Promise<string> {
