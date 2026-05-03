@@ -116,3 +116,12 @@ export type {
   CreateDraftWithLinesInput,
   CreateDraftWithLinesResult,
 } from "./create-with-lines";
+
+// ── Customer-facing invoice surface (FAS 7.3) ──
+export { getDraftByShareToken } from "./get-by-share-token";
+export type {
+  PublicDraftDTO,
+  PublicDraftLineItem,
+  PublicPaymentTerms,
+  GetDraftByShareTokenResult,
+} from "./get-by-share-token";
