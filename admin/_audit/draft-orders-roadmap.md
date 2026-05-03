@@ -53,6 +53,7 @@ ev. `_lib/email/templates/draft-*` och `api/webhooks/stripe/handle-draft-order-p
 | 7.2b.4d.2 | Lifecycle UI (confirm modal, dropdown, payment actions) | `11caaa7` |
 | 7.2b.4e | Timeline rendering | `b9aed38` |
 | 7.3 | Customer-facing invoice payment surface (`/invoice/[token]` page + Stripe Elements + success/cancelled) | `7436c02` `7d8d105` `5a7fcbb` `1377bc1` `6e8ac2f` `e75a0ed` — verified: tsc 0, tests 46/46, eslint 0 |
+| 7.4 | Invoice expiry / retry surface (resendInvoice service + action + konfigurera UI + timeline) | `b44da02` `5db420e` `2277407` `9ddd52c` — pending CI verification |
 
 ---
 
@@ -94,23 +95,7 @@ via Stripe Elements på den sidan. Idag dödläge: kund klickar länk → 404.
 
 ---
 
-### FAS 7.4 — Invoice expiry / retry surface
-**Beroende:** 7.3 stängd.
-
-**Problem:** `shareLinkExpiresAt` finns men ingen UI/UX när token gått ut.
-Operatör behöver kunna skicka en NY invoice (regenerera token + PI) utan
-att skapa en ny draft.
-
-**Scope:**
-- `_lib/draft-orders/resend-invoice.ts` — ny service som bygger ny
-  `shareLinkToken` + ny PaymentIntent (cancellar gammal PI om PENDING).
-  Idempotency på `(draftOrderId, idempotencyKey)`.
-- "Skicka om faktura"-action i `KonfigureraClient` (visas när
-  `status=INVOICED` OCH `shareLinkExpiresAt < now`).
-- "Faktura har gått ut"-screen i `app/(guest)/invoice/[token]/page.tsx`
-  (hänger ihop med 7.3).
-
-**Estimat:** 1 PR, 3–4 commits.
+_(FAS 7.4 — implementerad i 4 commits, pending CI-verifiering. Recon: `7-4-recon.md`.)_
 
 ---
 
