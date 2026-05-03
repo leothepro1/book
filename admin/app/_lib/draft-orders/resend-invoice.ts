@@ -80,7 +80,7 @@ function assertResendable(draft: DraftOrder): void {
       { draftOrderId: draft.id },
     );
   }
-  if (draft.totalCents <= 0n) {
+  if (draft.totalCents <= BigInt(0)) {
     throw new ValidationError(
       "Cannot resend invoice — draft has zero total",
       { draftOrderId: draft.id },
