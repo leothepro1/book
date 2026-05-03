@@ -258,7 +258,7 @@ export async function emitAnalyticsEvent<TEventName extends RegisteredEventName>
       await tx.$executeRaw`
         INSERT INTO analytics.outbox (
           id, tenant_id, event_id, event_name, schema_version,
-          payload, actor_type, actor_id, correlation_id, created_at
+          payload, actor_type, actor_id, correlation_id, context, created_at
         ) VALUES (
           ${outboxRowId},
           ${tenantId},
@@ -269,17 +269,21 @@ export async function emitAnalyticsEvent<TEventName extends RegisteredEventName>
           ${actor.actor_type},
           ${actor.actor_id},
           ${correlationId ?? null},
+          ${contextJson}::jsonb,
           NOW()
         )
         ON CONFLICT (tenant_id, event_id) DO NOTHING
       `;
-      // `context` lives on the future analytics.event row, not on the
-      // outbox row. The drainer (Phase 1B) will copy it from the
-      // outbox payload's caller-supplied envelope. (Outbox does not
-      // currently have a context column — see prisma/schema.prisma.
-      // The variable is kept here so the validate-step's `candidate`
-      // is self-consistent; it'll be threaded through in 1B.)
-      void contextJson;
+      // `context` is persisted on the outbox row alongside payload —
+      // the drainer (`drain-analytics-outbox.ts`) copies it forward
+      // to `analytics.event.context` so request-time data (geo,
+      // user-agent hint, locale, page_url, …) flows end-to-end. Emit
+      // distinguishes:
+      //   undefined or null → contextJson = null → DB NULL
+      //   {} or richer      → JSON.stringify(context) → JSONB object
+      // The schema is `Json?` (additive PR-X3a column); pre-X3a outbox
+      // rows have NULL and the drainer's idempotent INSERT-from-row
+      // path handles both shapes uniformly.
     },
   );
 
