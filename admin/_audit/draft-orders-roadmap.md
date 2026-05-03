@@ -54,6 +54,7 @@ ev. `_lib/email/templates/draft-*` och `api/webhooks/stripe/handle-draft-order-p
 | 7.2b.4e | Timeline rendering | `b9aed38` |
 | 7.3 | Customer-facing invoice payment surface (`/invoice/[token]` page + Stripe Elements + success/cancelled) | `7436c02` `7d8d105` `5a7fcbb` `1377bc1` `6e8ac2f` `e75a0ed` — verified: tsc 0, tests 46/46, eslint 0 |
 | 7.4 | Invoice expiry / retry surface (resendInvoice service + action + konfigurera UI + timeline) | `b44da02` `5db420e` `2277407` `9ddd52c` — pending CI verification |
+| 7.5 | OVERDUE-cron + state transition (Path B / 7.5-lite) | `bc3c2c8` `3f6de25` `6841ce3` — verified: tsc 0 new, vitest +21 (15 service + 4 route + 2 timeline), eslint 0 |
 
 ---
 
@@ -99,24 +100,17 @@ _(FAS 7.4 — implementerad i 4 commits, pending CI-verifiering. Recon: `7-4-rec
 
 ---
 
-### FAS 7.5 — OVERDUE-cron + reminder-flow
-**Beroende:** 7.3 stängd.
+_(FAS 7.5 — flyttad till "Klart" ovan via Path B "lite": ingen schema-change,
+återanvänder `shareLinkExpiresAt + graceDays`. Recon: `7-5-recon.md`.
+Reminder-mail flyttad till 7.5b nedan, blockad på Terminal A koordinering
+av `EmailEventType`-enum.)_
 
-**Problem:** State-machine har `INVOICED → OVERDUE` men ingen kod
-triggar denna transition. Behövs cron som flyggar drafts där
-`shareLinkExpiresAt + grace_period < now` eller där en operatörs-
-satt `dueDate < now`.
+---
 
-**Scope:**
-- `prisma/schema.prisma`: lägg till `DraftOrder.dueDate DateTime?`
-  (separat från `shareLinkExpiresAt` som styr token-livslängd).
-  **⚠ Schema-change — kräver Terminal A koordinering** (migration namespace).
-- `api/cron/overdue-drafts/route.ts` — kör en gång per dygn,
-  flippa `INVOICED → OVERDUE`, emit event.
-- Reminder-mail (återanvänder `draft-invoice.tsx` template med ny copy).
-- `vercel.json` cron-entry.
-
-**Estimat:** 1 PR, 4–5 commits.
+### FAS 7.5b — Reminder email for OVERDUE drafts (PENDING)
+**Beroende:** 7.5 stängd + Terminal A koordinering på `EmailEventType`-enum.
+Lägg till `DRAFT_INVOICE_OVERDUE` template-key, prisma migration, ny
+react-email template. Skjuts tills enum-utökning är koordinerad.
 
 ---
 
