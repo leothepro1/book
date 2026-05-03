@@ -19,6 +19,11 @@
 
 import { ulid } from "ulidx";
 
+import {
+  parseDeviceTypeFromNav,
+  type DeviceType,
+} from "./device-type";
+
 const SESSION_KEY = "bf_sid";
 const SESSION_LAST_EMIT_KEY = "bf_session_last_emit_at";
 const SESSION_PRIOR_DECISION_KEY = "bf_session_prior_consent_decision";
@@ -120,6 +125,19 @@ export interface StorefrontContext {
   viewport: { width: number; height: number };
   locale: string;
   session_id: string;
+  /**
+   * Optional per the additive PR-X2 schema bump on
+   * `_storefront-context.ts`. Loader populates via
+   * `parseDeviceTypeFromNav()`. Omitted in SSR / no-navigator
+   * environments — schema tolerates absence.
+   */
+  device_type?: DeviceType;
+  /**
+   * Optional per the additive PR-X2 schema bump. Loader populates via
+   * `getOrCreateVisitorId()` only when consent.analytics is granted
+   * AND localStorage is writable. Omitted otherwise.
+   */
+  visitor_id?: string;
 }
 
 export interface BuildContextOptions {
@@ -142,7 +160,7 @@ export interface BuildContextOptions {
 export function buildStorefrontContext(
   opts: BuildContextOptions = {},
 ): StorefrontContext {
-  return {
+  const ctx: StorefrontContext = {
     // page_url is sanitized — query string filtered against an
     // allowlist, fragment stripped. page_referrer is intentionally
     // NOT sanitized (the schema's contract assigns referrer
@@ -161,6 +179,39 @@ export function buildStorefrontContext(
       "sv",
     session_id: getOrCreateSessionId(),
   };
+
+  // device_type and visitor_id are OPTIONAL on the schema. Compute
+  // best-effort and include only on success — never throw inside the
+  // builder (the calling track() path is best-effort fire-and-forget).
+  try {
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const touchPoints =
+      typeof navigator !== "undefined" && typeof navigator.maxTouchPoints === "number"
+        ? navigator.maxTouchPoints
+        : 0;
+    const platform =
+      typeof navigator !== "undefined" && typeof navigator.platform === "string"
+        ? navigator.platform
+        : "";
+    ctx.device_type = parseDeviceTypeFromNav(ua, touchPoints, platform);
+  } catch {
+    /* best-effort — omit device_type rather than crashing the emit */
+  }
+
+  // visitor_id: gated upstream — buildStorefrontContext is only
+  // called from `track()` after `decideConsent()` returns "grant"
+  // (see loader.ts:372-384). The localStorage write here therefore
+  // only happens for consenting visitors.
+  try {
+    const vid = getOrCreateVisitorId();
+    if (vid.length >= 1) {
+      ctx.visitor_id = vid;
+    }
+  } catch {
+    /* best-effort — omit visitor_id rather than crashing the emit */
+  }
+
+  return ctx;
 }
 
 /**

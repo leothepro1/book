@@ -29,16 +29,23 @@ afterEach(() => {
 });
 
 describe("buildStorefrontContext", () => {
-  it("returns the canonical 6 fields", () => {
+  it("returns the 6 mandatory fields plus 2 optional (device_type, visitor_id)", () => {
     const ctx = buildStorefrontContext();
+    // device_type is always set by the classifier (jsdom's empty UA
+    // collapses to "unknown" but the field is still present).
+    // visitor_id is set when localStorage is writable, which it is
+    // under jsdom by default. SSR / private-mode coverage is in
+    // dedicated describe-blocks below.
     expect(Object.keys(ctx).sort()).toEqual(
       [
+        "device_type",
         "locale",
         "page_referrer",
         "page_url",
         "session_id",
         "user_agent_hash",
         "viewport",
+        "visitor_id",
       ].sort(),
     );
   });
@@ -435,5 +442,50 @@ describe("visitor_id — long-lived localStorage management", () => {
     expect(id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
     setItem.mockRestore();
     getItem.mockRestore();
+  });
+
+  it("buildStorefrontContext includes visitor_id when localStorage is writable", () => {
+    const ctx = buildStorefrontContext();
+    expect(ctx.visitor_id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+  });
+
+  it("buildStorefrontContext().visitor_id survives consent-rotation triggers", () => {
+    const a = buildStorefrontContext().visitor_id;
+    expect(a).toBeDefined();
+    // Simulate a consent revoke + regrant cycle by clearing the
+    // session-scoped state but NOT localStorage.
+    window.sessionStorage.clear();
+    const b = buildStorefrontContext().visitor_id;
+    expect(b).toBe(a);
+  });
+});
+
+describe("device_type — loader-side classifier wiring", () => {
+  it("buildStorefrontContext sets device_type from jsdom navigator", () => {
+    const ctx = buildStorefrontContext();
+    expect(["desktop", "mobile", "tablet", "unknown"]).toContain(
+      ctx.device_type,
+    );
+  });
+
+  it("classifier output reflects an iPhone UA stub → mobile", () => {
+    const original = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "userAgent",
+    );
+    Object.defineProperty(window.navigator, "userAgent", {
+      value:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) " +
+        "Version/17.0 Mobile/15E148 Safari/604.1",
+      configurable: true,
+    });
+    try {
+      const ctx = buildStorefrontContext();
+      expect(ctx.device_type).toBe("mobile");
+    } finally {
+      if (original) {
+        Object.defineProperty(window.navigator, "userAgent", original);
+      }
+    }
   });
 });
