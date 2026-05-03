@@ -168,4 +168,15 @@ describe("InvoicePage — branching", () => {
     render(ui);
     expect(screen.getByText("Tack för förfrågan!")).toBeTruthy();
   });
+
+  it("renders 'Ladda ner PDF' link with /invoice/{token}/pdf href and download attribute on INVOICED draft", async () => {
+    const ui = await InvoicePage({
+      params: Promise.resolve({ token: "tok_abc" }),
+    });
+    render(ui);
+    const link = screen.getByText("Ladda ner PDF") as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link.getAttribute("href")).toBe("/invoice/tok_abc/pdf");
+    expect(link.getAttribute("download")).toBe("Faktura-D-2026-0001.pdf");
+  });
 });
