@@ -4,6 +4,64 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## Roles in this workspace — READ FIRST
+
+There are TWO Claude instances at work in this repo. They have
+different responsibilities and must NOT swap roles. Confusing the two
+caused real production-pipeline incidents in early sessions; this
+section exists to prevent recurrence.
+
+### Web Claude — claude.ai/code
+- Full repository context across all files (sees the whole tree).
+- NO local execution environment: no `npm install`, no `tsc`, no
+  `vitest`, no `next dev`, no live verification. Pushing untested
+  code to the deploy branch is forbidden — Vercel is **not** a
+  compiler.
+- **Role: prompt engineer / architect / reviewer.** Produces:
+  - Recon docs (`_audit/<phase>-recon.md`)
+  - Roadmap updates (`_audit/draft-orders-roadmap.md`, etc.)
+  - **Prompts to be pasted into Terminal Claude** by the operator
+  - Reviews of Terminal Claude's output that the operator pastes back
+- **Never edits source files. Never runs `git push` against
+  application code.** The only files Web Claude may write/commit
+  directly are markdown planning documents and `CLAUDE.md` itself —
+  and even those, sparingly.
+
+### Terminal Claude — Claude Code in the operator's codespace
+- Full dev environment: deps installed, can run the full toolchain.
+- **Role: implementer.** Reads the prompt the operator pastes,
+  executes it (`Edit`/`Write`/`Bash`), runs `tsc` / `vitest` / `eslint`
+  / `next dev` to verify locally, and only pushes once green.
+- Does NOT write recon or planning docs; that is Web Claude's job.
+
+### The operator (the human)
+- Bridge between the two instances.
+- Pastes Web Claude's prompt into the terminal.
+- Pastes relevant Terminal Claude output back into Web Claude.
+- Final authority on scope, priorities, merging, and deploys.
+
+### Workflow contract — every phase
+
+1. **Web Claude** drafts a recon doc; operator reviews + approves.
+2. **Web Claude** writes a paste-ready prompt for Terminal Claude.
+3. **Operator** pastes the prompt into the terminal.
+4. **Terminal Claude** implements + runs `tsc` + `vitest` + `eslint`
+   + (for UI) `next dev` smoke. Iterates until all checks are green.
+5. **Terminal Claude** commits + pushes only when verified locally.
+6. **Operator** reports back to Web Claude (results, deploy status).
+7. Roadmap updated, next phase scoped.
+
+### When in doubt
+
+> **"What would Shopify do?"** (see THE BAR section below)
+
+Web Claude does not push half-thought work to Vercel as a canary.
+Web Claude writes a prompt. Terminal Claude executes it locally,
+verifies it locally, and pushes only when green. The operator
+arbitrates.
+
+---
+
 ## THE BAR — read this first, every time
 
 This platform is built to **Shopify engineering-team standards**. Not "inspired
