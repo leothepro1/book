@@ -169,8 +169,12 @@ som krävs i v2. v1-radnummer refererar `app/_lib/analytics/aggregation.ts`.
 - **Status:** GAP.
 - **Föreslagen åtgärd (en av tre):**
   1. **Viewport-heuristik i aggregator** (≤768px = MOBILE, ≤1024 = TABLET,
-     else DESKTOP). Pro: ingen schema-bump, snabb. Con: mismatch mot v1
-     på iPad-DPR-edge-cases och desktop-användare i krympta fönster.
+     else DESKTOP). **Avrådes** — viewport är ostabil input
+     (window-resize, DPR-skalning, mobile portrait/landscape, iPad
+     split-view). Heuristiken låser in dålig data permanent. Cost-saving
+     är skenbar: vi får aldrig korrekt device-fördelning, och en senare
+     migration till alt (2) kräver historisk-data-reklassificering. Inte
+     ett Shopify-grade alternativ.
   2. **v0.2.0 StorefrontContext + worker UA-parse**: lägg till
      `device_type: "desktop" | "mobile" | "tablet"` som worker härleder
      **innan** UA hashas. UA stannar i workern (privacy intact). Pro:
@@ -243,9 +247,12 @@ Phase 1B-drainern (`drain-analytics-outbox`) och scannern
 `inngest/functions/drain-analytics-outbox.ts:84-93` och
 `scan-analytics-outbox.ts:40-52`. Aggregatorn matchar mönstret:
 
-- **`scan-analytics-aggregate`** — daglig cron (`5 0 * * *` UTC, alltså
-  00:05 UTC efter dygnsbyte) selectar tenants med events i föregående
-  dygn och dispatchar `analytics.aggregate.fanout`-event per tenant.
+- **`scan-analytics-aggregate`** — var 15:e minut (`*/15 * * * *`),
+  matcher Tier 2 freshness-SLO på 15 min per `tiers.md:38`. Selectar
+  tenants med events i de senaste 48h och dispatchar
+  `analytics.aggregate.fanout`-event per tenant. 15-min-frekvensen
+  ligger i samma cron-band som befintlig `reconcile-payments`
+  (`vercel.json` `*/15 * * * *`) och `sync-discount-statuses`.
 - **`run-analytics-aggregate-day`** — triggas av
   `analytics.aggregate.fanout`. Per-tenant. Aggregerar (tenantId, date)
   idempotent. Concurrency `key: "event.data.tenant_id"`, limit 1 (samma
@@ -261,9 +268,10 @@ duplicerat infrastrukturansvar. Phase 5A följer mönstret rakt av.
 Skanner-strategi vid 10k tenants:
 
 - `scan-analytics-aggregate` läser DISTINCT `tenant_id` från
-  `analytics.event` WHERE `occurred_at` i target-dag. LIMIT 10000
-  (matchar `MAX_TENANTS_PER_SCAN = 1000` i scan-analytics-outbox.ts:38;
-  vid 10k tenants ökar vi till 10000 — RESOLVED).
+  `analytics.event` WHERE `occurred_at` i 48h-fönstret (per §3.4).
+  LIMIT 10000 (matchar `MAX_TENANTS_PER_SCAN = 1000` i
+  scan-analytics-outbox.ts:38; vid 10k tenants ökar vi till 10000 —
+  RESOLVED).
 - `step.sendEvent` dispatchar **alla** events i en batch (matchar
   scan-analytics-outbox.ts:78-84). Inngest serialiserar internt.
 - Per-tenant concurrency-key partitionerar fan-outet — samma pattern som
@@ -278,13 +286,21 @@ egen scheduler är round-robin per concurrency-key.
 
 - **Concurrency:** 1 per tenant (Inngest concurrency-key = tenantId)
 - **Cross-tenant parallelism:** Inngest plan default (start: 1000 runs)
-- **Per-tenant query-batch:** 10 000 events per chunk via cursor på
-  `(tenant_id, occurred_at)`. (events × 19 event-types × 1 dag per tenant,
-  vid 10k guests/h × 24h × 5 events/session ≈ 1.2M events/dag/tenant
-  värsta-fall — chunked för att hålla minne under 50 MB per worker)
+- **Per-tenant query-batch:** streaming via Postgres cursor på
+  `(tenant_id, occurred_at)`. Vid 10k guests/h × 24h × 5 events/session
+  ≈ 1.2M events/dag/tenant värsta-fall.
+- **Minne-budget enforcerad via chunked-mode:** events_count > 50_000
+  ⇒ obligatorisk streaming, chunk_size = 25_000. Aggregator API
+  accepterar `AsyncIterable<EventRow>`, inte `EventRow[]` — fold-pattern
+  över MetricRow-accumulator (`Map<string, number | Set<string>>`),
+  inga del-resultat hålls i Array. Håller minne under 50 MB per worker
+  oavsett input-volym.
 - **Budget per tenant:** 60 sekunder soft-cap (Inngest step timeout
-  default). Ovanför → `step.run` delar upp i sub-steps; aggregator sparar
-  cursor i `AnalyticsAggregationCursor` (ny tabell — se §4).
+  default). Vid budget-overrun: `step.run` yieldar via Inngest's
+  inbyggda step-throttling (per `drain-analytics-outbox.ts:88-91`-pattern
+  med concurrency-key). Per-tenant cursor-persistence är out-of-scope
+  för 5A; läggs till i 5C om production-mätning visar
+  single-step-budget regelbundet otillräcklig.
 
 ### 3.4 Late-arriving events
 
@@ -292,23 +308,35 @@ Outboxen är inte garanterat "drain inom 60 s" — drainern kan ligga efter
 om Inngest var nere. Phase 5A:s aggregator MÅSTE re-aggregera ett
 fönster för att fånga late events.
 
-**RESOLVED-strategi:** dubbel-aggregering varje natt.
-- 00:05 UTC: aggregera **igår** + **idag** (täcker UTC-cutoff late
-  events från dygnsbyte)
-- Aggregator-runs är idempotenta — upsert per (tenantId, date, metric,
-  dimension, dimensionValue). Skriva samma värde två gånger är no-op.
-- Phase 5C-kan introducera 7-dagars window ifall vi ser late events i
-  produktionsmätning. Phase 5A: 2-dagars window räcker som start.
+**RESOLVED-strategi: 48-timmars sliding window per run.** Varje
+15-min-tick aggregerar de senaste 48 timmarna per tenant (today
+partial + yesterday full + day-before-yesterday full). Detta ger:
+
+- **Dashboard-freshness inom 15 min** för dagens data (Tier 2 SLO).
+- **Late-event-fångst för dygnsbyten:** events som anlände efter
+  dygnsbytets re-aggregering fångas av nästa 15-min-tick som
+  fortfarande har "yesterday" inom fönstret.
+- **24h-buffer för late events bortom dygnsbyten:** day-before-yesterday
+  re-aggregeras tills den glider ut ur fönstret.
+
+Idempotent re-aggregation: composite unique upsert per §6.7 gör 96
+daily reruns per (tenant, date) säkra och billiga (upsert no-op vid
+oförändrat värde — Postgres `ON CONFLICT DO UPDATE` skriver inte ny
+WAL-rad om värde är oförändrat på modern Postgres). Phase 5C kan
+utöka fönstret till 7 dagar om production-mätning visar längre
+late-event-svans.
 
 ### 3.5 Crash-safety / cursor / resume
 
 - Inngest's `step.run` är atomic-checkpoint-baserat: en step som
   kraschat retryas, en step som lyckats hoppas över vid retry.
 - Aggregatorn delas i steps:
-  1. `select-events` — läser events för (tenantId, date) range, hela
-     resultatet i minnet upp till 1.2M (alt: chunked om RAM-budget
-     överskrids — se §3.3)
-  2. `compute-rows` — pure function, in-memory transform
+  1. `select-events` — streaming via Postgres cursor över
+     (tenantId, occurred_at) range. events_count > 50_000 ⇒
+     chunked-mode automatiskt (per §3.3). Aggregator håller endast
+     accumulator-state i minnet, inte raw events.
+  2. `compute-rows` — pure function, fold över event-iterator till
+     accumulator-state (`Map<string, number | Set<string>>`)
   3. `upsert-rows` — batch om 50 (samma som v1 aggregation.ts:213-232),
      idempotent
 - Vid crash mellan step 2 och 3: nästa run gör om hela kedjan
@@ -403,10 +431,10 @@ Identiskt med legacy schema:4048-4050 (verifierat). Extra index för Phase 5A:
 
 Three-phase migration över 30+ dagars cutover-fönster:
 
-- **5A (denna PR):** CREATE TABLE `analytics.daily_metric` + index +
-  `AnalyticsAggregationCursor` (om §3.5 kräver). Inget på
-  `AnalyticsDailyMetric`. Aggregator skriver dual: legacy v1 fortsätter
-  via befintlig path, v2 körs parallellt.
+- **5A (denna PR):** CREATE TABLE `analytics.daily_metric` + index.
+  Inget på `AnalyticsDailyMetric`. Ingen cursor-tabell (per §3.3 yieldar
+  Inngest-step:n via inbyggd throttling). Aggregator skriver dual:
+  legacy v1 fortsätter via befintlig path, v2 körs parallellt.
 - **5B (separat PR):** Parity-validering. Dashboard läser v1
   fortfarande. Inga skema-ändringar.
 - **5C (separat PR, ~30 dagar efter 5A):** Dashboard route flippar till
@@ -446,6 +474,27 @@ export const ANALYTICS_METRIC_MAPPINGS: EventMapping[] = [
 ];
 ```
 
+**Aggregator-semantik (mekanisk specifikation):**
+
+```
+aggregator: "sum"      — value = SUM(valueFrom(e)) över alla events
+                         som matchar (metric, dimension, dimensionValue).
+
+aggregator: "count"    — value = COUNT(*) över matchande events.
+                         valueFrom ignoreras helt.
+
+aggregator: "distinct" — value = COUNT(DISTINCT distinctKey(e)) över
+                         matchande events. valueFrom ignoreras helt;
+                         distinctKey är obligatorisk (tsc-error om
+                         saknas).
+```
+
+**Aggregator-API tar `AsyncIterable<AnalyticsEventRow>`, inte
+`AnalyticsEventRow[]`** (per §3.3 minne-budget). Implementationen är ett
+fold-pattern: per-event uppdaterar accumulator-state
+(`Map<string, number>` för sum/count, `Map<string, Set<string>>` för
+distinct), inga del-resultat hålls i Array.
+
 ### 5.2 Exempel-rader (Phase 5A scope)
 
 ```ts
@@ -484,6 +533,8 @@ export const ANALYTICS_METRIC_MAPPINGS: EventMapping[] = [
   contributions: [
     { metric: "SESSIONS", dimension: "TOTAL",
       dimensionValueFrom: () => "TOTAL",
+      // valueFrom ignoreras vid aggregator: "distinct" — distinctKey
+      // bestämmer vad som räknas. Behålls här som tsc-friendly stub.
       valueFrom: () => 1,
       aggregator: "distinct",
       distinctKey: (e) => e.payload.session_id },
@@ -560,12 +611,21 @@ explicit säger "each open tab maintains its own session_id".
 
 ### 6.5 Stora outbox-volymer — RESOLVED via §3.3
 
-10k tenants × 10k guests/h × 5 events/session × 24h ≈ 1.2M events/dag
-per tenant värsta-fall. Per-tenant chunking (10k events/chunk) håller
-minne under 50 MB. Cross-tenant fan-out via Inngest (1000 parallel
-runs default) ger total throughput ≥ 1.2M × 10k / 60 min ≈ 200K
-events/sek aggregator-side. Sannolikt under-utilized — Inngest plan-
-caps är den verkliga skalfaktor, inte vår arkitektur.
+Worst-case platform-volym: 1.2M events/dag/tenant × 10k tenants =
+**12B events/dag = ~138K events/sek peak**. Aggregator-throughput-behov:
+~140K events/sek aggregat över alla 1000 parallel runs (Inngest default
+plan-cap) = ~140 events/sek/run. Per-run-budget är väl inom Inngest
+step-throughput.
+
+Vid 15-min-frekvens (§3.4) körs aggregatorn 96 gånger per dag per
+tenant. Total events-volym sprids över 96 körningar × 10k tenants =
+960k körningar/dag globalt. Per körning återstår ~12.5k events i
+genomsnitt över hela flottan (peak-tenants högre, long-tail lägre).
+Aggregator-arkitekturen är inte bottleneck; Inngest plan-cap (1000
+parallel runs default) är.
+
+Per-tenant chunking (25 000 events/chunk via streaming, §3.3) håller
+minne under 50 MB oavsett input-volym.
 
 ### 6.6 Disk-tillväxt på `analytics.daily_metric` — uppskattning
 
@@ -582,6 +642,15 @@ Konservativ uppskattning per tenant per dag: **~75-150 rader**.
 
 10k tenants × 365 dagar × 100 rader = **365 miljoner rader/år**
 gemensamt. Vid Postgres ~150 bytes/rad inkl index: ~55 GB/år.
+
+**Worst-case-not för PRODUCT:** En tenant med stort sortiment (t.ex.
+spa-resort med 10k aktiva SKU:er) kan ge 10k+ PRODUCT-rader/dag. Vid
+10k tenants där 1% är stora = 100 stora tenants × 10k rader × 365 dagar
+= **365M extra-rader/år bara på PRODUCT-dimensionen**. Disk-uppskattningen
+ovan (~55 GB/år) förutsätter genomsnittstenanten. Om mer än 5% av
+flottan är stora ⇒ RANGE-partitioning på date krävs i 5C tidigare än
+annars. Övervaka via 5C-readiness-check: "top-tenant PRODUCT-rad-count
+per dag".
 
 **Hanterbart utan partitioning första 2 åren.** Phase 5C eller senare
 introducerar RANGE-partitioning på date (matchar pattern på
@@ -654,7 +723,7 @@ Olika tolerance per typ:
 | REVENUE × * | 0.0% (exakt) | Pengar — varje öre måste matcha |
 | ORDERS × * | 0.0% (exakt) | Disktinkt count — exakt deterministisk |
 | AOV × TOTAL | 0.5% | Avrundning skiljer (v1 round, v2 round; cents-vs-bigint tröskel) |
-| RETURNING_CUSTOMER_RATE | 0.5% | Samma avrundnings-skäl |
+| RETURNING_CUSTOMER_RATE | 1.5% | Avrundning + dataset-storlekseffekt: en enskild guest-account-classification på liten dataset (low-volume tenant) kan ge >0.5% drift utan att vara fel |
 | SESSIONS × TOTAL | **5%** | Semantik-skifte (§2.8) — multi-tab counts skiljer |
 | SESSIONS × DEVICE | **10%** | Heuristik vs UA-parse divergerar (§2.9) |
 | SESSIONS × CITY | **10%** | Geo-källa kan skilja (MaxMind-version-skew) (§2.10) |
@@ -693,7 +762,7 @@ Inte i 5A scope.
 
 Varje sub-step är en logisk commit på `feature/analytics-phase5a-aggregator`.
 
-### B.1 — Migration: `analytics.daily_metric` + cursor
+### B.1 — Migration: `analytics.daily_metric`
 
 **Filer:** `prisma/migrations/<timestamp>_analytics_phase5a_aggregator/migration.sql`,
 `prisma/schema.prisma`
@@ -702,7 +771,10 @@ Varje sub-step är en logisk commit på `feature/analytics-phase5a-aggregator`.
 
 **Innehåll:**
 - CREATE TABLE `analytics.daily_metric` med composite unique + 4 index
-- (Optional, beslut i §3.5) CREATE TABLE `AnalyticsAggregationCursor`
+
+(Ingen cursor-tabell i 5A — per §3.3 yieldar Inngest-step:n via inbyggd
+throttling. AnalyticsAggregationCursor är 5C-territory om
+production-mätning kräver det.)
 
 **Beroenden:** ingen.
 
@@ -733,14 +805,20 @@ tsc 3.
 **Filer:** `app/_lib/analytics/aggregation/aggregate-day.ts`,
 `app/_lib/analytics/aggregation/aggregate-day.test.ts`
 
-**LOC-diff:** aggregate-day.ts +220; test +260.
+**LOC-diff:** aggregate-day.ts +250; test +260.
 
 **Innehåll:**
-- `aggregateEvents(events: AnalyticsEvent[], tenantId, date): MetricRow[]`
+- `aggregateEvents(events: AsyncIterable<AnalyticsEvent>, tenantId, date): Promise<MetricRow[]>`
 - Pure funktion, ingen DB-touch
-- Hanterar sum/count/distinct enligt mapping-aggregator-fält
+- Fold-pattern över event-iterator: per-event uppdaterar
+  accumulator-state (`Map<string, number>` för sum/count,
+  `Map<string, Set<string>>` för distinct), inga del-resultat hålls i
+  Array (per §3.3 minne-budget)
+- Hanterar sum/count/distinct enligt mapping-aggregator-fält (per §5.1
+  semantik-spec)
 - Tester med fixture-events (page_viewed, payment_succeeded,
-  booking_completed) — assert MetricRow-output
+  booking_completed) — assert MetricRow-output. Använder async-generator
+  som test-input för att exercisera AsyncIterable-API:et.
 
 **Beroenden:** B.2.
 
@@ -756,12 +834,16 @@ tsc 3.
 
 **Innehåll:**
 - `runAggregateDay(tenantId, date): AggregationResult`
-- SELECT analytics.event WHERE tenant_id+occurred_at-range
-- Anropa `aggregateEvents` (B.3) — pure
+- SELECT analytics.event WHERE tenant_id+occurred_at-range som
+  Postgres-cursor (streaming) — wrappad till AsyncIterable och skickad
+  till `aggregateEvents` (B.3)
 - Batched upsert till `analytics.daily_metric` (50/batch, samma som v1
   aggregation.ts:213-232)
 - Strukturerad log på run_start/run_complete/run_failed
-- Idempotens-test: kör 2x mot samma input, assert identisk DB-state
+- **Idempotens-test i runner.test.ts:** kör `runAggregateDay` 2x mot
+  samma seedade test-DB-state, assert identisk slut-DB-state via
+  `SELECT *`-snapshot-jämförelse. Test-namn-strängen "idempotency"
+  används som markör så B.6:s verifier kan hitta den statiskt.
 
 **Beroenden:** B.1, B.3.
 
@@ -776,9 +858,10 @@ tsc 3.
 **LOC-diff:** scan +90; run +60; index +4.
 
 **Innehåll:**
-- `scan-analytics-aggregate` — cron `5 0 * * *` UTC, dispatchar fanout
+- `scan-analytics-aggregate` — cron `*/15 * * * *`, dispatchar fanout
+  per tenant (per §3.1)
 - `run-analytics-aggregate-day` — concurrency.key=tenant_id, anropar
-  `runAggregateDay` (B.4)
+  `runAggregateDay` för 48h-fönstret (per §3.4)
 - Sentry-wrap via `withSentry` (matcher drainer-pattern)
 
 **Beroenden:** B.4.
@@ -794,24 +877,28 @@ errors (`npm run dev` + manuell trigger via Inngest dev-UI).
 **LOC-diff:** verifier +280; package.json +1.
 
 **Innehåll (per pattern verify-phase3.ts):**
-- 12 statiska checks:
+- 11 statiska checks:
   1. Migration `analytics_phase5a_aggregator` finns på disk
   2. CREATE TABLE `analytics.daily_metric` i migration.sql
   3. Composite unique på rätt kolumner
   4. `metric-mapping.ts` exporterar `ANALYTICS_METRIC_MAPPINGS`
   5. `aggregate-day.ts` exporterar `aggregateEvents`
-  6. `runAggregateDay` finns
+  6. `runAggregateDay` finns OCH `runner.test.ts` innehåller strängen
+     "idempotency" (markör för det idempotens-test som landar i B.4)
   7. Inngest scan-function registrerad i `inngest/index.ts`
   8. Inngest run-function har concurrency.key=tenant_id
   9. Aggregator använder `_unguardedAnalyticsPipelineClient` (singleton)
   10. Cross-tenant scope-skydd: ingen `analytics.event`-query utan
       `tenant_id =` literal i WHERE
-  11. Idempotens-test: aggregator kör 2x mot samma input → identisk DB
-  12. tsc clean för Phase 5A-filer
+  11. tsc clean för Phase 5A-filer
+
+(Idempotens-runtime-testet är en integration-test i B.4:s
+`runner.test.ts`, inte en static check här. Verifier-skriptet greppar
+bara efter dess existens-markör i check #6.)
 
 **Beroenden:** B.5.
 
-**Checkpoints:** `npm run verify:phase5a` ⇒ 12/12.
+**Checkpoints:** `npm run verify:phase5a` ⇒ 11/11.
 
 ### B.7 — Cron registration + docs
 
@@ -830,7 +917,7 @@ diff stub +40.
 
 **Beroenden:** B.6.
 
-**Checkpoints:** `npm run verify:phase5a` ⇒ 12/12. tsc 3.
+**Checkpoints:** `npm run verify:phase5a` ⇒ 11/11. tsc 3.
 
 ### B.8 — Push + PR-beskrivning
 
@@ -842,12 +929,12 @@ Inte en commit — git-push + GitHub PR-text.
 |---|---|---|
 | B.1 | +63 | — |
 | B.2 | +300 | — |
-| B.3 | +480 | B.2 |
+| B.3 | +510 | B.2 |
 | B.4 | +260 | B.1, B.3 |
 | B.5 | +154 | B.4 |
 | B.6 | +281 | B.5 |
 | B.7 | +204 | B.6 |
-| **Total** | **~1742 LOC** | linjär |
+| **Total** | **~1772 LOC** | linjär |
 
 Varje step är en standalone-reviewable commit; testbar isolerat
 (undantag B.5 som kräver Inngest dev-runner).
@@ -911,12 +998,21 @@ som kräver det. Phase 5A:s SESSIONS-räkning matchar v2-definitionen. Phase
 
 ### 9.4 (OPEN) Device-type-derivation
 
-**Frågan:** SESSIONS × DEVICE är GAP. Tre alternativ per §2.9.
+**Frågan:** SESSIONS × DEVICE är GAP. Tre alternativ per §2.9 — alt (1)
+viewport-heuristik är där markerat som **Avrådes** (ostabil input,
+permanent dålig data). Frågan är därmed mellan (2) och (3):
 
-**Ingen default** — frågar Leo. (1) är billigast (in-aggregator-only,
-ingen schema-bump, no worker-LOC); (2) är korrekt över edge-cases men
-kostar ~150 LOC i workern under tree-shake-budget; (3) skjuter dimensionen
-till 5C.
+- (2) v0.2.0 StorefrontContext + worker UA-parse — korrekt data, kostar
+  ~150 LOC i workern under tree-shake-budget.
+- (3) Acceptera dimension-förlust i 5A; lös i 5C — billigaste vägen,
+  ingen ny LOC, men dashboarden saknar device-fördelning under
+  cutover-fönstret.
+
+Mellan (2) och (3) är frågan en business-prioritering: behöver
+5A-dashboarden device-fördelning från start, eller acceptabelt att
+den dyker upp i 5C?
+
+**Ingen default** — frågar Leo.
 
 ### 9.5 (OPEN) Geo-lookup för SESSIONS × CITY
 
@@ -1036,11 +1132,17 @@ Explicit sparade till senare PR:s — får INTE rinna in i Phase 5A:
   aggregator-implementation börjar (annars stoppar 5A på CHANNEL-gap).
 - **payment_succeeded.line_items v0.2.0-bump** ifall §9.2 svarar (a)
   eller (b). Samma timing som 9.1 — innan 5A.
-- **AnalyticsAggregationCursor-tabell** för per-tenant chunked-resume.
-  Inte i 5A — läggs till i 5C om production-mätning visar att 60s-budget
-  inte räcker per tenant.
+- **AnalyticsAggregationCursor-tabell** — explicit 5C-territory.
+  Per §3.3 yieldar 5A-aggregatorn via Inngest's inbyggda step-throttling
+  i stället för persistent cursor. Cursor-tabellen läggs till i 5C
+  endast om production-mätning visar att 60 s single-step-budget
+  regelbundet är otillräcklig per tenant.
+- **7-dagars late-event-window.** 5A kör 48 h sliding window per §3.4.
+  Phase 5C kan utöka till 7 dagar om production-mätning visar
+  late-event-svans bortom 48 h.
 - **RANGE-partitioning på `analytics.daily_metric`.** Behövs vid > 1B
-  rader (≈ flera år vid 10k tenants). 5C-territory.
+  rader (≈ flera år vid 10k tenants — eller tidigare om PRODUCT-dimension
+  blir tung per §6.6 worst-case-not). 5C-territory.
 - **Storage-snapshot/backup för cutover.** Phase 5C hanterar (matcher
   `docs/runbooks/pms-reliability-dr.md`-pattern).
 
@@ -1058,7 +1160,7 @@ Innan Phase 5A:s implementation-PR startar:
       startar
 - [ ] Branch fortsätter på `feature/analytics-phase5a-aggregator`
 - [ ] Implementation följer §8 sub-step-plan exakt; varje step en commit
-- [ ] Verifier `verify:phase5a` 12/12 grön innan PR review
+- [ ] Verifier `verify:phase5a` 11/11 grön innan PR review
 
 ---
 
