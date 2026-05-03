@@ -373,24 +373,37 @@ export async function processOrderPaidSideEffects(
       const { emitAnalyticsEventStandalone } = await import(
         "@/app/_lib/analytics/pipeline/emitter"
       );
-      const { deriveActor, deriveProvider, deriveInstrument } = await import(
-        "@/app/_lib/analytics/pipeline/integrations"
-      );
+      const {
+        deriveActor,
+        deriveProvider,
+        deriveInstrument,
+        deriveOrderSourceChannel,
+      } = await import("@/app/_lib/analytics/pipeline/integrations");
 
       // TODO(future): if Bedfront ever supports multi-payment per order
       // (refund + new payment cycle), this idempotency key collapses
       // both events into one. At that point, append a payment-attempt
-      // counter or use the payment-attempt UUID. For now (v0.1.0), one
+      // counter or use the payment-attempt UUID. For now (v0.2.0), one
       // payment per order is the invariant, and order.id as fallback
       // is safe.
       const idempotencyKey = `payment_succeeded:${
         order.stripePaymentIntentId ?? order.id
       }`;
 
+      // line_items: one entry per OrderLineItem, mapping productId →
+      // product_id and totalAmount (öre) → amount. Empty array is
+      // valid — orders without OrderLineItem rows (e.g. some
+      // PMS-accommodation flows) emit `line_items: []` rather than
+      // omitting the field. The shape is required and deterministic.
+      const lineItemsPayload = order.lineItems.map((li) => ({
+        product_id: li.productId,
+        amount: li.totalAmount,
+      }));
+
       await emitAnalyticsEventStandalone({
         tenantId: order.tenantId,
         eventName: "payment_succeeded",
-        schemaVersion: "0.1.0",
+        schemaVersion: "0.2.0",
         occurredAt: order.paidAt ?? new Date(),
         actor: deriveActor(order),
         payload: {
@@ -414,6 +427,13 @@ export async function processOrderPaidSideEffects(
           // referencing.
           provider_reference: order.stripePaymentIntentId ?? order.id,
           captured_at: order.paidAt ?? new Date(),
+          // v0.2.0: source_channel and line_items are REQUIRED.
+          // deriveOrderSourceChannel always returns a valid enum
+          // member ("unknown" for null/unmapped); line_items is
+          // always an array (possibly empty). No null-fallback path —
+          // the schema gates emit and would reject a null.
+          source_channel: deriveOrderSourceChannel(order),
+          line_items: lineItemsPayload,
         },
         idempotencyKey,
       });
