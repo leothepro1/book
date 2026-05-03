@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/**": ["./lib/geo/**"],
   },
+  serverExternalPackages: ["@react-pdf/renderer"],
   experimental: {
     ...(isDev && { staleTimes: { dynamic: 0, static: 30 } }),
     serverActions: {
