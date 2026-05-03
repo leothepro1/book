@@ -8,22 +8,34 @@
  * fragment here. Other features keep reading `tenant.settings` ad-hoc;
  * the analytics pipeline reads through this module exclusively.
  *
- * ## Phase 1 (this PR) — optional salt
+ * ## Phase 2 (this PR) — backfill complete; salt now present on all rows
+ *                         but type still optional pending Phase 3 tightening
  *
- * `analyticsSalt` is `string | undefined`. New tenant rows get the
- * salt at creation time (Phase 1 covers webhook + dev seed scripts).
- * Old tenant rows lack it until the Phase 2 backfill migration runs.
- * `getAnalyticsSalt` returns `undefined` for those rows and structured-
- * logs the absence so we can spot any tenants that escaped the
- * backfill.
+ * The Phase 2 migration (`20260503134853_analytics_backfill_tenant_salt`)
+ * writes a fresh 32-hex salt onto every Tenant row that was missing one.
+ * The migration ends with a `DO`-block that aborts the transaction if any
+ * row remains without a valid salt, so a successful apply means every row
+ * has been backfilled.
+ *
+ * `AnalyticsSettings.analyticsSalt` stays `string | undefined` and
+ * `getAnalyticsSalt` continues to return `undefined` + structured-log on
+ * absence. This is deliberate: until Phase 3 lands, the storefront read
+ * path must not 500 a tenant that somehow escaped the backfill (defense in
+ * depth — the structured log surfaces the case for ops review). The new
+ * `assertAnalyticsSaltPresent` helper is the Phase 3 entry point and
+ * throws on absence; it is wired in below but no callers use it yet.
  *
  * ## Phase 3 — required (NOT this PR)
  *
- * Once the backfill confirms 0 nulls in production, a follow-up commit
- * tightens the type to `string` (required) and `getAnalyticsSalt`
- * throws on absence. The throw is the right server-side signal for a
- * data-integrity bug. Until that tightening, the helper logs and
- * returns `undefined` so pre-backfill rows don't 500 the storefront.
+ * Once production telemetry confirms zero `analytics.tenant_missing_salt`
+ * events for a soak period, a follow-up commit:
+ *   1. Tightens the type to `analyticsSalt: string` (required).
+ *   2. Switches the default callers from `getAnalyticsSalt` to
+ *      `assertAnalyticsSaltPresent`.
+ *   3. (Optional) folds the throw into `getAnalyticsSalt` itself.
+ * The throw is the right server-side signal for a data-integrity bug —
+ * a Tenant without a salt post-backfill is a class of bug we want
+ * surfaced as a 500, not silently emitted unsalted.
  *
  * ## Salt construction
  *
@@ -94,6 +106,32 @@ export function getAnalyticsSalt(
     return undefined;
   }
   return raw;
+}
+
+/**
+ * Phase 3 entry point — read `analyticsSalt` and throw if absent.
+ *
+ * Mirrors `getAnalyticsSalt` but converts every "missing or malformed"
+ * outcome into a thrown Error tagged with the tenantId. Phase 2 adds the
+ * helper but does NOT switch existing callers over — the storefront read
+ * path keeps using `getAnalyticsSalt` so a backfill miss degrades
+ * gracefully instead of 500-ing the page. Phase 3 will swap the callers.
+ *
+ * The thrown message is the platform contract: post-Phase-2, a tenant
+ * without a valid salt is a data-integrity bug (the migration's DO-block
+ * verifies zero nulls before commit). Surfacing it as a 500 is the
+ * correct signal — silent fallback would hide the regression.
+ */
+export function assertAnalyticsSaltPresent(
+  tenant: Pick<Tenant, "id" | "settings">,
+): string {
+  const salt = getAnalyticsSalt(tenant);
+  if (!salt) {
+    throw new Error(
+      `analytics salt missing post-backfill — Phase 3 invariant violated; tenantId=${tenant.id}`,
+    );
+  }
+  return salt;
 }
 
 /**

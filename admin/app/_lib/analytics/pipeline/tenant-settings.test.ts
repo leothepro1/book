@@ -14,6 +14,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assertAnalyticsSaltPresent,
   generateAnalyticsSalt,
   getAnalyticsSalt,
 } from "./tenant-settings";
@@ -82,6 +83,60 @@ describe("getAnalyticsSalt", () => {
         },
       }),
     ).toBe(salt);
+  });
+});
+
+describe("assertAnalyticsSaltPresent", () => {
+  it("returns the salt when present and valid (happy path)", () => {
+    const salt = "b".repeat(32);
+    expect(
+      assertAnalyticsSaltPresent({
+        ...baseTenant,
+        settings: { analyticsSalt: salt },
+      }),
+    ).toBe(salt);
+  });
+
+  it("throws with tenantId in the message when settings is null", () => {
+    expect(() =>
+      assertAnalyticsSaltPresent({ ...baseTenant, settings: null }),
+    ).toThrowError(/tenantId=tenant_test_1/);
+  });
+
+  it("throws with tenantId in the message when analyticsSalt is missing", () => {
+    expect(() =>
+      assertAnalyticsSaltPresent({
+        ...baseTenant,
+        settings: { theme: { version: 1 } },
+      }),
+    ).toThrowError(/tenantId=tenant_test_1/);
+  });
+
+  it("throws when analyticsSalt is non-string", () => {
+    expect(() =>
+      assertAnalyticsSaltPresent({
+        ...baseTenant,
+        settings: { analyticsSalt: 123 },
+      }),
+    ).toThrowError(/Phase 3 invariant violated/);
+  });
+
+  it("throws when analyticsSalt is shorter than the minimum length", () => {
+    expect(() =>
+      assertAnalyticsSaltPresent({
+        ...baseTenant,
+        settings: { analyticsSalt: "tooshort" },
+      }),
+    ).toThrowError(/Phase 3 invariant violated/);
+  });
+
+  it("includes the exact phrase 'analytics salt missing post-backfill' in the message", () => {
+    // Lock the contract message — Phase 3 callers + ops alerts grep on this.
+    expect(() =>
+      assertAnalyticsSaltPresent({ id: "tenant_xyz", settings: null }),
+    ).toThrowError(
+      /analytics salt missing post-backfill — Phase 3 invariant violated; tenantId=tenant_xyz/,
+    );
   });
 });
 
