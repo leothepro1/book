@@ -1,0 +1,62 @@
+/* ── EmptyState — Phase 2 primitive ──
+   Centred placeholder column. One renderer covers both blank-slate
+   and informational flavours — the difference is which slots the
+   consumer fills, not styling rules. */
+
+.ui-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--empty-padding-y) var(--empty-padding-x);
+  gap: var(--empty-gap);
+  font-family: var(--admin-font);
+  box-sizing: border-box;
+}
+
+/* Chained `.material-symbols-rounded` (0,2,0) overrides Google
+   Fonts' unscoped `.material-symbols-rounded { font-size: 24px }`
+   (0,1,0) — same pattern Banner / Menu / Toast use.
+   The icon sits inside a fixed-size rounded box; `display: grid`
+   is required for `place-content: center` to actually centre the
+   glyph (it's a no-op on the default `display: inline` of a span). */
+.ui-empty-state__icon.material-symbols-rounded {
+  display: grid;
+  place-content: center;
+  width: var(--empty-icon-box-size);
+  height: var(--empty-icon-box-size);
+  border: 1px solid var(--empty-icon-box-border);
+  border-radius: var(--empty-icon-box-radius);
+  font-size: var(--empty-icon-size);
+  color: var(--empty-icon-color);
+  line-height: 1;
+  margin-bottom: var(--empty-icon-margin-bottom);
+}
+
+.ui-empty-state__title {
+  font-size: var(--empty-title-size);
+  font-weight: var(--empty-title-weight);
+  color: var(--empty-title-color);
+  line-height: 1.3;
+  margin: 0;
+}
+
+.ui-empty-state__description {
+  font-size: var(--empty-description-size);
+  color: var(--empty-description-color);
+  line-height: var(--empty-description-line-height);
+  max-width: var(--empty-description-max-width);
+  margin: 0;
+}
+
+/* Primary on the left, secondary on the right, 8px between. Both
+   buttons are rendered at sm size by the component — locked, not
+   configurable, so empty states across the admin read as one
+   pattern. */
+.ui-empty-state__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--empty-actions-gap);
+  margin-top: var(--empty-actions-margin-top);
+}

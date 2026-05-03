@@ -59,10 +59,10 @@
 .ui-menu__item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--menu-item-gap);
   width: 100%;
   padding: var(--menu-item-padding);
-  font-size: 14px;
+  font-size: var(--menu-item-font-size);
   font-weight: 400;
   font-family: inherit;
   color: var(--menu-item-fg);
@@ -71,6 +71,15 @@
   border-radius: var(--menu-item-radius);
   cursor: pointer;
   text-align: left;
+}
+
+/* SM size override. Single modifier on the root cascades to every
+   item — items don't carry their own size class. Trigger sizing is
+   the consumer's responsibility (set on the Button passed as trigger). */
+.ui-menu--sm .ui-menu__item {
+  gap: var(--menu-item-gap-sm);
+  padding: var(--menu-item-padding-sm);
+  font-size: var(--menu-item-font-size-sm);
 }
 
 .ui-menu__item:hover:not(:disabled) {
@@ -116,11 +125,15 @@
    `<link>` and slots after our bundled CSS). */
 .ui-menu__prefix.material-symbols-rounded {
   flex-shrink: 0;
-  font-size: 18px;
+  font-size: var(--menu-item-icon-size);
   /* Optical alignment: the glyph baseline sits a touch low against
      14px label text. Pull up 1px so icon + label share visual
      centre. */
   margin-top: -1px;
+}
+
+.ui-menu--sm .ui-menu__prefix.material-symbols-rounded {
+  font-size: var(--menu-item-icon-size-sm);
 }
 
 /* ── Suffix ──
@@ -138,7 +151,11 @@
 }
 
 .ui-menu__suffix .material-symbols-rounded {
-  font-size: 18px;
+  font-size: var(--menu-item-icon-size);
+}
+
+.ui-menu--sm .ui-menu__suffix .material-symbols-rounded {
+  font-size: var(--menu-item-icon-size-sm);
 }
 
 /* ── Divider ── */

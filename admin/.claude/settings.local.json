@@ -141,7 +141,8 @@
       "Bash(python3 -c ' *)",
       "Bash(xargs -I{} echo {})",
       "Bash(awk '/\\\\.admin-btn/,/^}/' /workspaces/book-C/admin/app/\\\\\\(admin\\\\\\)/base.css)",
-      "Bash(PORT=3030 npm run *)"
+      "Bash(PORT=3030 npm run *)",
+      "Bash(npx eslint *)"
     ]
   }
 }

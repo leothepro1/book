@@ -1,0 +1,37 @@
+/* ── Tooltip — Phase 2 primitive ──
+   Dark pill with white text and an 8×8 rotated arrow. Position is
+   inline-styled by the JS (top/left from measurement); chrome is
+   tokenised here. */
+
+.ui-tooltip__trigger {
+  display: inline-flex;
+}
+
+.ui-tooltip {
+  position: fixed;
+  z-index: var(--tooltip-z-index);
+  pointer-events: none;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-fg);
+  font-family: var(--admin-font);
+  font-size: var(--tooltip-font-size);
+  font-weight: var(--tooltip-font-weight);
+  line-height: var(--tooltip-line-height);
+  padding: var(--tooltip-padding);
+  border-radius: var(--tooltip-radius);
+  letter-spacing: var(--tooltip-letter-spacing);
+  white-space: nowrap;
+}
+
+/* Arrow is a rotated square that bleeds 4px out of the pill. The
+   `currentColor`-equivalent is achieved via `background:
+   var(--tooltip-bg)` — the tooltip's bg token is the single source
+   of truth so light/dark themes don't need a separate arrow rule. */
+.ui-tooltip__arrow {
+  position: absolute;
+  width: var(--tooltip-arrow-size);
+  height: var(--tooltip-arrow-size);
+  background: var(--tooltip-bg);
+  border-radius: var(--tooltip-arrow-radius);
+  transform: translateX(-50%) rotate(45deg);
+}

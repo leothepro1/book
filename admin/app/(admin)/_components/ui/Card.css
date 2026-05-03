@@ -1,0 +1,28 @@
+/* ── Card — Phase 2 primitive ──
+   Surface container. Owns four things: padding, radius, background,
+   shadow. Shadow varies via the elevation modifier — the rest is
+   locked so every card across the admin reads as one coherent
+   surface system. */
+
+.ui-card {
+  background: var(--card-bg);
+  border-radius: var(--card-radius);
+  padding: var(--card-padding);
+  box-sizing: border-box;
+}
+
+.ui-card--elevation-flat {
+  box-shadow: var(--card-shadow-flat);
+}
+
+.ui-card--elevation-sm {
+  box-shadow: var(--card-shadow-sm);
+}
+
+.ui-card--elevation-md {
+  box-shadow: var(--card-shadow-md);
+}
+
+.ui-card--elevation-lg {
+  box-shadow: var(--card-shadow-lg);
+}

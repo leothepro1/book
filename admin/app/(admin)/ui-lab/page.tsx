@@ -3,11 +3,14 @@
 import { useState } from 'react';
 import {
   Badge,
+  Banner,
   Button,
   Calendar,
+  Card,
   Checkbox,
   Choicebox,
   ChoiceboxGroup,
+  EmptyState,
   Input,
   Menu,
   Modal,
@@ -18,6 +21,8 @@ import {
   Slider,
   Spinner,
   Switch,
+  Tabs,
+  Tooltip,
   Textarea,
   ToastProvider,
   Toggle,
@@ -178,6 +183,109 @@ function UILabPageInner() {
         </div>
       </Section>
 
+      <Section title="EmptyState" status="in-progress">
+        Centrerad placeholder för vyer utan innehåll. Båda flavors
+        delar samma slots — ikon + titel + brödtext.
+        <em>Informational</em> lägger på två sm-knappar bredvid
+        varandra: primary till vänster, secondary till höger, 8px
+        gap. Knapp-varianterna är låsta i komponenten — alla empty
+        states i admin läses som ett mönster.
+        <div className="ui-lab__grid" style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 480 }}>
+          <SwitchSizeRow label="Blank slate">
+            <Card elevation="flat">
+              <EmptyState
+                icon="inbox"
+                title="Inga ordrar än"
+                description="Ordrar visas här när dina första gäster bokar."
+              />
+            </Card>
+          </SwitchSizeRow>
+          <SwitchSizeRow label="Informational — 1 knapp">
+            <Card elevation="flat">
+              <EmptyState
+                icon="bookmark_added"
+                title="Inga rabatter aktiva"
+                description="Skapa kampanjer och rabattkoder för att driva fler bokningar under lågsäsong."
+                primaryAction={{ label: 'Skapa rabatt', href: '/discounts/new' }}
+              />
+            </Card>
+          </SwitchSizeRow>
+          <SwitchSizeRow label="Informational — 2 knappar">
+            <Card elevation="flat">
+              <EmptyState
+                icon="inventory_2"
+                title="Inga produkter än"
+                description="Bygg din katalog med boenden, paket eller tilläggstjänster — sedan visar du dem på din sida."
+                primaryAction={{ label: 'Skapa produkt', href: '/products/new' }}
+                secondaryAction={{ label: 'Läs guiden', href: '/help/products' }}
+              />
+            </Card>
+          </SwitchSizeRow>
+        </div>
+      </Section>
+
+      <Section title="Card" status="in-progress">
+        Surface-container. Alla 4 varianter delar bg (#fff), radius
+        (.75rem) och padding — bara <code>elevation</code> varierar:
+        progressiv lyft från ren chrome (<code>flat</code>) till
+        modal-likt fritt (<code>lg</code>). Default är{' '}
+        <code>sm</code> (typisk standard-card-känsla). Header,
+        sektioner och dividers komponerar konsumenten själv inuti.
+        <div className="ui-lab__grid" style={{ display: 'flex', flexDirection: 'column', gap: 32, maxWidth: 480 }}>
+          <SwitchSizeRow label="elevation=flat">
+            <Card elevation="flat">
+              <strong>Flat</strong>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--admin-text-secondary)' }}>
+                Bara hairline-ringar — ingen lyft. För täta listor där
+                staplade shadows skulle slåss.
+              </p>
+            </Card>
+          </SwitchSizeRow>
+          <SwitchSizeRow label="elevation=sm (default)">
+            <Card elevation="sm">
+              <strong>Subtle</strong>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--admin-text-secondary)' }}>
+                Standard-card-lyft. Ett 2px tight shadow + ringarna.
+              </p>
+            </Card>
+          </SwitchSizeRow>
+          <SwitchSizeRow label="elevation=md">
+            <Card elevation="md">
+              <strong>Floating</strong>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--admin-text-secondary)' }}>
+                4-lagers mid-distans shadow. Hover-state, flytande paneler.
+              </p>
+            </Card>
+          </SwitchSizeRow>
+          <SwitchSizeRow label="elevation=lg">
+            <Card elevation="lg">
+              <strong>Overlay</strong>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--admin-text-secondary)' }}>
+                5-lagers dramatiskt shadow. Modal-likt, popping cards.
+              </p>
+            </Card>
+          </SwitchSizeRow>
+        </div>
+      </Section>
+
+      <Section title="Tabs" status="in-progress">
+        Horisontell tab-rad. Aktiv tab har 2px mörk underline som
+        visuellt ersätter den 1px gråa regeln under hela raden via
+        ett <code>-1px margin-bottom</code> per tab. Komponenten äger
+        bara nav-baren — innehållet renderar konsumenten själv
+        baserat på <code>value</code>. Tangentbord: ←/→ wraps,
+        Home/End hoppar, disabled-tabs hoppas över. Endast aktiv tab
+        ligger i tab-ordning; pilar flyttar fokus + aktiverar.
+        <div className="ui-lab__grid" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <SwitchSizeRow label="Standard">
+            <TabsDemo />
+          </SwitchSizeRow>
+          <SwitchSizeRow label="Med disabled">
+            <TabsWithDisabledDemo />
+          </SwitchSizeRow>
+        </div>
+      </Section>
+
       <Section title="Switch" status="in-progress">
         Segmenterad single-select. iOS-style sliding indicator —
         lyft från editorns <code>SegmentedControl</code> med
@@ -304,13 +412,43 @@ function UILabPageInner() {
       </Section>
 
       <Section title="Tooltip" status="in-progress">
-        Existerande tooltip-komponenten (<code>app/_components/Tooltip.tsx</code>)
-        med full hover-timing — här statiskt renderad utan hover så
-        designen kan granskas direkt. Mörk pill, vit text 12px, 8×8
-        roterad arrow.
+        Tooltip primitive med full timing-modell — 200ms enter, 50ms
+        scanning, 800ms same-element cooldown, 600ms click suppress,
+        80ms exit grace. Auto-flip vertikalt om utrymmet tar slut.
+        Mörk pill med 8×8 roterad arrow; tokeniserad så dark mode
+        flippar till ljus pill med mörk text. <em>Hovra triggers
+        nedan</em>.
         <div className="ui-lab__grid">
-          <ButtonRow label="Tooltip">
-            <StaticTooltip label="Skapa ny produkt" placement="bottom" />
+          <ButtonRow label="Top">
+            <Tooltip label="Skapa ny produkt" placement="top">
+              <Button variant="secondary" size="sm">Hovra</Button>
+            </Tooltip>
+          </ButtonRow>
+          <ButtonRow label="Bottom (default)">
+            <Tooltip label="Spara ändringarna">
+              <Button variant="secondary" size="sm">Hovra</Button>
+            </Tooltip>
+          </ButtonRow>
+          <ButtonRow label="På icon-only-button">
+            <Tooltip label="Fler val">
+              <Button variant="ghost" size="sm" leadingIcon="more_horiz" aria-label="Fler val" />
+            </Tooltip>
+            <Tooltip label="Ta bort">
+              <Button variant="ghost" size="sm" leadingIcon="delete" aria-label="Ta bort" />
+            </Tooltip>
+            <Tooltip label="Duplicera">
+              <Button variant="ghost" size="sm" leadingIcon="content_copy" aria-label="Duplicera" />
+            </Tooltip>
+          </ButtonRow>
+          <ButtonRow label="På disabled (auto-detected)">
+            <Tooltip label="Visas inte — barnet är disabled">
+              <Button variant="primary" size="sm" disabled>Disabled</Button>
+            </Tooltip>
+          </ButtonRow>
+          <ButtonRow label="disabled prop">
+            <Tooltip label="Visas inte — disabled prop" disabled>
+              <Button variant="secondary" size="sm">Hovra (visas inte)</Button>
+            </Tooltip>
           </ButtonRow>
         </div>
       </Section>
@@ -349,6 +487,78 @@ function UILabPageInner() {
         </div>
       </Section>
 
+      <Section title="Banner" status="in-progress">
+        Inline status-container i full bredd. Tre varianter — success
+        / warning / error — delar chrome (radius, padding, font, gap)
+        och skiljer sig bara i färgton. Ikon till vänster och CTA
+        till höger är valfria och sätts per call-site; CTA:n
+        renderas som en länk styled exakt som brödtexten med en
+        underline som affordance. <code>error</code> får{' '}
+        <code>role=&quot;alert&quot;</code>, övriga{' '}
+        <code>role=&quot;status&quot;</code>.
+        <div className="ui-lab__grid" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <SwitchSizeRow label="Bara text">
+            <Banner variant="success">Inställningarna sparades</Banner>
+            <Banner variant="warning">Du närmar dig din månadsgräns</Banner>
+            <Banner variant="error">Det gick inte att spara — försök igen</Banner>
+          </SwitchSizeRow>
+          <SwitchSizeRow label="Med ikon">
+            <Banner variant="success" icon="check_circle">
+              Bokningen är bekräftad
+            </Banner>
+            <Banner variant="warning" icon="warning">
+              Tillgängligheten är låg för valt datum
+            </Banner>
+            <Banner variant="error" icon="error">
+              Anslutningen till PMS är nere
+            </Banner>
+          </SwitchSizeRow>
+          <SwitchSizeRow label="Med CTA">
+            <Banner
+              variant="success"
+              cta={{ label: 'Visa orderdetaljer', href: '#order' }}
+            >
+              Order #1042 har skickats
+            </Banner>
+            <Banner
+              variant="warning"
+              cta={{ label: 'Uppgradera', href: '#billing' }}
+            >
+              Du har använt 90 % av din månadskvot
+            </Banner>
+            <Banner
+              variant="error"
+              cta={{ label: 'Lös problemet', href: '#integrations' }}
+            >
+              Stripe-kontot är inte aktiverat
+            </Banner>
+          </SwitchSizeRow>
+          <SwitchSizeRow label="Ikon + CTA">
+            <Banner
+              variant="success"
+              icon="check_circle"
+              cta={{ label: 'Visa', href: '#booking' }}
+            >
+              Bokningen är synkad till Mews
+            </Banner>
+            <Banner
+              variant="warning"
+              icon="warning"
+              cta={{ label: 'Läs mer', href: '#help' }}
+            >
+              Avtalet löper ut om 14 dagar
+            </Banner>
+            <Banner
+              variant="error"
+              icon="error"
+              cta={{ label: 'Felsök', href: '#diagnostics' }}
+            >
+              Senaste betalningen misslyckades
+            </Banner>
+          </SwitchSizeRow>
+        </div>
+      </Section>
+
       <Section title="Menu" status="in-progress">
         Action-meny som öppnas vid klick på trigger. Stänger på
         ESC, klick utanför, eller item-val. Items kan ha ikon,
@@ -380,6 +590,16 @@ function UILabPageInner() {
             <Menu.Item onSelect={() => {}}>Visa</Menu.Item>
             <Menu.Item onSelect={() => {}}>Kopiera länk</Menu.Item>
             <Menu.Item disabled onSelect={() => {}}>Disabled</Menu.Item>
+          </Menu>
+          <Menu
+            size="sm"
+            trigger={<Button variant="secondary" size="sm" trailingIcon="expand_more">SM</Button>}
+          >
+            <Menu.Item prefix="edit" onSelect={() => {}}>Redigera</Menu.Item>
+            <Menu.Item prefix="content_copy" onSelect={() => {}}>Duplicera</Menu.Item>
+            <Menu.Item prefix="archive" onSelect={() => {}}>Arkivera</Menu.Item>
+            <Menu.Divider />
+            <Menu.Item prefix="delete" variant="danger" onSelect={() => {}}>Ta bort</Menu.Item>
           </Menu>
         </div>
       </Section>
@@ -504,6 +724,40 @@ function SliderDemo({
       showInput={showInput}
       disabled={disabled}
       aria-label="Värde"
+    />
+  );
+}
+
+function TabsDemo() {
+  const [tab, setTab] = useState('overview');
+  return (
+    <Tabs
+      items={[
+        { id: 'overview', label: 'Översikt' },
+        { id: 'orders', label: 'Ordrar' },
+        { id: 'guests', label: 'Gäster' },
+        { id: 'settings', label: 'Inställningar' },
+      ]}
+      value={tab}
+      onChange={setTab}
+      aria-label="Hotellsektioner"
+    />
+  );
+}
+
+function TabsWithDisabledDemo() {
+  const [tab, setTab] = useState('a');
+  return (
+    <Tabs
+      items={[
+        { id: 'a', label: 'Allmänt' },
+        { id: 'b', label: 'Avancerat' },
+        { id: 'c', label: 'Premium', disabled: true },
+        { id: 'd', label: 'Loggar' },
+      ]}
+      value={tab}
+      onChange={setTab}
+      aria-label="Inställningar"
     />
   );
 }
@@ -906,85 +1160,6 @@ function ToggleRow({ label, size }: { label: string; size: 'sm' | 'md' }) {
       <Toggle checked={off} onChange={setOff} size={size} aria-label="Off" />
       <Toggle checked={on} onChange={setOn} size={size} aria-label="On" />
     </ButtonRow>
-  );
-}
-
-/**
- * Static visual of the production Tooltip (`app/_components/Tooltip.tsx`).
- * Mirrors the inline styles in that component exactly so the design
- * here matches what the live tooltip will render — minus the portal,
- * hover timing, and click suppression. Used only for design review
- * in ui-lab. If the live Tooltip's visual changes, update both.
- */
-function StaticTooltip({
-  label,
-  placement,
-}: {
-  label: string;
-  placement: 'top' | 'bottom';
-}) {
-  const tooltipNode = (
-    <div
-      role="tooltip"
-      style={{
-        position: 'relative',
-        background: '#1a1a1a',
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: 450,
-        fontFamily: 'var(--admin-font)',
-        lineHeight: 1,
-        padding: '7px 9px',
-        borderRadius: 6,
-        whiteSpace: 'nowrap',
-        letterSpacing: '0.01em',
-      }}
-    >
-      {label}
-      <span
-        aria-hidden
-        style={{
-          position: 'absolute',
-          left: '50%',
-          transform: 'translateX(-50%) rotate(45deg)',
-          width: 8,
-          height: 8,
-          background: '#1a1a1a',
-          borderRadius: 1,
-          ...(placement === 'top' ? { bottom: -4 } : { top: -4 }),
-        }}
-      />
-    </div>
-  );
-
-  const triggerNode = (
-    <span
-      style={{
-        fontFamily: 'var(--admin-font)',
-        fontSize: 13,
-        color: 'var(--admin-text-secondary)',
-        padding: '4px 8px',
-        background: 'var(--admin-surface, #f5f5f5)',
-        borderRadius: 4,
-        border: '1px solid var(--admin-border, #ebebeb)',
-      }}
-    >
-      Trigger
-    </span>
-  );
-
-  return (
-    <div
-      style={{
-        display: 'inline-flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 6,
-      }}
-    >
-      {placement === 'top' ? tooltipNode : triggerNode}
-      {placement === 'top' ? triggerNode : tooltipNode}
-    </div>
   );
 }
 

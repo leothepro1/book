@@ -191,7 +191,17 @@
      error-ring's subtlety. */
   --menu-item-bg-danger-hover: rgba(218, 47, 53, 0.08);
   --menu-item-radius:         6px;
+  /* Item dimensions — non-suffixed tokens are the md default,
+     -sm variants override on `.ui-menu--sm`. With body line-height
+     ~1.5: md = 14×1.5 + 8+8 ≈ 37px, sm = 13×1.5 + 6+6 ≈ 32px. */
   --menu-item-padding:        8px 10px;
+  --menu-item-padding-sm:     6px 8px;
+  --menu-item-font-size:      14px;
+  --menu-item-font-size-sm:   13px;
+  --menu-item-icon-size:      18px;
+  --menu-item-icon-size-sm:   16px;
+  --menu-item-gap:            8px;
+  --menu-item-gap-sm:         6px;
   --menu-divider:             #EBEBEB;
   --menu-transition:          180ms;
 
@@ -424,6 +434,139 @@
   --upload-empty-bg:             #FAFAFA;
   --upload-empty-bg-hover:       #f0f0f0;
   --upload-empty-padding:        16px;
+
+  /* Tooltip — Phase 2 primitive tokens
+     Promoted from `app/_components/Tooltip.tsx` (kept for legacy
+     imports as a re-export shim). Dark pill, white text, 8×8 rotated
+     arrow. Timing logic (enter delay, scanning, click suppression)
+     lives in the component — only visual chrome is tokenised here.
+
+     Dark-mode override flips bg+fg to white-on-dark — at #1a1a1a
+     the tooltip would be near-invisible against the #191919 page
+     background. */
+  --tooltip-bg:               #1a1a1a;
+  --tooltip-fg:               #FFFFFF;
+  --tooltip-font-size:        12px;
+  --tooltip-font-weight:      450;
+  --tooltip-line-height:      1;
+  --tooltip-padding:          7px 9px;
+  --tooltip-radius:           6px;
+  --tooltip-letter-spacing:   0.01em;
+  --tooltip-arrow-size:       8px;
+  --tooltip-arrow-radius:     1px;
+  --tooltip-z-index:          99999;
+
+  /* EmptyState — Phase 2 primitive tokens
+     Centred placeholder for empty lists / dashboards. Two flavours
+     emerge from a single component by what props are passed:
+       blank-slate    — just title (+ optional description)
+       informational  — title + description + icon + action(s)
+     The chrome (padding, gap, icon size, max-width) is one set —
+     the visual difference is content density, not styling. */
+  --empty-padding-y:           48px;
+  --empty-padding-x:           24px;
+  --empty-gap:                 8px;
+  --empty-icon-size:           48px;
+  --empty-icon-color:          var(--admin-text-tertiary);
+  --empty-icon-box-size:       70px;
+  --empty-icon-box-radius:     var(--radius-xl); /* 12px */
+  --empty-icon-box-border:     #E6E6E6;
+  --empty-icon-margin-bottom:  10px;
+  --empty-title-size:          16px;
+  --empty-title-weight:        var(--font-weight-semibold);
+  --empty-title-color:         var(--admin-text);
+  --empty-description-size:    14px;
+  --empty-description-color:   var(--admin-text-secondary);
+  --empty-description-line-height: 1.5;
+  --empty-description-max-width: 320px;
+  --empty-actions-gap:         8px;
+  --empty-actions-margin-top:  10px;
+
+  /* Card — Phase 2 primitive tokens
+     Surface container that the entire admin reads as a visual unit.
+     Shadow is a 6-layer stack: five distance-tinted soft shadows that
+     give a near-flat lift, plus a 1px hairline ring at 6% black so
+     the card edge is crisp against any background tint. The stack is
+     calibrated for white-on-near-white contrast — change with care. */
+  --card-bg:                  #FFFFFF;
+  --card-radius:              0.75rem; /* 12px */
+  --card-padding:             16px;
+  /* Four elevations — progressive lift. All four share the outer
+     1px hairline (`#00000014`) and the inner near-white ring
+     (`hsla(0, 0%, 98%, 1)`); the middle layers are what change.
+       flat — rings only, no lift (chrome-only surface)
+       sm   — single 2px close shadow (default card lift)
+       md   — 4-layer mid-distance lift (hover / floating panel)
+       lg   — 5-layer dramatic lift (overlay / popping card) */
+  --card-shadow-flat:
+    0 0 0 1px #00000014,
+    0 0 0 1px hsla(0, 0%, 98%, 1);
+  --card-shadow-sm:
+    0 0 0 1px #00000014,
+    0px 2px 2px #0000000a,
+    0 0 0 1px hsla(0, 0%, 98%, 1);
+  --card-shadow-md:
+    0 0 0 1px #00000014,
+    0px 1px 1px #00000005,
+    0px 4px 8px -4px #0000000a,
+    0px 16px 24px -8px #0000000f,
+    0 0 0 1px hsla(0, 0%, 98%, 1);
+  --card-shadow-lg:
+    0 0 0 1px #00000014,
+    0px 1px 1px #00000005,
+    0px 8px 16px -4px #0000000a,
+    0px 24px 32px -8px #0000000f,
+    0 0 0 1px hsla(0, 0%, 98%, 1);
+
+  /* Tabs — Phase 2 primitive tokens
+     Horizontal tab bar. The active tab reads as a 2px dark underline
+     that visually replaces the 1px gray rule under the bar — done by
+     pulling each tab up by `var(--tabs-border-width)` so its 2px
+     transparent/active border crosses the tablist's 1px border.
+     Items don't compose with the segmented Switch primitive — Tabs
+     navigate views, Switch picks one of N fungible options. */
+  --tabs-gap:                 24px;
+  --tabs-padding:             14px 2px;
+  --tabs-border-color:        #EAEAEA;
+  --tabs-border-width:        1px;
+  --tabs-active-color:        #171717;
+  --tabs-active-width:        2px;
+  --tabs-fg:                  var(--admin-text-secondary);
+  --tabs-fg-hover:            var(--admin-text);
+  --tabs-fg-active:           var(--admin-text);
+  --tabs-font-size:           14px;
+  --tabs-font-weight:         var(--font-weight-medium);
+
+  /* ── Banner — Phase 2 primitive tokens
+     Inline status banner. Full-width container with centred content
+     (icon + text + cta). Three semantic variants — success / warning /
+     error — share chrome (radius, padding, font, gap, icon size) and
+     differ only in background / border / foreground colour.
+
+     Surface is a subtle tint of the variant's base hue mixed into
+     `--admin-surface`, so banners read as a soft state cue rather
+     than a saturated alarm. Border uses the same hue at higher
+     opacity to give an outline that survives over both white and
+     muted page backgrounds. */
+  --banner-padding:           10px;
+  --banner-radius:            var(--radius-md);
+  --banner-gap:               var(--space-2);
+  --banner-font-size:         14px;
+  --banner-font-weight:       var(--font-weight-medium);
+  --banner-line-height:       1em;
+  --banner-icon-size:         18px;
+
+  --banner-success-bg:        #F0F7FF;
+  --banner-success-fg:        #0067D6;
+  --banner-success-border:    #CCE6FF;
+
+  --banner-warning-bg:        #FFF6E6;
+  --banner-warning-fg:        #A35200;
+  --banner-warning-border:    #FFDD8F;
+
+  --banner-error-bg:          #FFF0F0;
+  --banner-error-fg:          #CB2A2F;
+  --banner-error-border:      #FDD8D8;
 }
 
 /* ── Dark Mode ── */
@@ -503,6 +646,36 @@
   --shadow-modal:                0 16px 48px rgba(0, 0, 0, 0.5);
   --upload-empty-bg:             #2A2A2A;
   --upload-empty-bg-hover:       #333333;
+
+  /* Tooltip — dark override.
+     #1a1a1a tooltip on #191919 page bg is near-invisible. Flip to
+     white pill with dark text in dark mode. */
+  --tooltip-bg:               #FFFFFF;
+  --tooltip-fg:               #1a1a1a;
+
+  /* Card — no dark override.
+     Card bg is locked to #FFFFFF and the shadows are calibrated for
+     that surface. In dark mode the cards stay white-on-dark — a
+     deliberate Stripe/Linear-style choice to keep cards reading as
+     content paper regardless of theme. Revisit when a themed-card
+     variant is needed. */
+
+  /* Banner — dark overrides
+     Light pastel foregrounds on a higher-opacity tinted surface so
+     contrast stays comfortable against the dark page bg. Border at
+     30% (vs 22% in light) keeps the rim visible against a darker
+     surface. */
+  --banner-success-bg:        color-mix(in srgb, #22C55E 14%, var(--admin-surface));
+  --banner-success-fg:        #BBF7D0;
+  --banner-success-border:    color-mix(in srgb, #22C55E 30%, transparent);
+
+  --banner-warning-bg:        color-mix(in srgb, #F59E0B 14%, var(--admin-surface));
+  --banner-warning-fg:        #FED7AA;
+  --banner-warning-border:    color-mix(in srgb, #F59E0B 30%, transparent);
+
+  --banner-error-bg:          color-mix(in srgb, var(--admin-danger) 14%, var(--admin-surface));
+  --banner-error-fg:          #FECACA;
+  --banner-error-border:      color-mix(in srgb, var(--admin-danger) 30%, transparent);
 }
 
 

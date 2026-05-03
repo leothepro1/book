@@ -51,6 +51,14 @@ import './Menu.css';
 
 export type MenuItemVariant = 'default' | 'danger';
 
+/**
+ * Size only affects the menu list itself (item padding, font size,
+ * icon size, gap). The trigger's size is set by the consumer on the
+ * element passed as `trigger` — use `<Button size="sm">` as the
+ * trigger to match a `size="sm"` menu.
+ */
+export type MenuSize = 'sm' | 'md';
+
 export type MenuProps = {
   trigger: ReactElement<{
     ref?: Ref<HTMLElement>;
@@ -62,6 +70,9 @@ export type MenuProps = {
   /** Controlled open state. Omit for uncontrolled. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Item size. Default `md`. SM = 32px-tall items, 13px font, 16px
+      icons — match with `<Button size="sm">` as the trigger. */
+  size?: MenuSize;
 };
 
 type MenuContextValue = {
@@ -84,6 +95,7 @@ function MenuRoot({
   offset = 6,
   open: openProp,
   onOpenChange,
+  size = 'md',
 }: MenuProps) {
   const isControlled = typeof openProp === 'boolean';
   const [internalOpen, setInternalOpen] = useState(false);
@@ -225,7 +237,7 @@ function MenuRoot({
             <div
               ref={listRef}
               role="menu"
-              className="ui-menu"
+              className={size === 'sm' ? 'ui-menu ui-menu--sm' : 'ui-menu'}
               data-placement={placement}
               style={{
                 position: 'fixed',
