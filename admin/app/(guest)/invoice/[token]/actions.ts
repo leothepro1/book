@@ -162,14 +162,9 @@ export async function getInvoiceClientSecretAction(
     const stripe = getStripe();
     const pi = await stripe.paymentIntents.retrieve(piId, connectParams);
 
-    if (!pi.client_secret) {
-      return {
-        ok: false,
-        code: "STRIPE_ERROR",
-        message: "Betalningsleverantör returnerade inget client_secret.",
-      };
-    }
-
+    // Terminal/race statuses come BEFORE the client_secret null-check —
+    // Stripe returns `client_secret: null` for canceled PIs, so a
+    // null-first guard would mask the real reason.
     if (pi.status === "succeeded") {
       // Webhook race — PI confirmed but DraftOrder hasn't been moved
       // to PAID yet. Same UX as ALREADY_PAID.
@@ -185,6 +180,14 @@ export async function getInvoiceClientSecretAction(
         ok: false,
         code: "INVALID_STATE",
         message: "Betalning är avbruten — kontakta säljaren.",
+      };
+    }
+
+    if (!pi.client_secret) {
+      return {
+        ok: false,
+        code: "STRIPE_ERROR",
+        message: "Betalningsleverantör returnerade inget client_secret.",
       };
     }
 
