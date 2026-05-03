@@ -5635,6 +5635,9 @@ model AnalyticsPipelineOutbox {
   actorType     String    @map("actor_type")
   actorId       String?   @map("actor_id")
   correlationId String?   @map("correlation_id")
+  /// Request context (ip, user_agent, locale, page_url, …). Optional.
+  /// Mirrors AnalyticsPipelineEvent.context — drainer copies forward.
+  context       Json?
   createdAt     DateTime  @default(now()) @map("created_at")
   /// NULL = pending. Drainer sets this on successful publish.
   publishedAt   DateTime? @map("published_at")

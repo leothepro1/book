@@ -16,6 +16,67 @@ validation), see `app/_lib/analytics/pipeline/schemas/`.
   emits it yet (placeholder for an upcoming integration).
 - **Planned** — slot reserved, schema not yet written.
 
+## Event context
+
+Every event row in `analytics.event` carries an optional
+`context: Json?` column alongside `payload`. The two fields have
+distinct contracts:
+
+- **`payload`** — event-domain data. Schema-validated against the
+  registered Zod schema (`schemas/registry.ts`) at BOTH the emitter
+  and the drainer (defense in depth). Required shape per
+  `(event_name, schema_version)`.
+- **`context`** — request-time metadata that doesn't fit in the
+  event-domain payload. Caller-supplied, **opaque to the drainer**
+  (no schema validation), nullable. Examples: client IP-derived geo
+  (`{ country, city }`), user-agent classification hints, `locale`,
+  `page_url` for server-side emits, request correlation ids that
+  outlive the event lifecycle.
+
+### What CAN go in `context`
+
+Caller-supplied request-time data that:
+
+- Is informational, not load-bearing for downstream aggregations.
+- Does not need cross-event schema consistency (each emitter chooses
+  its shape; readers handle absence gracefully).
+- Pairs cleanly with the event but doesn't fit the event-domain
+  payload's stable shape.
+
+### What CANNOT go in `context`
+
+- **PII raw values.** No raw email, raw IP, raw User-Agent string,
+  raw name. Hash, classify, or omit. Same posture as
+  `user_agent_hash` in the storefront context: derive coarse
+  signals on the privileged side, ship only the derived value.
+  See Phase 5A recon §2.10 for the geo-PII bedömning that drives
+  this rule.
+- **Secrets.** No tokens, no credentials, no signed URLs. Even if
+  short-lived — `analytics.event` is append-only with a 730-day
+  default retention.
+- **Domain data.** If a value is needed for an aggregation,
+  it belongs in `payload` under a versioned schema field — context
+  is for things readers may consult opportunistically, not require.
+
+### End-to-end flow (PR-X3a)
+
+```
+caller        → emitAnalyticsEvent(tx, { …, context })
+emitter       → INSERT into analytics.outbox (payload, context, …)
+drainer       → SELECT context FROM analytics.outbox
+              → INSERT into analytics.event (payload, context, …)
+                ON CONFLICT (event_id, occurred_at) DO NOTHING
+Phase 5+      → SELECT … FROM analytics.event WHERE …
+              → consult event.context opportunistically
+```
+
+The outbox column is nullable (`Json?`); pre-PR-X3a outbox rows
+landed without it and the drainer treats them as `context: NULL`.
+Post-X3a, callers that omit context get the same `NULL`; callers
+that pass `{}` get a JSON empty object (the distinction is
+preserved end-to-end). The drainer never inspects context content;
+schema-validation runs against `payload` only.
+
 ## Schema authoring rules
 
 Locked decisions every new event schema MUST follow.
