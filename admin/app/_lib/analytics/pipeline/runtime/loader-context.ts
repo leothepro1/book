@@ -1,20 +1,32 @@
 /**
- * Phase 3 PR-B — Storefront context builder (main thread).
+ * Phase 3 PR-B + Phase 3.6 — Storefront context builder (main thread).
  *
  * Worker has no DOM access — all browser-derived context fields
- * (page URL, referrer, viewport, locale, session id, UA hash) are
- * built here and passed to the worker as part of every event
- * payload. Validates against StorefrontContextSchema in the worker.
+ * (page URL, referrer, viewport, locale, session_id, UA hash,
+ * visitor_id, landing_page) are built here and passed to the worker
+ * as part of every event payload. Validates against
+ * StorefrontContextSchema in the worker.
  *
  * `user_agent_hash` is sha256(navigator.userAgent).slice(0, 16) hex.
  * The raw UA string never enters the analytics pipeline — Phase 5
  * uses the hash only as a stability key (same browser = same hash).
  *
- * `session_id` is a client-generated ULID stored in sessionStorage
- * for the duration of the browser tab session. Sessions don't share
- * across tabs (matches industry norm — each tab is its own
- * tracking-session). Falls back to an in-memory cache when
- * sessionStorage is unavailable (private browsing on some browsers).
+ * `session_id` (Phase 3 PR-B) is a client-generated ULID stored in
+ * sessionStorage for the duration of the browser tab session.
+ * Sessions don't share across tabs. Falls back to an in-memory cache
+ * when sessionStorage is unavailable (private browsing).
+ *
+ * `visitor_id` (Phase 3.6) is a UUID v4 stored in localStorage with
+ * a 2-year TTL enforced at read time. Survives session and tab
+ * lifecycle; the stable identity that lets Phase 5 stitch returning
+ * visitors. Format = UUID v4 (NOT ULID) so the persistent cookie
+ * doesn't leak first-visit timestamps.
+ *
+ * `landing_page` (Phase 3.6) is the first sanitized URL of a
+ * session, captured once and pinned in sessionStorage["bf_landing"].
+ * Rotates together with session_id via clearSessionId(). Required by
+ * Shopify-style last-non-direct-click attribution to identify the
+ * page that started a session.
  */
 
 import { ulid } from "ulidx";
@@ -22,6 +34,8 @@ import { ulid } from "ulidx";
 const SESSION_KEY = "bf_sid";
 const SESSION_LAST_EMIT_KEY = "bf_session_last_emit_at";
 const SESSION_PRIOR_DECISION_KEY = "bf_session_prior_consent_decision";
+const VISITOR_KEY = "bf_vid";
+const LANDING_KEY = "bf_landing";
 const UA_HASH_LEN = 16; // 16 hex chars from sha256
 
 /**
@@ -30,6 +44,15 @@ const UA_HASH_LEN = 16; // 16 hex chars from sha256
  * `session_id`.
  */
 const SESSION_IDLE_MS = 30 * 60 * 1000;
+
+/**
+ * `visitor_id` re-mints after this many ms. Two years per the schema
+ * Semantic Contract — long enough to stitch returning visitors across
+ * a year of seasonality, short enough that abandoned browsers
+ * eventually cycle their identity. localStorage has no native TTL so
+ * this is enforced in JS at read time via `createdAt`.
+ */
+const VISITOR_TTL_MS = 2 * 365 * 24 * 60 * 60 * 1000;
 
 /**
  * Allowed query parameters on `page_url`. Everything else (including
@@ -53,6 +76,8 @@ const PAGE_URL_QUERY_ALLOWLIST = new Set([
 
 let cachedUaHash: string | null = null;
 let inMemorySessionId: string | null = null;
+let inMemoryVisitorId: string | null = null;
+let inMemoryLandingPage: string | null = null;
 
 /**
  * Compute the user-agent hash once at bootstrap. Subsequent
@@ -100,14 +125,18 @@ function readAnalyticsSalt(): string {
 /**
  * Test-only — clears the module-level UA hash cache so a fresh
  * `precomputeUserAgentHash()` runs on the next call. Also resets
- * the in-memory session-id fallback so private-mode tests start
- * clean. Does NOT touch sessionStorage — tests that need that
- * cleared call `window.sessionStorage.clear()` in their `beforeEach`
- * (the existing pattern). Production code never invokes this.
+ * the in-memory session-id, visitor-id, and landing-page fallbacks so
+ * private-mode tests start clean. Does NOT touch sessionStorage or
+ * localStorage — tests that need those cleared call
+ * `window.sessionStorage.clear()` / `window.localStorage.clear()` in
+ * their `beforeEach` (the existing pattern). Production code never
+ * invokes this.
  */
 export function _resetLoaderContextCacheForTests(): void {
   cachedUaHash = null;
   inMemorySessionId = null;
+  inMemoryVisitorId = null;
+  inMemoryLandingPage = null;
 }
 
 export interface StorefrontContext {
@@ -117,6 +146,8 @@ export interface StorefrontContext {
   viewport: { width: number; height: number };
   locale: string;
   session_id: string;
+  visitor_id: string;
+  landing_page: string;
 }
 
 export interface BuildContextOptions {
@@ -139,12 +170,16 @@ export interface BuildContextOptions {
 export function buildStorefrontContext(
   opts: BuildContextOptions = {},
 ): StorefrontContext {
+  // page_url uses the freshly-sanitized current URL on every emit;
+  // landing_page resolves the SAME sanitizer once per session and
+  // pins the result so subsequent navigations don't overwrite it.
+  const pageUrl = sanitizePageUrl(window.location.href);
   return {
     // page_url is sanitized — query string filtered against an
     // allowlist, fragment stripped. page_referrer is intentionally
     // NOT sanitized (the schema's contract assigns referrer
     // sanitization to Phase 5 readers).
-    page_url: sanitizePageUrl(window.location.href),
+    page_url: pageUrl,
     page_referrer: document.referrer,
     user_agent_hash: cachedUaHash ?? "ua_pending",
     viewport: {
@@ -157,6 +192,8 @@ export function buildStorefrontContext(
       readNavigatorLanguage() ??
       "sv",
     session_id: getOrCreateSessionId(),
+    visitor_id: getOrCreateVisitorId(),
+    landing_page: getOrCreateLandingPage(pageUrl),
   };
 }
 
@@ -217,6 +254,106 @@ function getOrCreateSessionId(): string {
     if (inMemorySessionId) return inMemorySessionId;
     inMemorySessionId = ulid();
     return inMemorySessionId;
+  }
+}
+
+// ── visitor_id (Phase 3.6) ──────────────────────────────────────────
+//
+// UUID v4 in localStorage["bf_vid"] as `{ value, createdAt }`. 2-year
+// TTL enforced at read time (localStorage has no native expiry).
+//
+// Format = UUID v4 — NOT ULID. ULID's first 48 bits are a millisecond
+// timestamp, and a persistent 2-year cookie shouldn't leak first-visit
+// time to anyone with read access to localStorage. UUID v4 is uniformly
+// random.
+//
+// Storage shape is JSON `{ "value": "<uuid>", "createdAt": <epoch ms> }`.
+// Plain string would have worked, but storing createdAt explicitly lets
+// us enforce the TTL without a second key — and gracefully re-mints
+// when the JSON is malformed (storage quota corruption, manual edit).
+
+interface VisitorEnvelope {
+  value: string;
+  createdAt: number;
+}
+
+const UUID_V4_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidVisitorEnvelope(v: unknown): v is VisitorEnvelope {
+  if (v === null || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.value === "string" &&
+    UUID_V4_RE.test(o.value) &&
+    typeof o.createdAt === "number" &&
+    Number.isFinite(o.createdAt)
+  );
+}
+
+function mintVisitorUuid(): string {
+  // crypto.randomUUID is a Web Crypto API — same module already uses
+  // crypto.subtle for the UA hash. No polyfill needed.
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // Defensive: if the runtime lacks randomUUID (very old browsers,
+  // insecure contexts), fall through to a Math.random-based v4. This
+  // path is never expected to execute in production — the loader only
+  // ships on https — but we'd rather emit a structurally-valid id than
+  // crash the emit.
+  const rand = (n: number) =>
+    Math.floor(Math.random() * 16 ** n)
+      .toString(16)
+      .padStart(n, "0");
+  const variant = (8 + Math.floor(Math.random() * 4)).toString(16); // 8|9|a|b
+  return `${rand(8)}-${rand(4)}-4${rand(3)}-${variant}${rand(3)}-${rand(12)}`;
+}
+
+export function getOrCreateVisitorId(now: number = Date.now()): string {
+  try {
+    const raw = window.localStorage.getItem(VISITOR_KEY);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (
+          isValidVisitorEnvelope(parsed) &&
+          now - parsed.createdAt <= VISITOR_TTL_MS
+        ) {
+          return parsed.value;
+        }
+      } catch {
+        /* malformed JSON — fall through to mint a fresh value */
+      }
+    }
+    const fresh = mintVisitorUuid();
+    const env: VisitorEnvelope = { value: fresh, createdAt: now };
+    window.localStorage.setItem(VISITOR_KEY, JSON.stringify(env));
+    return fresh;
+  } catch {
+    if (inMemoryVisitorId) return inMemoryVisitorId;
+    inMemoryVisitorId = mintVisitorUuid();
+    return inMemoryVisitorId;
+  }
+}
+
+// ── landing_page (Phase 3.6) ────────────────────────────────────────
+//
+// Sanitized URL captured ONCE per session and pinned in
+// sessionStorage["bf_landing"]. Rotates together with session_id via
+// `clearSessionId()`. Caller passes in the already-sanitized current
+// URL to avoid re-running the URL sanitizer twice in one emit.
+
+export function getOrCreateLandingPage(currentSanitizedUrl: string): string {
+  try {
+    const stored = window.sessionStorage.getItem(LANDING_KEY);
+    if (stored && stored.length >= 1) return stored;
+    window.sessionStorage.setItem(LANDING_KEY, currentSanitizedUrl);
+    return currentSanitizedUrl;
+  } catch {
+    if (inMemoryLandingPage) return inMemoryLandingPage;
+    inMemoryLandingPage = currentSanitizedUrl;
+    return inMemoryLandingPage;
   }
 }
 
@@ -281,10 +418,12 @@ export function clearSessionId(): void {
   try {
     window.sessionStorage.removeItem(SESSION_KEY);
     window.sessionStorage.removeItem(SESSION_LAST_EMIT_KEY);
+    window.sessionStorage.removeItem(LANDING_KEY);
   } catch {
     /* private mode — best effort */
   }
   inMemorySessionId = null;
+  inMemoryLandingPage = null;
 }
 
 /**

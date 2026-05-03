@@ -6,6 +6,8 @@ import {
   _resetLoaderContextCacheForTests,
   buildStorefrontContext,
   clearSessionId,
+  getOrCreateLandingPage,
+  getOrCreateVisitorId,
   isSessionIdle,
   markSessionEmit,
   precomputeUserAgentHash,
@@ -16,8 +18,11 @@ import {
 
 beforeEach(() => {
   _resetLoaderContextCacheForTests();
-  // jsdom's sessionStorage is per-test by default.
+  // jsdom's sessionStorage and localStorage are per-test by default
+  // but we clear explicitly so tests that share-mutate window APIs
+  // (private-mode simulators) see a deterministic baseline.
   window.sessionStorage.clear();
+  window.localStorage.clear();
   document.documentElement.lang = "";
 });
 
@@ -26,16 +31,18 @@ afterEach(() => {
 });
 
 describe("buildStorefrontContext", () => {
-  it("returns the canonical 6 fields", () => {
+  it("returns the canonical 8 fields (Phase 3.6: + visitor_id, landing_page)", () => {
     const ctx = buildStorefrontContext();
     expect(Object.keys(ctx).sort()).toEqual(
       [
+        "landing_page",
         "locale",
         "page_referrer",
         "page_url",
         "session_id",
         "user_agent_hash",
         "viewport",
+        "visitor_id",
       ].sort(),
     );
   });
@@ -385,5 +392,206 @@ describe("session_id rotation — Trigger 3 (tab close + reopen)", () => {
     _resetLoaderContextCacheForTests(); // also clears in-memory cache
     const b = buildStorefrontContext().session_id;
     expect(a).not.toBe(b);
+  });
+});
+
+// ── Phase 3.6: visitor_id (persistent, 2-year, localStorage) ────────
+
+const UUID_V4_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const VISITOR_TTL_MS = 2 * 365 * 24 * 60 * 60 * 1000;
+
+describe("getOrCreateVisitorId (Phase 3.6)", () => {
+  it("mints a UUID v4 on first call and persists { value, createdAt } to localStorage", () => {
+    const before = window.localStorage.getItem("bf_vid");
+    expect(before).toBeNull();
+
+    const now = 1_700_000_000_000;
+    const id = getOrCreateVisitorId(now);
+
+    expect(id).toMatch(UUID_V4_RE);
+    const raw = window.localStorage.getItem("bf_vid");
+    expect(raw).not.toBeNull();
+    const parsed = JSON.parse(raw!);
+    expect(parsed.value).toBe(id);
+    expect(parsed.createdAt).toBe(now);
+  });
+
+  it("returns the same value on subsequent calls within TTL", () => {
+    const a = getOrCreateVisitorId();
+    const b = getOrCreateVisitorId();
+    const c = getOrCreateVisitorId();
+    expect(b).toBe(a);
+    expect(c).toBe(a);
+  });
+
+  it("re-mints when createdAt is older than 2 years", () => {
+    const old = 1_700_000_000_000;
+    const a = getOrCreateVisitorId(old);
+    // Advance time past TTL.
+    const now = old + VISITOR_TTL_MS + 1000;
+    const b = getOrCreateVisitorId(now);
+    expect(b).not.toBe(a);
+    expect(b).toMatch(UUID_V4_RE);
+    const parsed = JSON.parse(window.localStorage.getItem("bf_vid")!);
+    expect(parsed.value).toBe(b);
+    expect(parsed.createdAt).toBe(now);
+  });
+
+  it("does NOT re-mint when createdAt is exactly at the TTL boundary", () => {
+    const old = 1_700_000_000_000;
+    const a = getOrCreateVisitorId(old);
+    const exactlyTTL = old + VISITOR_TTL_MS;
+    const b = getOrCreateVisitorId(exactlyTTL);
+    expect(b).toBe(a);
+  });
+
+  it("re-mints when stored JSON is malformed", () => {
+    window.localStorage.setItem("bf_vid", "not-json{");
+    const id = getOrCreateVisitorId();
+    expect(id).toMatch(UUID_V4_RE);
+  });
+
+  it("re-mints when stored value is not a UUID v4", () => {
+    window.localStorage.setItem(
+      "bf_vid",
+      JSON.stringify({ value: "01HZ8WF7Z7Z7Z7Z7Z7Z7Z7Z7ZB", createdAt: Date.now() }),
+    );
+    const id = getOrCreateVisitorId();
+    expect(id).toMatch(UUID_V4_RE);
+    expect(id).not.toBe("01HZ8WF7Z7Z7Z7Z7Z7Z7Z7Z7ZB");
+  });
+
+  it("falls back to in-memory id when localStorage throws (private mode)", () => {
+    const orig = window.localStorage.getItem;
+    window.localStorage.getItem = () => {
+      throw new Error("private mode");
+    };
+    try {
+      const a = getOrCreateVisitorId();
+      const b = getOrCreateVisitorId();
+      expect(a).toMatch(UUID_V4_RE);
+      expect(b).toBe(a);
+    } finally {
+      window.localStorage.getItem = orig;
+    }
+  });
+
+  it("survives across calls when in-memory cache is cleared (re-reads from localStorage)", () => {
+    const a = getOrCreateVisitorId();
+    _resetLoaderContextCacheForTests(); // clears in-memory only
+    const b = getOrCreateVisitorId();
+    expect(b).toBe(a);
+  });
+});
+
+// ── Phase 3.6: landing_page (per-session, sessionStorage) ───────────
+
+describe("getOrCreateLandingPage (Phase 3.6)", () => {
+  it("captures the current sanitized URL on first call", () => {
+    const url = "https://apelviken.rutgr.com/stays/svalan?utm_source=newsletter";
+    const out = getOrCreateLandingPage(url);
+    expect(out).toBe(url);
+    expect(window.sessionStorage.getItem("bf_landing")).toBe(url);
+  });
+
+  it("returns the SAME landing on subsequent calls even if the URL changes", () => {
+    const first = "https://apelviken.rutgr.com/?utm_source=x";
+    const second = "https://apelviken.rutgr.com/stays/svalan";
+    const a = getOrCreateLandingPage(first);
+    const b = getOrCreateLandingPage(second);
+    const c = getOrCreateLandingPage(second);
+    expect(a).toBe(first);
+    expect(b).toBe(first);
+    expect(c).toBe(first);
+  });
+
+  it("falls back to in-memory when sessionStorage throws", () => {
+    const origGet = window.sessionStorage.getItem;
+    window.sessionStorage.getItem = () => {
+      throw new Error("private mode");
+    };
+    try {
+      const a = getOrCreateLandingPage("https://x.example/");
+      const b = getOrCreateLandingPage("https://y.example/"); // ignored
+      expect(a).toBe("https://x.example/");
+      expect(b).toBe(a);
+    } finally {
+      window.sessionStorage.getItem = origGet;
+    }
+  });
+});
+
+// ── Phase 3.6: rotation interlock with session_id ───────────────────
+
+describe("clearSessionId — also clears landing_page (Phase 3.6)", () => {
+  it("removes bf_landing alongside bf_sid and bf_session_last_emit_at", () => {
+    buildStorefrontContext();
+    markSessionEmit(Date.now());
+    expect(window.sessionStorage.getItem("bf_sid")).not.toBeNull();
+    expect(window.sessionStorage.getItem("bf_landing")).not.toBeNull();
+    expect(window.sessionStorage.getItem("bf_session_last_emit_at")).not.toBeNull();
+
+    clearSessionId();
+
+    expect(window.sessionStorage.getItem("bf_sid")).toBeNull();
+    expect(window.sessionStorage.getItem("bf_landing")).toBeNull();
+    expect(window.sessionStorage.getItem("bf_session_last_emit_at")).toBeNull();
+  });
+
+  it("after clearSessionId, the next buildStorefrontContext() captures a fresh landing_page", () => {
+    Object.defineProperty(window, "location", {
+      value: new URL("https://apelviken.rutgr.com/page-A"),
+      configurable: true,
+    });
+    const a = buildStorefrontContext().landing_page;
+    expect(a).toBe("https://apelviken.rutgr.com/page-A");
+
+    Object.defineProperty(window, "location", {
+      value: new URL("https://apelviken.rutgr.com/page-B"),
+      configurable: true,
+    });
+    // Same session — landing remains pinned to page-A.
+    expect(buildStorefrontContext().landing_page).toBe(a);
+
+    clearSessionId();
+    // After rotation, page-B becomes the new landing.
+    const b = buildStorefrontContext().landing_page;
+    expect(b).toBe("https://apelviken.rutgr.com/page-B");
+    expect(b).not.toBe(a);
+  });
+
+  it("visitor_id is NOT cleared by clearSessionId (persists across session rotations)", () => {
+    const a = buildStorefrontContext().visitor_id;
+    clearSessionId();
+    const b = buildStorefrontContext().visitor_id;
+    expect(b).toBe(a);
+  });
+});
+
+describe("buildStorefrontContext — wires Phase 3.6 fields", () => {
+  it("includes visitor_id (UUID v4) and landing_page (current URL on first emit)", () => {
+    Object.defineProperty(window, "location", {
+      value: new URL("https://apelviken.rutgr.com/stays/svalan?utm_source=test"),
+      configurable: true,
+    });
+    const ctx = buildStorefrontContext();
+    expect(ctx.visitor_id).toMatch(UUID_V4_RE);
+    expect(ctx.landing_page).toBe(
+      "https://apelviken.rutgr.com/stays/svalan?utm_source=test",
+    );
+  });
+
+  it("landing_page is sanitized (drops non-allowlisted query params and fragment)", () => {
+    Object.defineProperty(window, "location", {
+      value: new URL(
+        "https://apelviken.rutgr.com/?email=foo&utm_source=newsletter#section-2",
+      ),
+      configurable: true,
+    });
+    const ctx = buildStorefrontContext();
+    expect(ctx.landing_page).not.toContain("email=");
+    expect(ctx.landing_page).not.toContain("#");
+    expect(ctx.landing_page).toContain("utm_source=newsletter");
   });
 });

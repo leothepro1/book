@@ -63,6 +63,13 @@ import { CheckoutStartedV010PayloadSchema } from "./legacy/checkout-started-v0.1
 import { validateCheckoutStartedV010Payload } from "./legacy/checkout-started-v0.1.0.validator";
 
 // ── Canonical context (re-used across event fixtures) ───────────────
+//
+// `visitor_id` and `landing_page` are Phase 3.6 additions on
+// StorefrontContextSchema, currently `.optional()` to drain
+// browser-cached pre-3.6 loader bundles. The canonical CTX includes
+// them populated to match what new loaders emit; per-event fixtures
+// below also exercise the absent-field paths to lock in the optional
+// behaviour.
 
 const CTX = {
   page_url: "https://apelviken.rutgr.com/stay/svalan",
@@ -71,7 +78,17 @@ const CTX = {
   viewport: { width: 1440, height: 900 },
   locale: "sv-SE",
   session_id: "01HZ8WF7Z7Z7Z7Z7Z7Z7Z7Z7ZB",
+  visitor_id: "550e8400-e29b-41d4-a716-446655440000",
+  landing_page: "https://apelviken.rutgr.com/",
 };
+
+// Helper for "optional fields stripped" fixtures — represents an
+// older loader that hasn't emitted visitor_id/landing_page yet.
+function ctxWithoutOptionals(): Record<string, unknown> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { visitor_id, landing_page, ...rest } = CTX;
+  return rest;
+}
 
 // ── Per-event fixture corpus ────────────────────────────────────────
 
@@ -99,6 +116,33 @@ const PARITY_CASES: ParityCase[] = [
       { label: "valid: stay", payload: { ...CTX, page_type: "stay" }, ok: true },
       { label: "valid: home", payload: { ...CTX, page_type: "home" }, ok: true },
       { label: "valid: other", payload: { ...CTX, page_type: "other" }, ok: true },
+      // Phase 3.6 optional-field paths
+      {
+        label: "valid: legacy emit without visitor_id/landing_page (cache-drain compat)",
+        payload: { ...ctxWithoutOptionals(), page_type: "stay" },
+        ok: true,
+      },
+      {
+        label: "valid: visitor_id present, landing_page absent (partial fill)",
+        payload: { ...ctxWithoutOptionals(), visitor_id: CTX.visitor_id, page_type: "stay" },
+        ok: true,
+      },
+      {
+        label: "invalid: visitor_id present but malformed (not a UUID v4)",
+        payload: { ...CTX, visitor_id: "not-a-uuid", page_type: "stay" },
+        ok: false,
+      },
+      {
+        label: "invalid: visitor_id v1 UUID rejected (only v4 allowed)",
+        payload: { ...CTX, visitor_id: "550e8400-e29b-11d4-a716-446655440000", page_type: "stay" },
+        ok: false,
+      },
+      {
+        label: "invalid: landing_page empty string",
+        payload: { ...CTX, landing_page: "", page_type: "stay" },
+        ok: false,
+      },
+      // Pre-existing fixtures
       { label: "invalid: page_type out of enum", payload: { ...CTX, page_type: "unknown" }, ok: false },
       { label: "invalid: page_type missing", payload: { ...CTX }, ok: false },
       { label: "invalid: page_url empty", payload: { ...CTX, page_url: "", page_type: "stay" }, ok: false },

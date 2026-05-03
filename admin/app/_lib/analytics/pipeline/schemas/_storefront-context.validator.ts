@@ -22,6 +22,7 @@ import {
   isPlainObject,
   isString,
   isStringMinLength,
+  isUuidV4,
   type Issue,
 } from "./_validators-common";
 
@@ -88,6 +89,22 @@ export function validateStorefrontContext(
     issues.push({
       path: `${prefix}session_id`,
       message: "must be a non-empty string",
+    });
+  }
+  // Phase 3.6 additions — optional. Validate format ONLY when present;
+  // absence is allowed for browser-cache drain compatibility. Mirrors
+  // `z.string().uuid().optional()` and `z.string().min(1).optional()`
+  // on the Zod side.
+  if (payload.visitor_id !== undefined && !isUuidV4(payload.visitor_id)) {
+    issues.push({
+      path: `${prefix}visitor_id`,
+      message: "must be a UUID v4 string when present",
+    });
+  }
+  if (payload.landing_page !== undefined && !isNonEmptyString(payload.landing_page)) {
+    issues.push({
+      path: `${prefix}landing_page`,
+      message: "must be a non-empty string when present",
     });
   }
 }

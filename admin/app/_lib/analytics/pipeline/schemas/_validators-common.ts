@@ -57,6 +57,13 @@ export function isIsoDate(v: unknown): v is string {
   return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 }
 
+const UUID_V4_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isUuidV4(v: unknown): v is string {
+  return typeof v === "string" && UUID_V4_RE.test(v);
+}
+
 export function isArrayOfNonEmptyStrings(v: unknown): v is string[] {
   return Array.isArray(v) && v.every((s) => typeof s === "string" && s.length >= 1);
 }
