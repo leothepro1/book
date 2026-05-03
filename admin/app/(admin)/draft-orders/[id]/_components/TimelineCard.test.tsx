@@ -287,6 +287,33 @@ describe("TimelineCard — metadata subtitle (defensive extraction)", () => {
     expect(screen.getByText("Faktura skickad om")).toBeTruthy();
   });
 
+  it("INVOICE_OVERDUE with graceDays=3 → 'Markerad förfallen efter 3 dagar'", () => {
+    render(
+      <TimelineCard
+        events={[
+          buildEvent({
+            type: "INVOICE_OVERDUE",
+            metadata: { graceDays: 3 },
+          }),
+        ]}
+      />,
+    );
+    expect(
+      screen.getByText("Markerad förfallen efter 3 dagar"),
+    ).toBeTruthy();
+  });
+
+  it("INVOICE_OVERDUE with no metadata → no subtitle, no crash", () => {
+    render(
+      <TimelineCard
+        events={[
+          buildEvent({ type: "INVOICE_OVERDUE", metadata: null }),
+        ]}
+      />,
+    );
+    expect(screen.getByText("Faktura förfallen")).toBeTruthy();
+  });
+
   it("CANCELLED with reason → 'Anledning: ...'", () => {
     render(
       <TimelineCard

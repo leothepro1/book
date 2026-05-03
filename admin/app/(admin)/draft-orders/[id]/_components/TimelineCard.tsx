@@ -326,6 +326,16 @@ function getEventSubtitle(event: TimelineEvent): string | null {
       return parts.length > 0 ? parts.join(" · ") : null;
     }
 
+    case "INVOICE_OVERDUE": {
+      const graceDays =
+        typeof meta.graceDays === "number" && Number.isFinite(meta.graceDays)
+          ? meta.graceDays
+          : null;
+      return graceDays !== null
+        ? `Markerad förfallen efter ${graceDays} dagar`
+        : null;
+    }
+
     case "CANCELLED": {
       const reason = typeof meta.reason === "string" ? meta.reason : null;
       return reason ? `Anledning: ${reason}` : null;
