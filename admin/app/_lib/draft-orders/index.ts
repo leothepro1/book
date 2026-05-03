@@ -137,3 +137,7 @@ export type {
   ResendInvoiceArgs,
   ResendInvoiceResult,
 } from "./types";
+
+// ── Invoice PDF (FAS 7.9) ──
+export { renderInvoicePdf } from "./render-invoice-pdf";
+export type { RenderInvoicePdfInput } from "./render-invoice-pdf";
