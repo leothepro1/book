@@ -218,10 +218,10 @@ detection cron, and the schema is already in place.
   detected_at             ISO date       now() at emit time
   ```
 
-### `payment_succeeded` v0.1.0 — Active
+### `payment_succeeded` v0.2.0 — Current; v0.1.0 deprecated
 
 A payment for an Order was captured. Fires for **every** paid Order
-regardless of `orderType` (ACCOMMODATION, PURCHASE, …).
+regardless of `orderType` (ACCOMMODATION, PURCHASE, GIFT_CARD, …).
 
 - **Trigger:** same as `booking_completed` —
   `processOrderPaidSideEffects` after Order is PAID.
@@ -229,7 +229,7 @@ regardless of `orderType` (ACCOMMODATION, PURCHASE, …).
   order.id}`. Stripe PI is the canonical reference for Stripe-backed
   orders; for INVOICE / future SwedbankPay / NETS without a
   stripePaymentIntentId, `order.id` is the stable fallback.
-- **Payload (`PaymentSucceededPayloadSchema`):**
+- **Payload (`PaymentSucceededPayloadSchema`, v0.2.0):**
 
   ```
   payment_id          string          Order.id (local stable id —
@@ -251,7 +251,64 @@ regardless of `orderType` (ACCOMMODATION, PURCHASE, …).
                                       the fallback covers non-Stripe
                                       orders
   captured_at         ISO date        Order.paidAt
+  source_channel      enum            direct | admin_draft | pms_import
+                                      | third_party_ota | unknown
+                                      (see deriveOrderSourceChannel) —
+                                      NEW in v0.2.0
+  line_items          array           [{ product_id: string,
+                                         amount:     int (öre) }]
+                                      one entry per OrderLineItem; can
+                                      be empty array — NEW in v0.2.0
   ```
+
+**Schema versions:**
+
+| Version | Status | Notes |
+|---|---|---|
+| v0.2.0 | Current | Adds REQUIRED `source_channel` (mapped from `Order.sourceChannel` via `deriveOrderSourceChannel`) and REQUIRED `line_items[]` (per-OrderLineItem `{ product_id, amount }`). Phase 5A's aggregator depends on both for REVENUE × CHANNEL, ORDERS × CHANNEL, and REVENUE × PRODUCT dimensions. |
+| v0.1.0 | **Deprecated** | Lacked `source_channel` and `line_items`. Phase 5 PURCHASE-orders had no CHANNEL coverage and REVENUE × PRODUCT had no source. Kept registered at `schemas/legacy/payment-succeeded-v0.1.0.ts` for outbox-drain backward-compat only. Drop after the outbox is confirmed empty of v0.1.0 events. |
+
+**Semantic Contract (v0.2.0 fields)**
+
+`source_channel`. Analytics-domain enum derived from
+`Order.sourceChannel` (a free-form `String?` column,
+`prisma/schema.prisma:2856`). The mapping is in
+`deriveOrderSourceChannel` (`integrations.ts`):
+
+  - `"direct"`           — guest checkout flow (POST /api/checkout/*)
+  - `"admin_draft"`      — merchant-created via draft-order conversion
+                           (`app/_lib/draft-orders/convert.ts:355`)
+  - `"third_party_ota"`  — `Order.sourceChannel ∈ {"booking_com",
+                           "expedia"}` (reserved for future OTA
+                           integration)
+  - `"pms_import"`       — reserved (currently no Order originates at
+                           the PMS; collapsed defensively if the
+                           operational column ever takes that value)
+  - `"unknown"`          — `Order.sourceChannel` is null or any value
+                           the mapper hasn't seen. Never throws — a
+                           non-zero "unknown" tally per tenant in
+                           Phase 5 dashboards is the signal to add a
+                           new enum member.
+
+The enum is a **superset** of `booking_completed.source_channel` — it
+adds `"admin_draft"` because `Order` carries that distinction but
+`Booking.externalSource` does not. Aggregators that join the two
+events MUST handle the wider set.
+
+`line_items`. One entry per row in `Order.lineItems` (the
+`OrderLineItem[]` Prisma relation). Each entry maps:
+
+  - `product_id` ← `OrderLineItem.productId`
+  - `amount`     ← `OrderLineItem.totalAmount` (öre — `quantity × unitAmount`)
+
+Empty array is valid: orders without explicit `OrderLineItem` rows
+emit `line_items: []` rather than omitting the field. The shape is
+required and deterministic — schema validation gates emit, so a null
+or missing array would reject before reaching the outbox.
+
+`Order.lineItems` MUST be in the Prisma `include` at the emit site
+(`processOrderPaidSideEffects` already does this for the spot-marker
+cleanup path; v0.2.0 reuses the same load).
 
 ### `payment_failed` v0.1.0 — Active
 
