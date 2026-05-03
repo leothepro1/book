@@ -6,6 +6,8 @@ import {
   _resetLoaderContextCacheForTests,
   buildStorefrontContext,
   clearSessionId,
+  clearVisitorId,
+  getOrCreateVisitorId,
   isSessionIdle,
   markSessionEmit,
   precomputeUserAgentHash,
@@ -18,6 +20,7 @@ beforeEach(() => {
   _resetLoaderContextCacheForTests();
   // jsdom's sessionStorage is per-test by default.
   window.sessionStorage.clear();
+  window.localStorage.clear();
   document.documentElement.lang = "";
 });
 
@@ -385,5 +388,52 @@ describe("session_id rotation — Trigger 3 (tab close + reopen)", () => {
     _resetLoaderContextCacheForTests(); // also clears in-memory cache
     const b = buildStorefrontContext().session_id;
     expect(a).not.toBe(b);
+  });
+});
+
+describe("visitor_id — long-lived localStorage management", () => {
+  it("getOrCreateVisitorId mints + persists a ULID on first call", () => {
+    expect(window.localStorage.getItem("bf_visitor_id")).toBeNull();
+    const id = getOrCreateVisitorId();
+    expect(id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+    expect(window.localStorage.getItem("bf_visitor_id")).toBe(id);
+  });
+
+  it("returns the SAME id across calls (long-lived)", () => {
+    const a = getOrCreateVisitorId();
+    const b = getOrCreateVisitorId();
+    expect(a).toBe(b);
+  });
+
+  it("persists across simulated session boundary (sessionStorage clear)", () => {
+    const a = getOrCreateVisitorId();
+    window.sessionStorage.clear(); // simulate session boundary
+    // The session_id rotates; the visitor_id must NOT.
+    const b = getOrCreateVisitorId();
+    expect(a).toBe(b);
+  });
+
+  it("clearVisitorId resets storage and the in-memory fallback", () => {
+    const a = getOrCreateVisitorId();
+    expect(a.length).toBeGreaterThan(0);
+    clearVisitorId();
+    expect(window.localStorage.getItem("bf_visitor_id")).toBeNull();
+    const b = getOrCreateVisitorId();
+    expect(b).not.toBe(a);
+  });
+
+  it("falls back to in-memory ULID when localStorage throws (private mode)", () => {
+    const setItem = vi.spyOn(window.localStorage, "setItem");
+    setItem.mockImplementation(() => {
+      throw new Error("private mode");
+    });
+    const getItem = vi.spyOn(window.localStorage, "getItem");
+    getItem.mockImplementation(() => {
+      throw new Error("private mode");
+    });
+    const id = getOrCreateVisitorId();
+    expect(id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+    setItem.mockRestore();
+    getItem.mockRestore();
   });
 });
