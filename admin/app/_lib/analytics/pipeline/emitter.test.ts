@@ -186,6 +186,75 @@ describe("emitAnalyticsEvent — eventId precedence (Phase 3)", () => {
   });
 });
 
+describe("emitAnalyticsEvent — context wire-through (PR-X3a)", () => {
+  // Mock tx that captures the 10th interpolated INSERT value (context),
+  // matching the order in the SQL: id, tenant_id, event_id, event_name,
+  // schema_version, payload, actor_type, actor_id, correlation_id,
+  // context, NOW(). See emitter.ts.
+  function makeMockTx(): {
+    tx: {
+      $executeRaw: ReturnType<typeof vi.fn>;
+      $queryRaw: ReturnType<typeof vi.fn>;
+    };
+    capturedContext: () => unknown;
+  } {
+    let captured: unknown = "uncaptured";
+    const tx = {
+      $executeRaw: vi.fn(async (_strings: TemplateStringsArray, ...values: unknown[]) => {
+        // Only capture from the INSERT call (11 values). The follow-up
+        // SELECT runs through $queryRaw and doesn't reach here.
+        if (values.length >= 10) captured = values[9];
+        return 1;
+      }),
+      $queryRaw: vi.fn(async () => [{ id: "outbox_row_id_test" }]),
+    };
+    return { tx, capturedContext: () => captured };
+  }
+
+  const PARAMS = {
+    tenantId: TENANT,
+    eventName: "booking_completed" as const,
+    schemaVersion: "0.1.0",
+    occurredAt: new Date("2026-06-01T12:00:00.000Z"),
+    actor: { actor_type: "system" as const, actor_id: null },
+    payload: VALID_BOOKING_PAYLOAD,
+  };
+
+  it("writes JSON.stringified context to the outbox INSERT when supplied", async () => {
+    const { tx, capturedContext } = makeMockTx();
+    const ctx = { ip: "203.0.113.42", locale: "sv-SE", page_url: "https://x.test/" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await emitAnalyticsEvent(tx as any, { ...PARAMS, context: ctx });
+    expect(capturedContext()).toBe(JSON.stringify(ctx));
+  });
+
+  it("writes NULL when context is undefined (caller omitted)", async () => {
+    const { tx, capturedContext } = makeMockTx();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await emitAnalyticsEvent(tx as any, PARAMS);
+    // The bind value is JS null; Prisma + ::jsonb cast that to SQL NULL.
+    expect(capturedContext()).toBeNull();
+  });
+
+  it("writes JSON.stringified empty object when context is {} (NOT collapsed to NULL)", async () => {
+    const { tx, capturedContext } = makeMockTx();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await emitAnalyticsEvent(tx as any, { ...PARAMS, context: {} });
+    // Empty object is meaningful — caller explicitly said "no fields,
+    // but the context envelope was present". Schema (Json?) accepts
+    // both NULL and {}. We must preserve the distinction.
+    expect(capturedContext()).toBe("{}");
+  });
+
+  it("writes JSON.stringified context with nested objects", async () => {
+    const { tx, capturedContext } = makeMockTx();
+    const ctx = { geo: { country: "SE", city: "Apelviken" }, ua_hint: "mobile" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await emitAnalyticsEvent(tx as any, { ...PARAMS, context: ctx });
+    expect(capturedContext()).toBe(JSON.stringify(ctx));
+  });
+});
+
 describe("error class hierarchy", () => {
   it("AnalyticsTransactionRequiredError extends AnalyticsEmitError", () => {
     const e = new AnalyticsTransactionRequiredError();
