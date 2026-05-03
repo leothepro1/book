@@ -321,7 +321,7 @@ export async function resendInvoice(
       type: "INVOICE_RESENT",
       metadata: eventMetadata,
       actorUserId: params.actorUserId ?? null,
-      actorSource: "admin_ui",
+      actorSource: params.actorSource,
     });
 
     const refreshed = (await tx.draftOrder.findFirst({

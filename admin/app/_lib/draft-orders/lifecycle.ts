@@ -695,7 +695,7 @@ export async function sendInvoice(
       from: fresh.status,
       to: "INVOICED",
       actorUserId: params.actorUserId ?? null,
-      actorSource: "admin_ui",
+      actorSource: params.actorSource,
       metadata: {
         invoiceUrl,
         stripePaymentIntentId,
@@ -738,7 +738,7 @@ export async function sendInvoice(
         currency: draft.currency,
       },
       actorUserId: params.actorUserId ?? null,
-      actorSource: "admin_ui",
+      actorSource: params.actorSource,
     });
 
     const refreshed = (await tx.draftOrder.findFirst({

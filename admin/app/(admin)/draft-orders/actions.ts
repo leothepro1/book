@@ -258,6 +258,7 @@ export async function bulkCancelDraftsAction(input: {
           draftOrderId: row.id,
           reason,
           actorUserId: userId,
+          actorSource: "admin_ui_bulk",
         });
         return { kind: "ok", outcome: base };
       } catch (err) {
@@ -341,6 +342,7 @@ export async function bulkSendInvoiceAction(input: {
           tenantId,
           draftOrderId: row.id,
           actorUserId: userId,
+          actorSource: "admin_ui_bulk",
         });
         // Email send is intentionally NOT triggered here. sendInvoice
         // emits the platform-grade INVOICE_SENT side effects; bulk
@@ -409,6 +411,7 @@ export async function bulkResendInvoiceAction(input: {
           tenantId,
           draftOrderId: row.id,
           actorUserId: userId,
+          actorSource: "admin_ui_bulk",
         });
         return { kind: "ok", outcome: base };
       } catch (err) {

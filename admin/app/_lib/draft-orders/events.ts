@@ -49,6 +49,7 @@ export type DraftEventType =
 /** Where the event originated — freeform but these are the known sources. */
 export type DraftEventActorSource =
   | "admin_ui"
+  | "admin_ui_bulk"
   | "cron"
   | "webhook"
   | "api";
