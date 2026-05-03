@@ -298,15 +298,21 @@ export async function resendInvoice(
       },
     });
 
+    // Prisma.InputJsonValue does not accept `null` in nested fields —
+    // omit optional string fields when they have no value.
     const eventMetadata: Prisma.InputJsonValue = {
       invoiceUrl,
       stripePaymentIntentId,
-      previousStripePaymentIntentId: previousPiId,
       rotatedPaymentIntent,
-      previousPiCancelError: previousCancel.error,
       shareLinkExpiresAt: shareLinkExpiresAt.toISOString(),
       totalCents: draft.totalCents.toString(),
       currency: draft.currency,
+      ...(previousPiId !== null
+        ? { previousStripePaymentIntentId: previousPiId }
+        : {}),
+      ...(previousCancel.error !== null
+        ? { previousPiCancelError: previousCancel.error }
+        : {}),
     };
 
     await createDraftOrderEventInTx(tx, {
