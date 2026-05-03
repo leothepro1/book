@@ -378,9 +378,14 @@ export function KonfigureraClient({
   // the underlying PaymentIntent isn't already succeeded.
   const isResendable =
     draft.status === "INVOICED" || draft.status === "OVERDUE";
+  // Mount-time snapshot — the "länken har gått ut" suffix is
+  // informational only; an operator's decision happens within seconds
+  // of opening the page, and the server-side check is authoritative.
+  // Using Date.now() in render directly violates react-hooks/purity.
+  const [nowAtMount] = useState(() => Date.now());
   const shareLinkExpired =
     draft.shareLinkExpiresAt !== null &&
-    draft.shareLinkExpiresAt.getTime() < Date.now();
+    draft.shareLinkExpiresAt.getTime() < nowAtMount;
   const dropdownItems: HeaderActionsDropdownItem[] = [];
   if (isResendable) {
     dropdownItems.push({
