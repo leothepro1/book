@@ -42,6 +42,7 @@
     "@maxmind/geoip2-node": "^6.3.4",
     "@prisma/client": "^6.19.2",
     "@react-email/components": "^1.0.9",
+    "@react-pdf/renderer": "^4.5.1",
     "@sentry/nextjs": "^10.46.0",
     "@stripe/react-stripe-js": "^5.6.1",
     "@stripe/stripe-js": "^8.11.0",
