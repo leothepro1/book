@@ -52,7 +52,7 @@ ev. `_lib/email/templates/draft-*` och `api/webhooks/stripe/handle-draft-order-p
 | 7.2b.4d.1 | Email-infra + markDraftAsPaid + lifecycle-actions | `6e78f1d` |
 | 7.2b.4d.2 | Lifecycle UI (confirm modal, dropdown, payment actions) | `11caaa7` |
 | 7.2b.4e | Timeline rendering | `b9aed38` |
-| 7.3 | Customer-facing invoice payment surface (`/invoice/[token]` page + Stripe Elements + success/cancelled) | branch `claude/initial-setup-JVMgE` (commits `7436c02`, `7d8d105`, `5a7fcbb`, `1377bc1`) — pending CI verification |
+| 7.3 | Customer-facing invoice payment surface (`/invoice/[token]` page + Stripe Elements + success/cancelled) | `7436c02` `7d8d105` `5a7fcbb` `1377bc1` `6e8ac2f` `e75a0ed` — verified: tsc 0, tests 46/46, eslint 0 |
 
 ---
 
@@ -62,11 +62,7 @@ ev. `_lib/email/templates/draft-*` och `api/webhooks/stripe/handle-draft-order-p
 > innan implementation startar. Recon-audit är kontraktet — ingen kod skrivs
 > innan recon är godkänd.
 
-### FAS 7.3 — Customer-facing invoice payment surface  ✅ IMPLEMENTED — pending CI
-**Recon:** `admin/_audit/7-3-recon.md`
-**Status:** Alla 5 implementation-commits pushat på branch.
-Sandbox saknar npm-registry-access så `tsc`/`vitest` kunde inte köras
-lokalt — CI måste validera. Nästa fas (7.4) väntar på grön CI + smoke.
+_(FAS 7.3 — flyttad till "Klart" ovan, verifierad 2026-05-03.)_
 
 **Problem:** `sendInvoice` (`_lib/draft-orders/lifecycle.ts:608`) skapar
 `invoiceUrl = {portalSlug}.rutgr.com/invoice/{shareLinkToken}` och skickar
