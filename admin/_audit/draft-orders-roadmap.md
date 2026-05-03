@@ -8,6 +8,12 @@ ev. `_lib/email/templates/draft-*` och `api/webhooks/stripe/handle-draft-order-p
 **Out-of-scope (Terminal A):** allt under `_lib/analytics/**`,
 `app/api/analytics/**`, `inngest/analytics/**`, `_lib/observability/**`.
 
+**Project tsc baseline:** 4 pre-existing errors out of Terminal B
+scope (3 × `app/(admin)/accommodations/actions.test.ts` TS2352,
+1 × `.next/dev/types/validator.ts` stale artifact). Documented in
+`_audit/7-2b-2-recon.md` (2026-04-27). Terminal B verifications use
+delta-against-this-baseline, not absolute zero.
+
 ---
 
 ## Stop-protocol — non-negotiable
@@ -52,9 +58,9 @@ ev. `_lib/email/templates/draft-*` och `api/webhooks/stripe/handle-draft-order-p
 | 7.2b.4d.1 | Email-infra + markDraftAsPaid + lifecycle-actions | `6e78f1d` |
 | 7.2b.4d.2 | Lifecycle UI (confirm modal, dropdown, payment actions) | `11caaa7` |
 | 7.2b.4e | Timeline rendering | `b9aed38` |
-| 7.3 | Customer-facing invoice payment surface (`/invoice/[token]` page + Stripe Elements + success/cancelled) | `7436c02` `7d8d105` `5a7fcbb` `1377bc1` `6e8ac2f` `e75a0ed` — verified: tsc 0, tests 46/46, eslint 0 |
-| 7.4 | Invoice expiry / retry surface (resendInvoice service + action + konfigurera UI + timeline) | `b44da02` `5db420e` `2277407` `9ddd52c` — pending CI verification |
-| 7.5 | OVERDUE-cron + state transition (Path B / 7.5-lite) | `bc3c2c8` `3f6de25` `6841ce3` — verified: tsc 0 new, vitest +21 (15 service + 4 route + 2 timeline), eslint 0 |
+| 7.3 | Customer-facing invoice payment surface (`/invoice/[token]` page + Stripe Elements + success/cancelled) | `7436c02` `7d8d105` `5a7fcbb` `1377bc1` `6e8ac2f` `e75a0ed` — verified: tsc 0 in Terminal B scope (project baseline 4 pre-existing, out of scope), tests 46/46, eslint 0 |
+| 7.4 | Invoice expiry / retry surface (resendInvoice service + action + konfigurera UI + timeline) | `b44da02` `5db420e` `2277407` `9ddd52c` — verified: tsc 0 in Terminal B scope (project baseline 4), tests 177/177, eslint 0 |
+| 7.5 | OVERDUE-cron + state transition (Path B / 7.5-lite) | `bc3c2c8` `3f6de25` `6841ce3` — verified: tsc 0 in Terminal B scope (project baseline 4), tests +21 net new, eslint 0 |
 
 ---
 
