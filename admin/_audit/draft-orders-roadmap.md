@@ -62,6 +62,15 @@ delta-against-this-baseline, not absolute zero.
 | 7.4 | Invoice expiry / retry surface (resendInvoice service + action + konfigurera UI + timeline) | `b44da02` `5db420e` `2277407` `9ddd52c` — verified: tsc 0 in Terminal B scope (project baseline 4), tests 177/177, eslint 0 |
 | 7.5 | OVERDUE-cron + state transition (Path B / 7.5-lite) | `bc3c2c8` `3f6de25` `6841ce3` — verified: tsc 0 in Terminal B scope (project baseline 4), tests +21 net new, eslint 0 |
 | 7.8 | Bulk-actions på `/draft-orders` index (cancel/send/resend) | `a0e2311` `254a83f` `3758c82` `3725736` — verified: tsc 0 in Terminal B scope (project baseline 4), tests +40 net new (20 actions + 7 BulkActionBar + 10 BulkResultModal + 3 DraftOrdersClient wiring; 4th DraftOrdersClient case re-purposed BWB4), eslint 0 |
+| 7.9 | Invoice PDF generation (@react-pdf/renderer + /pdf route + download link) | `22a1d4b` `df099f7` `89c7aab` `1900a40` — verified: tsc 0 in Terminal B scope (project baseline 3 in this worktree, no `.next`-stale artifact present), tests +18 net new (10 renderInvoicePdf + 7 pdf route + 1 page link), eslint 0 |
+
+> **Invoice domain status:** With FAS 7.3 + 7.4 + 7.5 + 7.8 + 7.9
+> closed, the entire customer-facing invoice surface (pay, resend,
+> overdue-detection, bulk-ops, PDF download) is complete in
+> Terminal B scope. Natural merge-to-main coordination point with
+> Terminal A — the next branch can start fresh on FAS 7.6
+> (PENDING_APPROVAL) when Terminal A is ready for schema
+> coordination.
 
 ---
 
@@ -159,19 +168,10 @@ delete, export-CSV och freeze-prices skjuts till framtida fas.)_
 
 ---
 
-### FAS 7.9 — Invoice PDF generation
-**Beroende:** 7.3 stängd.
-
-**Problem:** Kund vill spara/skriva ut faktura. Email innehåller bara
-en betal-länk; ingen PDF.
-
-**Scope:**
-- `_lib/draft-orders/render-invoice-pdf.ts` — server-side PDF (väg:
-  React-PDF eller Puppeteer-on-Vercel).
-- `app/(guest)/invoice/[token]/pdf/route.ts` — endpoint som streamar PDF.
-- "Ladda ner PDF"-knapp på invoice-sidan.
-
-**Estimat:** 1 PR, 4 commits + dependency-eval.
+_(FAS 7.9 — flyttad till "Klart" ovan via React-PDF / `/pdf`-route /
+nedladdningslänk. Recon: `7-9-recon.md`. Stänger den kund-sidiga
+invoice-domänen i Terminal B; admin-sidans PDF-knapp (Q8) skjuts
+till V2.)_
 
 ---
 
