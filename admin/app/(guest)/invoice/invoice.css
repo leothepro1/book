@@ -56,6 +56,21 @@
   color: color-mix(in srgb, var(--text, #000) 60%, transparent);
 }
 
+.inv-pdf-link {
+  align-self: flex-start;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--text, #000) 80%, transparent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+
+.inv-pdf-link:hover {
+  color: var(--text, #1a1a1a);
+}
+
 /* ── Summary ────────────────────────────────────────── */
 
 .inv__summary {

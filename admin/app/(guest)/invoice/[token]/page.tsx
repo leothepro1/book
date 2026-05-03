@@ -52,6 +52,7 @@ export default async function InvoicePage({ params }: PageProps) {
   if (draft.status === "PAID" || draft.status === "COMPLETED") {
     return (
       <PaidView
+        token={token}
         displayNumber={draft.displayNumber}
         totalCents={draft.totalCents}
         currency={draft.currency}
@@ -69,6 +70,13 @@ export default async function InvoicePage({ params }: PageProps) {
             Skickad {formatDate(draft.invoiceSentAt)}
           </p>
         ) : null}
+        <a
+          href={`/invoice/${token}/pdf`}
+          download={`Faktura-${draft.displayNumber}.pdf`}
+          className="inv-pdf-link"
+        >
+          Ladda ner PDF
+        </a>
       </header>
 
       <section className="inv__summary" aria-label="Beställningssammanfattning">
@@ -179,10 +187,12 @@ function ExpiredView({ displayNumber }: { displayNumber: string }) {
 }
 
 function PaidView({
+  token,
   displayNumber,
   totalCents,
   currency,
 }: {
+  token: string;
   displayNumber: string;
   totalCents: bigint;
   currency: string;
@@ -191,6 +201,13 @@ function PaidView({
     <main className="inv inv--paid">
       <header className="inv__header">
         <h1 className="inv__title">Faktura {displayNumber}</h1>
+        <a
+          href={`/invoice/${token}/pdf`}
+          download={`Faktura-${displayNumber}.pdf`}
+          className="inv-pdf-link"
+        >
+          Ladda ner PDF
+        </a>
       </header>
       <div className="inv__notice inv__notice--success">
         <p className="inv__notice-title">Tack — fakturan är betald</p>
