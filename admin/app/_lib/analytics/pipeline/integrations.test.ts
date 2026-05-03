@@ -18,6 +18,7 @@ import {
   deriveDisputeReason,
   deriveGuestId,
   deriveInstrument,
+  deriveOrderSourceChannel,
   derivePMSAdapterType,
   deriveProvider,
   deriveRefundReason,
@@ -131,6 +132,40 @@ describe("deriveSourceChannel", () => {
   it('returns "unknown" when both orderId and externalSource are null', () => {
     expect(
       deriveSourceChannel({ orderId: null, externalSource: null }),
+    ).toBe("unknown");
+  });
+});
+
+describe("deriveOrderSourceChannel — Order.sourceChannel mapping (v0.2.0)", () => {
+  it('maps "direct" → "direct"', () => {
+    expect(deriveOrderSourceChannel({ sourceChannel: "direct" })).toBe("direct");
+  });
+
+  it('maps "admin_draft" → "admin_draft" (preserves merchant-created distinction)', () => {
+    expect(deriveOrderSourceChannel({ sourceChannel: "admin_draft" })).toBe(
+      "admin_draft",
+    );
+  });
+
+  it('maps "booking_com" → "third_party_ota"', () => {
+    expect(deriveOrderSourceChannel({ sourceChannel: "booking_com" })).toBe(
+      "third_party_ota",
+    );
+  });
+
+  it('maps "expedia" → "third_party_ota"', () => {
+    expect(deriveOrderSourceChannel({ sourceChannel: "expedia" })).toBe(
+      "third_party_ota",
+    );
+  });
+
+  it('maps null → "unknown" (defensive default)', () => {
+    expect(deriveOrderSourceChannel({ sourceChannel: null })).toBe("unknown");
+  });
+
+  it('maps an unknown free-form string → "unknown" (never throws)', () => {
+    expect(
+      deriveOrderSourceChannel({ sourceChannel: "some-future-app-handle" }),
     ).toBe("unknown");
   });
 });

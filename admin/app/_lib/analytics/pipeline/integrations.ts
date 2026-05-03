@@ -30,6 +30,14 @@ export type Actor =
   | { actor_type: "anonymous"; actor_id: null };
 
 export type SourceChannel = "direct" | "pms_import" | "third_party_ota" | "unknown";
+/**
+ * `OrderSourceChannel` is a superset of `SourceChannel` adding
+ * `"admin_draft"`. Used by `payment_succeeded` v0.2.0 because Order
+ * carries `sourceChannel: "admin_draft"` for merchant-created draft
+ * conversions (see `app/_lib/draft-orders/convert.ts:355`), but
+ * Booking.externalSource never does.
+ */
+export type OrderSourceChannel = SourceChannel | "admin_draft";
 export type Provider = "stripe" | "swedbankpay" | "manual" | "other";
 export type Instrument = "card" | "bank_transfer" | "wallet" | "other";
 export type PMSProvider = "mews" | "fake" | "manual" | "other";
@@ -113,6 +121,51 @@ export function deriveSourceChannel(
   if (booking.orderId) return "direct";
   if (booking.externalSource) return "pms_import";
   return "unknown";
+}
+
+/**
+ * Derives the order-side source_channel for `payment_succeeded` v0.2.0.
+ *
+ * Maps `Order.sourceChannel` (operational free-form String? per
+ * `prisma/schema.prisma:2856`) into the analytics-domain enum. The
+ * operational column carries values produced by emit-sites:
+ *
+ *   "direct"        — set by every checkout-flow Order (POST /api/checkout/*)
+ *   "admin_draft"   — set by draft-order conversion
+ *                     (`app/_lib/draft-orders/convert.ts:355`)
+ *   "booking_com"   — reserved for future OTA ingestion
+ *   "expedia"       — reserved for future OTA ingestion
+ *   app-handles     — reserved for installed apps that mark their own
+ *                     orders; collapsed to "unknown" until a future
+ *                     v0.3.0 promotes them to dedicated enum values
+ *   null            — Order rows pre-dating sourceChannel column or
+ *                     emit-sites that forgot to set it
+ *
+ * Mapping rules:
+ *   "direct"                                      → "direct"
+ *   "admin_draft"                                 → "admin_draft"
+ *   "booking_com" | "expedia"                     → "third_party_ota"
+ *   null / unmapped string                        → "unknown"
+ *
+ * Defensive: a value the emitter has not seen before never throws — it
+ * collapses to `"unknown"` so the emit path stays atomic with the
+ * order-paid transaction. Phase 5 aggregations that surface a non-zero
+ * "unknown" tally per tenant are the signal to add a new enum value.
+ */
+export function deriveOrderSourceChannel(
+  order: Pick<Order, "sourceChannel">,
+): OrderSourceChannel {
+  switch (order.sourceChannel) {
+    case "direct":
+      return "direct";
+    case "admin_draft":
+      return "admin_draft";
+    case "booking_com":
+    case "expedia":
+      return "third_party_ota";
+    default:
+      return "unknown";
+  }
 }
 
 // ── Provider ─────────────────────────────────────────────────────────────

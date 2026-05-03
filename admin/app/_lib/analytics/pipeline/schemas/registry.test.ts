@@ -72,7 +72,7 @@ const validPaymentEvent = {
   event_id: VALID_ULID,
   tenant_id: TENANT,
   event_name: "payment_succeeded",
-  schema_version: "0.1.0",
+  schema_version: "0.2.0",
   occurred_at: new Date(),
   actor_type: "system" as const,
   actor_id: null,
@@ -84,6 +84,8 @@ const validPaymentEvent = {
     payment_instrument: "card" as const,
     provider_reference: "pi_3abc",
     captured_at: new Date(),
+    source_channel: "direct" as const,
+    line_items: [{ product_id: "prd_1", amount: 12900 }],
   },
 };
 
@@ -92,8 +94,12 @@ describe("ANALYTICS_EVENT_REGISTRY", () => {
     expect(ANALYTICS_EVENT_REGISTRY.booking_completed["0.1.0"]).toBeDefined();
   });
 
-  it("contains payment_succeeded at v0.1.0", () => {
+  it("contains payment_succeeded at v0.1.0 (deprecated, kept for outbox-drain)", () => {
     expect(ANALYTICS_EVENT_REGISTRY.payment_succeeded["0.1.0"]).toBeDefined();
+  });
+
+  it("contains payment_succeeded at v0.2.0 (current)", () => {
+    expect(ANALYTICS_EVENT_REGISTRY.payment_succeeded["0.2.0"]).toBeDefined();
   });
 
   it("contains booking_imported / booking_modified / booking_cancelled / booking_no_show at v0.1.0", () => {

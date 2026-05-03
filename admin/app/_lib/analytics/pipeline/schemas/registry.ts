@@ -35,11 +35,12 @@ import { PageViewedSchema } from "./page-viewed";
 // events that were emitted before the v0.2.0 migration drained from
 // the outbox. New emit-sites MUST target the v0.2.0 schemas above.
 // Removal plan: drop these imports + registry entries once the outbox
-// is confirmed empty of v0.1.0 cart-cluster events.
+// is confirmed empty of v0.1.0 events for that name.
 import { CartAbandonedV010Schema } from "./legacy/cart-abandoned-v0.1.0";
 import { CartStartedV010Schema } from "./legacy/cart-started-v0.1.0";
 import { CartUpdatedV010Schema } from "./legacy/cart-updated-v0.1.0";
 import { CheckoutStartedV010Schema } from "./legacy/checkout-started-v0.1.0";
+import { PaymentSucceededV010Schema } from "./legacy/payment-succeeded-v0.1.0";
 import { AccommodationPriceChangedSchema } from "./accommodation-price-changed";
 import { AccommodationPublishedSchema } from "./accommodation-published";
 import { DiscountCreatedSchema } from "./discount-created";
@@ -142,7 +143,8 @@ export const ANALYTICS_EVENT_REGISTRY = {
     "0.1.0": PaymentRefundedSchema,
   },
   payment_succeeded: {
-    "0.1.0": PaymentSucceededSchema,
+    "0.1.0": PaymentSucceededV010Schema,
+    "0.2.0": PaymentSucceededSchema,
   },
   pms_sync_failed: {
     "0.1.0": PmsSyncFailedSchema,
