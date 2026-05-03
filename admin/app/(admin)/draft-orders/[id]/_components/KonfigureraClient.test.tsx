@@ -9,6 +9,7 @@ const refreshMock = vi.fn();
 const updateMetaMock = vi.fn();
 const updateCustomerMock = vi.fn();
 const sendInvoiceMock = vi.fn();
+const resendInvoiceMock = vi.fn();
 const markPaidMock = vi.fn();
 const cancelMock = vi.fn();
 
@@ -25,6 +26,7 @@ vi.mock("../actions", () => ({
   updateDraftLineItemAction: vi.fn(),
   removeDraftLineItemAction: vi.fn(),
   sendDraftInvoiceAction: (input: unknown) => sendInvoiceMock(input),
+  resendDraftInvoiceAction: (input: unknown) => resendInvoiceMock(input),
   markDraftAsPaidAction: (input: unknown) => markPaidMock(input),
   cancelDraftAction: (input: unknown) => cancelMock(input),
 }));
@@ -127,6 +129,7 @@ const baseDraft: KonfigureraClientDraft = {
   completedAt: null,
   cancellationReason: null,
   invoiceUrl: null,
+  shareLinkExpiresAt: null,
   guestAccountId: null,
   companyLocationId: null,
   contactFirstName: null,
@@ -154,6 +157,7 @@ beforeEach(() => {
   updateMetaMock.mockReset();
   updateCustomerMock.mockReset();
   sendInvoiceMock.mockReset();
+  resendInvoiceMock.mockReset();
   markPaidMock.mockReset();
   cancelMock.mockReset();
 });
@@ -1170,5 +1174,123 @@ describe("KonfigureraClient — timeline integration (7.2b.4e)", () => {
       />,
     );
     expect(screen.getByText("Konverterad till order")).toBeTruthy();
+  });
+});
+
+// ── Resend invoice (FAS 7.4 B.3) ──────────────────────────────
+
+describe("KonfigureraClient — resend invoice (FAS 7.4)", () => {
+  function renderInvoiced(overrides: Partial<KonfigureraClientDraft> = {}) {
+    return render(
+      <KonfigureraClient
+        draft={{
+          ...baseDraft,
+          status: "INVOICED",
+          contactEmail: "x@y.z",
+          shareLinkExpiresAt: new Date("2099-01-01T00:00:00Z"),
+          invoiceSentAt: new Date("2026-04-25T12:00:00Z"),
+          pricesFrozenAt: new Date("2026-04-25T12:00:00Z"),
+          ...overrides,
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+      />,
+    );
+  }
+
+  it("dropdown shows 'Skicka om faktura' when status=INVOICED + link active", () => {
+    renderInvoiced();
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    expect(screen.getByText("Skicka om faktura")).toBeTruthy();
+  });
+
+  it("dropdown shows expired suffix when shareLinkExpiresAt < now", () => {
+    renderInvoiced({
+      shareLinkExpiresAt: new Date("2020-01-01T00:00:00Z"),
+    });
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    expect(
+      screen.getByText("Skicka om faktura (länken har gått ut)"),
+    ).toBeTruthy();
+  });
+
+  it("'Skicka om faktura' is hidden when status=PAID", () => {
+    render(
+      <KonfigureraClient
+        draft={{ ...baseDraft, status: "PAID" }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+      />,
+    );
+    // Dropdown trigger may not even appear if no items — avoid asserting
+    // on the menu and instead assert on absence of the label outright.
+    expect(screen.queryByText(/Skicka om faktura/)).toBeNull();
+  });
+
+  it("'Skicka om faktura' is hidden when status=OPEN (no invoice yet)", () => {
+    render(
+      <KonfigureraClient
+        draft={baseDraft}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+      />,
+    );
+    expect(screen.queryByText(/Skicka om faktura/)).toBeNull();
+  });
+
+  it("clicking row opens ConfirmModal", () => {
+    renderInvoiced();
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    fireEvent.click(screen.getByText("Skicka om faktura"));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeTruthy();
+    expect(dialog.textContent).toContain("Skicka om faktura");
+  });
+
+  it("confirm → resendDraftInvoiceAction called → router.refresh on ok", async () => {
+    resendInvoiceMock.mockResolvedValueOnce({
+      ok: true,
+      draft: { id: "draft_1" },
+      invoiceUrl: "https://x/inv-2",
+      rotatedPaymentIntent: true,
+      emailStatus: "sent",
+    });
+    renderInvoiced();
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    fireEvent.click(screen.getByText("Skicka om faktura"));
+    fireEvent.click(screen.getByText("Skicka om"));
+    await waitFor(() =>
+      expect(resendInvoiceMock).toHaveBeenCalledWith({ draftId: "draft_1" }),
+    );
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
+
+  it("resend failure → action error banner", async () => {
+    resendInvoiceMock.mockResolvedValueOnce({
+      ok: false,
+      error: "Faktura redan betald",
+    });
+    renderInvoiced();
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    fireEvent.click(screen.getByText("Skicka om faktura"));
+    fireEvent.click(screen.getByText("Skicka om"));
+    await waitFor(() =>
+      expect(screen.getByText("Faktura redan betald")).toBeTruthy(),
+    );
   });
 });

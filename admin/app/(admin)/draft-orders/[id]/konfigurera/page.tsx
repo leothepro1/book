@@ -63,6 +63,7 @@ export default async function KonfigureraDraftPage({
         completedAt: draft.completedAt,
         cancellationReason: draft.cancellationReason,
         invoiceUrl: draft.invoiceUrl,
+        shareLinkExpiresAt: draft.shareLinkExpiresAt,
         guestAccountId: draft.guestAccountId,
         companyLocationId: draft.companyLocationId,
         contactFirstName: draft.contactFirstName,
