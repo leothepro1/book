@@ -72,18 +72,22 @@ vi.mock("@/app/_lib/stripe/client", () => ({
   }),
 }));
 
-const mockGetPlatformFeeBps = vi.fn(() => 500);
+const mockGetPlatformFeeBps = vi.fn((..._args: unknown[]) => 500);
 vi.mock("@/app/_lib/payments/platform-fee", () => ({
   getPlatformFeeBps: (...args: unknown[]) => mockGetPlatformFeeBps(...args),
 }));
 
-const mockInitiateOrderPayment = vi.fn();
+const mockInitiateOrderPayment = vi.fn(
+  (..._args: unknown[]) => Promise.resolve({}) as unknown,
+);
 vi.mock("@/app/_lib/payments/providers", () => ({
   initiateOrderPayment: (...args: unknown[]) =>
     mockInitiateOrderPayment(...args),
 }));
 
-const mockCreateDraftOrderEventInTx = vi.fn(() => Promise.resolve());
+const mockCreateDraftOrderEventInTx = vi.fn(
+  (..._args: unknown[]) => Promise.resolve(),
+);
 vi.mock("./events", () => ({
   createDraftOrderEventInTx: (...args: unknown[]) =>
     mockCreateDraftOrderEventInTx(...args),
