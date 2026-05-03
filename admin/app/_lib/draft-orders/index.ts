@@ -60,6 +60,10 @@ export { convertDraftToOrder } from "./convert";
 export { sweepExpiredDrafts } from "./expire";
 export type { SweepResult, SweepExpiredDraftsOptions } from "./expire";
 
+// ── Services (FAS 7.5) ──
+export { markOverdueDrafts } from "./overdue";
+export type { OverdueResult, MarkOverdueOptions } from "./overdue";
+
 // ── Read-side services (FAS 7.0) ──
 export { listDrafts, computeAccommodationSummary } from "./list";
 export type {
