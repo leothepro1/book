@@ -50,6 +50,10 @@ vi.mock("@/app/_lib/draft-orders/mark-as-paid", () => ({
   markDraftAsPaid: vi.fn(),
 }));
 
+vi.mock("@/app/_lib/draft-orders/resend-invoice", () => ({
+  resendInvoice: vi.fn(),
+}));
+
 vi.mock("@/app/_lib/email", () => ({
   sendEmailEvent: vi.fn(),
 }));
@@ -74,6 +78,7 @@ import {
   cancelDraft,
 } from "@/app/_lib/draft-orders/lifecycle";
 import { markDraftAsPaid } from "@/app/_lib/draft-orders/mark-as-paid";
+import { resendInvoice } from "@/app/_lib/draft-orders/resend-invoice";
 import { sendEmailEvent } from "@/app/_lib/email";
 import {
   getDraftAction,
@@ -85,6 +90,7 @@ import {
   updateDraftLineItemAction,
   removeDraftLineItemAction,
   sendDraftInvoiceAction,
+  resendDraftInvoiceAction,
   markDraftAsPaidAction,
   cancelDraftAction,
 } from "./actions";
@@ -105,6 +111,7 @@ const freezePricesMock = freezePrices as unknown as Mock;
 const sendInvoiceMock = sendInvoice as unknown as Mock;
 const cancelDraftMock = cancelDraft as unknown as Mock;
 const markDraftAsPaidMock = markDraftAsPaid as unknown as Mock;
+const resendInvoiceMock = resendInvoice as unknown as Mock;
 const sendEmailEventMock = sendEmailEvent as unknown as Mock;
 const draftOrderFindFirstMock = (
   prisma as unknown as { draftOrder: { findFirst: Mock } }
@@ -872,5 +879,136 @@ describe("cancelDraftAction", () => {
     );
     const result = await cancelDraftAction({ draftId: "d" });
     expect(result.ok).toBe(false);
+  });
+});
+
+// ── resendDraftInvoiceAction (FAS 7.4) ─────────────────────────
+
+describe("resendDraftInvoiceAction", () => {
+  const draftRow = {
+    contactEmail: "anna@example.com",
+    contactFirstName: "Anna",
+    contactLastName: "Lind",
+    guestAccountId: null,
+    displayNumber: "D-2026-0042",
+    totalCents: BigInt(123400),
+    currency: "SEK",
+    expiresAt: new Date("2026-05-31T00:00:00Z"),
+  };
+
+  const resendResult = {
+    draft: { id: "d" },
+    invoiceUrl: "https://t.rutgr.com/invoice/new_token",
+    shareLinkToken: "new_token",
+    shareLinkExpiresAt: new Date("2026-06-10T00:00:00Z"),
+    clientSecret: "cs_new",
+    stripePaymentIntentId: "pi_new",
+    rotatedPaymentIntent: true,
+    previousPiCancelError: null,
+  };
+
+  it("missing orgId → { ok: false, error: 'Ingen tenant' }", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: null,
+      userId: null,
+      orgRole: null,
+    });
+    const result = await resendDraftInvoiceAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    expect(resendInvoiceMock).not.toHaveBeenCalled();
+  });
+
+  it("draft not found → { ok: false, error }", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce(null);
+    const result = await resendDraftInvoiceAction({ draftId: "missing" });
+    expect(result.ok).toBe(false);
+    expect(resendInvoiceMock).not.toHaveBeenCalled();
+  });
+
+  it("happy path → calls resendInvoice + sends email + returns ok", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce(draftRow);
+    resendInvoiceMock.mockResolvedValueOnce(resendResult);
+    findUniqueMock.mockResolvedValueOnce({ id: "tenant_t", name: "Hotel X" });
+    sendEmailEventMock.mockResolvedValueOnce({ status: "sent" });
+
+    const result = await resendDraftInvoiceAction({ draftId: "d" });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.invoiceUrl).toBe(
+        "https://t.rutgr.com/invoice/new_token",
+      );
+      expect(result.rotatedPaymentIntent).toBe(true);
+      expect(result.emailStatus).toBe("sent");
+    }
+    expect(resendInvoiceMock).toHaveBeenCalledWith({
+      tenantId: "tenant_t",
+      draftOrderId: "d",
+      invoiceEmailSubject: undefined,
+      invoiceEmailMessage: undefined,
+      actorUserId: "u",
+    });
+    const emailArgs = sendEmailEventMock.mock.calls[0];
+    expect(emailArgs[2]).toBe("anna@example.com");
+    const vars = emailArgs[3] as Record<string, string>;
+    expect(vars.invoiceUrl).toBe("https://t.rutgr.com/invoice/new_token");
+  });
+
+  it("ValidationError (status not INVOICED) → { ok: false, error }", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce(draftRow);
+    resendInvoiceMock.mockRejectedValueOnce(
+      new ValidationError(
+        "Cannot resend invoice — draft is not in INVOICED or OVERDUE state",
+      ),
+    );
+    const result = await resendDraftInvoiceAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.error).toContain("INVOICED");
+  });
+
+  it("ConflictError (PI succeeded) → { ok: false, error }", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce(draftRow);
+    resendInvoiceMock.mockRejectedValueOnce(
+      new ConflictError(
+        "Cannot resend invoice — previous PaymentIntent already succeeded; mark draft as paid instead",
+      ),
+    );
+    const result = await resendDraftInvoiceAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+  });
+
+  it("no recipient email → emailStatus null, no email call", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce({
+      ...draftRow,
+      contactEmail: null,
+      guestAccountId: null,
+    });
+    resendInvoiceMock.mockResolvedValueOnce(resendResult);
+
+    const result = await resendDraftInvoiceAction({ draftId: "d" });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.emailStatus).toBeNull();
+    expect(sendEmailEventMock).not.toHaveBeenCalled();
+  });
+
+  it("email override params propagated to service", async () => {
+    draftOrderFindFirstMock.mockResolvedValueOnce(draftRow);
+    resendInvoiceMock.mockResolvedValueOnce(resendResult);
+    findUniqueMock.mockResolvedValueOnce({ id: "tenant_t", name: "Hotel X" });
+    sendEmailEventMock.mockResolvedValueOnce({ status: "sent" });
+
+    await resendDraftInvoiceAction({
+      draftId: "d",
+      invoiceEmailSubject: "Påminnelse",
+      invoiceEmailMessage: "Vi väntar fortfarande på betalning.",
+    });
+
+    expect(resendInvoiceMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        invoiceEmailSubject: "Påminnelse",
+        invoiceEmailMessage: "Vi väntar fortfarande på betalning.",
+      }),
+    );
   });
 });
