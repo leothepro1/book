@@ -70,6 +70,7 @@ interface OutboxRow {
   actor_type: string;
   actor_id: string | null;
   correlation_id: string | null;
+  context: unknown; // Json? — null or JSON object copied forward to event.context
   created_at: Date;
   failed_count: number;
 }
@@ -143,8 +144,8 @@ async function drainOneBatch(
     // 1. Lock + read pending rows for this tenant.
     const rows = await tx.$queryRaw<OutboxRow[]>`
       SELECT id, tenant_id, event_id, event_name, schema_version,
-             payload, actor_type, actor_id, correlation_id, created_at,
-             failed_count
+             payload, actor_type, actor_id, correlation_id, context,
+             created_at, failed_count
       FROM analytics.outbox
       WHERE tenant_id = ${tenantId}
         AND published_at IS NULL
@@ -195,6 +196,7 @@ async function processRow(
       occurred_at: row.created_at,
       correlation_id: row.correlation_id,
       payload: row.payload,
+      context: row.context ?? null,
       actor_type: row.actor_type,
       actor_id: row.actor_id,
     };
@@ -203,6 +205,16 @@ async function processRow(
     // 2. INSERT into analytics.event with ON CONFLICT for the
     //    "previous drain partially succeeded" recovery path.
     //    The composite PK (event_id, occurred_at) is what we conflict on.
+    //    `context` is the caller-supplied request-time data (geo,
+    //    user-agent hint, locale, page_url, …) copied forward from the
+    //    outbox row. Pre-PR-X3a outbox rows have NULL context — the
+    //    bind below pushes that through as a SQL NULL via the
+    //    `::jsonb` cast, identical to a post-X3a row that emit-time
+    //    didn't include any context.
+    const contextJson =
+      row.context === null || row.context === undefined
+        ? null
+        : JSON.stringify(row.context);
     await tx.$executeRaw`
       INSERT INTO analytics.event (
         event_id, tenant_id, event_name, schema_version,
@@ -219,7 +231,7 @@ async function processRow(
         ${row.actor_type},
         ${row.actor_id},
         ${JSON.stringify(row.payload)}::jsonb,
-        NULL
+        ${contextJson}::jsonb
       )
       ON CONFLICT (event_id, occurred_at) DO NOTHING
     `;
