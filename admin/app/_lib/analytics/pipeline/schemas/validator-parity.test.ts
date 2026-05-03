@@ -106,6 +106,64 @@ const PARITY_CASES: ParityCase[] = [
       { label: "invalid: locale too short", payload: { ...CTX, locale: "s", page_type: "stay" }, ok: false },
       { label: "invalid: empty object", payload: {}, ok: false },
       { label: "invalid: null payload", payload: null, ok: false },
+      // device_type + visitor_id — additive PR-X2 fixtures. The
+      // shared StorefrontContextSchema fragment carries both as
+      // optional, so coverage on page_viewed exercises the same
+      // validator path used by every other storefront event.
+      {
+        label: "valid: with device_type=desktop + visitor_id",
+        payload: {
+          ...CTX,
+          page_type: "stay",
+          device_type: "desktop",
+          visitor_id: "01HZ8WF7Z7Z7Z7Z7Z7Z7Z7Z7VV",
+        },
+        ok: true,
+      },
+      {
+        label: "valid: with device_type only (visitor_id omitted)",
+        payload: { ...CTX, page_type: "stay", device_type: "mobile" },
+        ok: true,
+      },
+      {
+        label: "valid: with visitor_id only (device_type omitted)",
+        payload: {
+          ...CTX,
+          page_type: "stay",
+          visitor_id: "01HZ8WF7Z7Z7Z7Z7Z7Z7Z7Z7VV",
+        },
+        ok: true,
+      },
+      {
+        label: "valid: device_type=tablet",
+        payload: { ...CTX, page_type: "stay", device_type: "tablet" },
+        ok: true,
+      },
+      {
+        label: "valid: device_type=unknown",
+        payload: { ...CTX, page_type: "stay", device_type: "unknown" },
+        ok: true,
+      },
+      {
+        label: "invalid: device_type out of enum (iphone)",
+        payload: { ...CTX, page_type: "stay", device_type: "iphone" },
+        ok: false,
+      },
+      {
+        label: "invalid: device_type wrong type (number)",
+        payload: { ...CTX, page_type: "stay", device_type: 1 },
+        ok: false,
+      },
+      {
+        label: "invalid: visitor_id empty string",
+        payload: { ...CTX, page_type: "stay", visitor_id: "" },
+        ok: false,
+      },
+      {
+        label: "invalid: visitor_id wrong type (number)",
+        payload: { ...CTX, page_type: "stay", visitor_id: 12345 },
+        ok: false,
+      },
     ],
   },
   {
