@@ -59,6 +59,7 @@ import {
 } from "@/app/_lib/analytics/pipeline/consent";
 import { emitAnalyticsEventStandalone } from "@/app/_lib/analytics/pipeline/emitter";
 import { isAnalyticsEnabledForTenant } from "@/app/_lib/analytics/pipeline/feature-flag";
+import { resolveGeoForContext } from "@/app/_lib/analytics/pipeline/geo";
 import { checkAnalyticsOrigin } from "@/app/_lib/analytics/pipeline/origin-check";
 import { checkAnalyticsRateLimit } from "@/app/_lib/analytics/pipeline/rate-limit";
 import { getPlatformBaseDomain } from "@/app/_lib/platform/constants";
@@ -266,9 +267,44 @@ export async function POST(req: Request): Promise<NextResponse> {
     return new NextResponse(null, { status: 403 });
   }
 
-  // 8. Emit. Standalone variant — no operational tx to attach to.
+  // 8. Geo enrichment (PR-X3b). Runs AFTER consent + AFTER the
+  //    feature flag, so a declined-consent or pipeline-disabled
+  //    tenant never burns a MaxMind lookup. Returns null when the
+  //    GeoLite2 database is unavailable, the IP is unparsable, or
+  //    the lookup throws — `null` collapses to "no geo on this
+  //    event" and emit proceeds.
+  //
+  //    Privacy posture: city-level only per GDPR rekital 26. The IP
+  //    is NEVER stored (not in DB, not in logs); lat/lng is NEVER
+  //    returned (the helper's return type structurally lacks them).
+  //    Lookup is gated by `consent.analytics === true` (the consent
+  //    gate above is the boundary).
+  const eventContext: Record<string, unknown> = {};
+  try {
+    const geo = await resolveGeoForContext(ip, tenantId);
+    if (geo) {
+      eventContext.geo = geo; // { country, city }
+    }
+  } catch (err) {
+    // Defense in depth — `resolveGeoForContext` documents itself as
+    // "never throws", but a contract violation here must NOT abort
+    // the emit. Geo is enrichment, not core data.
+    log("warn", "analytics.collect.geo_unexpected_error", {
+      tenantId,
+      eventName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  // Future: additional context fields (e.g. context.user_agent_class
+  // when X3c lands) can be added here without a schema bump — the
+  // outbox/event context column is `Json?` and intentionally opaque.
+
+  // 9. Emit. Standalone variant — no operational tx to attach to.
   //    Worker's ULID is passed as `eventId` so the warehouse row
-  //    matches the worker's sessionStorage record exactly.
+  //    matches the worker's sessionStorage record exactly. `context`
+  //    is undefined when no enrichment fields applied, per the X3a
+  //    undefined→NULL contract; we never pass `{}` (which would land
+  //    as a JSONB empty object on the row, distinct from absence).
   try {
     await emitAnalyticsEventStandalone({
       tenantId,
@@ -277,6 +313,8 @@ export async function POST(req: Request): Promise<NextResponse> {
       occurredAt: new Date(envelope.occurred_at),
       actor: { actor_type: "anonymous", actor_id: null },
       payload: envelope.payload,
+      context:
+        Object.keys(eventContext).length > 0 ? eventContext : undefined,
       correlationId: envelope.correlation_id ?? null,
       eventId: envelope.event_id,
     });
