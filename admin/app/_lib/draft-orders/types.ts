@@ -444,6 +444,12 @@ export const SendInvoiceInputSchema = z.object({
   /** Stored on DraftOrder.invoiceEmailMessage. */
   invoiceEmailMessage: z.string().max(10000).optional(),
   actorUserId: z.string().optional(),
+  /**
+   * "admin_ui" (default) for single-action invocations, "admin_ui_bulk"
+   * for bulk-action server actions. Drives STATE_CHANGED + INVOICE_SENT
+   * metadata.actorSource on the timeline.
+   */
+  actorSource: z.enum(["admin_ui", "admin_ui_bulk"]).default("admin_ui"),
 });
 
 export type SendInvoiceInput = z.infer<typeof SendInvoiceInputSchema>;
@@ -494,6 +500,12 @@ export const ResendInvoiceInputSchema = z.object({
   /** Optional new email message; falls back to the previously stored value. */
   invoiceEmailMessage: z.string().max(10000).optional(),
   actorUserId: z.string().optional(),
+  /**
+   * "admin_ui" (default) for single-action invocations, "admin_ui_bulk"
+   * for bulk-action server actions. Drives INVOICE_RESENT
+   * metadata.actorSource on the timeline.
+   */
+  actorSource: z.enum(["admin_ui", "admin_ui_bulk"]).default("admin_ui"),
 });
 
 export type ResendInvoiceInput = z.infer<typeof ResendInvoiceInputSchema>;
@@ -529,8 +541,12 @@ export const CancelDraftInputSchema = z.object({
   /** Required when status is INVOICED or OVERDUE. */
   reason: z.string().max(500).optional(),
   actorUserId: z.string().optional(),
-  /** "admin_ui" (default) or "cron" for event-trail attribution. */
-  actorSource: z.enum(["admin_ui", "cron"]).default("admin_ui"),
+  /**
+   * "admin_ui" (default) for single-action invocations, "admin_ui_bulk"
+   * for bulk-action server actions, "cron" for the expire sweep. Drives
+   * STATE_CHANGED + CANCELLED metadata.actorSource on the timeline.
+   */
+  actorSource: z.enum(["admin_ui", "admin_ui_bulk", "cron"]).default("admin_ui"),
 });
 
 export type CancelDraftInput = z.infer<typeof CancelDraftInputSchema>;

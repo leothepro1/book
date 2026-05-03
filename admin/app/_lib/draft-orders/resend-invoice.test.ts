@@ -258,6 +258,45 @@ describe("resendInvoice — happy path", () => {
     expect(mockTryCancelStripePaymentIntent).not.toHaveBeenCalled();
     expect(result.rotatedPaymentIntent).toBe(true);
   });
+
+  it("threads actorSource: 'admin_ui_bulk' into INVOICE_RESENT event", async () => {
+    mockTx.draftOrder.findFirst
+      .mockResolvedValueOnce(makeDraft())
+      .mockResolvedValueOnce(makeDraft({ version: 2 }));
+
+    await resendInvoice({
+      tenantId: "tenant_1",
+      draftOrderId: "draft_1",
+      actorSource: "admin_ui_bulk",
+    });
+
+    expect(mockCreateDraftOrderEventInTx).toHaveBeenCalledWith(
+      mockTx,
+      expect.objectContaining({
+        type: "INVOICE_RESENT",
+        actorSource: "admin_ui_bulk",
+      }),
+    );
+  });
+
+  it("defaults actorSource to 'admin_ui' on INVOICE_RESENT when not provided", async () => {
+    mockTx.draftOrder.findFirst
+      .mockResolvedValueOnce(makeDraft())
+      .mockResolvedValueOnce(makeDraft({ version: 2 }));
+
+    await resendInvoice({
+      tenantId: "tenant_1",
+      draftOrderId: "draft_1",
+    });
+
+    expect(mockCreateDraftOrderEventInTx).toHaveBeenCalledWith(
+      mockTx,
+      expect.objectContaining({
+        type: "INVOICE_RESENT",
+        actorSource: "admin_ui",
+      }),
+    );
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════

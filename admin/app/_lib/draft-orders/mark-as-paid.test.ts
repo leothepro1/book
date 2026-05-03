@@ -168,6 +168,27 @@ describe("markDraftAsPaid — happy path", () => {
     };
     expect(eventArgs.data.actorSource).toBe("admin_ui");
   });
+
+  it("threads actorSource: 'admin_ui_bulk' into STATE_CHANGED event metadata", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValueOnce(makeDraft());
+    mockTx.draftOrder.findFirst.mockResolvedValueOnce({ status: "INVOICED" });
+    convertMock.mockResolvedValueOnce({
+      draft: makeDraft({ status: "COMPLETED" }),
+      order: {},
+    });
+
+    await markDraftAsPaid({
+      tenantId: "tenant_1",
+      draftOrderId: "draft_1",
+      actorUserId: "user_1",
+      actorSource: "admin_ui_bulk",
+    });
+
+    const eventArgs = mockTx.draftOrderEvent.create.mock.calls[0][0] as {
+      data: { actorSource: string };
+    };
+    expect(eventArgs.data.actorSource).toBe("admin_ui_bulk");
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════

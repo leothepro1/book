@@ -324,9 +324,14 @@ describe("bulkCancelDraftsAction", () => {
     expect(cancelDraftMock).toHaveBeenCalledTimes(3);
 
     for (const call of cancelDraftMock.mock.calls) {
-      const args = call[0] as { reason: string; tenantId: string };
+      const args = call[0] as {
+        reason: string;
+        tenantId: string;
+        actorSource: string;
+      };
       expect(args.reason).toBe("internal cleanup");
       expect(args.tenantId).toBe("tenant_t");
+      expect(args.actorSource).toBe("admin_ui_bulk");
     }
   });
 
@@ -424,6 +429,11 @@ describe("bulkSendInvoiceAction", () => {
     expect(result.succeeded).toHaveLength(2);
     expect(freezePricesMock).not.toHaveBeenCalled();
     expect(sendInvoiceMock).toHaveBeenCalledTimes(2);
+
+    for (const call of sendInvoiceMock.mock.calls) {
+      const args = call[0] as { actorSource: string };
+      expect(args.actorSource).toBe("admin_ui_bulk");
+    }
   });
 
   it("BS2 — auto-freeze on unfrozen draft (freeze BEFORE send)", async () => {
@@ -491,6 +501,11 @@ describe("bulkResendInvoiceAction", () => {
     if (!result.ok) throw new Error("expected ok");
     expect(result.succeeded).toHaveLength(2);
     expect(resendInvoiceMock).toHaveBeenCalledTimes(2);
+
+    for (const call of resendInvoiceMock.mock.calls) {
+      const args = call[0] as { actorSource: string };
+      expect(args.actorSource).toBe("admin_ui_bulk");
+    }
   });
 
   it("BR2 — non-INVOICED/OVERDUE → skipped, no service call", async () => {

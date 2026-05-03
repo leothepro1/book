@@ -581,6 +581,44 @@ describe("sendInvoice — happy path", () => {
     });
   });
 
+  it("threads actorSource: 'admin_ui_bulk' into STATE_CHANGED + INVOICE_SENT events", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
+    mockTx.draftOrder.findFirst
+      .mockResolvedValueOnce(makeDraftForInvoice())
+      .mockResolvedValueOnce(makeDraftForInvoice({ status: "INVOICED" }));
+
+    await sendInvoice({
+      tenantId: "tenant_1",
+      draftOrderId: "draft_1",
+      actorSource: "admin_ui_bulk",
+    });
+
+    const events = mockTx.draftOrderEvent.create.mock.calls.map(
+      (call) =>
+        (call[0] as { data: { type: string; actorSource: string } }).data,
+    );
+    const stateChanged = events.find((e) => e.type === "STATE_CHANGED");
+    const invoiceSent = events.find((e) => e.type === "INVOICE_SENT");
+    expect(stateChanged?.actorSource).toBe("admin_ui_bulk");
+    expect(invoiceSent?.actorSource).toBe("admin_ui_bulk");
+  });
+
+  it("defaults actorSource to 'admin_ui' when not provided", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
+    mockTx.draftOrder.findFirst
+      .mockResolvedValueOnce(makeDraftForInvoice())
+      .mockResolvedValueOnce(makeDraftForInvoice({ status: "INVOICED" }));
+
+    await sendInvoice({ tenantId: "tenant_1", draftOrderId: "draft_1" });
+
+    const events = mockTx.draftOrderEvent.create.mock.calls.map(
+      (call) =>
+        (call[0] as { data: { type: string; actorSource: string } }).data,
+    );
+    const invoiceSent = events.find((e) => e.type === "INVOICE_SENT");
+    expect(invoiceSent?.actorSource).toBe("admin_ui");
+  });
+
   it("emits INVOICE_SENT event + draft_order.invoiced platform webhook", async () => {
     mockPrisma.draftOrder.findFirst.mockResolvedValue(makeDraftForInvoice());
     mockTx.draftOrder.findFirst
