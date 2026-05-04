@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Claude Code — personal/machine settings (never commit)
+.claude/settings.local.json
+
 # local database backups (never committed — created during migrations/operations)
 backups/
 

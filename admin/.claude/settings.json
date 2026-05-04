@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+
+  "permissions": {
+    "allow": [
+      "Bash(npm run lint)",
+      "Bash(npm run lint -- :*)",
+      "Bash(npm run test)",
+      "Bash(npm run test -- :*)",
+      "Bash(npm run test:watch)",
+      "Bash(npm run build)",
+      "Bash(npm run build:analytics-runtime)",
+      "Bash(npm run smoke)",
+      "Bash(npm run dev)",
+      "Bash(npm run dev:clean)",
+      "Bash(npm run pms:export)",
+      "Bash(npm run pms:export -- :*)",
+      "Bash(npm run pms:import -- :*)",
+      "Bash(npm run pms:verify)",
+      "Bash(npm run db:migrate -- :*)",
+      "Bash(npm run db:seed)",
+      "Bash(npm install)",
+      "Bash(npm ls:*)",
+
+      "Bash(npx tsc:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npx prisma generate)",
+      "Bash(npx prisma format)",
+      "Bash(npx prisma migrate status)",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(npx prisma migrate deploy)",
+      "Bash(npx prisma studio)",
+
+      "Bash(git status)",
+      "Bash(git status:*)",
+      "Bash(git diff)",
+      "Bash(git diff:*)",
+      "Bash(git log)",
+      "Bash(git log:*)",
+      "Bash(git show)",
+      "Bash(git show:*)",
+      "Bash(git branch)",
+      "Bash(git branch:*)",
+      "Bash(git remote)",
+      "Bash(git remote:*)",
+      "Bash(git stash)",
+      "Bash(git stash:*)",
+      "Bash(git fetch)",
+      "Bash(git fetch:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git blame:*)",
+
+      "Bash(fuser:*)",
+      "Bash(lsof:*)",
+      "Bash(pgrep:*)",
+      "Bash(pkill -f next:*)",
+      "Bash(pkill -f turbopack:*)",
+      "Bash(pkill -f vitest:*)",
+
+      "Bash(rm -rf .next)",
+      "Bash(rm -rf admin/.next)",
+      "Bash(rm -rf node_modules/.cache:*)",
+
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(jq:*)",
+      "Bash(file:*)",
+      "Bash(tree:*)",
+      "Bash(env:*)",
+      "Bash(which:*)",
+      "Bash(command -v:*)",
+      "Bash(echo:*)",
+      "Bash(true)",
+      "Bash(false)",
+      "Bash(test:*)"
+    ],
+
+    "deny": [
+      "Bash(npx prisma db push:*)",
+      "Bash(prisma db push:*)",
+      "Bash(npx prisma migrate reset:*)",
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf ~:*)",
+      "Bash(rm -rf $HOME:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push:* main)",
+      "Bash(git push:* master)"
+    ]
+  },
+
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/session-start.sh"
+          }
+        ]
+      }
+    ],
+
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/eslint-post-edit.sh"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/schema-changed.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
