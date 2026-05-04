@@ -1,0 +1,297 @@
+/* Customer-facing invoice page — .inv / .inv-pay namespaces */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+.inv,
+.inv *,
+.inv *::before,
+.inv *::after,
+.inv-pay,
+.inv-pay * {
+  font-family:
+    var(--font-body, "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Helvetica, Arial, sans-serif);
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+}
+
+.inv {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 20px 80px;
+  color: var(--text, #1a1a1a);
+  background: var(--background, #fff);
+}
+
+@media (max-width: 600px) {
+  .inv {
+    padding: 24px 16px 64px;
+  }
+}
+
+/* ── Header ─────────────────────────────────────────── */
+
+.inv__header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--text, #000) 10%, transparent);
+}
+
+.inv__title {
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.inv__sent {
+  font-size: 14px;
+  margin: 0;
+  color: color-mix(in srgb, var(--text, #000) 60%, transparent);
+}
+
+.inv-pdf-link {
+  align-self: flex-start;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--text, #000) 80%, transparent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+
+.inv-pdf-link:hover {
+  color: var(--text, #1a1a1a);
+}
+
+/* ── Summary ────────────────────────────────────────── */
+
+.inv__summary {
+  background: color-mix(in srgb, var(--text, #000) 2%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--text, #000) 8%, transparent);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 32px;
+}
+
+.inv__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.inv__line {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--text, #000) 6%, transparent);
+}
+
+.inv__line:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.inv__line-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.inv__line-title {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.inv__line-variant,
+.inv__line-meta,
+.inv__line-qty {
+  font-size: 13px;
+  color: color-mix(in srgb, var(--text, #000) 60%, transparent);
+}
+
+.inv__line-amount {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── Totals ─────────────────────────────────────────── */
+
+.inv__totals {
+  margin: 24px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--text, #000) 10%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inv__total-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.inv__total-row dt {
+  color: color-mix(in srgb, var(--text, #000) 70%, transparent);
+  margin: 0;
+}
+
+.inv__total-row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.inv__total-row--grand {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--text, #000) 10%, transparent);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.inv__total-row--grand dt {
+  color: var(--text, #1a1a1a);
+}
+
+.inv__discount-code {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--text, #000) 50%, transparent);
+}
+
+/* ── Note ───────────────────────────────────────────── */
+
+.inv__note {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid
+    color-mix(in srgb, var(--text, #000) 10%, transparent);
+}
+
+.inv__note-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--text, #000) 60%, transparent);
+  margin: 0 0 6px;
+}
+
+.inv__note p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* ── Notice (expired / paid / cancelled) ────────────── */
+
+.inv__notice {
+  background: color-mix(in srgb, var(--text, #000) 3%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--text, #000) 10%, transparent);
+  border-radius: 12px;
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.inv__notice--success {
+  background: color-mix(in srgb, #16a34a 8%, transparent);
+  border-color: color-mix(in srgb, #16a34a 30%, transparent);
+}
+
+.inv__notice-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.inv__notice-body {
+  font-size: 14px;
+  margin: 0;
+  color: color-mix(in srgb, var(--text, #000) 70%, transparent);
+}
+
+/* ── Payment block ──────────────────────────────────── */
+
+.inv-pay {
+  border: 1px solid
+    color-mix(in srgb, var(--text, #000) 10%, transparent);
+  border-radius: 12px;
+  padding: 28px 24px;
+  background: var(--background, #fff);
+}
+
+.inv-pay__title {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 18px;
+}
+
+.inv-pay__loading {
+  font-size: 14px;
+  color: color-mix(in srgb, var(--text, #000) 60%, transparent);
+  text-align: center;
+  padding: 24px 0;
+}
+
+.inv-pay__error {
+  background: color-mix(in srgb, #ef4444 10%, transparent);
+  color: #b91c1c;
+  border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
+  margin: 12px 0 0;
+}
+
+.inv-pay__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.inv-pay__submit {
+  appearance: none;
+  border: none;
+  background: var(--cta-bg, #1a1a1a);
+  color: var(--cta-fg, #ffffff);
+  font-size: 15px;
+  font-weight: 500;
+  padding: 14px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.05s ease;
+}
+
+.inv-pay__submit:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.inv-pay__submit:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.inv-pay__submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

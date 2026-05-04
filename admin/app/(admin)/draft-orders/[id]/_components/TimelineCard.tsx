@@ -104,6 +104,8 @@ function getEventTitle(type: string): string {
       return "Priser låsta";
     case "INVOICE_SENT":
       return "Faktura skickad";
+    case "INVOICE_RESENT":
+      return "Faktura skickad om";
     case "INVOICE_OVERDUE":
       return "Faktura förfallen";
     case "CONVERTED":
@@ -146,6 +148,8 @@ function getEventIcon(type: string): string {
       return "lock";
     case "INVOICE_SENT":
       return "mail";
+    case "INVOICE_RESENT":
+      return "forward_to_inbox";
     case "INVOICE_OVERDUE":
       return "schedule";
     case "CONVERTED":
@@ -300,6 +304,36 @@ function getEventSubtitle(event: TimelineEvent): string | null {
       const d = new Date(expires);
       if (Number.isNaN(d.getTime())) return null;
       return `Förfaller ${formatAbsoluteDate(d)}`;
+    }
+
+    case "INVOICE_RESENT": {
+      const expires =
+        typeof meta.shareLinkExpiresAt === "string"
+          ? meta.shareLinkExpiresAt
+          : null;
+      const rotated =
+        typeof meta.rotatedPaymentIntent === "boolean"
+          ? meta.rotatedPaymentIntent
+          : null;
+      const parts: string[] = [];
+      if (expires) {
+        const d = new Date(expires);
+        if (!Number.isNaN(d.getTime())) {
+          parts.push(`Ny förfaller ${formatAbsoluteDate(d)}`);
+        }
+      }
+      if (rotated === true) parts.push("Ny betalningslänk");
+      return parts.length > 0 ? parts.join(" · ") : null;
+    }
+
+    case "INVOICE_OVERDUE": {
+      const graceDays =
+        typeof meta.graceDays === "number" && Number.isFinite(meta.graceDays)
+          ? meta.graceDays
+          : null;
+      return graceDays !== null
+        ? `Markerad förfallen efter ${graceDays} dagar`
+        : null;
     }
 
     case "CANCELLED": {

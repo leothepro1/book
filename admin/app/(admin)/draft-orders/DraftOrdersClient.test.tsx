@@ -27,12 +27,29 @@ vi.mock("next/link", async () => {
 
 vi.mock("./actions", () => ({
   getDrafts: vi.fn(),
+  bulkCancelDraftsAction: vi.fn(),
+  bulkSendInvoiceAction: vi.fn(),
+  bulkResendInvoiceAction: vi.fn(),
 }));
 
-import { getDrafts } from "./actions";
+import {
+  getDrafts,
+  bulkCancelDraftsAction,
+  bulkSendInvoiceAction,
+  bulkResendInvoiceAction,
+} from "./actions";
 import { DraftOrdersClient } from "./DraftOrdersClient";
 
 const getDraftsMock = getDrafts as unknown as ReturnType<typeof vi.fn>;
+const bulkCancelMock = bulkCancelDraftsAction as unknown as ReturnType<
+  typeof vi.fn
+>;
+const bulkSendMock = bulkSendInvoiceAction as unknown as ReturnType<
+  typeof vi.fn
+>;
+const bulkResendMock = bulkResendInvoiceAction as unknown as ReturnType<
+  typeof vi.fn
+>;
 
 // ── Fixtures ─────────────────────────────────────────────────
 
@@ -62,8 +79,32 @@ function emptyResult() {
 beforeEach(() => {
   pushMock.mockClear();
   getDraftsMock.mockReset();
+  bulkCancelMock.mockReset();
+  bulkSendMock.mockReset();
+  bulkResendMock.mockReset();
   searchParamsImpl = new URLSearchParams();
   getDraftsMock.mockResolvedValue(emptyResult());
+  bulkCancelMock.mockResolvedValue({
+    ok: true,
+    total: 0,
+    succeeded: [],
+    failed: [],
+    skipped: [],
+  });
+  bulkSendMock.mockResolvedValue({
+    ok: true,
+    total: 0,
+    succeeded: [],
+    failed: [],
+    skipped: [],
+  });
+  bulkResendMock.mockResolvedValue({
+    ok: true,
+    total: 0,
+    succeeded: [],
+    failed: [],
+    skipped: [],
+  });
 });
 
 afterEach(() => {
@@ -222,5 +263,152 @@ describe("DraftOrdersClient — CTA + tab default", () => {
     render(<DraftOrdersClient />);
     const cta = (await screen.findByText("Skapa order")).closest("a") as HTMLAnchorElement;
     expect(cta.getAttribute("href")).toBe("/draft-orders/new");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// FAS 7.8 — Bulk action wiring
+// ═══════════════════════════════════════════════════════════════
+
+function selectFirstRowCheckbox() {
+  // Per-row checkbox is the second .ord-check on screen — the first
+  // .ord-check belongs to the column header.
+  const checkboxes = document.querySelectorAll(".ord-check");
+  const rowCheckbox = checkboxes[1] as HTMLElement;
+  fireEvent.click(rowCheckbox);
+}
+
+describe("DraftOrdersClient — bulk action bar visibility", () => {
+  it("BWB1 — bar hidden until ≥1 row selected, appears after selection", async () => {
+    getDraftsMock.mockResolvedValue({
+      items: [makeDraft({ id: "d1" })],
+      total: 1, page: 1, limit: 25,
+    });
+    render(<DraftOrdersClient />);
+    await screen.findByText("D-1042");
+
+    expect(screen.queryByRole("region", { name: "Bulk-åtgärder" })).toBeNull();
+
+    selectFirstRowCheckbox();
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("region", { name: "Bulk-åtgärder" }),
+      ).toBeDefined(),
+    );
+  });
+});
+
+describe("DraftOrdersClient — bulk send-invoice flow", () => {
+  it("BWB2 — click Skicka faktura → ConfirmModal → confirm → action called → result modal", async () => {
+    getDraftsMock.mockResolvedValue({
+      items: [makeDraft({ id: "d1" })],
+      total: 1, page: 1, limit: 25,
+    });
+    bulkSendMock.mockResolvedValue({
+      ok: true,
+      total: 1,
+      succeeded: [{ draftId: "d1", displayNumber: "D-1042" }],
+      skipped: [],
+      failed: [],
+    });
+
+    render(<DraftOrdersClient />);
+    await screen.findByText("D-1042");
+    selectFirstRowCheckbox();
+    await screen.findByRole("region", { name: "Bulk-åtgärder" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Skicka faktura" }));
+
+    // The confirm modal opens — its CTA also says "Skicka faktura". Pick the
+    // last one (it is rendered after the bar in tree order).
+    await waitFor(() => {
+      const buttons = screen.getAllByRole("button", { name: "Skicka faktura" });
+      expect(buttons.length).toBeGreaterThan(1);
+    });
+
+    const confirmButtons = screen.getAllByRole("button", { name: "Skicka faktura" });
+    fireEvent.click(confirmButtons[confirmButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(bulkSendMock).toHaveBeenCalledTimes(1);
+      const call = bulkSendMock.mock.calls[0][0] as { draftIds: string[] };
+      expect(call.draftIds).toEqual(["d1"]);
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Skicka faktura: 1 lyckade/),
+      ).toBeDefined(),
+    );
+  });
+});
+
+describe("DraftOrdersClient — result modal close clears selection", () => {
+  it("BWB3 — closing the result modal clears selection (bar hides)", async () => {
+    getDraftsMock.mockResolvedValue({
+      items: [makeDraft({ id: "d1" })],
+      total: 1, page: 1, limit: 25,
+    });
+    bulkResendMock.mockResolvedValue({
+      ok: true,
+      total: 1,
+      succeeded: [{ draftId: "d1", displayNumber: "D-1042" }],
+      skipped: [],
+      failed: [],
+    });
+
+    render(<DraftOrdersClient />);
+    await screen.findByText("D-1042");
+    selectFirstRowCheckbox();
+    await screen.findByRole("region", { name: "Bulk-åtgärder" });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Skicka om faktura" }),
+    );
+    // Confirm modal CTA — pick the last instance.
+    const confirmButtons = await screen.findAllByRole("button", {
+      name: "Skicka om faktura",
+    });
+    fireEvent.click(confirmButtons[confirmButtons.length - 1]);
+
+    await waitFor(() =>
+      expect(screen.getByText(/Skicka om faktura: 1 lyckade/)).toBeDefined(),
+    );
+
+    // Footer "Stäng" — appears twice (× aria-label + footer CTA). Click the
+    // visible CTA at the end of the modal.
+    const closeButtons = screen.getAllByRole("button", { name: "Stäng" });
+    fireEvent.click(closeButtons[closeButtons.length - 1]);
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("region", { name: "Bulk-åtgärder" }),
+      ).toBeNull(),
+    );
+  });
+});
+
+describe("DraftOrdersClient — selection auto-clear on filter change", () => {
+  it("BWB4 — pagination next/prev clears selection (Q6 LOCKED)", async () => {
+    // 60 items → multiple pages so the Nästa knapp is enabled.
+    getDraftsMock.mockResolvedValue({
+      items: [makeDraft({ id: "d1" })],
+      total: 60, page: 1, limit: 25,
+    });
+    render(<DraftOrdersClient />);
+    await screen.findByText("D-1042");
+    selectFirstRowCheckbox();
+    await screen.findByRole("region", { name: "Bulk-åtgärder" });
+
+    fireEvent.click(screen.getByLabelText("Nästa sida"));
+
+    // The clear-on-change useEffect runs on the page-state update, so the
+    // bar disappears synchronously after the next paint.
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("region", { name: "Bulk-åtgärder" }),
+      ).toBeNull(),
+    );
   });
 });

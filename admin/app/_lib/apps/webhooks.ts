@@ -39,6 +39,7 @@ export type PlatformEventType =
   | "draft_order.updated"
   | "draft_order.cancelled"
   | "draft_order.invoiced"
+  | "draft_order.invoice_resent"
   | "draft_order.paid"
   | "draft_order.completed";
 

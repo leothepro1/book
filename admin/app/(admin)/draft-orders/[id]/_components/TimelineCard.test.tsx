@@ -77,6 +77,7 @@ describe("TimelineCard — title mapping for all known event-types", () => {
     ["DISCOUNT_REMOVED", "Rabatt borttagen"],
     ["PRICES_FROZEN", "Priser låsta"],
     ["INVOICE_SENT", "Faktura skickad"],
+    ["INVOICE_RESENT", "Faktura skickad om"],
     ["INVOICE_OVERDUE", "Faktura förfallen"],
     ["CONVERTED", "Konverterad till order"],
     ["CANCELLED", "Avbruten"],
@@ -254,6 +255,63 @@ describe("TimelineCard — metadata subtitle (defensive extraction)", () => {
       />,
     );
     expect(screen.getByText(/Förfaller 31 maj 2026/)).toBeTruthy();
+  });
+
+  it("INVOICE_RESENT with rotated PI + new expiry → combined subtitle", () => {
+    render(
+      <TimelineCard
+        events={[
+          buildEvent({
+            type: "INVOICE_RESENT",
+            metadata: {
+              shareLinkExpiresAt: "2026-06-15T00:00:00Z",
+              rotatedPaymentIntent: true,
+            },
+          }),
+        ]}
+      />,
+    );
+    expect(
+      screen.getByText(/Ny förfaller 15 juni 2026 · Ny betalningslänk/),
+    ).toBeTruthy();
+  });
+
+  it("INVOICE_RESENT with no metadata → no subtitle, no crash", () => {
+    render(
+      <TimelineCard
+        events={[
+          buildEvent({ type: "INVOICE_RESENT", metadata: null }),
+        ]}
+      />,
+    );
+    expect(screen.getByText("Faktura skickad om")).toBeTruthy();
+  });
+
+  it("INVOICE_OVERDUE with graceDays=3 → 'Markerad förfallen efter 3 dagar'", () => {
+    render(
+      <TimelineCard
+        events={[
+          buildEvent({
+            type: "INVOICE_OVERDUE",
+            metadata: { graceDays: 3 },
+          }),
+        ]}
+      />,
+    );
+    expect(
+      screen.getByText("Markerad förfallen efter 3 dagar"),
+    ).toBeTruthy();
+  });
+
+  it("INVOICE_OVERDUE with no metadata → no subtitle, no crash", () => {
+    render(
+      <TimelineCard
+        events={[
+          buildEvent({ type: "INVOICE_OVERDUE", metadata: null }),
+        ]}
+      />,
+    );
+    expect(screen.getByText("Faktura förfallen")).toBeTruthy();
   });
 
   it("CANCELLED with reason → 'Anledning: ...'", () => {

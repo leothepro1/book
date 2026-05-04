@@ -325,7 +325,8 @@ type DraftWithLinesAndReservations = DraftOrder & {
   reservations: DraftReservation[];
 };
 
-type TenantForInvoice = {
+/** @internal — re-used by resend-invoice.ts (FAS 7.4). */
+export type TenantForInvoice = {
   id: string;
   portalSlug: string | null;
   stripeAccountId: string | null;
@@ -416,7 +417,8 @@ function assertSendInvoicePreconditions(
   }
 }
 
-async function loadTenantForInvoice(tenantId: string): Promise<TenantForInvoice> {
+/** @internal — re-used by resend-invoice.ts (FAS 7.4). */
+export async function loadTenantForInvoice(tenantId: string): Promise<TenantForInvoice> {
   const tenant = (await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: {
@@ -435,7 +437,8 @@ async function loadTenantForInvoice(tenantId: string): Promise<TenantForInvoice>
 }
 
 /** S7 — tenant must have working Stripe Connect and a portal slug. */
-async function assertTenantStripeReady(tenant: TenantForInvoice): Promise<void> {
+/** @internal — re-used by resend-invoice.ts (FAS 7.4). */
+export async function assertTenantStripeReady(tenant: TenantForInvoice): Promise<void> {
   if (!tenant.stripeAccountId) {
     throw new ValidationError("Tenant has no Stripe Connect account", {
       tenantId: tenant.id,
@@ -466,22 +469,26 @@ async function assertTenantStripeReady(tenant: TenantForInvoice): Promise<void> 
   }
 }
 
-function clampShareLinkTtl(ms?: number): number {
+/** @internal — re-used by resend-invoice.ts (FAS 7.4). */
+export function clampShareLinkTtl(ms?: number): number {
   const raw = ms ?? DEFAULT_SHARE_LINK_TTL_MS;
   if (raw < MIN_SHARE_LINK_TTL_MS) return MIN_SHARE_LINK_TTL_MS;
   if (raw > MAX_SHARE_LINK_TTL_MS) return MAX_SHARE_LINK_TTL_MS;
   return raw;
 }
 
-function generateShareLinkToken(): string {
+/** @internal — re-used by resend-invoice.ts (FAS 7.4). */
+export function generateShareLinkToken(): string {
   return randomBytes(24).toString("base64url");
 }
 
-function buildInvoiceUrl(portalSlug: string, token: string): string {
+/** @internal — re-used by resend-invoice.ts (FAS 7.4). */
+export function buildInvoiceUrl(portalSlug: string, token: string): string {
   return getTenantUrl({ portalSlug }, { path: `/invoice/${token}` });
 }
 
-function mergeMetafields(
+/** @internal — re-used by resend-invoice.ts (FAS 7.4). */
+export function mergeMetafields(
   existing: Prisma.JsonValue | null,
   updates: Record<string, unknown>,
 ): Prisma.InputJsonValue {
@@ -688,7 +695,7 @@ export async function sendInvoice(
       from: fresh.status,
       to: "INVOICED",
       actorUserId: params.actorUserId ?? null,
-      actorSource: "admin_ui",
+      actorSource: params.actorSource,
       metadata: {
         invoiceUrl,
         stripePaymentIntentId,
@@ -731,7 +738,7 @@ export async function sendInvoice(
         currency: draft.currency,
       },
       actorUserId: params.actorUserId ?? null,
-      actorSource: "admin_ui",
+      actorSource: params.actorSource,
     });
 
     const refreshed = (await tx.draftOrder.findFirst({
@@ -802,7 +809,8 @@ function isReleasableHoldState(
  * Mirrors the approach at `app/api/checkout/payment-intent/route.ts`
  * which tolerates PaymentIntent-cancel failures post-hoc.
  */
-async function tryCancelStripePaymentIntent(
+/** @internal — re-used by resend-invoice.ts (FAS 7.4). */
+export async function tryCancelStripePaymentIntent(
   tenantId: string,
   stripePaymentIntentId: string,
 ): Promise<{ attempted: true; error: string | null }> {

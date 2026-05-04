@@ -24,6 +24,7 @@ import type {
 } from "@/app/_lib/draft-orders/types";
 import { freezePrices, sendInvoice, cancelDraft } from "@/app/_lib/draft-orders/lifecycle";
 import { markDraftAsPaid } from "@/app/_lib/draft-orders/mark-as-paid";
+import { resendInvoice } from "@/app/_lib/draft-orders/resend-invoice";
 import { sendEmailEvent, type EmailSendResult } from "@/app/_lib/email";
 import { formatSek } from "@/app/_lib/money/format";
 import { formatSwedishDate } from "@/app/_lib/search/dates";
@@ -372,6 +373,116 @@ export async function sendDraftInvoiceAction(input: {
       ok: true,
       draft: invoiceResult.draft,
       invoiceUrl: invoiceResult.invoiceUrl,
+      emailStatus,
+    };
+  } catch (err) {
+    if (err instanceof NotFoundError) return { ok: false, error: err.message };
+    if (err instanceof ValidationError) return { ok: false, error: err.message };
+    if (err instanceof ConflictError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+// ── Resend invoice (FAS 7.4) ───────────────────────────────────
+
+export type ResendDraftInvoiceActionResult =
+  | {
+      ok: true;
+      draft: DraftOrder;
+      invoiceUrl: string;
+      rotatedPaymentIntent: boolean;
+      emailStatus: EmailSendResult["status"] | null;
+    }
+  | { ok: false; error: string };
+
+export async function resendDraftInvoiceAction(input: {
+  draftId: string;
+  invoiceEmailSubject?: string;
+  invoiceEmailMessage?: string;
+}): Promise<ResendDraftInvoiceActionResult> {
+  const actor = await getActor();
+  if (!actor.tenantId) return { ok: false, error: NO_TENANT_ERROR };
+
+  try {
+    // Pre-fetch for email metadata. The service handles state
+    // validation; here we only need fields used by the email send.
+    const draftBefore = await prisma.draftOrder.findFirst({
+      where: { id: input.draftId, tenantId: actor.tenantId },
+      select: {
+        contactEmail: true,
+        contactFirstName: true,
+        contactLastName: true,
+        guestAccountId: true,
+        displayNumber: true,
+        totalCents: true,
+        currency: true,
+        expiresAt: true,
+      },
+    });
+    if (!draftBefore) {
+      return { ok: false, error: "Utkastet kunde inte hittas" };
+    }
+
+    const result = await resendInvoice({
+      tenantId: actor.tenantId,
+      draftOrderId: input.draftId,
+      invoiceEmailSubject: input.invoiceEmailSubject,
+      invoiceEmailMessage: input.invoiceEmailMessage,
+      actorUserId: actor.userId,
+    });
+
+    // Best-effort email re-send. Same pattern as sendDraftInvoiceAction.
+    let emailStatus: EmailSendResult["status"] | null = null;
+    const guestAccount = draftBefore.guestAccountId
+      ? await prisma.guestAccount.findFirst({
+          where: {
+            id: draftBefore.guestAccountId,
+            tenantId: actor.tenantId,
+          },
+          select: { email: true, firstName: true, lastName: true },
+        })
+      : null;
+    const recipientEmail =
+      draftBefore.contactEmail ?? guestAccount?.email ?? null;
+
+    if (recipientEmail) {
+      const tenantRecord = await prisma.tenant.findUnique({
+        where: { id: actor.tenantId },
+        select: { name: true },
+      });
+      const guestName = composeGuestName({
+        contactFirstName: draftBefore.contactFirstName,
+        contactLastName: draftBefore.contactLastName,
+        guestAccount: guestAccount
+          ? {
+              firstName: guestAccount.firstName,
+              lastName: guestAccount.lastName,
+            }
+          : null,
+      });
+
+      const emailResult = await sendEmailEvent(
+        actor.tenantId,
+        "DRAFT_INVOICE",
+        recipientEmail,
+        {
+          guestName,
+          hotelName: tenantRecord?.name ?? "",
+          displayNumber: draftBefore.displayNumber,
+          totalAmount: formatSek(draftBefore.totalCents),
+          currency: draftBefore.currency,
+          invoiceUrl: result.invoiceUrl,
+          expiresAt: formatSwedishDate(draftBefore.expiresAt),
+        },
+      );
+      emailStatus = emailResult.status;
+    }
+
+    return {
+      ok: true,
+      draft: result.draft,
+      invoiceUrl: result.invoiceUrl,
+      rotatedPaymentIntent: result.rotatedPaymentIntent,
       emailStatus,
     };
   } catch (err) {

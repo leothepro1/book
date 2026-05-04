@@ -40,6 +40,7 @@ import {
   updateDraftMetaAction,
   updateDraftCustomerAction,
   sendDraftInvoiceAction,
+  resendDraftInvoiceAction,
   markDraftAsPaidAction,
   cancelDraftAction,
 } from "../actions";
@@ -70,6 +71,7 @@ export type KonfigureraClientDraft = {
   completedAt: Date | null;
   cancellationReason: string | null;
   invoiceUrl: string | null;
+  shareLinkExpiresAt: Date | null;
   guestAccountId: string | null;
   companyLocationId: string | null;
   contactFirstName: string | null;
@@ -181,7 +183,7 @@ export function KonfigureraClient({
 
   // Lifecycle-action state (FAS 7.2b.4d.2).
   const [confirmKind, setConfirmKind] = useState<
-    "send-invoice" | "mark-paid" | "cancel" | null
+    "send-invoice" | "resend-invoice" | "mark-paid" | "cancel" | null
   >(null);
   const [confirmReason, setConfirmReason] = useState("");
   const [confirmReference, setConfirmReference] = useState("");
@@ -313,6 +315,24 @@ export function KonfigureraClient({
     }
   }, [draft.id, router]);
 
+  const handleResendInvoiceConfirm = useCallback(async () => {
+    setActionPending(true);
+    setActionError(null);
+    const result = await resendDraftInvoiceAction({ draftId: draft.id });
+    setActionPending(false);
+    setConfirmKind(null);
+    if (result.ok) {
+      setActionResult({
+        invoiceUrl: result.invoiceUrl,
+        emailStatus: result.emailStatus,
+      });
+      router.refresh();
+    } else {
+      setActionError(result.error);
+      setTimeout(() => setActionError(null), 5000);
+    }
+  }, [draft.id, router]);
+
   const handleMarkAsPaidConfirm = useCallback(async () => {
     setActionPending(true);
     setActionError(null);
@@ -353,7 +373,29 @@ export function KonfigureraClient({
   const isCancellable = !["CANCELLED", "COMPLETED", "REJECTED", "PAID"].includes(
     draft.status,
   );
+  // Resend visibility: only when invoice has actually been sent and the
+  // draft is still awaiting payment. The service further validates that
+  // the underlying PaymentIntent isn't already succeeded.
+  const isResendable =
+    draft.status === "INVOICED" || draft.status === "OVERDUE";
+  // Mount-time snapshot — the "länken har gått ut" suffix is
+  // informational only; an operator's decision happens within seconds
+  // of opening the page, and the server-side check is authoritative.
+  // Using Date.now() in render directly violates react-hooks/purity.
+  const [nowAtMount] = useState(() => Date.now());
+  const shareLinkExpired =
+    draft.shareLinkExpiresAt !== null &&
+    draft.shareLinkExpiresAt.getTime() < nowAtMount;
   const dropdownItems: HeaderActionsDropdownItem[] = [];
+  if (isResendable) {
+    dropdownItems.push({
+      key: "resend-invoice",
+      label: shareLinkExpired
+        ? "Skicka om faktura (länken har gått ut)"
+        : "Skicka om faktura",
+      onClick: () => setConfirmKind("resend-invoice"),
+    });
+  }
   if (isCancellable) {
     dropdownItems.push({
       key: "cancel",
@@ -583,6 +625,22 @@ export function KonfigureraClient({
         confirmLabel="Skicka"
         isPending={actionPending}
         onConfirm={handleSendInvoiceConfirm}
+        onCancel={() => setConfirmKind(null)}
+      />
+
+      <ConfirmModal
+        open={confirmKind === "resend-invoice"}
+        title="Skicka om faktura"
+        description={
+          <>
+            En ny betalningslänk genereras och den gamla länken slutar
+            fungera direkt. Stripe-betalningen återställs och ett nytt
+            email skickas till kunden.
+          </>
+        }
+        confirmLabel="Skicka om"
+        isPending={actionPending}
+        onConfirm={handleResendInvoiceConfirm}
         onCancel={() => setConfirmKind(null)}
       />
 

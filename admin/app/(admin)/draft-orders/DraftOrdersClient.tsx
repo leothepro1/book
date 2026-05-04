@@ -7,8 +7,26 @@ import { EditorIcon } from "@/app/_components/EditorIcon";
 import { SearchIcon } from "@/app/_components/SearchIcon";
 import { formatSek } from "@/app/_lib/money/format";
 import { DraftBadge } from "@/app/(admin)/_components/draft-orders/DraftBadge";
-import { getDrafts, type DraftTab } from "./actions";
+import {
+  getDrafts,
+  bulkCancelDraftsAction,
+  bulkSendInvoiceAction,
+  bulkResendInvoiceAction,
+  type BulkActionResult,
+  type DraftTab,
+} from "./actions";
+import { BulkActionBar } from "./_components/BulkActionBar";
+import { BulkResultModal } from "./_components/BulkResultModal";
+import { ConfirmModal } from "./[id]/_components/ConfirmModal";
 import type { DraftListItem, DraftListSortField, DraftListSortDirection } from "@/app/_lib/draft-orders";
+
+type BulkKind = "bulk-cancel" | "bulk-send" | "bulk-resend";
+
+const BULK_LABELS: Record<BulkKind, string> = {
+  "bulk-cancel": "Avbryt utkast",
+  "bulk-send": "Skicka faktura",
+  "bulk-resend": "Skicka om faktura",
+};
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -72,6 +90,17 @@ export function DraftOrdersClient() {
   const sortDropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // FAS 7.8 — bulk action state
+  const [confirmKind, setConfirmKind] = useState<BulkKind | null>(null);
+  const [bulkPending, setBulkPending] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
+  const [bulkResult, setBulkResult] = useState<BulkActionResult | null>(null);
+  const [bulkResultKind, setBulkResultKind] = useState<BulkKind | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+
   const limit = 25;
 
   // Debounce search input
@@ -134,6 +163,14 @@ export function DraftOrdersClient() {
     setSelectedIds(new Set());
   }, []);
 
+  // Q6 (LOCKED) — clear selection on tab / page / sort / search change.
+  // Cross-page / cross-filter selection is too error-prone to ship in V1.
+  // Wrap in useEffect rather than chaining off each setter so we cover every
+  // route in (handler-set + Link-set) without missing one.
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [activeTab, page, sortBy, sortDirection, debouncedSearch]);
+
   const selCount = selectedIds.size;
   const hasSelection = selCount > 0;
   const allSelected = items.length > 0 && selCount === items.length;
@@ -142,6 +179,58 @@ export function DraftOrdersClient() {
   const handleHeaderCheckbox = () => {
     if (allSelected || hasSelection) clearAll(); else selectAll();
   };
+
+  // ── Bulk action handlers (FAS 7.8) ──
+  const runBulkAction = useCallback(
+    async (
+      kind: BulkKind,
+      runner: (ids: string[]) => Promise<BulkActionResult>,
+    ) => {
+      const ids = Array.from(selectedIds);
+      if (ids.length === 0) return;
+      setBulkPending(true);
+      setBulkProgress({ current: 0, total: ids.length });
+      setConfirmKind(null);
+      try {
+        const result = await runner(ids);
+        setBulkResult(result);
+        setBulkResultKind(kind);
+      } finally {
+        setBulkPending(false);
+        setBulkProgress(null);
+      }
+      router.refresh();
+    },
+    [selectedIds, router],
+  );
+
+  const handleBulkCancel = useCallback(() => {
+    void runBulkAction("bulk-cancel", (ids) =>
+      bulkCancelDraftsAction({
+        draftIds: ids,
+        reason: cancelReason.trim() || undefined,
+      }),
+    );
+  }, [runBulkAction, cancelReason]);
+
+  const handleBulkSend = useCallback(() => {
+    void runBulkAction("bulk-send", (ids) =>
+      bulkSendInvoiceAction({ draftIds: ids }),
+    );
+  }, [runBulkAction]);
+
+  const handleBulkResend = useCallback(() => {
+    void runBulkAction("bulk-resend", (ids) =>
+      bulkResendInvoiceAction({ draftIds: ids }),
+    );
+  }, [runBulkAction]);
+
+  const handleResultClose = useCallback(() => {
+    setBulkResult(null);
+    setBulkResultKind(null);
+    setCancelReason("");
+    clearAll();
+  }, [clearAll]);
 
   if (!loaded) return null;
 
@@ -385,6 +474,77 @@ export function DraftOrdersClient() {
           </span>
         </div>
       )}
+
+      {/* Bulk-action bar (FAS 7.8) */}
+      <BulkActionBar
+        selectedCount={selCount}
+        onClearSelection={clearAll}
+        onSendInvoice={() => setConfirmKind("bulk-send")}
+        onResendInvoice={() => setConfirmKind("bulk-resend")}
+        onCancel={() => setConfirmKind("bulk-cancel")}
+        pending={bulkPending}
+        progress={bulkProgress}
+      />
+
+      {/* Cancel confirm — textarea for reason (matches single-cancel UX) */}
+      <ConfirmModal
+        open={confirmKind === "bulk-cancel"}
+        title={`Avbryt ${selCount} ${selCount === 1 ? "utkast" : "utkast"}?`}
+        description="Reservationer släpps. Anledning krävs för fakturerade och förfallna utkast."
+        confirmLabel="Avbryt utkast"
+        cancelLabel="Stäng"
+        danger
+        isPending={bulkPending}
+        onConfirm={handleBulkCancel}
+        onCancel={() => {
+          setConfirmKind(null);
+          setCancelReason("");
+        }}
+      >
+        <label className="admin-label admin-label--sm" htmlFor="bulk-cancel-reason">
+          Anledning (valfritt)
+        </label>
+        <textarea
+          id="bulk-cancel-reason"
+          className="admin-textarea--sm"
+          rows={3}
+          placeholder="t.ex. dubblettorder, kund ångrade sig…"
+          value={cancelReason}
+          onChange={(e) => setCancelReason(e.target.value)}
+          disabled={bulkPending}
+        />
+      </ConfirmModal>
+
+      <ConfirmModal
+        open={confirmKind === "bulk-send"}
+        title={`Skicka faktura för ${selCount} ${selCount === 1 ? "utkast" : "utkast"}?`}
+        description="Priser låses automatiskt och betalningslänk skapas per utkast."
+        confirmLabel="Skicka faktura"
+        cancelLabel="Stäng"
+        isPending={bulkPending}
+        onConfirm={handleBulkSend}
+        onCancel={() => setConfirmKind(null)}
+      />
+
+      <ConfirmModal
+        open={confirmKind === "bulk-resend"}
+        title={`Skicka om faktura för ${selCount} ${selCount === 1 ? "utkast" : "utkast"}?`}
+        description="Ny betalningslänk skapas; den gamla blir ogiltig."
+        confirmLabel="Skicka om faktura"
+        cancelLabel="Stäng"
+        isPending={bulkPending}
+        onConfirm={handleBulkResend}
+        onCancel={() => setConfirmKind(null)}
+      />
+
+      <BulkResultModal
+        open={bulkResult !== null}
+        result={bulkResult}
+        actionLabel={
+          bulkResultKind !== null ? BULK_LABELS[bulkResultKind] : "Bulk-resultat"
+        }
+        onClose={handleResultClose}
+      />
     </>
   );
 }

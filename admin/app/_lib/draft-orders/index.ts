@@ -60,6 +60,10 @@ export { convertDraftToOrder } from "./convert";
 export { sweepExpiredDrafts } from "./expire";
 export type { SweepResult, SweepExpiredDraftsOptions } from "./expire";
 
+// ── Services (FAS 7.5) ──
+export { markOverdueDrafts } from "./overdue";
+export type { OverdueResult, MarkOverdueOptions } from "./overdue";
+
 // ── Read-side services (FAS 7.0) ──
 export { listDrafts, computeAccommodationSummary } from "./list";
 export type {
@@ -116,3 +120,24 @@ export type {
   CreateDraftWithLinesInput,
   CreateDraftWithLinesResult,
 } from "./create-with-lines";
+
+// ── Customer-facing invoice surface (FAS 7.3) ──
+export { getDraftByShareToken } from "./get-by-share-token";
+export type {
+  PublicDraftDTO,
+  PublicDraftLineItem,
+  PublicPaymentTerms,
+  GetDraftByShareTokenResult,
+} from "./get-by-share-token";
+
+// ── Invoice resend (FAS 7.4) ──
+export { resendInvoice } from "./resend-invoice";
+export type {
+  ResendInvoiceInput,
+  ResendInvoiceArgs,
+  ResendInvoiceResult,
+} from "./types";
+
+// ── Invoice PDF (FAS 7.9) ──
+export { renderInvoicePdf } from "./render-invoice-pdf";
+export type { RenderInvoicePdfInput } from "./render-invoice-pdf";

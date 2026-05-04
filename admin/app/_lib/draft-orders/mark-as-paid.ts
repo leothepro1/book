@@ -36,6 +36,12 @@ export const MarkDraftAsPaidInputSchema = z.object({
   /** Free-form operator note — bank reference, transaction id, etc. */
   reference: z.string().max(500).optional(),
   actorUserId: z.string().optional(),
+  /**
+   * "admin_ui" (default) for single-action invocations, "admin_ui_bulk"
+   * for bulk-action server actions. Drives STATE_CHANGED
+   * metadata.actorSource on the timeline.
+   */
+  actorSource: z.enum(["admin_ui", "admin_ui_bulk"]).default("admin_ui"),
 });
 
 export type MarkDraftAsPaidInput = z.infer<typeof MarkDraftAsPaidInputSchema>;
@@ -113,7 +119,7 @@ export async function markDraftAsPaid(
       from: fresh.status,
       to: "PAID",
       actorUserId: params.actorUserId ?? null,
-      actorSource: "admin_ui",
+      actorSource: params.actorSource,
       metadata: {
         reason: "manual_payment",
         reference: params.reference ?? null,

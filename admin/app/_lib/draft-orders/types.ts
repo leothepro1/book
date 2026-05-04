@@ -444,6 +444,12 @@ export const SendInvoiceInputSchema = z.object({
   /** Stored on DraftOrder.invoiceEmailMessage. */
   invoiceEmailMessage: z.string().max(10000).optional(),
   actorUserId: z.string().optional(),
+  /**
+   * "admin_ui" (default) for single-action invocations, "admin_ui_bulk"
+   * for bulk-action server actions. Drives STATE_CHANGED + INVOICE_SENT
+   * metadata.actorSource on the timeline.
+   */
+  actorSource: z.enum(["admin_ui", "admin_ui_bulk"]).default("admin_ui"),
 });
 
 export type SendInvoiceInput = z.infer<typeof SendInvoiceInputSchema>;
@@ -460,6 +466,62 @@ export type SendInvoiceResult = {
   clientSecret: string;
   /** Stripe PaymentIntent ID (pi_...). Stored on DraftOrder.metafields.stripePaymentIntentId. */
   stripePaymentIntentId: string;
+};
+
+// ── FAS 7.4 lifecycle: resendInvoice ─────────────────────────────
+
+/**
+ * Resend an existing invoice with a freshly rotated share-link token
+ * and a new Stripe PaymentIntent.
+ *
+ * Pre-conditions (mirror sendInvoice with two relaxations):
+ *   - status MUST be INVOICED or OVERDUE (Q2 advisory: accept OVERDUE
+ *     for forward compatibility with FAS 7.5 cron)
+ *   - pricesFrozenAt MUST still be set (Q9 LOCKED)
+ *   - existing PI status MUST NOT be `succeeded` — caller should use
+ *     markDraftAsPaid instead
+ *
+ * Side effects:
+ *   - rotates DraftOrder.shareLinkToken / shareLinkExpiresAt /
+ *     invoiceUrl / invoiceSentAt
+ *   - cancels old Stripe PaymentIntent (best-effort) and mints a new one
+ *   - emits INVOICE_RESENT event (Q1 advisory: dedicated event type)
+ *   - emits platform webhook `draft_order.invoice_resent` (Q8 advisory)
+ *
+ * Status is NOT changed (INVOICED → INVOICED is not a transition).
+ */
+export const ResendInvoiceInputSchema = z.object({
+  tenantId: z.string().min(1),
+  draftOrderId: z.string().min(1),
+  /** Override the default share-link TTL on the regenerated token. Clamped [1d, 90d]. */
+  shareLinkTtlMs: z.number().int().positive().optional(),
+  /** Optional new email subject; falls back to the previously stored value. */
+  invoiceEmailSubject: z.string().max(200).optional(),
+  /** Optional new email message; falls back to the previously stored value. */
+  invoiceEmailMessage: z.string().max(10000).optional(),
+  actorUserId: z.string().optional(),
+  /**
+   * "admin_ui" (default) for single-action invocations, "admin_ui_bulk"
+   * for bulk-action server actions. Drives INVOICE_RESENT
+   * metadata.actorSource on the timeline.
+   */
+  actorSource: z.enum(["admin_ui", "admin_ui_bulk"]).default("admin_ui"),
+});
+
+export type ResendInvoiceInput = z.infer<typeof ResendInvoiceInputSchema>;
+export type ResendInvoiceArgs = z.input<typeof ResendInvoiceInputSchema>;
+
+export type ResendInvoiceResult = {
+  draft: DraftOrder;
+  invoiceUrl: string;
+  shareLinkToken: string;
+  shareLinkExpiresAt: Date;
+  clientSecret: string;
+  stripePaymentIntentId: string;
+  /** True when a new PI was minted (old PI cancelled or already in a non-succeeded terminal state). */
+  rotatedPaymentIntent: boolean;
+  /** Best-effort Stripe-cancel error message — null on success or when no cancel was attempted. */
+  previousPiCancelError: string | null;
 };
 
 // ── FAS 6.5D lifecycle: cancelDraft ──────────────────────────────
@@ -479,8 +541,12 @@ export const CancelDraftInputSchema = z.object({
   /** Required when status is INVOICED or OVERDUE. */
   reason: z.string().max(500).optional(),
   actorUserId: z.string().optional(),
-  /** "admin_ui" (default) or "cron" for event-trail attribution. */
-  actorSource: z.enum(["admin_ui", "cron"]).default("admin_ui"),
+  /**
+   * "admin_ui" (default) for single-action invocations, "admin_ui_bulk"
+   * for bulk-action server actions, "cron" for the expire sweep. Drives
+   * STATE_CHANGED + CANCELLED metadata.actorSource on the timeline.
+   */
+  actorSource: z.enum(["admin_ui", "admin_ui_bulk", "cron"]).default("admin_ui"),
 });
 
 export type CancelDraftInput = z.infer<typeof CancelDraftInputSchema>;

@@ -1822,4 +1822,159 @@
   font-weight: 400;
 }
 
+/* ── Bulk action bar (FAS 7.8 — draft-orders only) ── */
+
+.ord-bulk-bar {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--admin-surface, #fff);
+  border-top: 1px solid var(--admin-border);
+  box-shadow: var(--admin-shadow-md);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  z-index: 5;
+}
+
+.ord-bulk-bar__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.ord-bulk-bar__count {
+  font-size: var(--font-sm);
+  font-weight: 500;
+  color: var(--admin-text);
+}
+
+.ord-bulk-bar__clear {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: var(--font-sm);
+  color: var(--admin-accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.ord-bulk-bar__clear:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ord-bulk-bar__progress {
+  font-size: var(--font-sm);
+  color: var(--admin-text-secondary);
+}
+
+.ord-bulk-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ord-bulk-btn {
+  height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  font-size: var(--font-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-default);
+}
+
+.ord-bulk-btn:hover:not(:disabled) {
+  background: var(--admin-surface-raised);
+}
+
+.ord-bulk-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.ord-bulk-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ord-bulk-btn--accent {
+  background: var(--admin-accent);
+  border-color: var(--admin-accent);
+  color: #fff;
+}
+
+.ord-bulk-btn--accent:hover:not(:disabled) {
+  background: var(--admin-accent-hover, var(--admin-accent));
+}
+
+.ord-bulk-btn--danger {
+  background: var(--admin-danger);
+  border-color: var(--admin-danger);
+  color: #fff;
+}
+
+.ord-bulk-btn--danger:hover:not(:disabled) {
+  background: var(--admin-danger-hover, var(--admin-danger));
+}
+
+/* ── Bulk result modal (FAS 7.8) ── */
+
+.ord-bulk-result__section {
+  margin-top: var(--space-4);
+}
+
+.ord-bulk-result__section:first-child {
+  margin-top: 0;
+}
+
+.ord-bulk-result__section-title {
+  margin: 0 0 var(--space-2) 0;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--admin-text);
+}
+
+.ord-bulk-result__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.ord-bulk-result__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-sm);
+  color: var(--admin-text);
+  background: color-mix(in srgb, var(--admin-text) 4%, var(--admin-surface));
+  border-radius: var(--radius-xs);
+}
+
+.ord-bulk-result__row-id {
+  font-weight: 500;
+  color: var(--admin-text);
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.ord-bulk-result__row-detail {
+  color: var(--admin-text-secondary);
+  font-size: var(--font-xs);
+}
+
 /* ── Pagination — reuses .files-pagination from files.css ── */
