@@ -12,15 +12,22 @@ source of truth. Stripe is an implementation detail under the Order.
 Product type (accommodation vs standard) affects fulfillment logic — not
 checkout architecture.
 
+> **Where Order creation actually happens:** the `_lib/checkout` engine
+> (`processCheckout()`). This file owns the Order model, state machine,
+> webhook handler, and reconciliation. The pipeline that creates the
+> Order + initiates the PSP call lives in `_lib/checkout/CLAUDE.md`.
+
 ---
 
 ## Two checkout flows, one Order model
 
-Both flows create an Order FIRST, then create the Stripe object:
+Both flows route through `processCheckout(req, type)` in `_lib/checkout`,
+which creates an Order FIRST, then creates the Stripe object:
 
 **1. Checkout Session flow (cart/shop)**
   URL: /shop → /shop/checkout/success
   API: POST /api/checkout/create
+  CheckoutType: `types/session.ts`
   Creates: Order + Stripe Checkout Session (hosted by Stripe)
   Used for: STANDARD products via cart (add-to-cart → cart → pay)
   Payment: Redirect to Stripe-hosted page
@@ -29,11 +36,17 @@ Both flows create an Order FIRST, then create the Stripe object:
 **2. Elements flow (accommodation)**
   URL: /checkout → /checkout/success
   API: POST /api/checkout/payment-intent
+  CheckoutType: `types/elements.ts`
   Creates: Order + Stripe PaymentIntent (clientSecret for Elements)
   Used for: PMS_ACCOMMODATION products (search → select → pay)
   Payment: Embedded Stripe Elements in page
   Webhook: payment_intent.succeeded → PENDING→PAID
   Guest info: Collected in step 3, saved via POST /api/checkout/update-guest
+
+**3. Draft-order flow (B2B / walk-in)**
+  Order is NOT created at checkout time — it's created by
+  `convertDraftToOrder()` after the buyer pays via the share-token
+  invoice link. See `_lib/draft-orders/CLAUDE.md`.
 
 ---
 
@@ -144,9 +157,16 @@ Key: `bf_cart_{tenantId}`. NOT a DB model.
 
 ## Tax
 
-`getTaxRate()` in `_lib/orders/tax.ts` returns 0 (stub).
-Both checkout routes call it. Order stores `taxRate` (basis points)
-and `taxAmount`. UI shows "inkl. moms" until tax engine is implemented.
+The tax engine is `@/app/_lib/tax` — provider-pluggable, with the
+Nordic V1 builtin provider active. `_lib/orders/tax.ts` is a thin
+adapter wiring `calculateTax()` into the order pipeline.
+
+Order stores `taxRate` (basis points), `taxAmount`, and any
+`taxLines[]` breakdown for the receipt. The UI shows the same total
+the tax engine returned — never "inkl. moms" placeholders in production.
+
+See `_lib/tax/CLAUDE.md` for the calculator contract, failure-mode
+tiering, and provider registry.
 
 ---
 
@@ -184,6 +204,23 @@ and `taxAmount`. UI shows "inkl. moms" until tax engine is implemented.
   Releases expired inventory reservations, booking locks, webhook events (>30d)
 - `/api/cron/reconcile-stripe` — every 15 min
   Heals stuck PENDING orders by checking Stripe status
+
+For the broader cron landscape (PMS retry/reconcile, draft-order sweep,
+cancellation saga retry, email retry, etc.) see `app/api/CLAUDE.md`.
+
+---
+
+## Dependencies on other domains
+
+- `_lib/checkout` — owns the engine pipeline; this domain owns the Order model + lifecycle
+- `_lib/payments` — `initiateOrderPayment()` for the PSP step; `adapter.refund()` for refunds
+- `_lib/tax` — `calculateTax()` is the only entry point; never inline tax math
+- `_lib/discounts` — `applyDiscountInTx()` mutates `Order.discountAmount` inside the convert/checkout transaction
+- `_lib/integrations/reliability` — outbound pipeline triggers `createPmsBookingAfterPayment` from PAID transitions
+- `_lib/cancellations` — saga reads Order via `canTransition()`; transitions Order → CANCELLED in a single tx
+- `_lib/draft-orders` — `convertDraftToOrder()` produces an Order via the same `canTransition()` guard
+- `_lib/email` — order confirmation + cancellation triggers
+- `_lib/analytics` — emits ORDER_CREATED / ORDER_PAID / ORDER_CANCELLED / ORDER_REFUNDED via fire-and-forget
 
 ---
 

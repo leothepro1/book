@@ -218,3 +218,15 @@ Renderer maps tokens to CSS variables: --background, --text, --button-bg, --butt
 Elements inherit — elements do NOT own their own colors.
 Color ownership lives at the section level.
 Referenced schemes cannot be deleted.
+
+---
+
+## Where this domain plugs into the platform
+
+- **Editor surface** renders these definitions — see `app/(editor)/CLAUDE.md`
+- **Booking-engine surface** renders via `themes/engine.tsx` — see `app/(guest)/CLAUDE.md`
+- **Translation system** walks section content via `traversal.ts` —
+  marking a `SettingField` with `translatable: false` excludes it.
+  See `_lib/translations/CLAUDE.md`.
+- **TenantConfig + page registry** wraps section instances —
+  see `_lib/pages/CLAUDE.md`.

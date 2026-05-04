@@ -5,6 +5,14 @@ ever lost from a PMS, regardless of network conditions, webhook
 delivery failures, or partial outages. Three layers, one ingest
 chokepoint, zero tolerance for data loss.
 
+> **DR runbook**: `admin/docs/runbooks/pms-reliability-dr.md`
+> **Audit baseline**: `admin/docs/audits/accommodations-pms.md`
+>
+> **Cross-domain dependencies:**
+> - Outbound pipeline triggers `createPmsBookingAfterPayment` in `_lib/accommodations` (see that domain's CLAUDE.md)
+> - Cancellation saga calls `adapter.cancelBooking` — see `_lib/cancellations/CLAUDE.md` for the orchestration
+> - Draft-order convert calls `confirmHold` through `withIdempotency()` — see `_lib/draft-orders/CLAUDE.md`
+
 ---
 
 ## The ingest chokepoint

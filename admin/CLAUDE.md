@@ -521,18 +521,62 @@ Each subdomain has its own `CLAUDE.md` with deep architectural details,
 invariants, and key files. Claude loads them automatically when working
 in the relevant directory.
 
+### Commerce + checkout pipeline
+
 | Domain | Location |
 |---|---|
-| Pages, TenantConfig, visual editor | `app/_lib/pages/CLAUDE.md` |
-| Section/Block/Element model + definitions | `app/_lib/sections/CLAUDE.md` (+ `INVARIANTS.md`) |
+| Checkout engine (the entry point: `processCheckout()`) | `app/_lib/checkout/CLAUDE.md` |
+| Order model + state machine + Stripe webhook | `app/_lib/orders/CLAUDE.md` |
+| Payments registry + multi-PSP boundary | `app/_lib/payments/CLAUDE.md` |
+| Tax engine (provider-pluggable) | `app/_lib/tax/CLAUDE.md` |
+| Discount engine | `app/_lib/discounts/CLAUDE.md` |
+| Cart + product catalog | `app/_lib/products/CLAUDE.md` |
+| Cancellation saga (PMS + Stripe + DB) | `app/_lib/cancellations/CLAUDE.md` |
+| Draft orders / B2B invoicing (~25k LOC) | `app/_lib/draft-orders/CLAUDE.md` |
+| Companies (B2B) + store credit + payment terms | `app/_lib/companies/CLAUDE.md` |
+| Accommodations + post-payment PMS booking | `app/_lib/accommodations/CLAUDE.md` |
+
+### PMS + integrations
+
+| Domain | Location |
+|---|---|
 | PMS adapter layer (Mews/Apaleo/Opera) | `app/_lib/integrations/CLAUDE.md` |
 | PMS reliability engine (inbox/outbound/holds/idempotency) | `app/_lib/integrations/reliability/CLAUDE.md` |
+| Apps platform (channels, ads, marketing) | `app/_lib/apps/CLAUDE.md` |
+
+### Storefront + content
+
+| Domain | Location |
+|---|---|
+| Booking engine surface (`(guest)`) | `app/(guest)/CLAUDE.md` |
+| Visual editor surface (`(editor)`) | `app/(editor)/CLAUDE.md` |
+| Pages, TenantConfig | `app/_lib/pages/CLAUDE.md` |
+| Sections / blocks / elements | `app/_lib/sections/CLAUDE.md` (+ `INVARIANTS.md`) |
 | Translation system (i18n) | `app/_lib/translations/CLAUDE.md` |
-| Product catalog (variants, options, inventory) | `app/_lib/products/CLAUDE.md` |
-| Commerce engine (orders, checkout, Stripe) | `app/_lib/orders/CLAUDE.md` |
+| SEO engine (full design doc: `seoengine.md` at repo root) | `app/_lib/seo/CLAUDE.md` |
+
+### Platform infrastructure
+
+| Domain | Location |
+|---|---|
 | Email notification system (Resend, retry, magic link) | `app/_lib/email/CLAUDE.md` |
-| Discount system | `app/_lib/discounts/CLAUDE.md` |
-| Analytics pipeline (worker validator parity) | `app/_lib/analytics/pipeline/CLAUDE.md` |
+| Analytics (server emit, live, daily aggregation) | `app/_lib/analytics/CLAUDE.md` |
+| Analytics pixel runtime (worker validator parity) | `app/_lib/analytics/pipeline/CLAUDE.md` |
 | Enterprise infrastructure (Sentry, Redis, cache, logging) | `app/_lib/observability/CLAUDE.md` |
 | Clerk auth + roles + org sync | `app/(admin)/_lib/auth/CLAUDE.md` |
 | API routes index + cron jobs | `app/api/CLAUDE.md` |
+
+### External reference docs
+
+These are NOT loaded automatically with directory context — read them
+explicitly when relevant.
+
+| Doc | Location | Use when |
+|---|---|---|
+| Full SEO engine design | `seoengine.md` (repo root) | Designing or extending SEO adapters |
+| Domain audit baseline (2026-04-25) | `DOMAIN_AUDIT.md` (repo root) | Investigating where logic historically lived |
+| Cancellation engine design | `admin/docs/cancellation-engine.md` | Saga step ordering, edge cases |
+| PMS reliability DR runbook | `admin/docs/runbooks/pms-reliability-dr.md` | Single-table corruption, accidental DROP, Neon PITR |
+| Database backup runbook | `admin/docs/runbooks/db-backup.md` | Scheduling, retention |
+| Database restore runbook | `admin/docs/runbooks/db-restore.md` | Restore-drill or real recovery |
+| Domain audits (8 files) | `admin/docs/audits/` | Historical context per domain |
