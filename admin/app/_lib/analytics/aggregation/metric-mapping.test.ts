@@ -40,6 +40,9 @@ describe("ANALYTICS_METRIC_MAPPINGS — registry", () => {
     expect(ids).toEqual([
       "payment_succeeded@0.2.0",
       "booking_completed@0.1.0",
+      "cart_started@0.2.0",
+      "checkout_started@0.2.0",
+      "cart_abandoned@0.2.0",
       "page_viewed@0.1.0",
     ]);
   });

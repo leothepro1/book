@@ -206,6 +206,103 @@ export const ANALYTICS_METRIC_MAPPINGS: EventMapping[] = [
     ],
   },
 
+  // ── FUNNEL-METRICS — same-day approximation ─────────────────────────────
+  //
+  // The three funnel events below (cart_started, checkout_started,
+  // cart_abandoned) are aggregated into BASE COUNTS per calendar day.
+  // Phase 5A's derivedMetrics() then computes three rates from those
+  // counts: CART_TO_CHECKOUT_RATE, CART_ABANDONMENT_RATE, and
+  // CHECKOUT_COMPLETION_RATE.
+  //
+  // SAME-DAY APPROXIMATION — important caveat:
+  //
+  // Rates use events that fired ON each calendar day. A cart_id that
+  // started on day N and checked out on day N+1 is counted in DIFFERENT
+  // denominators / numerators (cart_started for day N, checkout_started
+  // for day N+1). This produces approximately-correct trends per day
+  // but does NOT track per-cart-id lifetime conversion.
+  //
+  // Concrete consequences:
+  //   - On a high-traffic day where cross-day carts complete, CART_TO_
+  //     CHECKOUT_RATE may exceed 100% (basis points > 10000) for a
+  //     single day. The aggregator does NOT clamp — saturating to
+  //     10000 would hide cross-day carryover and produce subtly wrong
+  //     trends. Phase 5B parity-tolerance accommodates by treating the
+  //     funnel rates as a DIFFERENT category from the v1-vs-v2
+  //     equality metrics. Dashboards rendering these rates should
+  //     either render the raw bp value or clamp at the read layer.
+  //   - On a low-traffic day where today's cart_started count is small
+  //     vs yesterday's still-active carts, abandonment rate is noisy.
+  //     Multi-day rolling windows are a Phase 5B/5C dashboard concern,
+  //     not an aggregator-level fix.
+  //
+  // Exact funnel-tracking (cart_id-lifecycle joins across days)
+  // requires a separate data structure — Phase 5C+ territory.
+  //
+  // distinct-on-cart_id semantics:
+  //   We use aggregator: "distinct" with distinctKey: cart_id rather
+  //   than "count" because the worker may dispatch duplicate beacons
+  //   (network retry, sendBeacon double-fire) for the same cart_id.
+  //   Distinct on cart_id gives us ACTUAL distinct carts that took the
+  //   step, not the count of beacon receipts.
+
+  // ── cart_started v0.2.0 ─────────────────────────────────────────────────
+  // Source for CART_STARTED × TOTAL.
+  // Phase 3 PR-B emits this on the FIRST add-to-empty-cart per cart_id.
+  {
+    eventName: "cart_started",
+    schemaVersion: "0.2.0",
+    contributions: [
+      {
+        metric: "CART_STARTED",
+        dimension: "TOTAL",
+        dimensionValueFrom: () => "TOTAL",
+        valueFrom: () => 1,
+        aggregator: "distinct",
+        distinctKey: (e) => asString(e.payload.cart_id, ""),
+      },
+    ],
+  },
+
+  // ── checkout_started v0.2.0 ─────────────────────────────────────────────
+  // Source for CHECKOUT_STARTED × TOTAL.
+  // Cart-only scope (per checkout-started.ts:32-46 — non-cart purchase
+  // flows use a separate event family).
+  {
+    eventName: "checkout_started",
+    schemaVersion: "0.2.0",
+    contributions: [
+      {
+        metric: "CHECKOUT_STARTED",
+        dimension: "TOTAL",
+        dimensionValueFrom: () => "TOTAL",
+        valueFrom: () => 1,
+        aggregator: "distinct",
+        distinctKey: (e) => asString(e.payload.cart_id, ""),
+      },
+    ],
+  },
+
+  // ── cart_abandoned v0.2.0 ───────────────────────────────────────────────
+  // Source for CART_ABANDONED × TOTAL.
+  // Dispatched via navigator.sendBeacon() from the loader's unload
+  // handler (cart-abandoned.ts) — duplicate-delivery is the norm here,
+  // distinct-on-cart_id is load-bearing for correctness.
+  {
+    eventName: "cart_abandoned",
+    schemaVersion: "0.2.0",
+    contributions: [
+      {
+        metric: "CART_ABANDONED",
+        dimension: "TOTAL",
+        dimensionValueFrom: () => "TOTAL",
+        valueFrom: () => 1,
+        aggregator: "distinct",
+        distinctKey: (e) => asString(e.payload.cart_id, ""),
+      },
+    ],
+  },
+
   // ── page_viewed v0.1.0 ─────────────────────────────────────────────────
   // Source for SESSIONS × {TOTAL, DEVICE, CITY} and VISITORS × TOTAL.
   // Tab-scoped session_id (industry-norm — recon §2.8 / §9.3).
