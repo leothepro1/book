@@ -291,7 +291,19 @@ export interface DerivedMetricRow {
   value: bigint;
 }
 
-const TOTAL_KEY = "TOTALTOTALTOTAL";
+/**
+ * Delimiter for accumulator keys. SOH (U+0001) is unreachable in any
+ * input we ever feed into the key:
+ *  - metric and dimension are platform-internal string constants under
+ *    our control (defined in this file), neither contains control chars.
+ *  - dimensionValue comes from event payloads, which are JSON-decoded;
+ *    the JSON spec forbids literal raw control characters in strings
+ *    (they must be escaped as \\u0001), so a JSON-parsed string never
+ *    carries a raw SOH byte.
+ * Using SOH as the delimiter makes both directions of the round trip
+ * (makeAccumulatorKey/parseAccumulatorKey) unambiguous without escaping.
+ */
+const ACC_DELIM = "\u0001";
 
 /** Internal — accumulator key shape used by aggregateEvents (B.3). */
 export function makeAccumulatorKey(
@@ -299,7 +311,25 @@ export function makeAccumulatorKey(
   dimension: string,
   dimensionValue: string,
 ): string {
-  return `${metric}${dimension}${dimensionValue}`;
+  return `${metric}${ACC_DELIM}${dimension}${ACC_DELIM}${dimensionValue}`;
+}
+
+/**
+ * Inverse of `makeAccumulatorKey`. Returns null if the key shape is
+ * malformed (defense-in-depth — should never happen in production).
+ */
+export function parseAccumulatorKey(key: string): {
+  metric: string;
+  dimension: string;
+  dimensionValue: string;
+} | null {
+  const parts = key.split(ACC_DELIM);
+  if (parts.length !== 3) return null;
+  return {
+    metric: parts[0],
+    dimension: parts[1],
+    dimensionValue: parts[2],
+  };
 }
 
 /**
@@ -341,10 +371,6 @@ export function derivedMetrics(
       value: ZERO,
     });
   }
-
-  // Reference TOTAL_KEY so callers using the constant don't break the
-  // import — and reserve the symbol for future joint-key derivations.
-  void TOTAL_KEY;
 
   return out;
 }
