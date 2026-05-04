@@ -430,22 +430,37 @@ export function parseAccumulatorKey(key: string): {
 }
 
 /**
- * Compute derived rows that depend only on already-folded scalar metrics.
- * The runner adds query-derived rows (RETURNING_CUSTOMER_RATE) separately
- * because they require a DB lookup.
+ * Compute derived rows that depend only on already-folded base metrics.
+ * The input map's values come from BOTH scalar-aggregator counts
+ * (REVENUE, ORDERS) and distinct-aggregator counts (CART_STARTED,
+ * CHECKOUT_STARTED, CART_ABANDONED) — see aggregate-day.ts where the
+ * two source maps are merged before this is called.
+ *
+ * The runner adds query-derived rows (RETURNING_CUSTOMER_RATE)
+ * separately because they require a DB lookup.
+ *
+ * Funnel-rate semantics — see the FUNNEL-METRICS doc-block in the
+ * mapping registry above for the same-day approximation caveat.
+ * Rates are emitted in basis points (10000 = 100%) matching Phase 5A's
+ * RETURNING_CUSTOMER_RATE convention. Each rate is OMITTED ENTIRELY
+ * when its denominator is zero — saving an explicit "NaN" row that
+ * would mean nothing to a dashboard. The dashboard treats a missing
+ * row as "no data this day", distinct from "0% rate".
  */
 export function derivedMetrics(
   folded: Map<string, bigint>,
 ): DerivedMetricRow[] {
   const out: DerivedMetricRow[] = [];
 
-  const revenueTotalKey = makeAccumulatorKey("REVENUE", "TOTAL", "TOTAL");
-  const ordersTotalKey = makeAccumulatorKey("ORDERS", "TOTAL", "TOTAL");
-
   // ES2017 target — use BigInt() expressions, never `0n` literals.
   const ZERO = BigInt(0);
   const TWO = BigInt(2);
 
+  // ── AVERAGE_ORDER_VALUE × TOTAL ────────────────────────────────────────
+  // AOV = round(REVENUE / ORDERS), zero-guard.
+
+  const revenueTotalKey = makeAccumulatorKey("REVENUE", "TOTAL", "TOTAL");
+  const ordersTotalKey = makeAccumulatorKey("ORDERS", "TOTAL", "TOTAL");
   const revenue = folded.get(revenueTotalKey) ?? ZERO;
   const orders = folded.get(ordersTotalKey) ?? ZERO;
 
@@ -469,5 +484,71 @@ export function derivedMetrics(
     });
   }
 
+  // ── Funnel-rate inputs ─────────────────────────────────────────────────
+
+  const cartStarted =
+    folded.get(makeAccumulatorKey("CART_STARTED", "TOTAL", "TOTAL")) ?? ZERO;
+  const checkoutStarted =
+    folded.get(makeAccumulatorKey("CHECKOUT_STARTED", "TOTAL", "TOTAL")) ??
+    ZERO;
+  const cartAbandoned =
+    folded.get(makeAccumulatorKey("CART_ABANDONED", "TOTAL", "TOTAL")) ?? ZERO;
+
+  // ── CART_TO_CHECKOUT_RATE × TOTAL ──────────────────────────────────────
+  // checkout_started / cart_started, basis points. Omit when cart_started
+  // is zero (no carts means no rate to compute — distinct from a 0% rate,
+  // which would imply 100% abandonment but isn't meaningful when there
+  // were no carts to begin with).
+  if (cartStarted > ZERO) {
+    out.push({
+      metric: "CART_TO_CHECKOUT_RATE",
+      dimension: "TOTAL",
+      dimensionValue: "TOTAL",
+      value: rateBasisPoints(checkoutStarted, cartStarted),
+    });
+  }
+
+  // ── CART_ABANDONMENT_RATE × TOTAL ──────────────────────────────────────
+  // cart_abandoned / cart_started, basis points. Same omit-when-zero
+  // policy as CART_TO_CHECKOUT_RATE.
+  if (cartStarted > ZERO) {
+    out.push({
+      metric: "CART_ABANDONMENT_RATE",
+      dimension: "TOTAL",
+      dimensionValue: "TOTAL",
+      value: rateBasisPoints(cartAbandoned, cartStarted),
+    });
+  }
+
+  // ── CHECKOUT_COMPLETION_RATE × TOTAL ───────────────────────────────────
+  // orders / checkout_started, basis points. Reuses the existing
+  // ORDERS × TOTAL count from Phase 5A — no new base metric needed.
+  // Omit when checkout_started is zero.
+  if (checkoutStarted > ZERO) {
+    out.push({
+      metric: "CHECKOUT_COMPLETION_RATE",
+      dimension: "TOTAL",
+      dimensionValue: "TOTAL",
+      value: rateBasisPoints(orders, checkoutStarted),
+    });
+  }
+
   return out;
+}
+
+/**
+ * Rate as basis points: round((numerator / denominator) * 10000).
+ *
+ * Caller is responsible for guarding `denominator > 0`. We use Number
+ * arithmetic for the rounding step — the inputs cannot exceed daily
+ * cart counts, which fit comfortably in Number's 2^53 safe-integer
+ * range even at fleet scale (10k tenants × peak hourly rate).
+ *
+ * NO clamping at 10000 — see the FUNNEL-METRICS doc-block above on
+ * cross-day cart carryover and why saturation would hide trend drift.
+ */
+function rateBasisPoints(numerator: bigint, denominator: bigint): bigint {
+  const num = Number(numerator);
+  const denom = Number(denominator);
+  return BigInt(Math.round((num / denom) * 10000));
 }
