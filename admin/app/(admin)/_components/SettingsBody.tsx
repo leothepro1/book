@@ -10,6 +10,7 @@ import { PoliciesContent } from '@/app/(admin)/settings/policies/PoliciesContent
 import { LanguagesContent } from '@/app/(admin)/settings/languages/LanguagesContent';
 import { EmailContent } from '@/app/(admin)/settings/email/EmailContent';
 import { PaymentsContent } from '@/app/(admin)/settings/payments/PaymentsContent';
+import { CheckoutContent } from '@/app/(admin)/settings/checkout/CheckoutContent';
 import { CustomerAccountsContent } from '@/app/(admin)/settings/customer-accounts/CustomerAccountsContent';
 import { BillingContent } from '@/app/(admin)/settings/billing/BillingContent';
 import { AppsContent } from '@/app/(admin)/settings/apps/AppsContent';
@@ -192,6 +193,8 @@ export function SettingsBody() {
           <EmailContent key={resetKey} onSubTitleChange={setSubTitleWithFresh} onHeaderExtraChange={setHeaderExtra} />
         ) : activeItem === 'payments' ? (
           <PaymentsContent key={resetKey} onSubTitleChange={setSubTitle} />
+        ) : activeItem === 'checkout' ? (
+          <CheckoutContent key={resetKey} onSubTitleChange={setSubTitle} />
         ) : activeItem === 'customer-accounts' ? (
           <CustomerAccountsContent key={resetKey} onSubTitleChange={setSubTitle} />
         ) : activeItem === 'apps' ? (

@@ -59,6 +59,10 @@ export function SidebarNavProvider({
   const enterSection = useCallback((id: string) => {
     setManuallyExited(null);
     setCurrentSection(id);
+    // Set transitioning synchronously so consumers (SidebarSearchInput)
+    // see it true in the same render as the section change. The useEffect
+    // below schedules the clear after the swap window.
+    setTransitioning(true);
   }, []);
 
   const exitSection = useCallback(() => {
@@ -71,6 +75,7 @@ export function SidebarNavProvider({
       }
       return null;
     });
+    setTransitioning(true);
   }, []);
 
   // Auto-sync currentSection from pathname for route-based sections.
@@ -98,6 +103,7 @@ export function SidebarNavProvider({
       const skipAutoEnter = manuallyExited && inferred === manuallyExited;
       if (!skipAutoEnter && inferred !== currentSection) {
         setCurrentSection(inferred);
+        setTransitioning(true);
       }
     }
   }

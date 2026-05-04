@@ -54,8 +54,15 @@ export function SidebarNavSwap({
     return () => clearTimeout(t);
   }, [exiting]);
 
+  const isAnimating = exiting !== null;
+
   return (
-    <div className={`sb__swap sb__swap--${direction}`}>
+    <div
+      className={
+        `sb__swap sb__swap--${direction}` +
+        (isAnimating ? ' sb__swap--animating' : '')
+      }
+    >
       {exiting && (
         <div key={`exit-${exiting.key}`} className="sb__swap-pane sb__swap-pane--exit" aria-hidden>
           {exiting.node}

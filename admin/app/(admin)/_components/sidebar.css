@@ -27,7 +27,7 @@
   align-items: center;
   width: 100%;
   padding: 0 8px;
-  height: 34px;
+  height: 36px;
   line-height: 1;
   border-radius: 8px;
   border: none;
@@ -37,9 +37,9 @@
   text-align: left;
   text-decoration: none;
   font-family: inherit;
-  font-size: 13px;
-  letter-spacing: -0.15px;
-  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: -0.04px;
+  font-weight: 450;
   gap: 9px;
   position: relative;
 }
@@ -55,8 +55,8 @@
 .sb__item--active,
 .sb__item--active:hover {
   background: #EBEBEB;
-  color: #303030;
-  font-weight: 600;
+  color: #171717;
+  font-weight: 450;
 }
 
 .sb__item--collapsed {
@@ -213,7 +213,7 @@
   flex-shrink: 0;
   width: calc(100% - 24px);
   margin: 0 12px 2px;
-  font-weight: 600;
+  font-weight: 450;
 }
 
 .sb__section-back .sb__icon {
@@ -356,6 +356,29 @@
   pointer-events: auto;
 }
 
+/* Drill-in/out animations for the portaled search — must mirror the
+   main panel's swap-pane keyframes exactly so the search reads as
+   part of the panel even though it's portaled to <body>. */
+.sb-search--anim-exit-forward {
+  animation: sb-search-exit-forward var(--sb-swap-duration) var(--sb-swap-easing) forwards;
+}
+
+.sb-search--anim-enter-back {
+  animation: sb-search-enter-back var(--sb-swap-duration) var(--sb-swap-easing);
+}
+
+@keyframes sb-search-exit-forward {
+  0%   { transform: translateX(0);     opacity: 1; filter: blur(0); }
+  50%  {                                            filter: blur(2px); }
+  100% { transform: translateX(-30%);  opacity: 0; filter: blur(1.5px); }
+}
+
+@keyframes sb-search-enter-back {
+  0%   { transform: translateX(-30%);  opacity: 0; filter: blur(3px); }
+  50%  {                                            filter: blur(1.5px); }
+  100% { transform: translateX(0);     opacity: 1; filter: blur(0); }
+}
+
 /* Pinned footer — persists across every drill-in swap, mirrors the
    org row at the top. Lives outside `.sb__swap` in the aside. */
 .sb__footer {
@@ -426,6 +449,14 @@
   inset: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* Compositor-layer promotion ONLY during an active swap. The wrapper
+   always carries `--forward`/`--back`, so we gate on `--animating`,
+   which is toggled by JS for the 220ms swap window. Without this gate
+   Chromium keeps the enter pane warm in a GPU layer permanently and
+   drops subpixel anti-aliasing — making sidebar text look fuzzy. */
+.sb__swap--animating .sb__swap-pane {
   will-change: transform, opacity;
 }
 
@@ -435,23 +466,24 @@
   --sb-swap-easing: cubic-bezier(0.4, 0, 0.1, 1);
 }
 
-/* Forward (entering a section) */
-.sb__swap--forward .sb__swap-pane--exit {
+/* Forward (entering a section) — animations gated on `--animating`
+   so they only declare during the active swap, not permanently. */
+.sb__swap--animating.sb__swap--forward .sb__swap-pane--exit {
   animation: sb-swap-exit-forward var(--sb-swap-duration) var(--sb-swap-easing) forwards;
   pointer-events: none;
 }
 
-.sb__swap--forward .sb__swap-pane--enter {
+.sb__swap--animating.sb__swap--forward .sb__swap-pane--enter {
   animation: sb-swap-enter-forward var(--sb-swap-duration) var(--sb-swap-easing);
 }
 
 /* Back (returning to main) */
-.sb__swap--back .sb__swap-pane--exit {
+.sb__swap--animating.sb__swap--back .sb__swap-pane--exit {
   animation: sb-swap-exit-back var(--sb-swap-duration) var(--sb-swap-easing) forwards;
   pointer-events: none;
 }
 
-.sb__swap--back .sb__swap-pane--enter {
+.sb__swap--animating.sb__swap--back .sb__swap-pane--enter {
   animation: sb-swap-enter-back var(--sb-swap-duration) var(--sb-swap-easing);
 }
 

@@ -2,6 +2,8 @@ import "./globals.css";
 import type { ReactNode } from "react";
 import { ClerkProvider } from '@clerk/nextjs';
 import Script from "next/script";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
@@ -16,7 +18,7 @@ function AuthProvider({ children }: { children: ReactNode }) {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
-      <html lang="sv">
+      <html lang="sv" className={`${GeistSans.variable} ${GeistMono.variable}`}>
         <head>
           <link
             rel="stylesheet"

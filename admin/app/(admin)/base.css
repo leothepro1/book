@@ -279,18 +279,20 @@
    ══════════════════════════════════════════════════════════ */
 
 :root {
+  /* Geist Sans is wired up in app/layout.tsx via `next/font` (geist
+     package). The `--font-geist-sans` CSS variable is set on <html>
+     by the GeistSans.variable className. System fallbacks below cover
+     the brief flash before the variable font is hydrated. */
   --admin-font:
-    "Inter",
-    ui-sans-serif,
+    var(--font-geist-sans),
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
     Helvetica,
-    "Apple Color Emoji",
     Arial,
     sans-serif,
-    "Segoe UI Emoji",
-    "Segoe UI Symbol";
+    "Apple Color Emoji",
+    "Segoe UI Emoji";
 }
 
 /* ── Base body ── */

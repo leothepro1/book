@@ -1160,13 +1160,59 @@ never bypass accessors, never hardcode page IDs in shared code.
 
 **If a component exists, use it. Do not build a new version.**
 
-This is the single most important rule in the codebase. Before writing
-ANY UI element, search the codebase for existing implementations.
-"Inspired by" or "similar to" is not acceptable — use the EXACT component.
+This is the single most important rule in the codebase. It is the
+DEFAULT, not a reminder the user has to give. The user should never
+have to say "use our existing X" or "we have a component for that" —
+component reuse is implicit on every UI task.
 
-### Mandatory reuse checklist — check EVERY time
+"Inspired by" or "similar to" is not acceptable — use the EXACT
+component. Approximating, simplifying, or "improving" it is a violation.
 
-Before building any of these, STOP and find the existing implementation:
+### Workflow — runs automatically before writing ANY UI element
+
+Whenever a task involves a button, input, textarea, radio, checkbox,
+modal, dropdown, table/list, badge, toggle, color picker, image
+picker, loading state, empty state, page header, search trigger,
+tooltip, tabs, or any other interactive primitive — **before writing
+a single line of JSX or CSS**:
+
+1. Search the codebase for existing implementations:
+   - `grep -rE "className=.*<thing>" app/(admin)`
+   - check `app/_components/`, `app/(admin)/_components/`, and `/ui-lab`
+2. If a component or established class pattern exists → use it. No
+   permission needed, no clarifying question, just use it.
+3. **If nothing shared exists for a reusable primitive → BUILD a
+   shared component first, then use it.** Place it next to its
+   siblings (e.g. `app/(admin)/_components/Radio.tsx` mirrors
+   `Toggle.tsx`). Add a demo in `/ui-lab`. Do NOT roll inline native
+   HTML for a primitive that is going to be needed elsewhere — that
+   is exactly how the codebase fragmented before this rule existed.
+4. Only after step 3 fails (the primitive is genuinely one-off and
+   will not be reused — e.g. `<label>`, `<h1>`, page-specific layout
+   `<div>`s) is raw HTML acceptable.
+
+Feature-local primitives in another feature's folder (e.g.
+`customers/companies/_components/form-primitives.tsx`) do NOT count
+as "shared" — using them across feature boundaries leaks CSS. If
+you find a primitive feature-locked in the wrong place, promote it
+to `_components/` rather than copy or import-with-CSS-leak.
+
+Asking "should I use the existing X?" or "should I build a shared X?"
+is wrong — the answer is always yes. Just do it. The only legitimate
+question is "where is X defined?" and that is answered by grep, not
+by the user.
+
+**Test for "is this reusable":** if grep finds 2+ raw `<input
+type="X">` or hand-rolled equivalents anywhere in `app/(admin)`, the
+component is reusable. The bar is low on purpose.
+
+### `/ui-lab` is the discovery surface
+
+`app/(admin)/ui-lab/` is the live showcase of every shared admin
+primitive. When unsure what exists, open it. New shared components
+added to `_components/` should also get a demo here.
+
+### Mandatory inventory — these MUST be reused, no exceptions
 
 **Color picker:**
   Editor uses `sf-color-row` + `sf-color-swatch` + `sf-input--color-hex`
@@ -1180,24 +1226,44 @@ Before building any of these, STOP and find the existing implementation:
   Shows "Ladda upp bild" → opens MediaLibrary modal → returns asset URL.
   NEVER use raw <input type="file"> or custom upload widgets.
 
+**DataTable / list views:**
+  `<DataTable>` from `app/(admin)/_components/DataTable/DataTable.tsx`.
+  Generic over row type. Handles columns, filter pills, selection +
+  bulk actions, row click, empty state. Use for products, orders,
+  customers, drafts, discounts — every list page in admin.
+  NEVER hand-roll a list page. Demo + reference: `/ui-lab`.
+
+**Search trigger:**
+  `<SearchTrigger>` from `_components/search/SearchTrigger.tsx` —
+  button styled like an input that opens the global Cmd+K modal.
+  The morphing sidebar input is the ONE exception (legacy + special
+  morph behavior); everywhere else use SearchTrigger.
+
 **Modals:**
   Admin uses `.am-overlay` + `.am-modal` (slide up, instant close)
   Guest uses `.com__overlay` + `.com__modal` (same animation)
   Editor uses `.settings-panel` for side panels
   NEVER create new modal CSS — use existing patterns.
 
-**Toggles:** `.admin-toggle` + `.admin-toggle-on` + `.admin-toggle-thumb`
+**Tabs:** `<Tabs>` from `_components/Tabs.tsx` (with `size` variants)
+**Toggles:** `<Toggle>` from `_components/Toggle.tsx`, or `.admin-toggle` CSS
+**Tooltip:** `<Tooltip>` from `app/_components/Tooltip.tsx`
+**Loading:** `<Loading />` / `<LoadingScreen />` from `app/_components/Loading`
+**Icons:** `<EditorIcon>` (admin/editor) + `<SearchIcon>` (universal)
+**Rich text editor:** `<RichTextEditor>` from `app/_components/RichTextEditor`
+**Link picker:** `<LinkPicker>` from `app/_components/LinkPicker`
+**Publish/save bars:** `<PublishBar>`, `<SaveProgressBar>`, `<EmailPublishBar>`
 **Buttons:** `.admin-btn`, `.settings-btn--connect`, `.settings-btn--outline`, etc.
 **Inputs:** `.sf-input`, `.email-sender__input`, `.admin-input--sm`
 **Dropdowns:** `.admin-dropdown` family
 **Labels:** `.admin-label`, `.design-field-label`, `.gc-modal-field__label`
-**Loading:** `<Loading />` and `<LoadingScreen />` from app/_components/Loading
+**Order/Draft badges:** `<OrderBadge>`, `<DraftBadge>` (domain-specific)
 
-### The rule
+### The "use it" protocol
 
-When the user says "same as X" or "like in /editor" or "use our existing":
+When applying a component:
 1. FIND the exact component file
-2. READ it completely
+2. READ it completely (props, defaults, classNames it relies on)
 3. IMPORT and USE it directly — or copy the exact JSX + class names
 4. Do NOT approximate, simplify, or "improve" it
 

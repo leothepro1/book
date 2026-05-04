@@ -1,0 +1,104 @@
+/* ── UI Lab page wrapper — mirrors products page layout ── */
+
+.container:has(.ui-lab-page) {
+  max-width: none;
+  padding: 0;
+  height: 100vh;
+  overflow: visible;
+}
+
+.ui-lab-page {
+  overflow: visible !important;
+  height: auto !important;
+}
+
+.ui-lab-page .admin-editor {
+  overflow: visible !important;
+  height: auto !important;
+  padding: 0 0 80px 0;
+}
+
+.ui-lab-page .admin-header {
+  border-bottom: none;
+  justify-content: space-between;
+  align-items: center;
+  height: auto;
+  padding: 16px;
+  display: flex;
+}
+
+.ui-lab-page .admin-content {
+  background: #fff;
+  border-radius: 0.75rem;
+  margin: 0 16px;
+  padding: 0;
+  box-shadow:
+    0 0.3125rem 0.3125rem -0.15625rem #00000008,
+    0 0.1875rem 0.1875rem -0.09375rem #00000005,
+    0 0.125rem 0.125rem -0.0625rem #00000005,
+    0 0.0625rem 0.0625rem -0.03125rem #00000008,
+    0 0.03125rem 0.03125rem #0000000a,
+    0 0 0 0.0625rem #0000000f;
+  overflow: hidden !important;
+  height: max-content;
+  min-height: auto !important;
+  max-height: max-content;
+}
+
+/* ── Section label — small caps divider above each component demo ── */
+
+.ui-lab__section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--admin-text-tertiary);
+  margin: 8px 16px 6px;
+}
+
+/* ── Demo-specific status badge (mirrors products-status visuals) ── */
+
+.demo-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.demo-status--active {
+  color: #223a5a;
+  background: #affebf;
+}
+
+.demo-status--draft {
+  background: #d5ebff;
+  color: #223a5a;
+}
+
+.demo-status--archived {
+  background: var(--admin-surface);
+  color: var(--admin-text-tertiary);
+}
+
+/* ── Bulk action button in selection toolbar ── */
+
+.ui-lab-bulk-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 8px;
+  background: #e56458;
+  color: #fff;
+  font-family: var(--admin-font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-left: 16px;
+}
+
+.ui-lab-bulk-btn:hover {
+  opacity: 0.85;
+}

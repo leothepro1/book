@@ -1,0 +1,152 @@
+/**
+ * Kassa (checkout) settings panel.
+ *
+ * Mirrors the customer-accounts pattern: stacked containers, each with
+ * a label + bordered list of icon+text+control rows. Outer card look
+ * (white bg, rounded, soft shadow) comes from settings-panel.css; this
+ * file only styles inner elements.
+ */
+
+/* ── Group label above each list ───────────────────────────── */
+.co-settings__label {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--admin-text);
+  line-height: var(--line-height-tight);
+  padding: 0 0 7px 0;
+}
+
+/* ── Bordered list grouping rows + dividers ────────────────── */
+.co-settings__list {
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+/* ── Inner settings row ────────────────────────────────────── */
+.co-settings__row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px;
+  background: transparent;
+}
+
+.co-settings__divider {
+  height: 1px;
+  background: var(--admin-border);
+  margin: 0 16px;
+}
+
+.co-settings__row-icon {
+  flex-shrink: 0;
+  color: var(--admin-text-secondary);
+  display: inline-flex;
+}
+
+.co-settings__row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.co-settings__row-title {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--admin-text);
+  line-height: var(--line-height-tight);
+}
+
+.co-settings__row-desc {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-normal);
+  color: var(--admin-text-secondary);
+  line-height: var(--line-height-tight);
+  margin-top: 2.6px;
+}
+
+.co-settings__row-control {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ── Radio row ─────────────────────────────────────────────── */
+/* Native <input type="radio"> + label, full-width clickable row.
+ * Uses `accent-color` so the indicator picks up the admin accent
+ * without us styling the disc by hand. */
+.co-settings__radio-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.co-settings__radio-row:hover {
+  background: var(--admin-surface-hover);
+}
+
+.co-settings__radio {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--admin-accent);
+}
+
+.co-settings__radio-label {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--admin-text);
+  line-height: var(--line-height-tight);
+}
+
+/* ── Checkbox row (with help-text under the label) ─────────── */
+.co-settings__check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.co-settings__check-row:hover {
+  background: var(--admin-surface-hover);
+}
+
+.co-settings__checkbox {
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0 0;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--admin-accent);
+}
+
+.co-settings__check-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.co-settings__check-label {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--admin-text);
+  line-height: var(--line-height-tight);
+}
+
+.co-settings__check-desc {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-normal);
+  color: var(--admin-text-secondary);
+  line-height: var(--line-height-tight);
+  margin-top: 2.6px;
+}
