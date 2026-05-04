@@ -31,7 +31,7 @@ const CARDS = [
   { key: "orders", label: "Ordrar", format: "number" },
   { key: "averageOrderValue", label: "Snittordervärde", format: "currency" },
   { key: "returningCustomerRate", label: "Återkommande kunder", format: "rate" },
-  { key: "visitors", label: "Besökare", format: "number" },
+  { key: "visitors", label: "Besökare (period)", format: "number" },
 ] as const;
 
 export function SummaryCards({ summary, currency, loading }: Props) {
