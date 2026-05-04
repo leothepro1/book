@@ -551,11 +551,22 @@ downstream tax work.
 
 ### Q1 — Migration-strategi: 1 stor eller 2 små?
 
-**Rekommendation:** **2 små migrations** — `tax_foundation` och
-`dual_currency_pricing` separata. Lättare att rollback om ena bryter,
-lättare att review.
+**Rekommendation:** **1 PR med båda migrations** —
+`tax_foundation_<timestamp>` och `dual_currency_pricing_<timestamp>`
+shippas i samma PR (atomic backfill).
 
-**Beslut:** advisory.
+**Beslut:** **LOCKED** — Terminal A's explicit ask 2026-05-04. Citat:
+
+> "keep both Tax-0 migrations in the same PR (you implied this), so
+> backfill + new columns commit atomically. Don't split into two
+> separate merges — that would put the dual-currency backfill in a
+> window where presentment* columns exist but are NULL on historical
+> rows, and any analytics tail-read in between has to special-case."
+> — Terminal A, `_audit/session-2026-05-04-resume.md` §A
+
+Implementation-konsekvens: Terminal Claude shippar BÅDA migrations i
+samma feature-branch + samma PR. Backfill-SQL embeds i samma migration
+som schema-add (atomic transaction, zero-downtime-deploy-safe).
 
 ### Q2 — `TaxLine.rate` som Decimal eller Int (basis points)?
 
@@ -718,14 +729,29 @@ EOF
 
 ## G — Cross-domain coord checklist
 
-⚠ **PUSHA INTE Tax-0 INNAN:**
+> **Status update 2026-05-04:** Terminal A reviewed coord and gave
+> green-light. Their full response is captured in
+> `_audit/session-2026-05-04-resume.md` (section "Terminal A coord
+> response"). Relevant items below marked ✅.
+
+**PUSHA INTE Tax-0 implementation INNAN:**
 
 1. [ ] PR #40 (master plan) mergad till main
-2. [ ] Terminal A bekräftat att schema-migration-namespace är fritt
-   (deras Phase 5A added migration `20260504144722_analytics_phase5a_aggregator`
-   — vår namespace `tax_foundation_<timestamp>` får inte kollidera)
-3. [ ] Terminal A informerad om nya kolumner på `Order` + `OrderLineItem`
-   (de kan vilja konsumera `presentmentCurrency` i sin analytics-pipeline)
+2. [ ] PR #41 (denna recon) mergad till main
+3. [x] **✅ Terminal A bekräftat schema-migration-namespace fritt**
+   - Latest analytics migration on main: `20260504144722_analytics_phase5a_aggregator`
+   - No concurrent migration in flight
+   - `feature/analytics-funnel-metrics` is pure additive logic, zero schema touch
+   - Namespace `tax_foundation_<timestamp>` then `dual_currency_pricing_<timestamp>` är OK
+4. [x] **✅ Terminal A informed of new `presentmentCurrency` columns**
+   - They confirmed YES interest in consuming presentment fields
+   - Timeline: post-Tax-4 (no immediate consumption post-Tax-0)
+   - Naming preference: MoneyBag-nesting at API surface (per
+     `_audit/presentment-money-handoff.md`)
+   - Cross-team contract doc at `_audit/presentment-money-handoff.md`
+     is the canonical reference
+5. [ ] Both Tax-0 migrations confirmed shipping in **single PR**
+   (Terminal A's lock-in ask — see Q1 above)
 
 ---
 
