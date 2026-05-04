@@ -63,6 +63,7 @@ delta-against-this-baseline, not absolute zero.
 | 7.5 | OVERDUE-cron + state transition (Path B / 7.5-lite) | `bc3c2c8` `3f6de25` `6841ce3` — verified: tsc 0 in Terminal B scope (project baseline 4), tests +21 net new, eslint 0 |
 | 7.8 | Bulk-actions på `/draft-orders` index (cancel/send/resend) | `a0e2311` `254a83f` `3758c82` `3725736` — verified: tsc 0 in Terminal B scope (project baseline 4), tests +40 net new (20 actions + 7 BulkActionBar + 10 BulkResultModal + 3 DraftOrdersClient wiring; 4th DraftOrdersClient case re-purposed BWB4), eslint 0 |
 | 7.9 | Invoice PDF generation (@react-pdf/renderer + /pdf route + download link) | `22a1d4b` `df099f7` `89c7aab` `1900a40` — verified: tsc 0 in Terminal B scope (project baseline 3 in this worktree, no `.next`-stale artifact present), tests +18 net new (10 renderInvoicePdf + 7 pdf route + 1 page link), eslint 0 |
+| 7.6-lite | Manual PENDING_APPROVAL operator-flow (submit / approve / reject services + actions + UI + timeline) | `a4ca3a0` `0c44337` `bbb0e76` `deebcb9` — verified: tsc 3 (project baseline accommodations, NEW=0), tests +77 net new (41 approval service + 14 approval actions + 13 KonfigureraClient approval + 9 TimelineCard approval), eslint 0 in scope |
 
 > **Invoice domain status:** With FAS 7.3 + 7.4 + 7.5 + 7.8 + 7.9
 > closed, the entire customer-facing invoice surface (pay, resend,
@@ -71,6 +72,29 @@ delta-against-this-baseline, not absolute zero.
 > Terminal A — the next branch can start fresh on FAS 7.6
 > (PENDING_APPROVAL) when Terminal A is ready for schema
 > coordination.
+
+> **Approval domain status (FAS 7.6-lite):** Manual operator-driven
+> approval flow shipped — `OPEN → PENDING_APPROVAL → APPROVED|REJECTED`
+> via three new services on the existing state-machine. Self-approval
+> blocked at the service layer (Q1), reject reason required (Q2),
+> graceful handling of legacy null `createdByUserId` (Q3). Three
+> follow-up sub-phases (7.6b/c/d) deferred — each requires
+> Terminal A schema or enum coordination.
+
+### FAS 7.6b — Approval threshold via TenantConfig (PENDING)
+**Beroende:** Schema-change → Terminal A migration coordination.
+Lägg till `TenantConfig.draftApprovalThresholdCents` + auto-trigger
+i `sendInvoiceAction` när belopp >= tröskel. Q7 i 7.6-lite recon.
+
+### FAS 7.6c — Approval email notifications (PENDING)
+**Beroende:** `EmailEventType` enum-extension med
+`DRAFT_APPROVAL_REQUEST` + `DRAFT_APPROVAL_GRANTED` +
+`DRAFT_APPROVAL_REJECTED` → Terminal A koord. Q6 i 7.6-lite recon.
+
+### FAS 7.6d — Approval-portal RBAC (PENDING)
+**Beroende:** Inget hårt — separate admin-yta för icke-admin
+approvers (godkännare som inte har full org-admin). Q-decision
+om granulär RBAC.
 
 ---
 

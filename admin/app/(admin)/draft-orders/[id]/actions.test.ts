@@ -54,6 +54,12 @@ vi.mock("@/app/_lib/draft-orders/resend-invoice", () => ({
   resendInvoice: vi.fn(),
 }));
 
+vi.mock("@/app/_lib/draft-orders/approval", () => ({
+  submitForApproval: vi.fn(),
+  approveDraft: vi.fn(),
+  rejectDraft: vi.fn(),
+}));
+
 vi.mock("@/app/_lib/email", () => ({
   sendEmailEvent: vi.fn(),
 }));
@@ -79,6 +85,11 @@ import {
 } from "@/app/_lib/draft-orders/lifecycle";
 import { markDraftAsPaid } from "@/app/_lib/draft-orders/mark-as-paid";
 import { resendInvoice } from "@/app/_lib/draft-orders/resend-invoice";
+import {
+  submitForApproval,
+  approveDraft,
+  rejectDraft,
+} from "@/app/_lib/draft-orders/approval";
 import { sendEmailEvent } from "@/app/_lib/email";
 import {
   getDraftAction,
@@ -93,6 +104,9 @@ import {
   resendDraftInvoiceAction,
   markDraftAsPaidAction,
   cancelDraftAction,
+  submitDraftForApprovalAction,
+  approveDraftAction,
+  rejectDraftAction,
 } from "./actions";
 
 type Mock = ReturnType<typeof vi.fn>;
@@ -112,6 +126,9 @@ const sendInvoiceMock = sendInvoice as unknown as Mock;
 const cancelDraftMock = cancelDraft as unknown as Mock;
 const markDraftAsPaidMock = markDraftAsPaid as unknown as Mock;
 const resendInvoiceMock = resendInvoice as unknown as Mock;
+const submitForApprovalMock = submitForApproval as unknown as Mock;
+const approveDraftMock = approveDraft as unknown as Mock;
+const rejectDraftMock = rejectDraft as unknown as Mock;
 const sendEmailEventMock = sendEmailEvent as unknown as Mock;
 const draftOrderFindFirstMock = (
   prisma as unknown as { draftOrder: { findFirst: Mock } }
@@ -1010,5 +1027,180 @@ describe("resendDraftInvoiceAction", () => {
         invoiceEmailMessage: "Vi väntar fortfarande på betalning.",
       }),
     );
+  });
+});
+
+// ── Approval actions (FAS 7.6-lite) ────────────────────────────
+
+describe("submitDraftForApprovalAction", () => {
+  it("missing orgId → { ok: false, error: 'Ingen tenant' }", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: null,
+      userId: null,
+      orgRole: null,
+    });
+    const result = await submitDraftForApprovalAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    expect(submitForApprovalMock).not.toHaveBeenCalled();
+  });
+
+  it("missing userId → { ok: false, error: '...identitet kunde inte fastställas' }", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: "org_1",
+      userId: null,
+      orgRole: "org:admin",
+    });
+    const result = await submitDraftForApprovalAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/identitet/);
+    expect(submitForApprovalMock).not.toHaveBeenCalled();
+  });
+
+  it("happy path passes draftOrderId + requestNote + actorUserId", async () => {
+    const draft = { id: "d", status: "PENDING_APPROVAL" };
+    submitForApprovalMock.mockResolvedValueOnce({ draft });
+    const result = await submitDraftForApprovalAction({
+      draftId: "d",
+      requestNote: "Snälla godkänn snart",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.draft).toBe(draft);
+    expect(submitForApprovalMock).toHaveBeenCalledWith({
+      tenantId: "tenant_t",
+      draftOrderId: "d",
+      requestNote: "Snälla godkänn snart",
+      actorUserId: "u",
+    });
+  });
+
+  it("ValidationError → { ok: false, error: msg }", async () => {
+    submitForApprovalMock.mockRejectedValueOnce(
+      new ValidationError("Draft is not in OPEN status"),
+    );
+    const result = await submitDraftForApprovalAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("Draft is not in OPEN status");
+  });
+
+  it("ConflictError → { ok: false, error: msg }", async () => {
+    submitForApprovalMock.mockRejectedValueOnce(
+      new ConflictError("Draft mutated during submit-for-approval — retry"),
+    );
+    const result = await submitDraftForApprovalAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("approveDraftAction", () => {
+  it("missing orgId → { ok: false, error: 'Ingen tenant' }", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: null,
+      userId: null,
+      orgRole: null,
+    });
+    const result = await approveDraftAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    expect(approveDraftMock).not.toHaveBeenCalled();
+  });
+
+  it("missing userId → { ok: false, error: '...identitet kunde inte fastställas' }", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: "org_1",
+      userId: null,
+      orgRole: "org:admin",
+    });
+    const result = await approveDraftAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    expect(approveDraftMock).not.toHaveBeenCalled();
+  });
+
+  it("happy path passes draftOrderId + approvalNote + actorUserId", async () => {
+    const draft = { id: "d", status: "APPROVED" };
+    approveDraftMock.mockResolvedValueOnce({ draft });
+    const result = await approveDraftAction({
+      draftId: "d",
+      approvalNote: "OK",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.draft).toBe(draft);
+    expect(approveDraftMock).toHaveBeenCalledWith({
+      tenantId: "tenant_t",
+      draftOrderId: "d",
+      approvalNote: "OK",
+      actorUserId: "u",
+    });
+  });
+
+  it("ValidationError (self-approval) → { ok: false, error: msg }", async () => {
+    approveDraftMock.mockRejectedValueOnce(
+      new ValidationError("Cannot approve your own approval request"),
+    );
+    const result = await approveDraftAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.error).toBe("Cannot approve your own approval request");
+  });
+
+  it("ConflictError → { ok: false, error: msg }", async () => {
+    approveDraftMock.mockRejectedValueOnce(
+      new ConflictError("Draft mutated during approval — retry"),
+    );
+    const result = await approveDraftAction({ draftId: "d" });
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("rejectDraftAction", () => {
+  it("missing orgId → { ok: false, error: 'Ingen tenant' }", async () => {
+    getAuthMock.mockResolvedValueOnce({
+      orgId: null,
+      userId: null,
+      orgRole: null,
+    });
+    const result = await rejectDraftAction({
+      draftId: "d",
+      rejectionReason: "x",
+    });
+    expect(result.ok).toBe(false);
+    expect(rejectDraftMock).not.toHaveBeenCalled();
+  });
+
+  it("happy path passes draftOrderId + rejectionReason + actorUserId", async () => {
+    const draft = { id: "d", status: "REJECTED" };
+    rejectDraftMock.mockResolvedValueOnce({ draft });
+    const result = await rejectDraftAction({
+      draftId: "d",
+      rejectionReason: "Pris för högt",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.draft).toBe(draft);
+    expect(rejectDraftMock).toHaveBeenCalledWith({
+      tenantId: "tenant_t",
+      draftOrderId: "d",
+      rejectionReason: "Pris för högt",
+      actorUserId: "u",
+    });
+  });
+
+  it("ValidationError (empty reason raised by zod) → { ok: false, error: msg }", async () => {
+    rejectDraftMock.mockRejectedValueOnce(
+      new ValidationError("rejectionReason is required"),
+    );
+    const result = await rejectDraftAction({
+      draftId: "d",
+      rejectionReason: "x",
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it("ConflictError → { ok: false, error: msg }", async () => {
+    rejectDraftMock.mockRejectedValueOnce(
+      new ConflictError("Draft mutated during rejection — retry"),
+    );
+    const result = await rejectDraftAction({
+      draftId: "d",
+      rejectionReason: "x",
+    });
+    expect(result.ok).toBe(false);
   });
 });

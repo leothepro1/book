@@ -141,3 +141,17 @@ export type {
 // ── Invoice PDF (FAS 7.9) ──
 export { renderInvoicePdf } from "./render-invoice-pdf";
 export type { RenderInvoicePdfInput } from "./render-invoice-pdf";
+
+// ── Approval flow (FAS 7.6-lite) ──
+export { submitForApproval, approveDraft, rejectDraft } from "./approval";
+export type {
+  SubmitForApprovalInput,
+  SubmitForApprovalArgs,
+  SubmitForApprovalResult,
+  ApproveDraftInput,
+  ApproveDraftArgs,
+  ApproveDraftResult,
+  RejectDraftInput,
+  RejectDraftArgs,
+  RejectDraftResult,
+} from "./types";

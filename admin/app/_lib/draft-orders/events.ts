@@ -44,7 +44,11 @@ export type DraftEventType =
   // FAS 7.2b.4b.1
   | "CUSTOMER_UPDATED"
   // FAS 7.4
-  | "INVOICE_RESENT";
+  | "INVOICE_RESENT"
+  // FAS 7.6-lite
+  | "APPROVAL_REQUESTED"
+  | "APPROVAL_GRANTED"
+  | "APPROVAL_REJECTED";
 
 /** Where the event originated — freeform but these are the known sources. */
 export type DraftEventActorSource =

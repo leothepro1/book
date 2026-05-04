@@ -25,6 +25,11 @@ import type {
 import { freezePrices, sendInvoice, cancelDraft } from "@/app/_lib/draft-orders/lifecycle";
 import { markDraftAsPaid } from "@/app/_lib/draft-orders/mark-as-paid";
 import { resendInvoice } from "@/app/_lib/draft-orders/resend-invoice";
+import {
+  submitForApproval,
+  approveDraft,
+  rejectDraft,
+} from "@/app/_lib/draft-orders/approval";
 import { sendEmailEvent, type EmailSendResult } from "@/app/_lib/email";
 import { formatSek } from "@/app/_lib/money/format";
 import { formatSwedishDate } from "@/app/_lib/search/dates";
@@ -528,6 +533,82 @@ export async function cancelDraftAction(input: {
       tenantId: actor.tenantId,
       draftOrderId: input.draftId,
       reason: input.reason,
+      actorUserId: actor.userId,
+    });
+    return { ok: true, draft: result.draft };
+  } catch (err) {
+    if (err instanceof NotFoundError) return { ok: false, error: err.message };
+    if (err instanceof ValidationError) return { ok: false, error: err.message };
+    if (err instanceof ConflictError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+// ── Approval actions (FAS 7.6-lite) ────────────────────────────
+
+const NO_USER_ERROR = "Användarens identitet kunde inte fastställas";
+
+export async function submitDraftForApprovalAction(input: {
+  draftId: string;
+  requestNote?: string;
+}): Promise<DraftMutationResult> {
+  const actor = await getActor();
+  if (!actor.tenantId) return { ok: false, error: NO_TENANT_ERROR };
+  if (!actor.userId) return { ok: false, error: NO_USER_ERROR };
+
+  try {
+    const result = await submitForApproval({
+      tenantId: actor.tenantId,
+      draftOrderId: input.draftId,
+      requestNote: input.requestNote,
+      actorUserId: actor.userId,
+    });
+    return { ok: true, draft: result.draft };
+  } catch (err) {
+    if (err instanceof NotFoundError) return { ok: false, error: err.message };
+    if (err instanceof ValidationError) return { ok: false, error: err.message };
+    if (err instanceof ConflictError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+export async function approveDraftAction(input: {
+  draftId: string;
+  approvalNote?: string;
+}): Promise<DraftMutationResult> {
+  const actor = await getActor();
+  if (!actor.tenantId) return { ok: false, error: NO_TENANT_ERROR };
+  if (!actor.userId) return { ok: false, error: NO_USER_ERROR };
+
+  try {
+    const result = await approveDraft({
+      tenantId: actor.tenantId,
+      draftOrderId: input.draftId,
+      approvalNote: input.approvalNote,
+      actorUserId: actor.userId,
+    });
+    return { ok: true, draft: result.draft };
+  } catch (err) {
+    if (err instanceof NotFoundError) return { ok: false, error: err.message };
+    if (err instanceof ValidationError) return { ok: false, error: err.message };
+    if (err instanceof ConflictError) return { ok: false, error: err.message };
+    throw err;
+  }
+}
+
+export async function rejectDraftAction(input: {
+  draftId: string;
+  rejectionReason: string;
+}): Promise<DraftMutationResult> {
+  const actor = await getActor();
+  if (!actor.tenantId) return { ok: false, error: NO_TENANT_ERROR };
+  if (!actor.userId) return { ok: false, error: NO_USER_ERROR };
+
+  try {
+    const result = await rejectDraft({
+      tenantId: actor.tenantId,
+      draftOrderId: input.draftId,
+      rejectionReason: input.rejectionReason,
       actorUserId: actor.userId,
     });
     return { ok: true, draft: result.draft };
