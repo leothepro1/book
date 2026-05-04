@@ -11,6 +11,7 @@
 import type { CalculatedDiscountImpact } from "@/app/_lib/discounts/apply";
 import type { ConditionContext } from "@/app/_lib/discounts/eligibility";
 import { getTaxRate } from "@/app/_lib/orders/tax";
+import type { ComputedTaxLine } from "@/app/_lib/tax/types";
 import type {
   DraftTotalsInput,
   DraftTotalsLineInput,
@@ -209,33 +210,69 @@ export function buildDiscountEngineInput(
  *     input with a projected `orderDiscountImpact` for a would-be code,
  *     without persisting.
  */
+/**
+ * Per-line tax resolution from the Tax-1 calculator (Tax-2 wire-up).
+ * The orchestrator (or preview-totals) maps a `TaxResponse` into this
+ * shape and feeds it back into `buildDraftTotalsInput` so the pure
+ * core can echo `taxCents` instead of computing it inline.
+ */
+export type TaxByLineEntry = {
+  taxCents: bigint;
+  taxLines: ComputedTaxLine[];
+};
+
 export function buildDraftTotalsInput(params: {
   draft: RawDraftOrder;
   lineItems: RawDraftLineItem[];
-  accTaxRateMap: Map<string, number>;
+  /**
+   * Legacy FAS 6.4 path. When set, the input carries `taxRateBp` per
+   * line and the pure core computes tax inline. Tax-2 callers should
+   * pass `taxByLineId` instead.
+   */
+  accTaxRateMap?: Map<string, number>;
+  /**
+   * Tax-2 path. When set, lines carry pre-computed `taxCents` +
+   * `taxLines` from the calculator; the pure core skips inline tax
+   * computation. Mutually exclusive with `accTaxRateMap` in practice
+   * (calculator-supplied taxCents wins when both are present).
+   */
+  taxByLineId?: Map<string, TaxByLineEntry>;
   companyTaxExempt: boolean;
   orderDiscountImpact:
     | Extract<CalculatedDiscountImpact, { valid: true }>
     | null;
 }): DraftTotalsInput {
-  const { draft, lineItems, accTaxRateMap, companyTaxExempt, orderDiscountImpact } =
-    params;
+  const {
+    draft,
+    lineItems,
+    accTaxRateMap,
+    taxByLineId,
+    companyTaxExempt,
+    orderDiscountImpact,
+  } = params;
 
-  const lines: DraftTotalsLineInput[] = lineItems.map((l) => ({
-    id: l.id,
-    lineType: l.lineType,
-    unitPriceCents: l.unitPriceCents,
-    quantity: l.quantity,
-    subtotalCents: l.subtotalCents,
-    taxable: l.taxable,
-    taxRateBp: resolveLineTaxRateBp(l, accTaxRateMap),
-    lineDiscountCents: l.lineDiscountCents,
-    lineDiscountType: l.lineDiscountType,
-    lineDiscountValue:
-      l.lineDiscountValue === null || l.lineDiscountValue === undefined
-        ? null
-        : String(l.lineDiscountValue),
-  }));
+  const lines: DraftTotalsLineInput[] = lineItems.map((l) => {
+    const fromCalculator = taxByLineId?.get(l.id);
+    return {
+      id: l.id,
+      lineType: l.lineType,
+      unitPriceCents: l.unitPriceCents,
+      quantity: l.quantity,
+      subtotalCents: l.subtotalCents,
+      taxable: l.taxable,
+      taxRateBp: accTaxRateMap
+        ? resolveLineTaxRateBp(l, accTaxRateMap)
+        : undefined,
+      taxCents: fromCalculator?.taxCents,
+      taxLines: fromCalculator?.taxLines,
+      lineDiscountCents: l.lineDiscountCents,
+      lineDiscountType: l.lineDiscountType,
+      lineDiscountValue:
+        l.lineDiscountValue === null || l.lineDiscountValue === undefined
+          ? null
+          : String(l.lineDiscountValue),
+    };
+  });
 
   const ctxBuyerKind: "GUEST" | "COMPANY" =
     draft.buyerKind === "COMPANY" ? "COMPANY" : "GUEST";

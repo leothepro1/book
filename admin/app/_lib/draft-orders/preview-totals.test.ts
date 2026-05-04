@@ -3,6 +3,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/app/_lib/db/prisma", () => ({
   prisma: {
     accommodation: { findMany: vi.fn() },
+    // Tax-2: preview-totals now resolves fulfillment country + calls
+    // calculateTax (which itself reads tenantTaxConfig). Defaults give
+    // "SE" + builtin so legacy fixtures keep working unchanged.
+    tenant: {
+      findFirst: vi
+        .fn()
+        .mockResolvedValue({ addressCountry: "SE" }),
+    },
+    tenantTaxConfig: {
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
   },
 }));
 
