@@ -7,6 +7,15 @@ const mockPrisma = {
   draftOrder: { findFirst: vi.fn() },
   accommodation: { findMany: vi.fn() },
   companyLocation: { findFirst: vi.fn() },
+  // Tax-2: orchestrator now resolves fulfillment country + product
+  // type + tenant tax config in addition to the FAS 6.4 reads. Defaults
+  // give "SE" fulfillment + builtin provider + zero PRODUCT lookups so
+  // pre-existing fixtures keep working unchanged.
+  tenant: {
+    findFirst: vi.fn().mockResolvedValue({ addressCountry: "SE" }),
+  },
+  product: { findMany: vi.fn().mockResolvedValue([]) },
+  tenantTaxConfig: { findFirst: vi.fn().mockResolvedValue(null) },
 };
 
 vi.mock("@/app/_lib/db/prisma", () => ({ prisma: mockPrisma }));
@@ -17,8 +26,6 @@ vi.mock("@/app/_lib/discounts/apply", () => ({
   calculateDiscountImpact: (...args: unknown[]) =>
     mockCalculateDiscountImpact(...args),
 }));
-
-// Tax stub always returns 0 — no mock needed; identity pass-through.
 
 // Import after mocks.
 const { computeDraftTotals } = await import("./orchestrator");
@@ -91,6 +98,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockPrisma.accommodation.findMany.mockResolvedValue([]);
   mockPrisma.companyLocation.findFirst.mockResolvedValue(null);
+  // Tax-2 defaults — re-set after clearAllMocks().
+  mockPrisma.tenant.findFirst.mockResolvedValue({ addressCountry: "SE" });
+  mockPrisma.product.findMany.mockResolvedValue([]);
+  mockPrisma.tenantTaxConfig.findFirst.mockResolvedValue(null);
 });
 
 // ── Draft not found ─────────────────────────────────────────────
@@ -134,6 +145,12 @@ describe("computeDraftTotals — tx injection", () => {
       },
       accommodation: { findMany: vi.fn().mockResolvedValue([]) },
       companyLocation: { findFirst: vi.fn().mockResolvedValue(null) },
+      // Tax-2 reads — defaults route through tx as well, never global.
+      tenant: {
+        findFirst: vi.fn().mockResolvedValue({ addressCountry: "SE" }),
+      },
+      product: { findMany: vi.fn().mockResolvedValue([]) },
+      tenantTaxConfig: { findFirst: vi.fn().mockResolvedValue(null) },
     };
 
     const result = await computeDraftTotals(
@@ -370,17 +387,25 @@ describe("computeDraftTotals — tax rate resolution", () => {
     expect(result.taxCents).toBe(BigInt(0));
   });
 
-  it("PRODUCT line uses getTaxRate() stub (0 today)", async () => {
+  it("PRODUCT line in SE → calculator returns 25% RETAIL_GENERAL", async () => {
+    // Tax-2: orchestrator now calls calculateTax(). PRODUCT lines map
+    // to RETAIL_GENERAL (Q1/Q2 default), and SE rate for that category
+    // is 25%. The legacy `taxRateBp=0` path is gone.
     mockPrisma.draftOrder.findFirst.mockResolvedValue(
       makeRawDraft({ taxesIncluded: false }),
     );
 
     const result = await computeDraftTotals("tenant_1", "draft_1");
 
-    expect(result.taxCents).toBe(BigInt(0));
+    // 10000 öre × 25% = 2500 öre
+    expect(result.taxCents).toBe(BigInt(2500));
   });
 
-  it("accommodation with no Accommodation row → 0 bp fallback", async () => {
+  it("accommodation with no Accommodation row → calculator still classifies via lineType", async () => {
+    // Tax-2: tax category resolution no longer reads
+    // Accommodation.taxRate. ACCOMMODATION → ACCOMMODATION_HOTEL
+    // (Q1 default), SE rate 12% — orchestrator emits tax accordingly
+    // even when the row is missing from the catalog.
     mockPrisma.draftOrder.findFirst.mockResolvedValue(
       makeRawDraft({
         taxesIncluded: false,
@@ -397,7 +422,8 @@ describe("computeDraftTotals — tax rate resolution", () => {
 
     const result = await computeDraftTotals("tenant_1", "draft_1");
 
-    expect(result.taxCents).toBe(BigInt(0));
+    // 10000 öre × 12% = 1200 öre
+    expect(result.taxCents).toBe(BigInt(1200));
   });
 });
 
@@ -573,5 +599,161 @@ describe("computeDraftTotals — stay window for discount ctx", () => {
     expect(ctx.nights).toBe(0);
     expect(ctx.checkInDate).toBeUndefined();
     expect(ctx.checkOutDate).toBeUndefined();
+  });
+});
+
+// ── Tax-2: calculator integration ───────────────────────────────
+
+describe("computeDraftTotals — Tax-2 calculator integration", () => {
+  it("ACCOMMODATION line + SE → 12% via calculator", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeRawDraft({
+        taxesIncluded: false,
+        lineItems: [
+          makeRawLine({
+            id: "ln_acc",
+            lineType: "ACCOMMODATION",
+            accommodationId: "acc_1",
+            productId: null,
+            checkInDate: new Date("2026-06-01"),
+            checkOutDate: new Date("2026-06-06"),
+            subtotalCents: BigInt(50000),
+            unitPriceCents: BigInt(10000),
+            quantity: 5,
+          }),
+        ],
+      }),
+    );
+    const result = await computeDraftTotals("tenant_1", "draft_1");
+    // 50000 öre × 12% = 6000 öre
+    expect(result.taxCents).toBe(BigInt(6000));
+    expect(result.perLine[0].taxLines).toHaveLength(1);
+    expect(result.perLine[0].taxLines[0].rate).toBe(0.12);
+    expect(result.perLine[0].taxLines[0].source).toBe("builtin");
+  });
+
+  it("long-stay (>30 nights) → ACCOMMODATION_LONG_STAY rate=0", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeRawDraft({
+        taxesIncluded: false,
+        lineItems: [
+          makeRawLine({
+            id: "ln_long",
+            lineType: "ACCOMMODATION",
+            accommodationId: "acc_1",
+            productId: null,
+            checkInDate: new Date("2026-06-01"),
+            checkOutDate: new Date("2026-07-15"),
+            subtotalCents: BigInt(500000),
+            unitPriceCents: BigInt(10000),
+            quantity: 50,
+          }),
+        ],
+      }),
+    );
+    const result = await computeDraftTotals("tenant_1", "draft_1");
+    expect(result.taxCents).toBe(BigInt(0));
+    // Audit-trail TaxLine still emitted (Q5).
+    expect(result.perLine[0].taxLines).toHaveLength(1);
+    expect(result.perLine[0].taxLines[0].rate).toBe(0);
+    expect(result.perLine[0].taxLines[0].title).toMatch(/Momsbefriad/);
+  });
+
+  it("companyTaxExempt (taxSetting=EXEMPT) → 0 across lines + warning", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeRawDraft({
+        buyerKind: "COMPANY",
+        companyLocationId: "cl_1",
+        taxesIncluded: false,
+      }),
+    );
+    mockPrisma.companyLocation.findFirst.mockResolvedValue({
+      taxSetting: "EXEMPT",
+      taxExemptions: [],
+      taxId: "SE123456789",
+    });
+    const result = await computeDraftTotals("tenant_1", "draft_1");
+    expect(result.taxCents).toBe(BigInt(0));
+    expect(result.perLine[0].taxLines).toEqual([]);
+  });
+
+  it("calculator warnings propagate as tax.<warning> prefix", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeRawDraft({
+        taxesIncluded: false,
+        buyerKind: "COMPANY",
+        companyLocationId: "cl_1",
+      }),
+    );
+    mockPrisma.companyLocation.findFirst.mockResolvedValue({
+      taxSetting: "EXEMPT",
+      taxExemptions: [],
+      taxId: null,
+    });
+    const result = await computeDraftTotals("tenant_1", "draft_1");
+    expect(result.warnings).toContain("tax.collect_mode_do_not_collect");
+  });
+
+  it("non-Nordic country (US tenant) → calculator emits no_rate_for_country", async () => {
+    mockPrisma.tenant.findFirst.mockResolvedValue({ addressCountry: "US" });
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeRawDraft({ taxesIncluded: false }),
+    );
+    const result = await computeDraftTotals("tenant_1", "draft_1");
+    expect(result.taxCents).toBe(BigInt(0));
+    expect(result.warnings).toContain("tax.no_rate_for_country:US");
+  });
+
+  it("frozen draft short-circuits — no calculator call", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeRawDraft({
+        pricesFrozenAt: new Date("2026-04-01"),
+        totalTaxCents: BigInt(7777), // pre-tax-2 frozen value
+      }),
+    );
+    const result = await computeDraftTotals("tenant_1", "draft_1");
+    expect(result.source).toBe("FROZEN_SNAPSHOT");
+    expect(result.taxCents).toBe(BigInt(7777));
+    // tenant.findFirst would have been called by Tax-2's path; the
+    // frozen short-circuit returns BEFORE it runs.
+    expect(mockPrisma.tenant.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("PRODUCT line resolves productType (GIFT_CARD → FEE_OTHER → 25% in SE)", async () => {
+    mockPrisma.product.findMany.mockResolvedValue([
+      { id: "prod_1", productType: "GIFT_CARD" },
+    ]);
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeRawDraft({ taxesIncluded: false }),
+    );
+    const result = await computeDraftTotals("tenant_1", "draft_1");
+    expect(result.perLine[0].taxLines[0].rate).toBe(0.25);
+  });
+
+  it("perLine breakdown carries the calculator's TaxLine for downstream persistence", async () => {
+    mockPrisma.draftOrder.findFirst.mockResolvedValue(
+      makeRawDraft({
+        taxesIncluded: false,
+        lineItems: [
+          makeRawLine({
+            id: "L1",
+            lineType: "ACCOMMODATION",
+            accommodationId: "acc_1",
+            productId: null,
+            checkInDate: new Date("2026-06-01"),
+            checkOutDate: new Date("2026-06-06"),
+            subtotalCents: BigInt(50000),
+            unitPriceCents: BigInt(10000),
+            quantity: 5,
+          }),
+        ],
+      }),
+    );
+    const result = await computeDraftTotals("tenant_1", "draft_1");
+    const tl = result.perLine[0].taxLines[0];
+    expect(tl.jurisdiction).toBe("SE");
+    expect(tl.taxAmount).toBe(BigInt(6000));
+    expect(tl.presentmentTaxAmount).toBe(BigInt(6000)); // Q4 LOCKED
+    expect(tl.channelLiable).toBe(true);
   });
 });

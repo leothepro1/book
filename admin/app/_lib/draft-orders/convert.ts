@@ -62,6 +62,7 @@ import {
 import { resolveAdapter } from "@/app/_lib/integrations/resolve";
 import { createDraftOrderEventInTx } from "./events";
 import { transitionDraftStatusInTx } from "./lifecycle";
+import { reparentTaxLinesDraftToOrder } from "./convert-tax-lines";
 import { buildDiscountEngineInput } from "./calculator";
 import type { RawDraftOrder, RawDraftLineItem } from "./calculator";
 import {
@@ -837,6 +838,19 @@ export async function convertDraftToOrder(
       const orderLineItems = await createOrderLineItemsFromDraftInTx(tx, {
         order,
         draft: fresh,
+      });
+
+      // Tax-2 B.5: reparent TaxLine rows from draft → order in the
+      // same tx. Position-based pairing matches
+      // createOrderLineItemsFromDraftInTx's iteration order. Pre-Tax-2
+      // frozen drafts have 0 TaxLines → no-op (Q8 advisory).
+      const taxLinePairs = fresh.lineItems.map((dli, idx) => ({
+        draftLineItemId: dli.id,
+        orderLineItemId: orderLineItems[idx].id,
+      }));
+      await reparentTaxLinesDraftToOrder(tx, {
+        tenantId: fresh.tenantId,
+        pairs: taxLinePairs,
       });
 
       const bookings = await createBookingsFromDraftInTx(tx, {

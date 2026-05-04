@@ -29,13 +29,17 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/app/_lib/db/prisma";
 import { calculateDiscountImpact } from "@/app/_lib/discounts/apply";
 import { NotFoundError } from "@/app/_lib/errors/service-errors";
-import { computeDraftTotalsPure } from "./core";
+import { calculateTax } from "@/app/_lib/tax";
+import type { TaxExemptionCode } from "@/app/_lib/tax/exemptions";
+import { computeDraftTotalsPure, computeTaxableBasesPure } from "./core";
 import {
   buildDiscountEngineInput,
   buildDraftTotalsInput,
   type RawDraftOrder,
-  type RawDraftLineItem,
+  type TaxByLineEntry,
 } from "./context";
+import { resolveFulfillmentCountry } from "./fulfillment-country";
+import { buildTaxRequestFromDraft } from "./tax-request";
 import type {
   DraftCalculatorOptions,
   DraftTotals,
@@ -44,6 +48,14 @@ import type {
 } from "./types";
 
 type Tx = Prisma.TransactionClient;
+
+/** Map from Prisma TaxSetting enum → calculator collectMode (Q9 A). */
+function mapCollectMode(
+  taxSetting: "COLLECT" | "EXEMPT" | "COLLECT_UNLESS_EXEMPT",
+): "COLLECT" | "DO_NOT_COLLECT" | "COLLECT_UNLESS_EXEMPT" {
+  if (taxSetting === "EXEMPT") return "DO_NOT_COLLECT";
+  return taxSetting;
+}
 
 // ── Public API ─────────────────────────────────────────────────
 
@@ -82,32 +94,32 @@ export async function computeDraftTotals(
     return assembleFrozenSnapshot(draft);
   }
 
-  // ── Resolve accommodation tax rates (batch) ──
-  const accommodationIds = Array.from(
-    new Set(
-      draft.lineItems
-        .filter((l) => l.lineType === "ACCOMMODATION" && l.accommodationId)
-        .map((l) => l.accommodationId as string),
-    ),
-  );
-  const accTaxRateMap = new Map<string, number>();
-  if (accommodationIds.length > 0) {
-    const rows = await db.accommodation.findMany({
-      where: { id: { in: accommodationIds }, tenantId },
-      select: { id: true, taxRate: true },
-    });
-    for (const row of rows) accTaxRateMap.set(row.id, row.taxRate);
-  }
-
-  // ── Resolve companyTaxExempt (audit §5) ──
+  // ── Resolve B2B context (CompanyLocation tax-settings) ──
   let companyTaxExempt = false;
+  let companyLocationTaxContext: {
+    taxExemptions: TaxExemptionCode[];
+    collectMode: "COLLECT" | "DO_NOT_COLLECT" | "COLLECT_UNLESS_EXEMPT";
+    vatNumber?: string;
+    taxRegistrationId?: string;
+  } | undefined = undefined;
   if (draft.buyerKind === "COMPANY" && draft.companyLocationId) {
     const loc = await db.companyLocation.findFirst({
       where: { id: draft.companyLocationId, tenantId },
-      select: { taxSetting: true },
+      select: { taxSetting: true, taxExemptions: true, taxId: true },
     });
-    if (loc?.taxSetting === "EXEMPT") companyTaxExempt = true;
-    // COLLECT_UNLESS_EXEMPT is treated as COLLECT in 6.4.
+    if (loc) {
+      const collectMode = mapCollectMode(loc.taxSetting);
+      // EXEMPT → companyTaxExempt + DO_NOT_COLLECT both express the
+      // same intent. Honour the legacy flag as a defense-in-depth
+      // belt-and-braces (Q9 advisory A: delegate to calculator AND
+      // suppress at core level so the contract is bulletproof).
+      if (loc.taxSetting === "EXEMPT") companyTaxExempt = true;
+      companyLocationTaxContext = {
+        taxExemptions: (loc.taxExemptions ?? []) as TaxExemptionCode[],
+        collectMode,
+        vatNumber: loc.taxId ?? undefined,
+      };
+    }
   }
 
   // ── Resolve discount code (CODE path only — see SCOPE NOTE) ──
@@ -133,11 +145,88 @@ export async function computeDraftTotals(
     }
   }
 
-  // ── Assemble core input via shared builder ──
+  // ── Pre-compute discount-adjusted bases for the calculator ──
+  // We need these BEFORE calling calculateTax so the calculator sees
+  // the correct taxable base per line. Build a "no-tax" input shape
+  // first, run Steps 1-5 via the pure helper, then layer calculator
+  // results back in for the final pass.
+  const baseInput = buildDraftTotalsInput({
+    draft,
+    lineItems: draft.lineItems,
+    companyTaxExempt,
+    orderDiscountImpact,
+  });
+  const taxableBaseByLineId = computeTaxableBasesPure(baseInput);
+
+  // ── Pre-load Product.productType for PRODUCT lines (taxonomy lookup) ──
+  const productIds = Array.from(
+    new Set(
+      draft.lineItems
+        .filter((l) => l.lineType === "PRODUCT" && l.productId)
+        .map((l) => l.productId as string),
+    ),
+  );
+  const productTypeById = new Map<string, "STANDARD" | "GIFT_CARD">();
+  if (productIds.length > 0) {
+    const rows = await db.product.findMany({
+      where: { id: { in: productIds }, tenantId },
+      select: { id: true, productType: true },
+    });
+    for (const row of rows) {
+      productTypeById.set(
+        row.id,
+        row.productType as "STANDARD" | "GIFT_CARD",
+      );
+    }
+  }
+
+  // ── Resolve fulfillment country (Q3 LOCKED) ──
+  const fulfillmentCountryCode = await resolveFulfillmentCountry(
+    tenantId,
+    tx,
+  );
+
+  // ── Call calculateTax (Tax-1 entry-point) ──
+  const taxRequest = buildTaxRequestFromDraft({
+    draft,
+    lineItems: draft.lineItems,
+    taxableBaseByLineId,
+    productTypeById,
+    fulfillmentCountryCode,
+    // V1: buyer country = fulfillment country (intra-country default).
+    // Future: extract from CompanyLocation.billingAddress JSON when
+    // cross-border B2B becomes a real case.
+    buyerCountryCode: fulfillmentCountryCode,
+    shopCurrency: draft.currency,
+    presentmentCurrency: draft.currency, // Q4 LOCKED
+    companyLocation: companyLocationTaxContext,
+  });
+  const taxResponse = await calculateTax(taxRequest);
+
+  // ── Map TaxResponse → taxByLineId for the final pure-core pass ──
+  const taxByLineId = new Map<string, TaxByLineEntry>();
+  for (const respLine of taxResponse.lines) {
+    const taxCents = respLine.taxLines.reduce(
+      (acc, tl) => acc + tl.taxAmount,
+      BigInt(0),
+    );
+    taxByLineId.set(respLine.lineId, {
+      taxCents,
+      taxLines: respLine.taxLines,
+    });
+  }
+
+  // Surface calculator warnings via `tax.<warning>` prefix so callers
+  // (admin UI, logs) can filter them.
+  for (const w of taxResponse.warnings) {
+    orchestratorWarnings.push(`tax.${w}`);
+  }
+
+  // ── Assemble final core input via shared builder ──
   const input = buildDraftTotalsInput({
     draft,
     lineItems: draft.lineItems,
-    accTaxRateMap,
+    taxByLineId,
     companyTaxExempt,
     orderDiscountImpact,
   });
@@ -228,6 +317,12 @@ function assembleFrozenSnapshot(draft: RawDraftOrder): DraftTotals {
       totalLineDiscountCents: l.lineDiscountCents,
       taxableBaseCents: base < BigInt(0) ? BigInt(0) : base,
       taxCents: l.taxAmountCents,
+      // Frozen snapshots predating Tax-2 have no per-jurisdiction
+      // breakdown stored on the row. The TaxLine table (B.4) carries
+      // the canonical per-jurisdiction history for post-Tax-2 freezes;
+      // surfacing it here would require an extra query — defer to a
+      // later phase if a UI needs it.
+      taxLines: [],
       totalCents: l.totalCents,
     };
   });

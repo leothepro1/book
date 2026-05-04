@@ -15,6 +15,7 @@
  */
 
 import type { CalculatedDiscountImpact } from "@/app/_lib/discounts/apply";
+import type { ComputedTaxLine } from "@/app/_lib/tax/types";
 
 // ── Line-level input ───────────────────────────────────────────
 
@@ -46,10 +47,28 @@ export type DraftTotalsLineInput = {
   /** DraftLineItem.taxable. When false, tax is always 0 for this line. */
   taxable: boolean;
   /**
+   * @deprecated Tax-2 — use `taxCents` instead. Kept for backward
+   * compatibility with the FAS 6.4 fixture-built tests; will be removed
+   * once all callers (orchestrator + preview-totals + service-layer
+   * tests) populate `taxCents` directly.
+   *
    * Resolved tax rate in basis points (1200 = 12%). Orchestrator's job
    * to resolve per the audit §2 chain. Core never does DB lookups.
    */
-  taxRateBp: number;
+  taxRateBp?: number;
+  /**
+   * Pre-computed tax in ören. Tax-2: orchestrator calls
+   * `calculateTax()` and populates this per line, replacing the
+   * legacy `taxRateBp` + inline compute. When set, Step 6 of the pure
+   * core skips inline computation and uses this verbatim.
+   */
+  taxCents?: bigint;
+  /**
+   * Per-jurisdiction breakdown emitted by the Tax-1 calculator.
+   * Pass-through to the per-line breakdown for downstream persistence
+   * (Tax-2 B.4 freezePrices snapshots TaxLine rows from this).
+   */
+  taxLines?: ComputedTaxLine[];
   /**
    * Staff-manual fixed discount in ören. Takes precedence when > 0n.
    * Set by admin UI via numeric input.
@@ -129,6 +148,13 @@ export type DraftTotalsLineBreakdown = {
   taxableBaseCents: bigint;
   /** Computed per Step 6; 0n when `!taxable` or `companyTaxExempt`. */
   taxCents: bigint;
+  /**
+   * Per-jurisdiction TaxLines for this line, as emitted by the Tax-1
+   * calculator. Empty array when no calculator was run (FAS 6.4
+   * legacy path) or when the line is non-taxable / exempt. Tax-2 B.4
+   * snapshots these into the TaxLine table on freezePrices.
+   */
+  taxLines: ComputedTaxLine[];
   /**
    * Line contribution to the draft total. Semantics depend on
    * `taxesIncluded`:

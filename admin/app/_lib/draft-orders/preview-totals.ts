@@ -17,12 +17,19 @@ import { z } from "zod";
 import type { DraftOrder } from "@prisma/client";
 import { prisma } from "@/app/_lib/db/prisma";
 import { calculateDiscountImpact } from "@/app/_lib/discounts/apply";
-import { computeDraftTotalsPure } from "./calculator/core";
+import { calculateTax } from "@/app/_lib/tax";
+import {
+  computeDraftTotalsPure,
+  computeTaxableBasesPure,
+} from "./calculator/core";
 import {
   buildDraftTotalsInput,
   type RawDraftOrder,
   type RawDraftLineItem,
+  type TaxByLineEntry,
 } from "./calculator/context";
+import { resolveFulfillmentCountry } from "./calculator/fulfillment-country";
+import { buildTaxRequestFromDraft } from "./calculator/tax-request";
 import { resolveLineForAdd } from "./lines";
 
 // ── Public types ───────────────────────────────────────────────
@@ -176,9 +183,8 @@ export async function previewDraftTotals(
 
   // Build synthetic RawDraftLineItem rows for the lines that priced ok.
   // Failed lines are excluded from totals but remembered for breakdown.
-  const taxRateByAccId = new Map<string, number>(
-    accommodations.map((a) => [a.id, a.taxRate]),
-  );
+  // Tax-2: Accommodation.taxRate basis-points lookup is no longer used —
+  // calculator-driven flow takes over via calculateTax() below.
 
   const okOutcomes = outcomes.filter(
     (o): o is Extract<LineOutcome, { ok: true }> => o.ok,
@@ -280,12 +286,49 @@ export async function previewDraftTotals(
     }
   }
 
-  // Compute via pure core.
+  // Tax-2: pre-compute discount-adjusted bases, call calculateTax,
+  // then run the final totals pass.
+  const baseInput = buildDraftTotalsInput({
+    draft: syntheticRawDraft,
+    lineItems: syntheticLineItems,
+    companyTaxExempt: false,
+    orderDiscountImpact,
+  });
+  const taxableBaseByLineId = computeTaxableBasesPure(baseInput);
+
+  const fulfillmentCountryCode = await resolveFulfillmentCountry(
+    params.tenantId,
+  );
+
+  const taxRequest = buildTaxRequestFromDraft({
+    draft: syntheticRawDraft,
+    lineItems: syntheticLineItems,
+    taxableBaseByLineId,
+    productTypeById: new Map(), // preview is ACCOMMODATION-only today
+    fulfillmentCountryCode,
+    buyerCountryCode: fulfillmentCountryCode,
+    shopCurrency: currency,
+    presentmentCurrency: currency, // Q4 LOCKED
+  });
+  const taxResponse = await calculateTax(taxRequest);
+
+  const taxByLineId = new Map<string, TaxByLineEntry>();
+  for (const respLine of taxResponse.lines) {
+    const taxCents = respLine.taxLines.reduce(
+      (acc, tl) => acc + tl.taxAmount,
+      BigInt(0),
+    );
+    taxByLineId.set(respLine.lineId, {
+      taxCents,
+      taxLines: respLine.taxLines,
+    });
+  }
+
   const totals = computeDraftTotalsPure(
     buildDraftTotalsInput({
       draft: syntheticRawDraft,
       lineItems: syntheticLineItems,
-      accTaxRateMap: taxRateByAccId,
+      taxByLineId,
       companyTaxExempt: false,
       orderDiscountImpact,
     }),

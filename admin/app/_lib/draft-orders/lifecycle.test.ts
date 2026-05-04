@@ -15,6 +15,11 @@ const mockTx = {
   },
   draftLineItem: { update: vi.fn() },
   draftOrderEvent: { create: vi.fn() },
+  // Tax-2 B.4: persistTaxLinesForDraft writes inside the freezePrices tx.
+  taxLine: {
+    deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    createMany: vi.fn().mockResolvedValue({ count: 0 }),
+  },
 };
 
 const mockPrisma = {

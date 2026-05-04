@@ -134,7 +134,19 @@ function allocateOrderDiscount(
 }
 
 // ── Step 6: Tax calculation ────────────────────────────────────
+//
+// Tax-2: orchestrator calls `calculateTax()` BEFORE invoking the pure
+// core and supplies pre-computed `line.taxCents` per line. The legacy
+// FAS 6.4 path supplied `taxRateBp` and let core compute inline — that
+// path is preserved as a fallback so existing tests + the discount-
+// preview path keep working until they migrate. When `taxCents` is set
+// it wins unconditionally.
 
+/**
+ * @deprecated Tax-2 — orchestrator now supplies `line.taxCents` from
+ * the Tax-1 calculator. Kept only for the FAS 6.4 legacy path until
+ * all callers migrate.
+ */
 function computeLineTax(
   taxableBase: bigint,
   taxRateBp: number,
@@ -151,6 +163,70 @@ function computeLineTax(
 }
 
 // ── Public API ─────────────────────────────────────────────────
+
+/**
+ * Compute the per-line taxable base that would feed the Tax-1
+ * calculator, WITHOUT computing tax itself. Pure helper used by the
+ * orchestrator + preview-totals to build a TaxRequest before the
+ * calculator runs (Tax-2 wire-up).
+ *
+ * Runs Steps 1-5 of the pricing pipeline:
+ *   1. Snapshot validation + quantity clamp.
+ *   2. Manual line discount.
+ *   3. Pre-order-discount per-line nets.
+ *   4. Order-level discount allocation.
+ *   5. Suppress (non-taxable / company-exempt) → 0.
+ *
+ * Returns: per-line `Map<lineId, taxableBaseCents>`. Suppressed lines
+ * map to `0n` so the calculator never sees them as taxable.
+ *
+ * The duplication with `computeDraftTotalsPure` Steps 1-5 is
+ * intentional — orchestrator computes bases ONCE here, then runs the
+ * full pipeline ONCE more for the final totals. The Steps 1-5 work is
+ * O(lines) and trivially cheap.
+ */
+export function computeTaxableBasesPure(
+  input: DraftTotalsInput,
+): Map<string, bigint> {
+  const out = new Map<string, bigint>();
+  const lines = input.lines.map((line) => {
+    const quantity = line.quantity < 0 ? 0 : line.quantity;
+    return { ...line, quantity };
+  });
+
+  // Steps 2-3: manual discounts + pre-order-discount nets.
+  const sink = new Set<string>(); // discard warnings; not the helper's job
+  const manualDiscounts = lines.map((line) =>
+    computeManualLineDiscount(line, sink),
+  );
+  const lineNets = lines.map((line, i) =>
+    clampNonNeg(line.subtotalCents - manualDiscounts[i]),
+  );
+  const lineNetsById = new Map<string, bigint>();
+  const lineOrder: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    lineNetsById.set(lines[i].id, lineNets[i]);
+    lineOrder.push(lines[i].id);
+  }
+
+  // Step 4: order-level allocation.
+  const orderAllocations = input.orderDiscountImpact
+    ? allocateOrderDiscount(input.orderDiscountImpact, lineNetsById, lineOrder)
+    : new Map<string, bigint>();
+
+  // Step 5: post-discount taxable base, suppress if non-taxable / exempt.
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const manual = manualDiscounts[i];
+    const orderAlloc = orderAllocations.get(line.id) ?? BigInt(0);
+    const baseAfterDiscount = clampNonNeg(
+      line.subtotalCents - manual - orderAlloc,
+    );
+    const suppressed = !line.taxable || input.companyTaxExempt;
+    out.set(line.id, suppressed ? BigInt(0) : baseAfterDiscount);
+  }
+  return out;
+}
 
 /**
  * Compute a DraftOrder's totals from a pre-assembled input.
@@ -216,12 +292,18 @@ export function computeDraftTotalsPure(
     const suppressed = !line.taxable || input.companyTaxExempt;
     const taxableBase = suppressed ? BigInt(0) : baseAfterDiscount;
 
-    // Step 6: tax
-    const taxCents = computeLineTax(
-      taxableBase,
-      line.taxRateBp,
-      input.taxesIncluded,
-    );
+    // Step 6: tax — Tax-2 prefers orchestrator-supplied `line.taxCents`
+    // (computed via the Tax-1 calculator). Falls back to the FAS 6.4
+    // inline computation when the legacy `taxRateBp` path is active.
+    const taxCents = suppressed
+      ? BigInt(0)
+      : line.taxCents !== undefined
+        ? line.taxCents
+        : computeLineTax(
+            taxableBase,
+            line.taxRateBp ?? 0,
+            input.taxesIncluded,
+          );
 
     // Step 8 per-line: line contribution to total
     const lineTotal = input.taxesIncluded
@@ -236,6 +318,10 @@ export function computeDraftTotalsPure(
       totalLineDiscountCents: totalLineDiscount,
       taxableBaseCents: taxableBase,
       taxCents,
+      // When suppressed (non-taxable / company-exempt), drop the
+      // calculator's audit rows — they reflect "what would have been"
+      // before the kill-switch fired.
+      taxLines: suppressed ? [] : (line.taxLines ?? []),
       totalCents: lineTotal,
     });
 
