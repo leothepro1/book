@@ -46,6 +46,7 @@ import {
   type RawDraftOrder,
 } from "./calculator";
 import { createDraftOrderEventInTx, type DraftEventActorSource } from "./events";
+import { persistTaxLinesForDraft } from "./freeze-tax-lines";
 import { canTransition } from "./state-machine";
 import {
   CancelDraftInputSchema,
@@ -173,6 +174,16 @@ export async function freezePrices(
         },
       });
     }
+
+    // Tax-2 B.4: snapshot per-jurisdiction TaxLine rows in the same tx.
+    // Idempotent (Q6 LOCKED) — deleteMany + createMany. Empty
+    // taxLines arrays (calculator tier-3 fallback / non-taxable) still
+    // run the cleanup so the table stays consistent.
+    await persistTaxLinesForDraft(tx, {
+      tenantId: draft.tenantId,
+      perLine: totals.perLine,
+      presentmentCurrency: draft.currency, // Q4 LOCKED: equals shopCurrency
+    });
 
     await createDraftOrderEventInTx(tx, {
       tenantId: draft.tenantId,
