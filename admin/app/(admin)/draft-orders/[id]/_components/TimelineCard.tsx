@@ -120,6 +120,12 @@ function getEventTitle(type: string): string {
       return "Reservation misslyckades";
     case "EXPIRED_CLEANUP":
       return "Utkast utgick";
+    case "APPROVAL_REQUESTED":
+      return "Godkännande begärt";
+    case "APPROVAL_GRANTED":
+      return "Godkänt";
+    case "APPROVAL_REJECTED":
+      return "Avslagit";
     default:
       return "Aktivitet";
   }
@@ -163,6 +169,12 @@ function getEventIcon(type: string): string {
       return "event_busy";
     case "EXPIRED_CLEANUP":
       return "hourglass_empty";
+    case "APPROVAL_REQUESTED":
+      return "pending";
+    case "APPROVAL_GRANTED":
+      return "verified";
+    case "APPROVAL_REJECTED":
+      return "block";
     default:
       return "circle";
   }
@@ -348,6 +360,24 @@ function getEventSubtitle(event: TimelineEvent): string | null {
 
     case "HOLD_FAILED": {
       return typeof meta.error === "string" ? meta.error : null;
+    }
+
+    case "APPROVAL_REQUESTED": {
+      const note =
+        typeof meta.requestNote === "string" ? meta.requestNote : null;
+      return note;
+    }
+
+    case "APPROVAL_GRANTED": {
+      const note =
+        typeof meta.approvalNote === "string" ? meta.approvalNote : null;
+      return note;
+    }
+
+    case "APPROVAL_REJECTED": {
+      const reason =
+        typeof meta.rejectionReason === "string" ? meta.rejectionReason : null;
+      return reason ? `Anledning: ${reason}` : null;
     }
 
     default:

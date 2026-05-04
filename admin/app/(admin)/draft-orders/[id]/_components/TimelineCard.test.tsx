@@ -85,6 +85,9 @@ describe("TimelineCard — title mapping for all known event-types", () => {
     ["HOLD_RELEASED", "Reservation släppt"],
     ["HOLD_FAILED", "Reservation misslyckades"],
     ["EXPIRED_CLEANUP", "Utkast utgick"],
+    ["APPROVAL_REQUESTED", "Godkännande begärt"],
+    ["APPROVAL_GRANTED", "Godkänt"],
+    ["APPROVAL_REJECTED", "Avslagit"],
   ];
 
   for (const [type, expectedTitle] of expectations) {
@@ -357,6 +360,77 @@ describe("TimelineCard — metadata subtitle (defensive extraction)", () => {
     );
     expect(screen.getByText("Status ändrad")).toBeTruthy();
     expect(screen.queryByText(/→/)).toBeNull();
+  });
+
+  // ── FAS 7.6-lite: approval event subtitle rendering ──────────
+
+  it("APPROVAL_REQUESTED with requestNote → subtitle shows note verbatim", () => {
+    render(
+      <TimelineCard
+        events={[
+          buildEvent({
+            type: "APPROVAL_REQUESTED",
+            metadata: { requestNote: "Brådskande, prio kund" },
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByText("Brådskande, prio kund")).toBeTruthy();
+  });
+
+  it("APPROVAL_REQUESTED with no metadata → title only, no crash", () => {
+    render(
+      <TimelineCard
+        events={[buildEvent({ type: "APPROVAL_REQUESTED", metadata: null })]}
+      />,
+    );
+    expect(screen.getByText("Godkännande begärt")).toBeTruthy();
+  });
+
+  it("APPROVAL_GRANTED with approvalNote → subtitle shows note verbatim", () => {
+    render(
+      <TimelineCard
+        events={[
+          buildEvent({
+            type: "APPROVAL_GRANTED",
+            metadata: { approvalNote: "OK från ekonomi" },
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByText("OK från ekonomi")).toBeTruthy();
+  });
+
+  it("APPROVAL_GRANTED with empty metadata → title only, no crash", () => {
+    render(
+      <TimelineCard
+        events={[buildEvent({ type: "APPROVAL_GRANTED", metadata: {} })]}
+      />,
+    );
+    expect(screen.getByText("Godkänt")).toBeTruthy();
+  });
+
+  it("APPROVAL_REJECTED with reason → subtitle 'Anledning: ...'", () => {
+    render(
+      <TimelineCard
+        events={[
+          buildEvent({
+            type: "APPROVAL_REJECTED",
+            metadata: { rejectionReason: "Pris för högt" },
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByText("Anledning: Pris för högt")).toBeTruthy();
+  });
+
+  it("APPROVAL_REJECTED with no metadata → title only, no crash", () => {
+    render(
+      <TimelineCard
+        events={[buildEvent({ type: "APPROVAL_REJECTED", metadata: null })]}
+      />,
+    );
+    expect(screen.getByText("Avslagit")).toBeTruthy();
   });
 });
 
