@@ -13,6 +13,11 @@ the Phase-2 layer on top of the CLAUDE.md context split (Phase 1).
 | `hooks/protected-branch.sh` | ✅ yes | Blocks prompts when on `main` / `master` / `production` |
 | `hooks/eslint-post-edit.sh` | ✅ yes | Runs ESLint on TS/TSX files immediately after Claude edits them |
 | `hooks/schema-changed.sh` | ✅ yes | Reminds about migration workflow when `prisma/schema.prisma` changes |
+| `agents/researcher.md` | ✅ yes | Read-only exploration of unfamiliar code/docs/libs (returns summary, not raw data) |
+| `agents/pms-reliability-auditor.md` | ✅ yes | Audits changes against the PMS reliability engine invariants |
+| `agents/migration-reviewer.md` | ✅ yes | Audits Prisma changes against the 8 migration rules |
+| `agents/recon-author.md` | ✅ yes | Drafts recon docs in `admin/_audit/` (Web Claude role) |
+| `agents/README.md` | ✅ yes | Subagents catalog + invocation guide |
 
 ## Permissions model (`settings.json`)
 

@@ -7,10 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > working in that area. This root file holds only what is universal across the
 > codebase. See "Domain map" at the bottom.
 >
-> **Project Claude Code stack** (permissions, hooks): see `admin/.claude/README.md`.
-> SessionStart auto-injects git context. Edit/Write hooks auto-run ESLint on
-> TS/TSX files and remind about the migration workflow when schema.prisma
-> changes. Disable any hook via `CLAUDE_HOOK_*=0` env vars.
+> **Project Claude Code stack** (permissions, hooks, subagents): see
+> `admin/.claude/README.md`. SessionStart auto-injects git context +
+> recent recon docs. Edit/Write hooks auto-run ESLint on TS/TSX files
+> and remind about the migration workflow. UserPromptSubmit blocks
+> prompts on `main`/`master`. Four subagents available: `researcher`,
+> `pms-reliability-auditor`, `migration-reviewer`, `recon-author` —
+> see `admin/.claude/agents/README.md`. Disable any hook via
+> `CLAUDE_HOOK_*=0` env vars.
 
 ---
 
