@@ -72,68 +72,21 @@
   align-items: center;
 }
 
-/* ── Radio row ─────────────────────────────────────────────── */
-/* Native <input type="radio"> + label, full-width clickable row.
- * Uses `accent-color` so the indicator picks up the admin accent
- * without us styling the disc by hand. */
-.co-settings__radio-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 16px;
-  cursor: pointer;
-  background: transparent;
+/* ── Choice row (wraps ui/Radio + ui/Checkbox in the list box) ─ */
+/* The ui primitives provide their own clickable-row layout, but
+ * we add 16px padding so they sit flush with surrounding co-settings
+ * rows and the dividers. The primitives themselves handle hover,
+ * focus, active styling, and dark-mode tokens. */
+.co-settings__choice-row {
+  padding: 8px 16px;
 }
 
-.co-settings__radio-row:hover {
-  background: var(--admin-surface-hover);
-}
-
-.co-settings__radio {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  flex-shrink: 0;
-  cursor: pointer;
-  accent-color: var(--admin-accent);
-}
-
-.co-settings__radio-label {
-  font-size: var(--font-md);
-  font-weight: var(--font-weight-medium);
-  color: var(--admin-text);
-  line-height: var(--line-height-tight);
-}
-
-/* ── Checkbox row (with help-text under the label) ─────────── */
-.co-settings__check-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  width: 100%;
-  padding: 16px;
-  cursor: pointer;
-  background: transparent;
-}
-
-.co-settings__check-row:hover {
-  background: var(--admin-surface-hover);
-}
-
-.co-settings__checkbox {
-  width: 16px;
-  height: 16px;
-  margin: 1px 0 0 0;
-  flex-shrink: 0;
-  cursor: pointer;
-  accent-color: var(--admin-accent);
-}
-
+/* Stacked label + helptext for ui/Checkbox's `label` ReactNode. */
 .co-settings__check-text {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  gap: 2.6px;
 }
 
 .co-settings__check-label {
@@ -148,5 +101,4 @@
   font-weight: var(--font-weight-normal);
   color: var(--admin-text-secondary);
   line-height: var(--line-height-tight);
-  margin-top: 2.6px;
 }

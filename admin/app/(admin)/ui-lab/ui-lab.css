@@ -1,104 +1,130 @@
-/* ── UI Lab page wrapper — mirrors products page layout ── */
+/* UI Lab — internal showcase page for ui/ primitives.
+   Self-contained styling so the lab's chrome doesn't compete with
+   the components being demoed. Uses only base.css tokens. */
 
-.container:has(.ui-lab-page) {
-  max-width: none;
-  padding: 0;
-  height: 100vh;
-  overflow: visible;
+.ui-lab {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6);
+  color: var(--admin-text);
+  font-family: var(--admin-font);
 }
 
-.ui-lab-page {
-  overflow: visible !important;
-  height: auto !important;
+.ui-lab__header {
+  margin-bottom: var(--space-8);
+  padding-bottom: var(--space-6);
+  border-bottom: 1px solid var(--admin-border);
 }
 
-.ui-lab-page .admin-editor {
-  overflow: visible !important;
-  height: auto !important;
-  padding: 0 0 80px 0;
+.ui-lab__title {
+  margin: 0 0 var(--space-2) 0;
+  font-size: var(--font-2xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
 }
 
-.ui-lab-page .admin-header {
-  border-bottom: none;
-  justify-content: space-between;
-  align-items: center;
-  height: auto;
-  padding: 16px;
-  display: flex;
+.ui-lab__lede {
+  margin: 0;
+  color: var(--admin-text-secondary);
+  font-size: var(--font-md);
+  line-height: var(--line-height-relaxed);
+  max-width: 64ch;
 }
 
-.ui-lab-page .admin-content {
-  background: #fff;
-  border-radius: 0.75rem;
-  margin: 0 16px;
-  padding: 0;
-  box-shadow:
-    0 0.3125rem 0.3125rem -0.15625rem #00000008,
-    0 0.1875rem 0.1875rem -0.09375rem #00000005,
-    0 0.125rem 0.125rem -0.0625rem #00000005,
-    0 0.0625rem 0.0625rem -0.03125rem #00000008,
-    0 0.03125rem 0.03125rem #0000000a,
-    0 0 0 0.0625rem #0000000f;
-  overflow: hidden !important;
-  height: max-content;
-  min-height: auto !important;
-  max-height: max-content;
+.ui-lab__lede code {
+  font-family: var(--admin-font-mono);
+  font-size: 0.92em;
+  background: var(--admin-surface-muted);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
 }
 
-/* ── Section label — small caps divider above each component demo ── */
-
-.ui-lab__section-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--admin-text-tertiary);
-  margin: 8px 16px 6px;
-}
-
-/* ── Demo-specific status badge (mirrors products-status visuals) ── */
-
-.demo-status {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 7px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.4;
-}
-
-.demo-status--active {
-  color: #223a5a;
-  background: #affebf;
-}
-
-.demo-status--draft {
-  background: #d5ebff;
-  color: #223a5a;
-}
-
-.demo-status--archived {
+.ui-lab__section {
+  margin-bottom: var(--space-8);
+  padding: var(--space-6);
   background: var(--admin-surface);
-  color: var(--admin-text-tertiary);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-xl);
 }
 
-/* ── Bulk action button in selection toolbar ── */
+.ui-lab__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
 
-.ui-lab-bulk-btn {
+.ui-lab__section-title {
+  margin: 0;
+  font-size: var(--font-xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+.ui-lab__status {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
-  border: none;
-  border-radius: 8px;
-  background: #e56458;
-  color: #fff;
-  font-family: var(--admin-font);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  margin-left: 16px;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
-.ui-lab-bulk-btn:hover {
-  opacity: 0.85;
+.ui-lab__status--pending {
+  background: var(--admin-surface-muted);
+  color: var(--admin-text-secondary);
+}
+
+.ui-lab__status--in-progress {
+  background: #FFF4D6;
+  color: #7A5800;
+}
+
+.ui-lab__status--shipped {
+  background: #DCF5E3;
+  color: #1F5C2E;
+}
+
+.ui-lab__section-body {
+  color: var(--admin-text-secondary);
+  font-size: var(--font-sm);
+  line-height: var(--line-height-normal);
+}
+
+.ui-lab__section-body code {
+  font-family: var(--admin-font-mono);
+  font-size: 0.92em;
+  background: var(--admin-surface-muted);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+}
+
+/* Component grid — used inside each section once components ship.
+   Each row labels its variant; the cell hosts the rendered example.
+   Built ahead of time so promotion PRs only need JSX. */
+
+.ui-lab__grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: var(--space-4) var(--space-5);
+  align-items: center;
+  margin-top: var(--space-4);
+}
+
+.ui-lab__grid-label {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--admin-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ui-lab__grid-cell {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }

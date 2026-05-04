@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { EditorIcon } from "@/app/_components/EditorIcon";
-import { Toggle } from "@/app/(admin)/_components/Toggle";
+import { Radio, Checkbox, Toggle } from "@/app/(admin)/_components/ui";
 import "./checkout.css";
 
 type Props = {
@@ -12,7 +12,7 @@ type Props = {
 /**
  * Kassa (checkout) — settings panel.
  *
- * UI shell only. None of the toggles are wired to persistence yet —
+ * UI shell only. None of the controls are wired to persistence yet —
  * the underlying checkout flow can't honour these settings until each
  * one is plumbed through `app/api/checkout/*` and the storefront
  * checkout client. Local state only; hook into a server action when
@@ -21,8 +21,11 @@ type Props = {
  */
 export function CheckoutContent({ onSubTitleChange }: Props) {
   // ── Container 1: Kontaktmetod ───────────────────────────────
-  const [contactMethod, setContactMethod] = useState<"email" | "phone-email">("email");
-  const [requireLoginBeforeCheckout, setRequireLoginBeforeCheckout] = useState(false);
+  const [contactMethod, setContactMethod] = useState<"email" | "phone-email">(
+    "email",
+  );
+  const [requireLoginBeforeCheckout, setRequireLoginBeforeCheckout] =
+    useState(false);
 
   // ── Container 2: Anpassning av kassan ───────────────────────
   const [allowSpecialRequests, setAllowSpecialRequests] = useState(true);
@@ -45,52 +48,42 @@ export function CheckoutContent({ onSubTitleChange }: Props) {
         <div className="co-settings__label">Kontaktmetod</div>
 
         <div className="co-settings__list">
-          <label className="co-settings__radio-row">
-            <input
-              type="radio"
-              name="contact-method"
-              value="email"
+          <div className="co-settings__choice-row">
+            <Radio
               checked={contactMethod === "email"}
               onChange={() => setContactMethod("email")}
-              className="co-settings__radio"
+              label="E-postadress"
             />
-            <span className="co-settings__radio-label">E-postadress</span>
-          </label>
+          </div>
 
           <div className="co-settings__divider" />
 
-          <label className="co-settings__radio-row">
-            <input
-              type="radio"
-              name="contact-method"
-              value="phone-email"
+          <div className="co-settings__choice-row">
+            <Radio
               checked={contactMethod === "phone-email"}
               onChange={() => setContactMethod("phone-email")}
-              className="co-settings__radio"
+              label="Telefonnummer och e-postadress"
             />
-            <span className="co-settings__radio-label">
-              Telefonnummer och e-postadress
-            </span>
-          </label>
+          </div>
 
           <div className="co-settings__divider" />
 
-          <label className="co-settings__check-row">
-            <input
-              type="checkbox"
+          <div className="co-settings__choice-row">
+            <Checkbox
               checked={requireLoginBeforeCheckout}
-              onChange={(e) => setRequireLoginBeforeCheckout(e.target.checked)}
-              className="co-settings__checkbox"
+              onChange={setRequireLoginBeforeCheckout}
+              label={
+                <span className="co-settings__check-text">
+                  <span className="co-settings__check-label">
+                    Kräv att kunder loggar in före kassan
+                  </span>
+                  <span className="co-settings__check-desc">
+                    Kunder kan endast använda e-post när inloggning krävs
+                  </span>
+                </span>
+              }
             />
-            <span className="co-settings__check-text">
-              <span className="co-settings__check-label">
-                Kräv att kunder loggar in före kassan
-              </span>
-              <span className="co-settings__check-desc">
-                Kunder kan endast använda e-post när inloggning krävs
-              </span>
-            </span>
-          </label>
+          </div>
         </div>
       </div>
 
@@ -104,16 +97,19 @@ export function CheckoutContent({ onSubTitleChange }: Props) {
               <EditorIcon name="edit_note" size={20} />
             </span>
             <div className="co-settings__row-text">
-              <div className="co-settings__row-title">Tillåt specialönskemål</div>
+              <div className="co-settings__row-title">
+                Tillåt specialönskemål
+              </div>
               <div className="co-settings__row-desc">
-                Visa ett textfält där gästen kan skriva önskemål inför ankomst (allergier, preferenser, hänsyn).
+                Visa ett textfält där gästen kan skriva önskemål inför ankomst
+                (allergier, preferenser, hänsyn).
               </div>
             </div>
             <span className="co-settings__row-control">
               <Toggle
                 checked={allowSpecialRequests}
                 onChange={setAllowSpecialRequests}
-                ariaLabel="Tillåt specialönskemål"
+                aria-label="Tillåt specialönskemål"
               />
             </span>
           </div>
@@ -127,14 +123,15 @@ export function CheckoutContent({ onSubTitleChange }: Props) {
             <div className="co-settings__row-text">
               <div className="co-settings__row-title">Visa ankomsttid</div>
               <div className="co-settings__row-desc">
-                Låt gästen ange en planerad ankomsttid i kassan. Synkas till PMS.
+                Låt gästen ange en planerad ankomsttid i kassan. Synkas till
+                PMS.
               </div>
             </div>
             <span className="co-settings__row-control">
               <Toggle
                 checked={showArrivalTime}
                 onChange={setShowArrivalTime}
-                ariaLabel="Visa ankomsttid"
+                aria-label="Visa ankomsttid"
               />
             </span>
           </div>
@@ -148,14 +145,15 @@ export function CheckoutContent({ onSubTitleChange }: Props) {
             <div className="co-settings__row-text">
               <div className="co-settings__row-title">Visa nedräkning</div>
               <div className="co-settings__row-desc">
-                Visa hur länge bokningen är reserverad i kassan (15 minuter). Skapar urgency och kommunicerar tillgänglighetslås tydligt.
+                Visa hur länge bokningen är reserverad i kassan (15 minuter).
+                Skapar urgency och kommunicerar tillgänglighetslås tydligt.
               </div>
             </div>
             <span className="co-settings__row-control">
               <Toggle
                 checked={showHoldCountdown}
                 onChange={setShowHoldCountdown}
-                ariaLabel="Visa nedräkning"
+                aria-label="Visa nedräkning"
               />
             </span>
           </div>
@@ -172,16 +170,19 @@ export function CheckoutContent({ onSubTitleChange }: Props) {
               <EditorIcon name="subscriptions" size={20} />
             </span>
             <div className="co-settings__row-text">
-              <div className="co-settings__row-title">Tillåt nyhetsbrevsanmälan</div>
+              <div className="co-settings__row-title">
+                Tillåt nyhetsbrevsanmälan
+              </div>
               <div className="co-settings__row-desc">
-                Visa en kryssruta för nyhetsbrev i kassan. Gäster som tackar ja synkas till din epostmarknadsföring.
+                Visa en kryssruta för nyhetsbrev i kassan. Gäster som tackar ja
+                synkas till din epostmarknadsföring.
               </div>
             </div>
             <span className="co-settings__row-control">
               <Toggle
                 checked={allowNewsletterOptIn}
                 onChange={setAllowNewsletterOptIn}
-                ariaLabel="Tillåt nyhetsbrevsanmälan"
+                aria-label="Tillåt nyhetsbrevsanmälan"
               />
             </span>
           </div>
@@ -195,7 +196,8 @@ export function CheckoutContent({ onSubTitleChange }: Props) {
             <div className="co-settings__row-text">
               <div className="co-settings__row-title">Förvald opt-in</div>
               <div className="co-settings__row-desc">
-                Förkryssa nyhetsbrevsrutan. Stäng av för att kräva aktivt samtycke (rekommenderas i EU).
+                Förkryssa nyhetsbrevsrutan. Stäng av för att kräva aktivt
+                samtycke (rekommenderas i EU).
               </div>
             </div>
             <span className="co-settings__row-control">
@@ -203,7 +205,7 @@ export function CheckoutContent({ onSubTitleChange }: Props) {
                 checked={newsletterPrechecked}
                 onChange={setNewsletterPrechecked}
                 disabled={!allowNewsletterOptIn}
-                ariaLabel="Förvald opt-in"
+                aria-label="Förvald opt-in"
               />
             </span>
           </div>
@@ -215,16 +217,19 @@ export function CheckoutContent({ onSubTitleChange }: Props) {
               <EditorIcon name="gavel" size={20} />
             </span>
             <div className="co-settings__row-text">
-              <div className="co-settings__row-title">Kräv villkorsacceptans</div>
+              <div className="co-settings__row-title">
+                Kräv villkorsacceptans
+              </div>
               <div className="co-settings__row-desc">
-                Gästen måste aktivt acceptera bokningsvillkoren innan betalning kan slutföras.
+                Gästen måste aktivt acceptera bokningsvillkoren innan betalning
+                kan slutföras.
               </div>
             </div>
             <span className="co-settings__row-control">
               <Toggle
                 checked={requireTermsAcceptance}
                 onChange={setRequireTermsAcceptance}
-                ariaLabel="Kräv villkorsacceptans"
+                aria-label="Kräv villkorsacceptans"
               />
             </span>
           </div>
