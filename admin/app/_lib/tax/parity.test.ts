@@ -507,7 +507,6 @@ describe("Decision 10: failure-mode never blocks", () => {
       key: "string-thrower",
       displayName: "Throws raw string",
       async calculate() {
-        // eslint-disable-next-line @typescript-eslint/only-throw-error
         throw "no Error wrapper";
       },
     };

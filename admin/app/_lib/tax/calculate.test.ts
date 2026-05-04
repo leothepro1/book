@@ -209,7 +209,6 @@ describe("calculateTax — failure-mode tier-3 (Decision 10)", () => {
       key: "throwing-string",
       displayName: "Throws a string",
       async calculate() {
-        // eslint-disable-next-line @typescript-eslint/only-throw-error
         throw "raw string error";
       },
     };
