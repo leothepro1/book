@@ -12,6 +12,9 @@ const sendInvoiceMock = vi.fn();
 const resendInvoiceMock = vi.fn();
 const markPaidMock = vi.fn();
 const cancelMock = vi.fn();
+const submitForApprovalMock = vi.fn();
+const approveDraftMock = vi.fn();
+const rejectDraftMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock, refresh: refreshMock }),
@@ -29,6 +32,10 @@ vi.mock("../actions", () => ({
   resendDraftInvoiceAction: (input: unknown) => resendInvoiceMock(input),
   markDraftAsPaidAction: (input: unknown) => markPaidMock(input),
   cancelDraftAction: (input: unknown) => cancelMock(input),
+  submitDraftForApprovalAction: (input: unknown) =>
+    submitForApprovalMock(input),
+  approveDraftAction: (input: unknown) => approveDraftMock(input),
+  rejectDraftAction: (input: unknown) => rejectDraftMock(input),
 }));
 
 // Mock the cross-route AccommodationPickerModal to avoid importing the
@@ -130,6 +137,7 @@ const baseDraft: KonfigureraClientDraft = {
   cancellationReason: null,
   invoiceUrl: null,
   shareLinkExpiresAt: null,
+  createdByUserId: null,
   guestAccountId: null,
   companyLocationId: null,
   contactFirstName: null,
@@ -160,6 +168,9 @@ beforeEach(() => {
   resendInvoiceMock.mockReset();
   markPaidMock.mockReset();
   cancelMock.mockReset();
+  submitForApprovalMock.mockReset();
+  approveDraftMock.mockReset();
+  rejectDraftMock.mockReset();
 });
 
 describe("KonfigureraClient — header & layout (status-agnostic)", () => {
@@ -1292,5 +1303,402 @@ describe("KonfigureraClient — resend invoice (FAS 7.4)", () => {
     await waitFor(() =>
       expect(screen.getByText("Faktura redan betald")).toBeTruthy(),
     );
+  });
+});
+
+// ── Approval flow (FAS 7.6-lite B.3) ──────────────────────────
+
+describe("KonfigureraClient — approval flow dropdown gating (FAS 7.6-lite)", () => {
+  const draftWithLine: KonfigureraClientDraft = {
+    ...baseDraft,
+    lineItems: [
+      // Minimal placeholder; LineItemsCard renders, full structure not required
+      // for dropdown gating — only `length > 0` matters.
+      {
+        ...({
+          id: "li_1",
+          draftOrderId: baseDraft.id,
+          tenantId: "tenant_1",
+          lineType: "ACCOMMODATION",
+          position: 1,
+          title: "Cabin",
+          quantity: 1,
+          unitPriceCents: BigInt(150000),
+          totalCents: BigInt(150000),
+          taxAmountCents: BigInt(0),
+          taxable: true,
+        } as unknown as KonfigureraClientDraft["lineItems"][number]),
+      },
+    ],
+  };
+
+  it("OPEN with line items → 'Begär godkännande' visible in dropdown", () => {
+    render(
+      <KonfigureraClient
+        draft={draftWithLine}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+      />,
+    );
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    expect(screen.getByText("Begär godkännande")).toBeTruthy();
+  });
+
+  it("OPEN with NO line items → 'Begär godkännande' hidden", () => {
+    render(
+      <KonfigureraClient
+        draft={baseDraft}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+      />,
+    );
+    // baseDraft has lineItems=[], dropdown does not surface submit option.
+    // (The dropdown trigger appears only if there is at least one item;
+    // for OPEN+empty there is "Avbryt utkast", so the menu opens and we
+    // can assert absence.)
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    expect(screen.queryByText("Begär godkännande")).toBeNull();
+  });
+
+  it("INVOICED → no 'Begär godkännande' (already past OPEN)", () => {
+    render(
+      <KonfigureraClient
+        draft={{
+          ...draftWithLine,
+          status: "INVOICED",
+          shareLinkExpiresAt: new Date("2099-01-01T00:00:00Z"),
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+      />,
+    );
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    expect(screen.queryByText("Begär godkännande")).toBeNull();
+  });
+
+  it("PENDING_APPROVAL → both 'Godkänn' and 'Avslå' visible (currentUserId mismatch)", () => {
+    render(
+      <KonfigureraClient
+        draft={{
+          ...draftWithLine,
+          status: "PENDING_APPROVAL",
+          createdByUserId: "user_creator",
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+        currentUserId="user_other"
+      />,
+    );
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    expect(screen.getByText("Godkänn")).toBeTruthy();
+    expect(screen.getByText("Avslå")).toBeTruthy();
+  });
+
+  it("PENDING_APPROVAL self-approval → 'Godkänn' hidden, 'Avslå' visible", () => {
+    render(
+      <KonfigureraClient
+        draft={{
+          ...draftWithLine,
+          status: "PENDING_APPROVAL",
+          createdByUserId: "user_same",
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+        currentUserId="user_same"
+      />,
+    );
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    expect(screen.queryByText("Godkänn")).toBeNull();
+    expect(screen.getByText("Avslå")).toBeTruthy();
+  });
+
+  it("PENDING_APPROVAL with null createdByUserId → 'Godkänn' visible (legacy graceful)", () => {
+    render(
+      <KonfigureraClient
+        draft={{
+          ...draftWithLine,
+          status: "PENDING_APPROVAL",
+          createdByUserId: null,
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+        currentUserId="user_actor"
+      />,
+    );
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    expect(screen.getByText("Godkänn")).toBeTruthy();
+  });
+});
+
+describe("KonfigureraClient — approval modals (FAS 7.6-lite)", () => {
+  const draftWithLine: KonfigureraClientDraft = {
+    ...baseDraft,
+    lineItems: [
+      {
+        ...({
+          id: "li_1",
+          draftOrderId: baseDraft.id,
+          tenantId: "tenant_1",
+          lineType: "ACCOMMODATION",
+          position: 1,
+          title: "Cabin",
+          quantity: 1,
+          unitPriceCents: BigInt(150000),
+          totalCents: BigInt(150000),
+          taxAmountCents: BigInt(0),
+          taxable: true,
+        } as unknown as KonfigureraClientDraft["lineItems"][number]),
+      },
+    ],
+  };
+
+  it("clicking 'Begär godkännande' opens modal with optional textarea", () => {
+    render(
+      <KonfigureraClient
+        draft={draftWithLine}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+      />,
+    );
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    fireEvent.click(screen.getByText("Begär godkännande"));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeTruthy();
+    expect(dialog.textContent).toContain("Begär godkännande");
+    // Confirm button NOT disabled (note is optional)
+    const confirm = screen.getByText("Begär") as HTMLButtonElement;
+    expect(confirm.disabled).toBe(false);
+  });
+
+  it("submit-for-approval success → action called + router.refresh", async () => {
+    submitForApprovalMock.mockResolvedValueOnce({
+      ok: true,
+      draft: { id: "draft_1" },
+    });
+    render(
+      <KonfigureraClient
+        draft={draftWithLine}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+      />,
+    );
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    fireEvent.click(screen.getByText("Begär godkännande"));
+    fireEvent.click(screen.getByText("Begär"));
+    await waitFor(() =>
+      expect(submitForApprovalMock).toHaveBeenCalledWith({
+        draftId: "draft_1",
+        requestNote: undefined,
+      }),
+    );
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
+
+  it("clicking 'Godkänn' opens modal with optional textarea", () => {
+    render(
+      <KonfigureraClient
+        draft={{
+          ...draftWithLine,
+          status: "PENDING_APPROVAL",
+          createdByUserId: "user_creator",
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+        currentUserId="user_other"
+      />,
+    );
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    fireEvent.click(screen.getByText("Godkänn"));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeTruthy();
+    expect(dialog.textContent).toContain("Godkänn utkast");
+  });
+
+  it("approve success → action called + router.refresh", async () => {
+    approveDraftMock.mockResolvedValueOnce({
+      ok: true,
+      draft: { id: "draft_1" },
+    });
+    render(
+      <KonfigureraClient
+        draft={{
+          ...draftWithLine,
+          status: "PENDING_APPROVAL",
+          createdByUserId: "user_creator",
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+        currentUserId="user_other"
+      />,
+    );
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    fireEvent.click(screen.getByText("Godkänn"));
+    // Click the *modal* "Godkänn" button (the second one). The modal one
+    // is inside a dialog role; the menu trigger has already disappeared.
+    const confirmButtons = screen.getAllByText("Godkänn");
+    fireEvent.click(confirmButtons[confirmButtons.length - 1]);
+    await waitFor(() =>
+      expect(approveDraftMock).toHaveBeenCalledWith({
+        draftId: "draft_1",
+        approvalNote: undefined,
+      }),
+    );
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
+
+  it("clicking 'Avslå' opens modal with REQUIRED reason textarea, confirm disabled", () => {
+    render(
+      <KonfigureraClient
+        draft={{
+          ...draftWithLine,
+          status: "PENDING_APPROVAL",
+          createdByUserId: "user_creator",
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+        currentUserId="user_other"
+      />,
+    );
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    fireEvent.click(screen.getByText("Avslå"));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeTruthy();
+    expect(dialog.textContent).toContain("Avslå utkast");
+    // Reject button is disabled when reason is empty
+    const rejectButtons = screen.getAllByText("Avslå");
+    const modalRejectButton = rejectButtons[rejectButtons.length - 1] as HTMLButtonElement;
+    expect(modalRejectButton.disabled).toBe(true);
+  });
+
+  it("typing reason enables 'Avslå' button + reject success calls action", async () => {
+    rejectDraftMock.mockResolvedValueOnce({
+      ok: true,
+      draft: { id: "draft_1" },
+    });
+    render(
+      <KonfigureraClient
+        draft={{
+          ...draftWithLine,
+          status: "PENDING_APPROVAL",
+          createdByUserId: "user_creator",
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+        currentUserId="user_other"
+      />,
+    );
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    fireEvent.click(screen.getByText("Avslå"));
+    const reasonInput = screen.getByPlaceholderText(
+      /pris för högt/,
+    ) as HTMLTextAreaElement;
+    fireEvent.change(reasonInput, {
+      target: { value: "Pris för högt jämfört med konkurrenter" },
+    });
+    const rejectButtons = screen.getAllByText("Avslå");
+    const modalRejectButton = rejectButtons[rejectButtons.length - 1] as HTMLButtonElement;
+    expect(modalRejectButton.disabled).toBe(false);
+    fireEvent.click(modalRejectButton);
+    await waitFor(() =>
+      expect(rejectDraftMock).toHaveBeenCalledWith({
+        draftId: "draft_1",
+        rejectionReason: "Pris för högt jämfört med konkurrenter",
+      }),
+    );
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
+
+  it("approve failure → action error banner shows", async () => {
+    approveDraftMock.mockResolvedValueOnce({
+      ok: false,
+      error: "Cannot approve your own approval request",
+    });
+    render(
+      <KonfigureraClient
+        draft={{
+          ...draftWithLine,
+          status: "PENDING_APPROVAL",
+          createdByUserId: "user_creator",
+        }}
+        reservations={[]}
+        customer={null}
+        stripePaymentIntent={null}
+        prev={null}
+        next={null}
+        paymentTerms={null}
+        events={[]}
+        currentUserId="user_other"
+      />,
+    );
+    fireEvent.click(screen.getByText(/Fler åtgärder/));
+    fireEvent.click(screen.getByText("Godkänn"));
+    const confirmButtons = screen.getAllByText("Godkänn");
+    fireEvent.click(confirmButtons[confirmButtons.length - 1]);
+    await waitFor(() =>
+      expect(
+        screen.getByText("Cannot approve your own approval request"),
+      ).toBeTruthy(),
+    );
+    expect(refreshMock).not.toHaveBeenCalled();
   });
 });

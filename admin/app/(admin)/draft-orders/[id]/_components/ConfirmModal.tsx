@@ -10,6 +10,9 @@ interface ConfirmModalProps {
   cancelLabel?: string;
   danger?: boolean;
   isPending?: boolean;
+  /** Disables the confirm button on top of `isPending` — used by callers
+   * that have a required field (e.g. FAS 7.6-lite reject reason). */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
   children?: ReactNode;
@@ -23,6 +26,7 @@ export function ConfirmModal({
   cancelLabel = "Avbryt",
   danger = false,
   isPending = false,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
   children,
@@ -80,7 +84,7 @@ export function ConfirmModal({
             type="button"
             className={`admin-btn ${danger ? "admin-btn--danger" : "admin-btn--accent"}`}
             onClick={onConfirm}
-            disabled={isPending}
+            disabled={isPending || confirmDisabled}
             aria-busy={isPending}
           >
             {isPending ? "Bearbetar..." : confirmLabel}

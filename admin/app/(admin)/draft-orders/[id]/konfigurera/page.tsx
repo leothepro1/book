@@ -5,14 +5,17 @@ import { getDraft } from "@/app/_lib/draft-orders/get";
 import { KonfigureraClient } from "../_components/KonfigureraClient";
 import "../../../products/_components/product-form.css";
 
-async function resolveTenantId(): Promise<string | null> {
-  const { orgId } = await getAuth();
-  if (!orgId) return null;
+async function resolveActor(): Promise<{
+  tenantId: string | null;
+  userId: string | null;
+}> {
+  const { orgId, userId } = await getAuth();
+  if (!orgId) return { tenantId: null, userId: userId ?? null };
   const tenant = await prisma.tenant.findUnique({
     where: { clerkOrgId: orgId },
     select: { id: true },
   });
-  return tenant?.id ?? null;
+  return { tenantId: tenant?.id ?? null, userId: userId ?? null };
 }
 
 function extractTermsName(frozen: unknown): string | null {
@@ -29,8 +32,9 @@ export default async function KonfigureraDraftPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const tenantId = await resolveTenantId();
-  if (!tenantId) notFound();
+  const actor = await resolveActor();
+  if (!actor.tenantId) notFound();
+  const tenantId = actor.tenantId;
 
   const detail = await getDraft(id, tenantId);
   if (!detail) notFound();
@@ -64,6 +68,7 @@ export default async function KonfigureraDraftPage({
         cancellationReason: draft.cancellationReason,
         invoiceUrl: draft.invoiceUrl,
         shareLinkExpiresAt: draft.shareLinkExpiresAt,
+        createdByUserId: draft.createdByUserId,
         guestAccountId: draft.guestAccountId,
         companyLocationId: draft.companyLocationId,
         contactFirstName: draft.contactFirstName,
@@ -104,6 +109,7 @@ export default async function KonfigureraDraftPage({
         actorSource: e.actorSource,
         createdAt: e.createdAt,
       }))}
+      currentUserId={actor.userId}
     />
   );
 }

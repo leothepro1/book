@@ -43,6 +43,9 @@ import {
   resendDraftInvoiceAction,
   markDraftAsPaidAction,
   cancelDraftAction,
+  submitDraftForApprovalAction,
+  approveDraftAction,
+  rejectDraftAction,
 } from "../actions";
 import type { EmailSendResult } from "@/app/_lib/email";
 
@@ -72,6 +75,10 @@ export type KonfigureraClientDraft = {
   cancellationReason: string | null;
   invoiceUrl: string | null;
   shareLinkExpiresAt: Date | null;
+  /** Clerk userId of the operator who created the draft. Nullable for
+   * pre-FAS-7.0 / dev-seed drafts (Q3). Drives the self-approval UI gate
+   * on the "Godkänn" button. */
+  createdByUserId: string | null;
   guestAccountId: string | null;
   companyLocationId: string | null;
   contactFirstName: string | null;
@@ -109,6 +116,13 @@ interface KonfigureraClientProps {
   next: { id: string; displayNumber: string } | null;
   paymentTerms: KonfigureraPaymentTerms | null;
   events: TimelineEvent[];
+  /** Current authenticated operator. Used to hide "Godkänn" when
+   * currentUserId === draft.createdByUserId (Q1 self-approval UI gate;
+   * server enforces too). Null when getAuth() returns no userId. The
+   * page-level component (konfigurera/page.tsx) always drills this from
+   * `actor.userId`; the optionality here is purely for test-call-site
+   * ergonomics and defaults to null (server-side check authoritative). */
+  currentUserId?: string | null;
 }
 
 const NAV_BUTTON: CSSProperties = {
@@ -146,6 +160,7 @@ export function KonfigureraClient({
   next,
   paymentTerms,
   events,
+  currentUserId = null,
 }: KonfigureraClientProps) {
   const router = useRouter();
 
@@ -181,12 +196,24 @@ export function KonfigureraClient({
   const [savedAt, setSavedAt] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Lifecycle-action state (FAS 7.2b.4d.2).
+  // Lifecycle-action state (FAS 7.2b.4d.2 + FAS 7.6-lite).
   const [confirmKind, setConfirmKind] = useState<
-    "send-invoice" | "resend-invoice" | "mark-paid" | "cancel" | null
+    | "send-invoice"
+    | "resend-invoice"
+    | "submit-for-approval"
+    | "approve-draft"
+    | "reject-draft"
+    | "mark-paid"
+    | "cancel"
+    | null
   >(null);
   const [confirmReason, setConfirmReason] = useState("");
   const [confirmReference, setConfirmReference] = useState("");
+  // FAS 7.6-lite: separate text fields for each approval modal so reopening
+  // one doesn't carry over text from another.
+  const [requestNote, setRequestNote] = useState("");
+  const [approvalNote, setApprovalNote] = useState("");
+  const [rejectionReason, setRejectionReason] = useState("");
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<{
@@ -369,6 +396,63 @@ export function KonfigureraClient({
     }
   }, [draft.id, confirmReason, router]);
 
+  // FAS 7.6-lite: approval-flow handlers. All three follow the same
+  // pattern as handleCancelConfirm — call action, clear modal, refresh
+  // on ok, set ephemeral error on failure.
+  const handleSubmitForApprovalConfirm = useCallback(async () => {
+    setActionPending(true);
+    setActionError(null);
+    const result = await submitDraftForApprovalAction({
+      draftId: draft.id,
+      requestNote: requestNote.trim() || undefined,
+    });
+    setActionPending(false);
+    setConfirmKind(null);
+    setRequestNote("");
+    if (result.ok) {
+      router.refresh();
+    } else {
+      setActionError(result.error);
+      setTimeout(() => setActionError(null), 5000);
+    }
+  }, [draft.id, requestNote, router]);
+
+  const handleApproveDraftConfirm = useCallback(async () => {
+    setActionPending(true);
+    setActionError(null);
+    const result = await approveDraftAction({
+      draftId: draft.id,
+      approvalNote: approvalNote.trim() || undefined,
+    });
+    setActionPending(false);
+    setConfirmKind(null);
+    setApprovalNote("");
+    if (result.ok) {
+      router.refresh();
+    } else {
+      setActionError(result.error);
+      setTimeout(() => setActionError(null), 5000);
+    }
+  }, [draft.id, approvalNote, router]);
+
+  const handleRejectDraftConfirm = useCallback(async () => {
+    setActionPending(true);
+    setActionError(null);
+    const result = await rejectDraftAction({
+      draftId: draft.id,
+      rejectionReason: rejectionReason.trim(),
+    });
+    setActionPending(false);
+    setConfirmKind(null);
+    setRejectionReason("");
+    if (result.ok) {
+      router.refresh();
+    } else {
+      setActionError(result.error);
+      setTimeout(() => setActionError(null), 5000);
+    }
+  }, [draft.id, rejectionReason, router]);
+
   // Dropdown items derivation: cancel is hidden for terminal/PAID statuses.
   const isCancellable = !["CANCELLED", "COMPLETED", "REJECTED", "PAID"].includes(
     draft.status,
@@ -387,6 +471,39 @@ export function KonfigureraClient({
     draft.shareLinkExpiresAt !== null &&
     draft.shareLinkExpiresAt.getTime() < nowAtMount;
   const dropdownItems: HeaderActionsDropdownItem[] = [];
+  // FAS 7.6-lite: "Begär godkännande" — only on OPEN drafts that have
+  // line items (empty drafts have nothing to approve).
+  if (draft.status === "OPEN" && draft.lineItems.length > 0) {
+    dropdownItems.push({
+      key: "submit-for-approval",
+      label: "Begär godkännande",
+      onClick: () => setConfirmKind("submit-for-approval"),
+    });
+  }
+  // FAS 7.6-lite: approve/reject — only on PENDING_APPROVAL.
+  // "Godkänn" is hidden when the current user IS the requester (Q1
+  // self-approval UI gate; server enforces too). Hidden only when
+  // both IDs are non-null and equal — null on either side falls
+  // through to the server's authoritative check.
+  if (draft.status === "PENDING_APPROVAL") {
+    const isSelfApproval =
+      currentUserId !== null &&
+      draft.createdByUserId !== null &&
+      currentUserId === draft.createdByUserId;
+    if (!isSelfApproval) {
+      dropdownItems.push({
+        key: "approve-draft",
+        label: "Godkänn",
+        onClick: () => setConfirmKind("approve-draft"),
+      });
+    }
+    dropdownItems.push({
+      key: "reject-draft",
+      label: "Avslå",
+      danger: true,
+      onClick: () => setConfirmKind("reject-draft"),
+    });
+  }
   if (isResendable) {
     dropdownItems.push({
       key: "resend-invoice",
@@ -723,6 +840,155 @@ export function KonfigureraClient({
           rows={3}
           placeholder="T.ex. kunden ändrade sig"
           disabled={actionPending}
+          style={{
+            width: "100%",
+            padding: "8px 12px",
+            border: "1px solid var(--admin-border)",
+            borderRadius: 6,
+            fontSize: 14,
+            fontFamily: "inherit",
+            resize: "vertical",
+            minHeight: 60,
+          }}
+        />
+      </ConfirmModal>
+
+      {/* FAS 7.6-lite: Begär godkännande */}
+      <ConfirmModal
+        open={confirmKind === "submit-for-approval"}
+        title="Begär godkännande"
+        description={
+          <>
+            Utkastet skickas vidare för godkännande. När någon annan
+            godkänner kan fakturan skickas till kunden.
+          </>
+        }
+        confirmLabel="Begär"
+        isPending={actionPending}
+        onConfirm={handleSubmitForApprovalConfirm}
+        onCancel={() => {
+          setConfirmKind(null);
+          setRequestNote("");
+        }}
+      >
+        <label
+          style={{
+            display: "block",
+            fontSize: 13,
+            color: "var(--admin-text-muted)",
+            marginBottom: 6,
+          }}
+        >
+          Notering till godkännare (valfritt)
+        </label>
+        <textarea
+          value={requestNote}
+          onChange={(e) => setRequestNote(e.target.value.slice(0, 500))}
+          rows={3}
+          placeholder="T.ex. brådskande, prio kund"
+          disabled={actionPending}
+          maxLength={500}
+          style={{
+            width: "100%",
+            padding: "8px 12px",
+            border: "1px solid var(--admin-border)",
+            borderRadius: 6,
+            fontSize: 14,
+            fontFamily: "inherit",
+            resize: "vertical",
+            minHeight: 60,
+          }}
+        />
+      </ConfirmModal>
+
+      {/* FAS 7.6-lite: Godkänn utkast */}
+      <ConfirmModal
+        open={confirmKind === "approve-draft"}
+        title="Godkänn utkast"
+        description={
+          <>
+            Utkastet godkänns och kan därefter skickas som faktura.
+            Beslutet registreras i aktivitetsloggen.
+          </>
+        }
+        confirmLabel="Godkänn"
+        isPending={actionPending}
+        onConfirm={handleApproveDraftConfirm}
+        onCancel={() => {
+          setConfirmKind(null);
+          setApprovalNote("");
+        }}
+      >
+        <label
+          style={{
+            display: "block",
+            fontSize: 13,
+            color: "var(--admin-text-muted)",
+            marginBottom: 6,
+          }}
+        >
+          Kommentar (valfritt)
+        </label>
+        <textarea
+          value={approvalNote}
+          onChange={(e) => setApprovalNote(e.target.value.slice(0, 500))}
+          rows={3}
+          placeholder="T.ex. OK från ekonomi"
+          disabled={actionPending}
+          maxLength={500}
+          style={{
+            width: "100%",
+            padding: "8px 12px",
+            border: "1px solid var(--admin-border)",
+            borderRadius: 6,
+            fontSize: 14,
+            fontFamily: "inherit",
+            resize: "vertical",
+            minHeight: 60,
+          }}
+        />
+      </ConfirmModal>
+
+      {/* FAS 7.6-lite: Avslå utkast — REQUIRED reason. */}
+      <ConfirmModal
+        open={confirmKind === "reject-draft"}
+        title="Avslå utkast"
+        description={
+          <>
+            Utkastet avslås och kan inte återställas. Anledningen
+            registreras i aktivitetsloggen och visas för utkastets
+            skapare.
+          </>
+        }
+        confirmLabel="Avslå"
+        danger
+        isPending={actionPending}
+        confirmDisabled={rejectionReason.trim().length === 0}
+        onConfirm={handleRejectDraftConfirm}
+        onCancel={() => {
+          setConfirmKind(null);
+          setRejectionReason("");
+        }}
+      >
+        <label
+          style={{
+            display: "block",
+            fontSize: 13,
+            color: "var(--admin-text-muted)",
+            marginBottom: 6,
+          }}
+        >
+          Anledning <span style={{ color: "var(--admin-danger)" }}>*</span>
+        </label>
+        <textarea
+          value={rejectionReason}
+          onChange={(e) => setRejectionReason(e.target.value.slice(0, 500))}
+          rows={3}
+          placeholder="T.ex. pris för högt, kund vill omförhandla"
+          disabled={actionPending}
+          maxLength={500}
+          required
+          aria-required="true"
           style={{
             width: "100%",
             padding: "8px 12px",
