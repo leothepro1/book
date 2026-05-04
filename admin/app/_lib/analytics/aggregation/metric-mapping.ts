@@ -206,6 +206,103 @@ export const ANALYTICS_METRIC_MAPPINGS: EventMapping[] = [
     ],
   },
 
+  // ── FUNNEL-METRICS — same-day approximation ─────────────────────────────
+  //
+  // The three funnel events below (cart_started, checkout_started,
+  // cart_abandoned) are aggregated into BASE COUNTS per calendar day.
+  // Phase 5A's derivedMetrics() then computes three rates from those
+  // counts: CART_TO_CHECKOUT_RATE, CART_ABANDONMENT_RATE, and
+  // CHECKOUT_COMPLETION_RATE.
+  //
+  // SAME-DAY APPROXIMATION — important caveat:
+  //
+  // Rates use events that fired ON each calendar day. A cart_id that
+  // started on day N and checked out on day N+1 is counted in DIFFERENT
+  // denominators / numerators (cart_started for day N, checkout_started
+  // for day N+1). This produces approximately-correct trends per day
+  // but does NOT track per-cart-id lifetime conversion.
+  //
+  // Concrete consequences:
+  //   - On a high-traffic day where cross-day carts complete, CART_TO_
+  //     CHECKOUT_RATE may exceed 100% (basis points > 10000) for a
+  //     single day. The aggregator does NOT clamp — saturating to
+  //     10000 would hide cross-day carryover and produce subtly wrong
+  //     trends. Phase 5B parity-tolerance accommodates by treating the
+  //     funnel rates as a DIFFERENT category from the v1-vs-v2
+  //     equality metrics. Dashboards rendering these rates should
+  //     either render the raw bp value or clamp at the read layer.
+  //   - On a low-traffic day where today's cart_started count is small
+  //     vs yesterday's still-active carts, abandonment rate is noisy.
+  //     Multi-day rolling windows are a Phase 5B/5C dashboard concern,
+  //     not an aggregator-level fix.
+  //
+  // Exact funnel-tracking (cart_id-lifecycle joins across days)
+  // requires a separate data structure — Phase 5C+ territory.
+  //
+  // distinct-on-cart_id semantics:
+  //   We use aggregator: "distinct" with distinctKey: cart_id rather
+  //   than "count" because the worker may dispatch duplicate beacons
+  //   (network retry, sendBeacon double-fire) for the same cart_id.
+  //   Distinct on cart_id gives us ACTUAL distinct carts that took the
+  //   step, not the count of beacon receipts.
+
+  // ── cart_started v0.2.0 ─────────────────────────────────────────────────
+  // Source for CART_STARTED × TOTAL.
+  // Phase 3 PR-B emits this on the FIRST add-to-empty-cart per cart_id.
+  {
+    eventName: "cart_started",
+    schemaVersion: "0.2.0",
+    contributions: [
+      {
+        metric: "CART_STARTED",
+        dimension: "TOTAL",
+        dimensionValueFrom: () => "TOTAL",
+        valueFrom: () => 1,
+        aggregator: "distinct",
+        distinctKey: (e) => asString(e.payload.cart_id, ""),
+      },
+    ],
+  },
+
+  // ── checkout_started v0.2.0 ─────────────────────────────────────────────
+  // Source for CHECKOUT_STARTED × TOTAL.
+  // Cart-only scope (per checkout-started.ts:32-46 — non-cart purchase
+  // flows use a separate event family).
+  {
+    eventName: "checkout_started",
+    schemaVersion: "0.2.0",
+    contributions: [
+      {
+        metric: "CHECKOUT_STARTED",
+        dimension: "TOTAL",
+        dimensionValueFrom: () => "TOTAL",
+        valueFrom: () => 1,
+        aggregator: "distinct",
+        distinctKey: (e) => asString(e.payload.cart_id, ""),
+      },
+    ],
+  },
+
+  // ── cart_abandoned v0.2.0 ───────────────────────────────────────────────
+  // Source for CART_ABANDONED × TOTAL.
+  // Dispatched via navigator.sendBeacon() from the loader's unload
+  // handler (cart-abandoned.ts) — duplicate-delivery is the norm here,
+  // distinct-on-cart_id is load-bearing for correctness.
+  {
+    eventName: "cart_abandoned",
+    schemaVersion: "0.2.0",
+    contributions: [
+      {
+        metric: "CART_ABANDONED",
+        dimension: "TOTAL",
+        dimensionValueFrom: () => "TOTAL",
+        valueFrom: () => 1,
+        aggregator: "distinct",
+        distinctKey: (e) => asString(e.payload.cart_id, ""),
+      },
+    ],
+  },
+
   // ── page_viewed v0.1.0 ─────────────────────────────────────────────────
   // Source for SESSIONS × {TOTAL, DEVICE, CITY} and VISITORS × TOTAL.
   // Tab-scoped session_id (industry-norm — recon §2.8 / §9.3).
@@ -333,22 +430,37 @@ export function parseAccumulatorKey(key: string): {
 }
 
 /**
- * Compute derived rows that depend only on already-folded scalar metrics.
- * The runner adds query-derived rows (RETURNING_CUSTOMER_RATE) separately
- * because they require a DB lookup.
+ * Compute derived rows that depend only on already-folded base metrics.
+ * The input map's values come from BOTH scalar-aggregator counts
+ * (REVENUE, ORDERS) and distinct-aggregator counts (CART_STARTED,
+ * CHECKOUT_STARTED, CART_ABANDONED) — see aggregate-day.ts where the
+ * two source maps are merged before this is called.
+ *
+ * The runner adds query-derived rows (RETURNING_CUSTOMER_RATE)
+ * separately because they require a DB lookup.
+ *
+ * Funnel-rate semantics — see the FUNNEL-METRICS doc-block in the
+ * mapping registry above for the same-day approximation caveat.
+ * Rates are emitted in basis points (10000 = 100%) matching Phase 5A's
+ * RETURNING_CUSTOMER_RATE convention. Each rate is OMITTED ENTIRELY
+ * when its denominator is zero — saving an explicit "NaN" row that
+ * would mean nothing to a dashboard. The dashboard treats a missing
+ * row as "no data this day", distinct from "0% rate".
  */
 export function derivedMetrics(
   folded: Map<string, bigint>,
 ): DerivedMetricRow[] {
   const out: DerivedMetricRow[] = [];
 
-  const revenueTotalKey = makeAccumulatorKey("REVENUE", "TOTAL", "TOTAL");
-  const ordersTotalKey = makeAccumulatorKey("ORDERS", "TOTAL", "TOTAL");
-
   // ES2017 target — use BigInt() expressions, never `0n` literals.
   const ZERO = BigInt(0);
   const TWO = BigInt(2);
 
+  // ── AVERAGE_ORDER_VALUE × TOTAL ────────────────────────────────────────
+  // AOV = round(REVENUE / ORDERS), zero-guard.
+
+  const revenueTotalKey = makeAccumulatorKey("REVENUE", "TOTAL", "TOTAL");
+  const ordersTotalKey = makeAccumulatorKey("ORDERS", "TOTAL", "TOTAL");
   const revenue = folded.get(revenueTotalKey) ?? ZERO;
   const orders = folded.get(ordersTotalKey) ?? ZERO;
 
@@ -372,5 +484,71 @@ export function derivedMetrics(
     });
   }
 
+  // ── Funnel-rate inputs ─────────────────────────────────────────────────
+
+  const cartStarted =
+    folded.get(makeAccumulatorKey("CART_STARTED", "TOTAL", "TOTAL")) ?? ZERO;
+  const checkoutStarted =
+    folded.get(makeAccumulatorKey("CHECKOUT_STARTED", "TOTAL", "TOTAL")) ??
+    ZERO;
+  const cartAbandoned =
+    folded.get(makeAccumulatorKey("CART_ABANDONED", "TOTAL", "TOTAL")) ?? ZERO;
+
+  // ── CART_TO_CHECKOUT_RATE × TOTAL ──────────────────────────────────────
+  // checkout_started / cart_started, basis points. Omit when cart_started
+  // is zero (no carts means no rate to compute — distinct from a 0% rate,
+  // which would imply 100% abandonment but isn't meaningful when there
+  // were no carts to begin with).
+  if (cartStarted > ZERO) {
+    out.push({
+      metric: "CART_TO_CHECKOUT_RATE",
+      dimension: "TOTAL",
+      dimensionValue: "TOTAL",
+      value: rateBasisPoints(checkoutStarted, cartStarted),
+    });
+  }
+
+  // ── CART_ABANDONMENT_RATE × TOTAL ──────────────────────────────────────
+  // cart_abandoned / cart_started, basis points. Same omit-when-zero
+  // policy as CART_TO_CHECKOUT_RATE.
+  if (cartStarted > ZERO) {
+    out.push({
+      metric: "CART_ABANDONMENT_RATE",
+      dimension: "TOTAL",
+      dimensionValue: "TOTAL",
+      value: rateBasisPoints(cartAbandoned, cartStarted),
+    });
+  }
+
+  // ── CHECKOUT_COMPLETION_RATE × TOTAL ───────────────────────────────────
+  // orders / checkout_started, basis points. Reuses the existing
+  // ORDERS × TOTAL count from Phase 5A — no new base metric needed.
+  // Omit when checkout_started is zero.
+  if (checkoutStarted > ZERO) {
+    out.push({
+      metric: "CHECKOUT_COMPLETION_RATE",
+      dimension: "TOTAL",
+      dimensionValue: "TOTAL",
+      value: rateBasisPoints(orders, checkoutStarted),
+    });
+  }
+
   return out;
+}
+
+/**
+ * Rate as basis points: round((numerator / denominator) * 10000).
+ *
+ * Caller is responsible for guarding `denominator > 0`. We use Number
+ * arithmetic for the rounding step — the inputs cannot exceed daily
+ * cart counts, which fit comfortably in Number's 2^53 safe-integer
+ * range even at fleet scale (10k tenants × peak hourly rate).
+ *
+ * NO clamping at 10000 — see the FUNNEL-METRICS doc-block above on
+ * cross-day cart carryover and why saturation would hide trend drift.
+ */
+function rateBasisPoints(numerator: bigint, denominator: bigint): bigint {
+  const num = Number(numerator);
+  const denom = Number(denominator);
+  return BigInt(Math.round((num / denom) * 10000));
 }

@@ -488,3 +488,157 @@ describe("aggregateEvents — async streaming", () => {
     );
   });
 });
+
+describe("aggregateEvents — funnel pipeline (cart events → rates)", () => {
+  function cartStartedEvent(payload: Record<string, unknown>) {
+    return event({
+      event_name: "cart_started",
+      schema_version: "0.2.0",
+      payload,
+    });
+  }
+  function checkoutStartedEvent(payload: Record<string, unknown>) {
+    return event({
+      event_name: "checkout_started",
+      schema_version: "0.2.0",
+      payload,
+    });
+  }
+  function cartAbandonedEvent(payload: Record<string, unknown>) {
+    return event({
+      event_name: "cart_abandoned",
+      schema_version: "0.2.0",
+      payload,
+    });
+  }
+
+  it("Fixture 17 — full funnel: 4 carts, 2 checkouts, 1 abandoned, 1 paid → all rates correct", async () => {
+    // 4 distinct carts started.
+    // 2 of them got to checkout (the same beacon may double-fire).
+    // 1 was abandoned.
+    // 1 paid order resulted (matches one of the checkouts).
+    const events: AnalyticsEventRow[] = [
+      // 4 distinct cart_started
+      cartStartedEvent({
+        cart_id: "01HZFUNNEL0CART00000000001",
+        product_id: "p1",
+        cart_total: { amount: 100, currency: "SEK" },
+      }),
+      cartStartedEvent({
+        cart_id: "01HZFUNNEL0CART00000000002",
+        product_id: "p2",
+        cart_total: { amount: 200, currency: "SEK" },
+      }),
+      cartStartedEvent({
+        cart_id: "01HZFUNNEL0CART00000000003",
+        product_id: "p3",
+        cart_total: { amount: 300, currency: "SEK" },
+      }),
+      cartStartedEvent({
+        cart_id: "01HZFUNNEL0CART00000000004",
+        product_id: "p4",
+        cart_total: { amount: 400, currency: "SEK" },
+      }),
+      // 2 checkout_started — second one is a duplicate beacon (same cart_id)
+      checkoutStartedEvent({
+        cart_id: "01HZFUNNEL0CART00000000001",
+        items_count: 1,
+        line_items_count: 1,
+        cart_total: { amount: 100, currency: "SEK" },
+      }),
+      checkoutStartedEvent({
+        cart_id: "01HZFUNNEL0CART00000000001", // duplicate
+        items_count: 1,
+        line_items_count: 1,
+        cart_total: { amount: 100, currency: "SEK" },
+      }),
+      checkoutStartedEvent({
+        cart_id: "01HZFUNNEL0CART00000000002",
+        items_count: 1,
+        line_items_count: 1,
+        cart_total: { amount: 200, currency: "SEK" },
+      }),
+      // 1 abandoned
+      cartAbandonedEvent({
+        cart_id: "01HZFUNNEL0CART00000000003",
+        items_count: 1,
+        line_items_count: 1,
+        cart_total: { amount: 300, currency: "SEK" },
+        time_since_last_interaction_ms: 60_000,
+      }),
+      // 1 payment_succeeded
+      paymentEvent({
+        payment_id: "ord_funnel_1",
+        amount: { amount: 100, currency: "SEK" },
+        source_channel: "direct",
+        line_items: [],
+      }),
+    ];
+
+    const rows = await aggregateEvents(fromArray(events), TENANT, DATE);
+
+    expect(findRow(rows, "CART_STARTED", "TOTAL", "TOTAL")?.value).toBe(
+      BigInt(4),
+    );
+    // Duplicate beacon collapses to 2 distinct cart_ids.
+    expect(findRow(rows, "CHECKOUT_STARTED", "TOTAL", "TOTAL")?.value).toBe(
+      BigInt(2),
+    );
+    expect(findRow(rows, "CART_ABANDONED", "TOTAL", "TOTAL")?.value).toBe(
+      BigInt(1),
+    );
+    // Rates: checkout/cart = 2/4 = 50% = 5000 bp.
+    expect(
+      findRow(rows, "CART_TO_CHECKOUT_RATE", "TOTAL", "TOTAL")?.value,
+    ).toBe(BigInt(5000));
+    // Abandonment: 1/4 = 25% = 2500 bp.
+    expect(
+      findRow(rows, "CART_ABANDONMENT_RATE", "TOTAL", "TOTAL")?.value,
+    ).toBe(BigInt(2500));
+    // Completion: orders/checkout = 1/2 = 50% = 5000 bp.
+    expect(
+      findRow(rows, "CHECKOUT_COMPLETION_RATE", "TOTAL", "TOTAL")?.value,
+    ).toBe(BigInt(5000));
+  });
+
+  it("Fixture 18 — empty stream omits all funnel rates, AOV still 0", async () => {
+    const rows = await aggregateEvents(fromArray([]), TENANT, DATE);
+    expect(findRow(rows, "CART_TO_CHECKOUT_RATE", "TOTAL", "TOTAL")).toBeUndefined();
+    expect(findRow(rows, "CART_ABANDONMENT_RATE", "TOTAL", "TOTAL")).toBeUndefined();
+    expect(
+      findRow(rows, "CHECKOUT_COMPLETION_RATE", "TOTAL", "TOTAL"),
+    ).toBeUndefined();
+    expect(
+      findRow(rows, "AVERAGE_ORDER_VALUE", "TOTAL", "TOTAL")?.value,
+    ).toBe(BigInt(0));
+  });
+
+  it("Fixture 19 — only cart_started events (no checkout) → rate=0%, no completion", async () => {
+    const events: AnalyticsEventRow[] = [
+      cartStartedEvent({
+        cart_id: "01HZFUNNEL1CART11111111111",
+        product_id: "px",
+        cart_total: { amount: 100, currency: "SEK" },
+      }),
+      cartStartedEvent({
+        cart_id: "01HZFUNNEL1CART22222222222",
+        product_id: "px",
+        cart_total: { amount: 100, currency: "SEK" },
+      }),
+    ];
+    const rows = await aggregateEvents(fromArray(events), TENANT, DATE);
+    expect(findRow(rows, "CART_STARTED", "TOTAL", "TOTAL")?.value).toBe(BigInt(2));
+    // No checkout events → CART_TO_CHECKOUT_RATE = 0 (rate emitted at 0).
+    expect(
+      findRow(rows, "CART_TO_CHECKOUT_RATE", "TOTAL", "TOTAL")?.value,
+    ).toBe(BigInt(0));
+    // No abandoned → CART_ABANDONMENT_RATE = 0.
+    expect(
+      findRow(rows, "CART_ABANDONMENT_RATE", "TOTAL", "TOTAL")?.value,
+    ).toBe(BigInt(0));
+    // No checkouts means CHECKOUT_COMPLETION_RATE has zero denominator → omitted.
+    expect(
+      findRow(rows, "CHECKOUT_COMPLETION_RATE", "TOTAL", "TOTAL"),
+    ).toBeUndefined();
+  });
+});

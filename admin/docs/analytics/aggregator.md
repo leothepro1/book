@@ -205,6 +205,78 @@ Per recon §6:
 | Inngest mid-batch crash | step.run checkpoint resumes only unfinished days | Automatic on retry budget |
 | Idempotency violation | composite unique upsert; runner test "idempotency" marker | Will not occur unless registry mapping is non-deterministic |
 
+## Funnel metrics
+
+Phase 5A landed three storefront cart events into the aggregator
+registry plus three derived rates. Same architecture, no schema
+change, no migration, no Inngest change — pure registry + derived-
+metric extension.
+
+### Base counts (distinct on cart_id)
+
+| Metric × Dimension | Source event | Aggregator |
+|---|---|---|
+| `CART_STARTED × TOTAL` | `cart_started@0.2.0` | distinct on `cart_id` |
+| `CHECKOUT_STARTED × TOTAL` | `checkout_started@0.2.0` | distinct on `cart_id` |
+| `CART_ABANDONED × TOTAL` | `cart_abandoned@0.2.0` | distinct on `cart_id` |
+
+`distinct` is load-bearing — the worker may dispatch duplicate
+beacons (network retry, sendBeacon double-fire) for the same
+`cart_id`. Distinct collapses these to the actual cart count.
+
+### Derived rates (basis points, 10000 = 100%)
+
+| Metric × Dimension | Formula | Emitted when |
+|---|---|---|
+| `CART_TO_CHECKOUT_RATE × TOTAL` | `CHECKOUT_STARTED / CART_STARTED` | `CART_STARTED > 0` |
+| `CART_ABANDONMENT_RATE × TOTAL` | `CART_ABANDONED / CART_STARTED` | `CART_STARTED > 0` |
+| `CHECKOUT_COMPLETION_RATE × TOTAL` | `ORDERS / CHECKOUT_STARTED` | `CHECKOUT_STARTED > 0` |
+
+When a denominator is zero the row is OMITTED ENTIRELY, not emitted
+as 0. The dashboard treats a missing row as "no data this day",
+distinct from "0% rate" — saving the latter would imply 100%
+abandonment-of-no-carts which has no meaningful interpretation.
+
+`CHECKOUT_COMPLETION_RATE` reuses Phase 5A's existing
+`ORDERS × TOTAL` count — no new base mapping needed.
+
+### Same-day approximation — explicit caveat
+
+Rates use events that fired ON each calendar day. A `cart_id` that
+started on day N and checked out on day N+1 lands in DIFFERENT
+denominators / numerators (`cart_started` for day N,
+`checkout_started` for day N+1). Consequences:
+
+* On a high-traffic day with cross-day cart carryover,
+  `CART_TO_CHECKOUT_RATE` may exceed 100% (basis points > 10000)
+  for that single day. The aggregator does **NOT** clamp.
+  Saturation would hide cross-day carryover and produce subtly
+  wrong trend lines. Dashboards rendering these rates should clamp
+  at the read layer if they want a 0–100% UI.
+* On a low-traffic day, abandonment rate is noisy because today's
+  small cart_started count is dwarfed by yesterday's still-active
+  carts. Multi-day rolling windows are a Phase 5B/5C dashboard
+  concern, not an aggregator-level fix.
+
+Exact funnel-tracking (cart_id-lifecycle joins across days) requires
+a separate data structure — Phase 5C+ territory.
+
+### Out of scope for this extension
+
+* **Per-channel funnel rates** — `cart_started` and `checkout_started`
+  payloads do not carry `source_channel`. A v0.3.0 schema bump on
+  the cart cluster would be required. Future PR.
+* **Per-product funnel** — `cart_started.product_id` exists but
+  `checkout_started` carries only counts, not a product list.
+  Would require a `line_items[]` array on `checkout_started`.
+  Future PR.
+* **Time-to-conversion** — sec/min between `cart_started` →
+  `payment_succeeded` requires per-`cart_id` lifecycle tracking.
+  Phase 5C.
+* **Dashboard rendering** — Phase 5B (after parity-validation).
+* **Phase 5B parity-tolerance entries** for the new rates — to be
+  added to recon §7.2 when 5B kicks off.
+
 ## Parity-diff (Phase 5B)
 
 `npm run analytics:parity-diff` is reserved as an npm script name; the

@@ -192,12 +192,27 @@ export async function aggregateEvents(
     });
   }
 
-  // ── Derived rows (AOV) — computed from the scalar map.
+  // ── Derived rows (AOV + funnel-rates) — computed from a unified map.
   //
-  // RETURNING_CUSTOMER_RATE is NOT here because it needs a DB query
-  // for actor_id history — the runner emits it separately in B.4.
+  // derivedMetrics needs to look up BOTH sum-aggregator counts (REVENUE,
+  // ORDERS) AND distinct-aggregator counts (CART_STARTED, CHECKOUT_STARTED,
+  // CART_ABANDONED). We merge distinct sizes into the input map so
+  // derivedMetrics is a single Map<key, bigint> lookup regardless of how
+  // the underlying count was produced.
+  //
+  // Merge is non-destructive — scalarSum keys never collide with distinct
+  // keys at the registry level (same metric+dimension never declared
+  // both ways), so the merged map's contents are the union of the two.
+  //
+  // RETURNING_CUSTOMER_RATE is NOT computed here — it needs a DB query
+  // for actor_id history; the runner emits it separately in B.4.
 
-  for (const d of derivedMetrics(scalarSum)) {
+  const foldedAllCounts = new Map<string, bigint>(scalarSum);
+  for (const [accKey, set] of distinctSets) {
+    foldedAllCounts.set(accKey, BigInt(set.size));
+  }
+
+  for (const d of derivedMetrics(foldedAllCounts)) {
     rows.push({
       tenantId,
       date,
