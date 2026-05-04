@@ -11,6 +11,7 @@ import { AovChart } from "./components/AovChart";
 import { ReturningChart } from "./components/ReturningChart";
 import { CityChart } from "./components/CityChart";
 import { DeviceChart } from "./components/DeviceChart";
+import { VisitorsLiveCard } from "./components/VisitorsLiveCard";
 
 type DashboardData = {
   ok: boolean;
@@ -77,6 +78,11 @@ export default function AnalyticsDashboard({ tenantId }: { tenantId: string }) {
       {/* Header row */}
       <div className="analytics-header-row">
         <DateRangePicker from={from} to={to} onChange={handleDateChange} />
+      </div>
+
+      {/* Live widget — Besökare just nu (Track 3, near-live, 5-min poll) */}
+      <div className="analytics-live-row">
+        <VisitorsLiveCard />
       </div>
 
       {/* Summary cards */}

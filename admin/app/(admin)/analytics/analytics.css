@@ -173,6 +173,32 @@
   animation: analytics-skeleton-pulse 1.2s ease-in-out infinite;
 }
 
+.analytics-live-row {
+  margin-bottom: 12px;
+}
+
+.analytics-summary-card__hint {
+  font-size: 11px;
+  color: var(--admin-text-tertiary);
+  margin-top: 4px;
+}
+
+.analytics-summary-card__retry {
+  background: transparent;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  padding: 2px 8px;
+  margin-left: 8px;
+  cursor: pointer;
+  color: var(--admin-text-secondary);
+}
+
+.analytics-summary-card__retry:hover {
+  border-color: var(--admin-border-focus);
+  color: var(--admin-text);
+}
+
 /* ── Charts grid ── */
 
 .analytics-charts-grid {
