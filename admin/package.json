@@ -22,6 +22,7 @@
     "verify:storefront-context-additive": "tsx scripts/verify-storefront-context-additive.ts",
     "verify:context-pipeline": "tsx scripts/verify-context-pipeline.ts",
     "verify:geo-lookup": "tsx scripts/verify-geo-lookup.ts",
+    "verify:phase5a": "tsx scripts/verify-phase5a-aggregator.ts",
     "db:up": "docker rm -f pg 2>/dev/null || true && docker volume create hospitality_pgdata >/dev/null && docker run --name pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=hospitality -p 5432:5432 -v hospitality_pgdata:/var/lib/postgresql/data -d postgres:16 && bash -lc 'for i in {1..60}; do docker exec pg pg_isready -U postgres -d hospitality >/dev/null 2>&1 && echo \"pg ready\" && exit 0; sleep 1; done; echo \"pg not ready\"; docker logs --tail 200 pg; exit 1'",
     "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "db:seed": "prisma db seed",
