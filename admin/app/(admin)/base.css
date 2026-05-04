@@ -1,9 +1,13 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
-
 /* ══════════════════════════════════════════════════════════
    base.css — Admin global foundation
    Light + Dark mode via CSS custom properties
    Import in (admin)/layout.tsx
+
+   Fonts: Geist + Geist Mono are loaded by next/font/google in
+   (admin)/layout.tsx and exposed as --font-geist-sans /
+   --font-geist-mono. The admin font tokens below reference those
+   variables. Hardcoded font-family stacks are forbidden in admin
+   CSS — always use var(--admin-font) or var(--admin-font-mono).
    ══════════════════════════════════════════════════════════ */
 
 /* ── Light Mode (default) ── */
@@ -52,6 +56,248 @@
   --admin-danger:        #EE0000;
   --admin-danger-tint:   #FFEBEB;
 
+  /* Button — Phase 1 primitive tokens (light)
+     5 variants: primary, secondary, accent, ghost, danger.
+     Hover goes darker except primary which goes lighter (it's already
+     near-black, so darkening would flatten the affordance).
+     Active is one step further from base than hover. */
+  --btn-primary-bg:           #171717;
+  --btn-primary-bg-hover:     #2A2A2A;
+  --btn-primary-bg-active:    #3A3A3A;
+  --btn-primary-fg:           #FFFFFF;
+
+  --btn-secondary-bg:         #FFFFFF;
+  --btn-secondary-bg-hover:   #F5F5F5;
+  --btn-secondary-bg-active:  #EBEBEB;
+  --btn-secondary-fg:         #171717;
+  --btn-secondary-border:     #EBEBEB;
+
+  --btn-accent-bg:            #0072F5;
+  --btn-accent-bg-hover:      #005FCC;
+  --btn-accent-bg-active:     #004FA8;
+  --btn-accent-fg:            #FFFFFF;
+
+  --btn-ghost-bg:             #EBEBEB;
+  --btn-ghost-bg-hover:       #DEDEDE;
+  --btn-ghost-bg-active:      #D1D1D1;
+  --btn-ghost-fg:             #171717;
+
+  --btn-danger-bg:            #DA2F35;
+  --btn-danger-bg-hover:      #C42228;
+  --btn-danger-bg-active:     #A8181D;
+  --btn-danger-fg:            #FFFFFF;
+
+  /* Modal — Phase 2 primitive tokens (light)
+     Shared across default / sticky / single-button variants.
+     Width is a max constraint, not a fixed width — actual modal is
+     `min(viewport - margin, --modal-max-width)` so it responds on
+     narrow viewports without manual breakpoints.
+     Shadow is iOS-style: large soft offset + tighter rim, gives a
+     "floating sheet" feel against the dimmed backdrop. */
+  /* Toggle — Phase 1 primitive tokens
+     Reuses existing --admin-toggle-on / --admin-toggle-off for the
+     track color (single source of truth across legacy + new toggle).
+     Thumb gets its own tokens since the legacy CSS hardcoded them
+     inline. */
+  --toggle-thumb-bg:          #FFFFFF;
+  --toggle-thumb-shadow:      0 1px 3px rgba(0, 0, 0, 0.2);
+
+  /* Checkbox — Phase 1 primitive tokens
+     Mirrors the legacy `.fac-check` look (the user-validated 10/10).
+     Checked state uses --dark-primary so it stays in sync with the
+     site's dark-primary palette (other dark-filled chrome). */
+  --checkbox-bg:              #FFFFFF;
+  --checkbox-border:          var(--admin-border);
+  --checkbox-border-hover:    #999999;
+  --checkbox-checked-bg:      var(--dark-primary);
+  --checkbox-checked-border:  var(--dark-primary);
+  --checkbox-icon:            #FFFFFF;
+
+  /* Toast — Phase 2 primitive tokens
+     All 10 toast variants share the same chrome (shadow, padding,
+     radius, font-size, close-icon affordance). Variant differs only
+     in colour treatment / leading icon. Shadow is the same 5-stack
+     used by Modal for visual coherence between floating surfaces. */
+  --toast-bg:                 #FFFFFF;
+  --toast-fg:                 #171717;
+  --toast-radius:             12px;
+  --toast-padding:            16px;
+  --toast-stack-gap:          8px;
+  --toast-stack-bottom:       24px;
+  --toast-stack-right:        24px;
+  --toast-transition:         220ms;
+  --toast-shadow:
+    0 0 0 1px #00000014,
+    0px 1px 1px #00000005,
+    0px 4px 8px -4px #0000000a,
+    0px 16px 24px -8px #0000000f,
+    0 0 0 1px hsla(0, 0%, 98%, 1);
+  --toast-close-color:        #8F8F98;
+  --toast-close-hover:        #303030;
+  --toast-max-width:          480px;
+  /* Coloured variants — bg + fg as a pair so close-button colour
+     auto-derives from `currentColor`. Hex values match the brand
+     palette already used in Button (accent #0072F5, danger #DA2F35)
+     plus a warning orange. */
+  --toast-success-bg:         #0072F5;
+  --toast-success-fg:         #FFFFFF;
+  --toast-warning-bg:         #FF990A;
+  --toast-warning-fg:         #171717;
+  --toast-error-bg:           #DA2F35;
+  --toast-error-fg:           #FFFFFF;
+
+  /* Textarea — Phase 1 primitive tokens
+     Reference: legacy `.admin-textarea`. The new primitive owns its
+     own token namespace (instead of reusing --admin-* directly) so a
+     future redesign of textareas doesn't ripple into other admin
+     surfaces that share the same base tokens. */
+  --textarea-bg:              #FFFFFF;
+  --textarea-fg:              var(--admin-text);
+  --textarea-placeholder:     var(--admin-text-tertiary);
+  --textarea-border:          var(--admin-border);
+  --textarea-border-hover:    #B0B0B0;
+  --textarea-border-focus:    #999999;
+  --textarea-border-error:    #CB2A2F;
+  /* Light-red halo for the invalid state — same shape as the focus
+     ring (4px spread) but tinted red and applied by default (not
+     just on focus). Communicates "this is wrong" without needing
+     the user to interact first. */
+  --textarea-error-ring:      0 0 0 4px rgba(203, 42, 47, 0.12);
+  --textarea-radius:          10px;
+  --textarea-padding:         12px;
+  --textarea-min-height:      96px;
+  --textarea-disabled-bg:     #F2F2F2;
+
+  /* Menu — Phase 2 primitive tokens
+     Action menu (NOT a select dropdown — see legacy `.admin-dropdown`
+     for that). Shadow is the same 5-stack as Modal/Toast for visual
+     coherence between floating surfaces. */
+  --menu-bg:                  #FFFFFF;
+  --menu-radius:              12px;
+  --menu-padding:             6px;
+  --menu-min-width:           200px;
+  --menu-shadow:
+    0 0 0 1px #00000014,
+    0px 1px 1px #00000005,
+    0px 4px 8px -4px #0000000a,
+    0px 16px 24px -8px #0000000f,
+    0 0 0 1px hsla(0, 0%, 98%, 1);
+  --menu-item-fg:             #171717;
+  --menu-item-fg-danger:      #DA2F35;
+  --menu-item-bg-hover:       #F5F5F5;
+  /* Light-red hover for danger items so they share the same
+     "no border, no extra space" layout as regular items but still
+     read as destructive on hover. 8% alpha matches the toast
+     error-ring's subtlety. */
+  --menu-item-bg-danger-hover: rgba(218, 47, 53, 0.08);
+  --menu-item-radius:         6px;
+  /* Item dimensions — non-suffixed tokens are the md default,
+     -sm variants override on `.ui-menu--sm`. With body line-height
+     ~1.5: md = 14×1.5 + 8+8 ≈ 37px, sm = 13×1.5 + 6+6 ≈ 32px. */
+  --menu-item-padding:        8px 10px;
+  --menu-item-padding-sm:     6px 8px;
+  --menu-item-font-size:      14px;
+  --menu-item-font-size-sm:   13px;
+  --menu-item-icon-size:      18px;
+  --menu-item-icon-size-sm:   16px;
+  --menu-item-gap:            8px;
+  --menu-item-gap-sm:         6px;
+  --menu-divider:             #EBEBEB;
+  --menu-transition:          180ms;
+
+  /* Badge — Phase 2 primitive tokens
+     Status pills used in lists (products, orders, customers etc).
+     Six tones cover every existing status palette in the admin —
+     consolidates products.css `.products-status--*` and the
+     OrderBadge BUCKET_STYLES into one tokenised system.
+
+     Tone mapping (existing → new):
+       Aktiv (product)        → success    (#AFFEBF / #223A5A)
+       Utkast (product)       → info       (#D5EBFF / #223A5A)
+       Arkiverad (product)    → neutral    (#E8E8E8 / #616161)
+       AVSLUTAD (order)       → neutral    (same)
+       VÄNTANDE (order)       → warning    (#FFD6A4 / #5E4200)
+       PÅGÅENDE (order)       → attention  (#FFEB78 / #4F4700)
+       PROBLEM (order)        → critical   (#FED1D7 / #8E0B21) */
+  --badge-radius:             7px;
+  --badge-padding:            2px 8px;
+  --badge-font-size:          12px;
+  --badge-font-weight:        500;
+
+  --badge-success-bg:         #AFFEBF;
+  --badge-success-fg:         #223A5A;
+  --badge-info-bg:            #D5EBFF;
+  --badge-info-fg:            #223A5A;
+  --badge-warning-bg:         #FFD6A4;
+  --badge-warning-fg:         #5E4200;
+  --badge-attention-bg:       #FFEB78;
+  --badge-attention-fg:       #4F4700;
+  --badge-critical-bg:        #FED1D7;
+  --badge-critical-fg:        #8E0B21;
+  --badge-neutral-bg:         #E8E8E8;
+  --badge-neutral-fg:         #616161;
+
+  /* Choicebox — Phase 2 primitive tokens
+     Larger tap-target alternative to Radio/Checkbox. The whole
+     card is the click surface.
+
+     Three states:
+       rest      — white bg, light border
+       hover     — #F2F2F2 bg, darker border on both card + indicator
+       selected  — slightly darker bg, accent-coloured indicator
+                   (border + fill) so the chosen card reads via the
+                   indicator first, card chrome second */
+  --choicebox-bg:                     #FFFFFF;
+  --choicebox-bg-hover:               #F2F2F2;
+  --choicebox-bg-selected:            #F0F7FF;
+  --choicebox-border:                 var(--admin-border);
+  --choicebox-border-hover:           #999999;
+  --choicebox-border-selected:        #0068D6;
+  --choicebox-fg:                     var(--admin-text);
+  --choicebox-fg-secondary:           var(--admin-text-secondary);
+  --choicebox-fg-selected:            #0068D6;
+  --choicebox-radius:                 6px;
+  --choicebox-padding:                12px;
+  --choicebox-gap:                    12px;
+  /* Indicator: light at rest, darker on hover, accent blue (#0068D6)
+     when selected. Fill + border share the same accent so the
+     indicator reads as one solid blue surface with a white inner
+     mark. Selected card bg is a very light tint of the same blue
+     so the whole card reads as a single coherent "blue family". */
+  --choicebox-indicator-bg:           #FFFFFF;
+  --choicebox-indicator-bg-selected:  #0068D6;
+  --choicebox-indicator-border:       var(--admin-border);
+  --choicebox-indicator-border-hover: #999999;
+  --choicebox-indicator-border-selected: #0068D6;
+  --choicebox-indicator-fg-selected:  #FFFFFF;
+  /* Soft grey halo that grows behind the textarea on focus. Spread
+     0 → 4px transitioned via box-shadow so the ring "grows in"
+     rather than appearing instantly. */
+  --textarea-focus-ring:      0 0 0 4px rgba(0, 0, 0, 0.10);
+
+  --modal-bg:                 #FFFFFF;
+  /* iOS-style frosted overlay — white at 78% opacity instead of
+     black-dim. The page behind reads as a softened wash rather
+     than a darkened scrim. */
+  --modal-overlay-bg:         rgba(255, 255, 255, 0.78);
+  --modal-radius:             14px;
+  /* Layered shadow: outer dark hairline + tight micro-shadow +
+     medium soft + large soft + inner light hairline. The two 1px
+     spread shadows give the modal a subtle double-edge that lifts
+     it cleanly off the white-frosted overlay; the three distance
+     shadows do the actual depth lifting. */
+  --modal-shadow:
+    0 0 0 1px #00000014,
+    0px 1px 1px #00000005,
+    0px 8px 16px -4px #0000000a,
+    0px 24px 32px -8px #0000000f,
+    0 0 0 1px hsla(0, 0%, 98%, 1);
+  --modal-max-width:          480px;
+  --modal-max-height:         85vh;
+  --modal-transition:         220ms;
+  --modal-divider:            #EBEBEB;
+  --modal-footer-bg:          #FAFAFA;
+
   /* Toggle / switch */
   --admin-toggle-off:    #dcdcd7;
   --admin-toggle-on:     #2783DE;
@@ -81,7 +327,7 @@
   --admin-range-track:           #CAE6FF;
 
   /* Shared field tokens (sf-*) — used by editor + settings */
-  --sf-mono:                     "SF Mono", "Cascadia Code", "Fira Code", monospace;
+  --sf-mono:                     var(--admin-font-mono);
   --sf-input-height:             36px;
   --sf-input-font-size:          13px;
 
@@ -181,10 +427,6 @@
   --badge-font-size:             var(--font-xs);
   --badge-font-weight:           var(--font-weight-medium);
 
-  /* ── Modal ── */
-  --modal-radius:                var(--radius-2xl);
-  --modal-shadow:                var(--shadow-modal);
-
   /* ── File upload empty state ── */
   --upload-empty-min-height:     96px;
   --upload-empty-border:         1.5px dashed var(--admin-border);
@@ -192,6 +434,139 @@
   --upload-empty-bg:             #FAFAFA;
   --upload-empty-bg-hover:       #f0f0f0;
   --upload-empty-padding:        16px;
+
+  /* Tooltip — Phase 2 primitive tokens
+     Promoted from `app/_components/Tooltip.tsx` (kept for legacy
+     imports as a re-export shim). Dark pill, white text, 8×8 rotated
+     arrow. Timing logic (enter delay, scanning, click suppression)
+     lives in the component — only visual chrome is tokenised here.
+
+     Dark-mode override flips bg+fg to white-on-dark — at #1a1a1a
+     the tooltip would be near-invisible against the #191919 page
+     background. */
+  --tooltip-bg:               #1a1a1a;
+  --tooltip-fg:               #FFFFFF;
+  --tooltip-font-size:        12px;
+  --tooltip-font-weight:      450;
+  --tooltip-line-height:      1;
+  --tooltip-padding:          7px 9px;
+  --tooltip-radius:           6px;
+  --tooltip-letter-spacing:   0.01em;
+  --tooltip-arrow-size:       8px;
+  --tooltip-arrow-radius:     1px;
+  --tooltip-z-index:          99999;
+
+  /* EmptyState — Phase 2 primitive tokens
+     Centred placeholder for empty lists / dashboards. Two flavours
+     emerge from a single component by what props are passed:
+       blank-slate    — just title (+ optional description)
+       informational  — title + description + icon + action(s)
+     The chrome (padding, gap, icon size, max-width) is one set —
+     the visual difference is content density, not styling. */
+  --empty-padding-y:           48px;
+  --empty-padding-x:           24px;
+  --empty-gap:                 8px;
+  --empty-icon-size:           48px;
+  --empty-icon-color:          var(--admin-text-tertiary);
+  --empty-icon-box-size:       70px;
+  --empty-icon-box-radius:     var(--radius-xl); /* 12px */
+  --empty-icon-box-border:     #E6E6E6;
+  --empty-icon-margin-bottom:  10px;
+  --empty-title-size:          16px;
+  --empty-title-weight:        var(--font-weight-semibold);
+  --empty-title-color:         var(--admin-text);
+  --empty-description-size:    14px;
+  --empty-description-color:   var(--admin-text-secondary);
+  --empty-description-line-height: 1.5;
+  --empty-description-max-width: 320px;
+  --empty-actions-gap:         8px;
+  --empty-actions-margin-top:  10px;
+
+  /* Card — Phase 2 primitive tokens
+     Surface container that the entire admin reads as a visual unit.
+     Shadow is a 6-layer stack: five distance-tinted soft shadows that
+     give a near-flat lift, plus a 1px hairline ring at 6% black so
+     the card edge is crisp against any background tint. The stack is
+     calibrated for white-on-near-white contrast — change with care. */
+  --card-bg:                  #FFFFFF;
+  --card-radius:              0.75rem; /* 12px */
+  --card-padding:             16px;
+  /* Four elevations — progressive lift. All four share the outer
+     1px hairline (`#00000014`) and the inner near-white ring
+     (`hsla(0, 0%, 98%, 1)`); the middle layers are what change.
+       flat — rings only, no lift (chrome-only surface)
+       sm   — single 2px close shadow (default card lift)
+       md   — 4-layer mid-distance lift (hover / floating panel)
+       lg   — 5-layer dramatic lift (overlay / popping card) */
+  --card-shadow-flat:
+    0 0 0 1px #00000014,
+    0 0 0 1px hsla(0, 0%, 98%, 1);
+  --card-shadow-sm:
+    0 0 0 1px #00000014,
+    0px 2px 2px #0000000a,
+    0 0 0 1px hsla(0, 0%, 98%, 1);
+  --card-shadow-md:
+    0 0 0 1px #00000014,
+    0px 1px 1px #00000005,
+    0px 4px 8px -4px #0000000a,
+    0px 16px 24px -8px #0000000f,
+    0 0 0 1px hsla(0, 0%, 98%, 1);
+  --card-shadow-lg:
+    0 0 0 1px #00000014,
+    0px 1px 1px #00000005,
+    0px 8px 16px -4px #0000000a,
+    0px 24px 32px -8px #0000000f,
+    0 0 0 1px hsla(0, 0%, 98%, 1);
+
+  /* Tabs — Phase 2 primitive tokens
+     Horizontal tab bar. The active tab reads as a 2px dark underline
+     that visually replaces the 1px gray rule under the bar — done by
+     pulling each tab up by `var(--tabs-border-width)` so its 2px
+     transparent/active border crosses the tablist's 1px border.
+     Items don't compose with the segmented Switch primitive — Tabs
+     navigate views, Switch picks one of N fungible options. */
+  --tabs-gap:                 24px;
+  --tabs-padding:             14px 2px;
+  --tabs-border-color:        #EAEAEA;
+  --tabs-border-width:        1px;
+  --tabs-active-color:        #171717;
+  --tabs-active-width:        2px;
+  --tabs-fg:                  var(--admin-text-secondary);
+  --tabs-fg-hover:            var(--admin-text);
+  --tabs-fg-active:           var(--admin-text);
+  --tabs-font-size:           14px;
+  --tabs-font-weight:         var(--font-weight-medium);
+
+  /* ── Banner — Phase 2 primitive tokens
+     Inline status banner. Full-width container with centred content
+     (icon + text + cta). Three semantic variants — success / warning /
+     error — share chrome (radius, padding, font, gap, icon size) and
+     differ only in background / border / foreground colour.
+
+     Surface is a subtle tint of the variant's base hue mixed into
+     `--admin-surface`, so banners read as a soft state cue rather
+     than a saturated alarm. Border uses the same hue at higher
+     opacity to give an outline that survives over both white and
+     muted page backgrounds. */
+  --banner-padding:           10px;
+  --banner-radius:            var(--radius-md);
+  --banner-gap:               var(--space-2);
+  --banner-font-size:         14px;
+  --banner-font-weight:       var(--font-weight-medium);
+  --banner-line-height:       1em;
+  --banner-icon-size:         18px;
+
+  --banner-success-bg:        #F0F7FF;
+  --banner-success-fg:        #0067D6;
+  --banner-success-border:    #CCE6FF;
+
+  --banner-warning-bg:        #FFF6E6;
+  --banner-warning-fg:        #A35200;
+  --banner-warning-border:    #FFDD8F;
+
+  --banner-error-bg:          #FFF0F0;
+  --banner-error-fg:          #CB2A2F;
+  --banner-error-border:      #FDD8D8;
 }
 
 /* ── Dark Mode ── */
@@ -271,13 +646,57 @@
   --shadow-modal:                0 16px 48px rgba(0, 0, 0, 0.5);
   --upload-empty-bg:             #2A2A2A;
   --upload-empty-bg-hover:       #333333;
+
+  /* Tooltip — dark override.
+     #1a1a1a tooltip on #191919 page bg is near-invisible. Flip to
+     white pill with dark text in dark mode. */
+  --tooltip-bg:               #FFFFFF;
+  --tooltip-fg:               #1a1a1a;
+
+  /* Card — no dark override.
+     Card bg is locked to #FFFFFF and the shadows are calibrated for
+     that surface. In dark mode the cards stay white-on-dark — a
+     deliberate Stripe/Linear-style choice to keep cards reading as
+     content paper regardless of theme. Revisit when a themed-card
+     variant is needed. */
+
+  /* Banner — dark overrides
+     Light pastel foregrounds on a higher-opacity tinted surface so
+     contrast stays comfortable against the dark page bg. Border at
+     30% (vs 22% in light) keeps the rim visible against a darker
+     surface. */
+  --banner-success-bg:        color-mix(in srgb, #22C55E 14%, var(--admin-surface));
+  --banner-success-fg:        #BBF7D0;
+  --banner-success-border:    color-mix(in srgb, #22C55E 30%, transparent);
+
+  --banner-warning-bg:        color-mix(in srgb, #F59E0B 14%, var(--admin-surface));
+  --banner-warning-fg:        #FED7AA;
+  --banner-warning-border:    color-mix(in srgb, #F59E0B 30%, transparent);
+
+  --banner-error-bg:          color-mix(in srgb, var(--admin-danger) 14%, var(--admin-surface));
+  --banner-error-fg:          #FECACA;
+  --banner-error-border:      color-mix(in srgb, var(--admin-danger) 30%, transparent);
 }
 
 
 /* ══════════════════════════════════════════════════════════
-   Typography — Inter-only (Notion-like)
+   Typography — Geist + Geist Mono (loaded via next/font in admin layout)
    ══════════════════════════════════════════════════════════ */
 
+/* Single-level definition at :root.
+ *
+ * "Geist" / "Geist Fallback" / "Geist Mono" / "Geist Mono Fallback"
+ * are the literal font-family names emitted by next/font/google
+ * (see (admin)/layout.tsx). The @font-face declarations live in the
+ * admin route's CSS bundle, so on admin routes the names resolve to
+ * the actual fonts. On any other route — base.css isn't loaded at
+ * all (it's imported only by admin layout), so this rule never
+ * runs there. Either way the system-font tail of the stack covers
+ * the fallback when @font-face hasn't loaded yet (display: swap).
+ *
+ * No wrapper class needed: html, body, and any portaled popover
+ * (Menu, Modal, Toast, Calendar) all inherit --admin-font from
+ * :root and resolve to Geist consistently. */
 :root {
   /* Geist Sans is wired up in app/layout.tsx via `next/font` (geist
      package). The `--font-geist-sans` CSS variable is set on <html>
@@ -293,6 +712,17 @@
     sans-serif,
     "Apple Color Emoji",
     "Segoe UI Emoji";
+
+  --admin-font-mono:
+    "Geist Mono",
+    "Geist Mono Fallback",
+    ui-monospace,
+    "SF Mono",
+    "Cascadia Code",
+    "Fira Code",
+    Menlo,
+    Consolas,
+    monospace;
 }
 
 /* ── Base body ── */
@@ -437,8 +867,8 @@ textarea::placeholder {
   border-radius: var(--radius-lg);
   border: none;
   font-family: var(--admin-font);
-  font-size: var(--font-md);
-  font-weight: var(--font-weight-medium);
+  font-size: 14px;
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
   transition:
     background var(--duration-slow) ease,
@@ -834,7 +1264,7 @@ textarea::placeholder {
 
 .admin-input--color-hex {
   flex: 1;
-  font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace;
+  font-family: var(--admin-font-mono);
   font-size: 12px;
   letter-spacing: 0.02em;
 }

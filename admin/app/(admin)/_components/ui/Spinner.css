@@ -1,0 +1,35 @@
+/* ── Spinner — continuous arc indicator ──
+   Single SVG circle drawn as a ~270° arc (see Spinner.tsx for the
+   stroke-dasharray math). The whole SVG rotates at constant velocity.
+   No per-bar choreography, no opacity choreography — clean modern
+   pattern shipped by Linear / Vercel / GitHub / Stripe.
+
+   Color: `currentColor` on the circle stroke. Size: fixed via the
+   SVG's `width`/`height` attributes (set by the `size` prop) —
+   independent of parent font-size, so the spinner is size-stable
+   wherever it's placed. */
+
+.ui-spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  color: currentColor;
+  animation: ui-spinner-rotate 0.8s linear infinite;
+  /* SVGs rotate around the element's centre by default in modern
+     browsers, but pinning transform-origin removes any chance of an
+     off-axis wobble on legacy WebKit. */
+  transform-origin: center;
+}
+
+@keyframes ui-spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Reduced motion: don't fully stop (otherwise the spinner stops
+   communicating "in progress"); slow the cycle to a calm 2s instead. */
+@media (prefers-reduced-motion: reduce) {
+  .ui-spinner {
+    animation-duration: 2s;
+  }
+}

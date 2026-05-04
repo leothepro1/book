@@ -1,0 +1,457 @@
+/* ── Calendar — Phase 2 primitive ──
+   Trigger is a button styled to read as an input field (border,
+   value text, leading icon, trailing chevron). The popover is a
+   portaled month grid that smart-positions itself drop-down /
+   drop-up via JS (see Calendar.tsx).
+
+   Tokens: reuses --menu-* for the popover surface so calendars,
+   menus, and other floating panels share the same elevation feel.
+   Day-cell sizing (36px) is intrinsic to the calendar layout and
+   not part of the global token system.
+
+   Z-index 9000 matches Menu so calendars and menus can coexist
+   without ordering surprises. */
+
+/* ── Wrapper ─────────────────────────────────────────────────
+   Inline-flex container that anchors the optional clear button
+   alongside the trigger. The wrapper has no chrome of its own —
+   border, background, padding all live on the inner trigger so
+   the clear button can overlay the trigger's right edge cleanly. */
+
+.ui-calendar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ── Trigger ────────────────────────────────────────────────── */
+
+.ui-calendar__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--admin-font);
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border-strong);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  user-select: none;
+  text-align: left;
+  white-space: nowrap;
+  transition:
+    border-color var(--duration-normal) var(--ease-default),
+    background-color var(--duration-normal) var(--ease-default),
+    color var(--duration-normal) var(--ease-default);
+}
+
+.ui-calendar__trigger:hover:not(:disabled) {
+  border-color: var(--admin-border-focus);
+}
+
+.ui-calendar__trigger:focus-visible {
+  outline: 2px solid var(--admin-input-focus, var(--admin-border-focus));
+  outline-offset: 2px;
+}
+
+.ui-calendar__trigger--open {
+  border-color: var(--admin-border-focus);
+  background: var(--admin-surface-hover);
+}
+
+.ui-calendar__trigger--disabled,
+.ui-calendar__trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Sizes — match Input/Button sm/md/lg height + padding */
+.ui-calendar__trigger--sm {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+.ui-calendar__trigger--md {
+  height: 38px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+.ui-calendar__trigger--lg {
+  height: 44px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+/* Specificity boost (.ui-calendar__trigger .ui-calendar__icon =
+   0,2,0) is mandatory: Google Fonts ships `.material-symbols-rounded
+   { font-size: 24px }` at (0,1,0) and would otherwise win. */
+.ui-calendar__trigger .ui-calendar__icon {
+  flex-shrink: 0;
+  font-size: 18px;
+  /* Icon tracks the trigger's text colour exactly — no muted
+     secondary tint. */
+  color: inherit;
+  font-weight: 400;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.ui-calendar__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Pin to the cap-height so vertical centring against the icon is
+     stable regardless of the trigger's own line-height inheritance. */
+  line-height: 1em;
+}
+
+.ui-calendar__placeholder {
+  /* No visual distinction from a selected value — same colour and
+     weight as the trigger text. The wrapper exists only as a hook
+     for future tweaks (e.g. localised aria-description) without
+     needing structural changes. */
+}
+
+/* When the clear button is rendered the trigger reserves space on
+   the right so the value text never sits underneath it. The clear
+   button itself is positioned absolutely against the wrapper. */
+.ui-calendar__trigger--has-clear {
+  padding-right: 42px;
+}
+
+/* ── Clear button ───────────────────────────────────────────── */
+
+.ui-calendar__clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-full);
+  color: #303030;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default);
+}
+
+.ui-calendar__clear:hover {
+  background: var(--admin-surface-active);
+  color: var(--admin-text);
+}
+
+.ui-calendar__clear:focus-visible {
+  outline: 2px solid var(--admin-input-focus, var(--admin-border-focus));
+  outline-offset: 2px;
+}
+
+.ui-calendar__clear .material-symbols-rounded {
+  font-size: 18px;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* ── Popover surface ────────────────────────────────────────── */
+
+.ui-calendar__popover {
+  background: var(--menu-bg);
+  border-radius: var(--menu-radius);
+  box-shadow: var(--menu-shadow);
+  padding: var(--space-3);
+  /* Width sized to fit the grid flush with no dead space:
+     7 columns × 32px cell = 224px content + 2 × 12px padding = 248px.
+     Both `.ui-calendar__weekdays` and `.ui-calendar__days` use
+     `repeat(7, 1fr)` so each column resolves to exactly 32px and the
+     weekday letters align over their day cells. */
+  width: 248px;
+  z-index: 9000;
+  font-family: var(--admin-font);
+  /* Slide+fade enter, mirroring Menu. No exit animation —
+     unmounts immediately on close. */
+  animation: ui-calendar-in var(--menu-transition, 180ms) var(--ease-default) both;
+}
+
+@keyframes ui-calendar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-calendar__popover {
+    animation-duration: 1ms;
+  }
+}
+
+/* ── Header (month label + nav) ─────────────────────────────── */
+
+/* Month label sits flush left, nav-group flush right on the same
+   row. `space-between` on the flex container does the rest — no
+   spacers or filler elements needed. */
+.ui-calendar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  padding: 0 var(--space-1);
+}
+
+.ui-calendar__month-label {
+  color: var(--admin-text);
+  /* First letter of the Swedish month name is lowercase by Intl
+     convention (e.g. "maj 2026"); capitalise visually without
+     mutating the string. */
+  text-transform: capitalize;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ui-calendar__nav-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ui-calendar__nav {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--admin-text-secondary);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-default);
+}
+
+.ui-calendar__nav:hover {
+  background: var(--admin-surface-hover);
+  color: var(--admin-text);
+}
+
+.ui-calendar__nav:focus-visible {
+  outline: 2px solid var(--admin-input-focus, var(--admin-border-focus));
+  outline-offset: -2px;
+}
+
+.ui-calendar__nav .material-symbols-rounded {
+  font-size: 24px;
+  font-weight: 300;
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+}
+
+/* ── Grid ───────────────────────────────────────────────────── */
+
+.ui-calendar__grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ui-calendar__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0;
+}
+
+.ui-calendar__weekday {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 400;
+  color: hsla(0, 0%, 30%, 1);
+  padding: var(--space-1) 0;
+}
+
+.ui-calendar__days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  /* Day cells touch each other so range fills look continuous;
+     gap-related breathing room comes from the cell's own padding
+     and the rounded selected-state pill. */
+  gap: 0;
+}
+
+/* ── Day cell ───────────────────────────────────────────────── */
+
+.ui-calendar__day {
+  /* Square cell — 32×32 with 6px corners. Calendar-intrinsic
+     dimension; the popover width below is sized to fit seven of
+     these columns flush. */
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 450;
+  /* Tabular numerals — every digit takes the same advance width
+     (Geist Sans supports `tnum`), so day numbers sit pixel-perfect
+     in their cells regardless of which digits they contain. */
+  font-variant-numeric: tabular-nums;
+  color: hsla(0, 0%, 30%, 1);
+  cursor: pointer;
+  /* z-index neutral baseline so range fills (which paint behind
+     the cell) layer correctly. */
+  position: relative;
+  z-index: 1;
+  transition:
+    background-color var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default);
+}
+
+/* Hover indication: a 1px inset border using --admin-border. We use
+   `box-shadow` (not `border`) so adding it on hover doesn't shift
+   neighbouring layout by 1px — the shadow lives outside the box
+   model. Follows the cell's border-radius automatically. Applies on
+   top of any state-specific background (in-range path, selected pill)
+   so hover reads consistently across the grid. */
+.ui-calendar__day:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--admin-border);
+}
+
+.ui-calendar__day:focus-visible {
+  outline: 2px solid var(--admin-input-focus, var(--admin-border-focus));
+  outline-offset: -2px;
+}
+
+/* Days from previous/next month — dimmed but still selectable
+   so the user can spill over without changing the view month. */
+.ui-calendar__day--outside {
+  color: var(--admin-text-tertiary);
+}
+
+/* Today marker — small dot below the digit so "now" reads without
+   the digit needing its own weight bump. */
+.ui-calendar__day--today::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+/* Selected — solid pill matching the primary CTA. The dot for
+   "today" is hidden when the day is also selected (contrast would
+   be poor against the dark fill). */
+.ui-calendar__day--selected {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+}
+.ui-calendar__day--selected:hover:not(:disabled) {
+  background: var(--btn-primary-bg-hover);
+  color: var(--btn-primary-fg);
+}
+.ui-calendar__day--selected.ui-calendar__day--today::after {
+  background: var(--btn-primary-fg);
+  opacity: 0.85;
+}
+
+/* In-range fill — light grey path that runs continuously between
+   the two endpoints. Hardcoded #EAEAEA pending a token promotion
+   (no current token sits cleanly between --admin-surface-hover and
+   --admin-surface-active for this purpose). */
+.ui-calendar__day--in-range {
+  background: #EAEAEA;
+  border-radius: 0;
+  color: var(--admin-text);
+}
+
+/* Range endpoints — round only the outer side so the in-range fill
+   tucks neatly into the selected pill on the inner side. */
+.ui-calendar__day--range-start {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.ui-calendar__day--range-end {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+/* Same-day range (start == end) gets full pill rounding on both
+   sides since there's no in-range fill to tuck into. */
+.ui-calendar__day--range-start.ui-calendar__day--range-end {
+  border-radius: var(--radius-md);
+}
+
+/* ── Footer (commit area) ───────────────────────────────────
+   Holds the "Använd" button that commits pending day selections to
+   props.onChange. Mirrors the visual contract of `.ui-btn--secondary
+   .ui-btn--sm` so the commit affordance reads consistent with the
+   rest of the UI library, but lives inside the popover and styles
+   itself locally to avoid pulling Button's transition + slide
+   choreography (overkill for a static commit row). */
+
+.ui-calendar__footer {
+  display: flex;
+  margin-top: var(--space-3);
+}
+
+.ui-calendar__apply {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 33px;
+  padding: 7px 13px;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-fg);
+  border: 1px solid var(--btn-secondary-border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  line-height: 1rem;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-normal) var(--ease-default),
+    color var(--duration-normal) var(--ease-default),
+    border-color var(--duration-normal) var(--ease-default);
+}
+
+.ui-calendar__apply:hover {
+  background: var(--btn-secondary-bg-hover);
+}
+
+.ui-calendar__apply:active {
+  background: var(--btn-secondary-bg-active);
+}
+
+.ui-calendar__apply:focus-visible {
+  outline: 2px solid var(--admin-input-focus, var(--admin-border-focus));
+  outline-offset: 2px;
+}
+
+/* Disabled — visually muted, not clickable. No hover state. */
+.ui-calendar__day--disabled {
+  color: var(--admin-text-tertiary);
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ui-calendar__day--disabled:hover {
+  background: transparent;
+}

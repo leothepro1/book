@@ -1,0 +1,168 @@
+/* ── Menu — Phase 2 primitive ──
+   Action menu (NOT a select dropdown). Rendered via portal at the
+   computed position; positioning is handled by the JS, this file
+   only owns visual chrome.
+
+   Shadow uses the same 5-stack as Modal/Toast for a consistent
+   "floating surface" feel across the system. */
+
+.ui-menu {
+  background: var(--menu-bg);
+  border-radius: var(--menu-radius);
+  box-shadow: var(--menu-shadow);
+  padding: var(--menu-padding);
+  min-width: var(--menu-min-width);
+  z-index: 9000;
+  font-family: var(--admin-font);
+  /* Default = drop-down: slide in from a few px above. Drop-up
+     variant below swaps the origin direction so the slide always
+     "comes from" the trigger side. No exit animation — the menu
+     is rendered conditionally and unmounts immediately on close
+     (snappier feel for an action menu). */
+  animation: ui-menu-in-down var(--menu-transition) var(--ease-default) both;
+}
+
+.ui-menu[data-placement='top'] {
+  animation: ui-menu-in-up var(--menu-transition) var(--ease-default) both;
+}
+
+@keyframes ui-menu-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ui-menu-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-menu {
+    animation-duration: 1ms;
+  }
+}
+
+/* ── Item ── */
+
+.ui-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--menu-item-gap);
+  width: 100%;
+  padding: var(--menu-item-padding);
+  font-size: var(--menu-item-font-size);
+  font-weight: 400;
+  font-family: inherit;
+  color: var(--menu-item-fg);
+  background: none;
+  border: none;
+  border-radius: var(--menu-item-radius);
+  cursor: pointer;
+  text-align: left;
+}
+
+/* SM size override. Single modifier on the root cascades to every
+   item — items don't carry their own size class. Trigger sizing is
+   the consumer's responsibility (set on the Button passed as trigger). */
+.ui-menu--sm .ui-menu__item {
+  gap: var(--menu-item-gap-sm);
+  padding: var(--menu-item-padding-sm);
+  font-size: var(--menu-item-font-size-sm);
+}
+
+.ui-menu__item:hover:not(:disabled) {
+  background: var(--menu-item-bg-hover);
+}
+
+.ui-menu__item:focus-visible {
+  outline: 2px solid var(--admin-input-focus, var(--admin-accent));
+  outline-offset: -2px;
+}
+
+.ui-menu__item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Danger tone — only color + hover-bg differ from the default
+   item. Same padding, same row layout, no border-top, no extra
+   space above. The visual separation comes from colour alone. */
+.ui-menu__item--danger {
+  color: var(--menu-item-fg-danger);
+}
+
+.ui-menu__item--danger:hover:not(:disabled) {
+  background: var(--menu-item-bg-danger-hover);
+}
+
+.ui-menu__label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ── Prefix ──
+   Leading icon. Fixed 18px glyph (Material Symbols Rounded sizes
+   by font-size). Color is inherited from the item — `currentColor`
+   semantics — so the icon always matches the row's text:
+   default → text fg, danger → danger fg, hover-state inherited too.
+
+   Selector is chained with `.material-symbols-rounded` for (0,2,0)
+   specificity. Google Fonts ships `.material-symbols-rounded
+   { font-size: 24px }` at (0,1,0); a bare `.ui-menu__prefix` would
+   tie and lose to source order (Google CSS loads via runtime
+   `<link>` and slots after our bundled CSS). */
+.ui-menu__prefix.material-symbols-rounded {
+  flex-shrink: 0;
+  font-size: var(--menu-item-icon-size);
+  /* Optical alignment: the glyph baseline sits a touch low against
+     14px label text. Pull up 1px so icon + label share visual
+     centre. */
+  margin-top: -1px;
+}
+
+.ui-menu--sm .ui-menu__prefix.material-symbols-rounded {
+  font-size: var(--menu-item-icon-size-sm);
+}
+
+/* ── Suffix ──
+   Flush-right slot for shortcuts, counts, badges, trailing icons.
+   `margin-left: auto` is redundant given the label's `flex: 1 1 auto`
+   already pushes us, but it's defensive — guarantees right-alignment
+   even if a future change removes the flex on `__label`. Color
+   inherited from the item; nested icons follow the same rule. */
+.ui-menu__suffix {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+}
+
+.ui-menu__suffix .material-symbols-rounded {
+  font-size: var(--menu-item-icon-size);
+}
+
+.ui-menu--sm .ui-menu__suffix .material-symbols-rounded {
+  font-size: var(--menu-item-icon-size-sm);
+}
+
+/* ── Divider ── */
+
+.ui-menu__divider {
+  height: 1px;
+  background: var(--menu-divider);
+  margin: 4px 0;
+  border: none;
+}

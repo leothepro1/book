@@ -1,0 +1,135 @@
+/* ── SearchSelect — predictive search + listbox ──
+   Composes SearchInput's chrome with a portal-rendered listbox
+   that mirrors Menu's positioning + dismissal contract. The
+   popover width matches the trigger so the dropdown reads as
+   anchored to the input. */
+
+.ui-search-select {
+  position: relative;
+  width: 100%;
+  display: block;
+}
+
+/* ── Popover ──
+   Reuses the menu surface tokens for visual cohesion (same
+   background, radius, shadow, padding). Animation matches Menu's
+   slide-down / slide-up so the system reads as one vocabulary. */
+.ui-search-select__popover {
+  background: var(--menu-bg);
+  border-radius: var(--menu-radius);
+  box-shadow: var(--menu-shadow);
+  padding: var(--menu-padding);
+  z-index: 9000;
+  font-family: var(--admin-font);
+  /* Cap the height for long lists; let it scroll inside. */
+  max-height: 320px;
+  overflow-y: auto;
+  animation: ui-search-select-in-down var(--menu-transition)
+    var(--ease-default) both;
+}
+
+.ui-search-select__popover[data-placement='top'] {
+  animation: ui-search-select-in-up var(--menu-transition)
+    var(--ease-default) both;
+}
+
+@keyframes ui-search-select-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ui-search-select-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Item ──
+   Same row vocabulary as Menu items: 8px gap, soft hover, danger
+   reserved for potential future variant. Multi-select rows fit a
+   Checkbox in the prefix slot — the row uses `align-items: center`
+   so the box and label centre vertically. */
+.ui-search-select__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: var(--menu-item-padding);
+  font-size: 14px;
+  font-weight: 450;
+  color: var(--menu-item-fg);
+  border-radius: var(--menu-item-radius);
+  cursor: pointer;
+  text-align: left;
+  /* Wrap long labels rather than truncating — search results often
+     have natural-language labels that lose meaning with ellipsis. */
+  word-break: break-word;
+}
+
+/* ── Sizes ──
+   `sm` matches the 32px input height: explicit row-height + purely
+   horizontal padding, content vertically centred via flex. md (the
+   default block above) keeps the standard menu-item padding so the
+   row breathes alongside larger inputs. lg can be added when needed. */
+.ui-search-select__item--sm {
+  height: 32px;
+  padding: 0 10px;
+}
+
+.ui-search-select__item:hover:not(.ui-search-select__item--disabled) {
+  background: var(--menu-item-bg-hover);
+}
+
+.ui-search-select__item--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Selected-state tint for single-select highlighting. Multi-select
+   rows already communicate state via the Checkbox, so this is a
+   subtle reinforcement, not the primary signal. */
+.ui-search-select__item--selected {
+  background: var(--menu-item-bg-hover);
+}
+
+.ui-search-select__item-prefix {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ui-search-select__item-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ui-search-select__item-suffix {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--admin-text-tertiary);
+}
+
+/* ── Empty state ──
+   Same row padding so the empty message takes the same vertical
+   space as a single result — popover height doesn't jump between
+   "1 result" and "no results". */
+.ui-search-select__empty {
+  padding: var(--menu-item-padding);
+  font-size: 14px;
+  color: var(--admin-text-tertiary);
+  text-align: left;
+}

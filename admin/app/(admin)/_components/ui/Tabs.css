@@ -1,0 +1,59 @@
+/* ── Tabs — Phase 2 primitive ──
+   Horizontal navigation. The active tab's 2px dark border crosses
+   the tablist's 1px gray rule via a -1px margin-bottom on each tab,
+   so the dark indicator visually replaces the gray at that segment
+   (rather than stacking under it). Inactive tabs reserve the same
+   2px slot via a transparent border so layout doesn't shift on
+   selection change. */
+
+.ui-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: var(--tabs-gap);
+  border-bottom: var(--tabs-border-width) solid var(--tabs-border-color);
+  font-family: var(--admin-font);
+}
+
+.ui-tabs__tab {
+  padding: var(--tabs-padding);
+  background: none;
+  border: none;
+  /* Transparent slot — same 2px the active state will fill. Keeps
+     layout stable across selection changes. */
+  border-bottom: var(--tabs-active-width) solid transparent;
+  /* Pull each tab down by the tablist's border width so the tab's
+     own 2px border crosses the 1px rule rather than stacking above
+     it. With margin-bottom: -1px and active 2px > 1px, the dark
+     indicator fully covers the gray for the tab's width. */
+  margin-bottom: calc(var(--tabs-border-width) * -1);
+  font-family: inherit;
+  font-size: var(--tabs-font-size);
+  font-weight: var(--tabs-font-weight);
+  line-height: 1.2;
+  color: var(--tabs-fg);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color var(--duration-fast) var(--ease-default),
+    border-bottom-color var(--duration-fast) var(--ease-default);
+}
+
+.ui-tabs__tab:hover:not(:disabled) {
+  color: var(--tabs-fg-hover);
+}
+
+.ui-tabs__tab[aria-selected='true'] {
+  color: var(--tabs-fg-active);
+  border-bottom-color: var(--tabs-active-color);
+}
+
+.ui-tabs__tab:focus-visible {
+  outline: 2px solid var(--admin-input-focus, var(--admin-accent));
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.ui-tabs__tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

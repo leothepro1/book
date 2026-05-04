@@ -1,0 +1,51 @@
+/* ── Composite field shell ──
+   Shared by Input, Textarea, and any future field-shaped primitive
+   that opts into the composite render mode (label + control +
+   helpText/error). Imported by each component that needs it so the
+   shell stays in scope wherever it's actually used.
+
+   The wrapper itself is intentionally width-agnostic — it inherits
+   the parent's width like the bare input would, so dropping a
+   composite Input into an existing layout doesn't change the
+   sizing footprint. */
+
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.ui-field__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  color: var(--admin-text);
+  line-height: 1.4;
+}
+
+/* Red asterisk after the label text — convention is "required" not
+   a translatable string, and Polaris/Material both use this exact
+   affordance. */
+.ui-field__required {
+  color: var(--admin-danger);
+  font-weight: var(--font-weight-semibold);
+  /* Pull the star slightly closer to the last letter of the label. */
+  margin-left: -2px;
+}
+
+.ui-field__help,
+.ui-field__error {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ui-field__help {
+  color: var(--admin-text-secondary);
+}
+
+.ui-field__error {
+  color: var(--admin-danger);
+}

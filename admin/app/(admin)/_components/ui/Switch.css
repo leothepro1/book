@@ -1,0 +1,129 @@
+/* ── Switch — segmented single-select ──
+   Two layers: the track (`.ui-switch`) and the moving indicator
+   (`.ui-switch__indicator`). The indicator is absolutely positioned
+   inside the track and slides between segment positions via JS-set
+   `left` + `width` (see Switch.tsx). Each `.ui-switch__btn` sits
+   above the indicator (`z-index: 1`) so labels remain crisp during
+   the slide.
+
+   Lifted from the editor's `.sf-segmented` pattern with these
+   updates: tokenised colours/shadows, three sizes, disabled state,
+   real radiogroup ARIA wired in TSX. */
+
+.ui-switch {
+  display: flex;
+  position: relative;
+  /* #F2F2F2 sits between --admin-surface-muted (#FAFAFA) and
+     --admin-surface-sunken (#ECEBEA) — no exact token. Matches the
+     editor's .sf-segmented track for visual cohesion across both
+     surfaces. Token-debt acknowledged. */
+  background: #f2f2f2;
+  border-radius: var(--radius-md);
+  width: 100%;
+  /* `width: 100%` + `flex: 1` on btns = even-share segments. Wrap
+     the Switch in a sized container if a narrower control is wanted. */
+}
+
+.ui-switch__indicator {
+  position: absolute;
+  border-radius: var(--radius-sm);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-sm);
+  transition:
+    left 0.2s cubic-bezier(0.32, 0.72, 0, 1),
+    width 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ui-switch__btn {
+  cursor: pointer;
+  color: var(--admin-text);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  flex: 1;
+  font-family: inherit;
+  font-weight: 450;
+  position: relative;
+  z-index: 1;
+  transition: color 0.15s var(--ease-default);
+  /* Label-only text — single-line, ellipsised if a segment is too
+     narrow. Reads cleaner than wrapping mid-segment. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.ui-switch__btn:disabled {
+  cursor: not-allowed;
+  color: var(--admin-text-tertiary);
+}
+
+.ui-switch--disabled {
+  opacity: 0.6;
+  /* Whole-track dim — per-segment disabled handled on the btn above. */
+}
+
+/* ── Sizes ──
+   Heights match Input/Button so a Switch sits cleanly alongside
+   them in toolbars: sm 32 / md 38 / lg 44. Track padding scales
+   with size; indicator inset (top/bottom) tracks the same value via
+   absolute-positioning rules below. */
+
+.ui-switch--sm {
+  height: 32px;
+  padding: 2px;
+}
+
+.ui-switch--md {
+  height: 38px;
+  padding: 3px;
+}
+
+.ui-switch--lg {
+  height: 44px;
+  padding: 4px;
+}
+
+.ui-switch--sm .ui-switch__indicator {
+  top: 2px;
+  bottom: 2px;
+}
+
+.ui-switch--md .ui-switch__indicator {
+  top: 3px;
+  bottom: 3px;
+}
+
+.ui-switch--lg .ui-switch__indicator {
+  top: 4px;
+  bottom: 4px;
+}
+
+.ui-switch--sm .ui-switch__btn {
+  font-size: 13px;
+  padding: 0 10px;
+}
+
+.ui-switch--md .ui-switch__btn {
+  font-size: 14px;
+  padding: 0 12px;
+}
+
+.ui-switch--lg .ui-switch__btn {
+  font-size: 14px;
+  padding: 0 16px;
+}
+
+/* Reduced motion — drop the slide; the indicator still moves
+   instantly so the active state is communicated. */
+@media (prefers-reduced-motion: reduce) {
+  .ui-switch__indicator {
+    transition: none;
+  }
+}

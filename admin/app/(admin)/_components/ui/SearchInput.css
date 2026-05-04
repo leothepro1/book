@@ -1,0 +1,147 @@
+/* ── SearchInput — Phase 2 primitive ──
+   Wrapper-with-overlay layout: a `position: relative` container holds
+   the leading SVG icon (absolutely positioned, vertically centred)
+   and the actual `<input>` underneath. The input carries enough
+   `padding-left` to clear the icon — the icon is purely decorative
+   so it sits *above* the input visually but never intercepts clicks.
+
+   Visual chrome (border, focus ring, error halo, hover, disabled)
+   reuses the `--textarea-*` token set so SearchInput, Input, and
+   Textarea all look identical at rest, on hover, on focus, and in
+   error. If those three primitives ever need to diverge, introduce
+   a `--search-*` namespace then. */
+
+.ui-search {
+  position: relative;
+  width: 100%;
+  display: block;
+}
+
+/* ── Input chrome ──
+   Identical to .ui-input by design — same tokens, same transitions.
+   Only difference is `padding-left` to make room for the icon
+   overlay. */
+.ui-search__input {
+  font-family: var(--admin-font);
+  /* 450 sits between --font-weight-normal (400) and
+     --font-weight-medium (500). No token matches — token-debt
+     acknowledged. The half-step weight reads as a hair sturdier
+     than body text without crossing into the "label" weight. */
+  font-weight: 450;
+  color: var(--textarea-fg);
+  background: var(--textarea-bg);
+  border: 1.5px solid var(--textarea-border);
+  border-radius: var(--textarea-radius);
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  line-height: 1.5;
+  display: block;
+  /* Start state for the focus-ring grow animation — see Input.css. */
+  box-shadow: 0 0 0 0 transparent;
+  transition:
+    border-color 0.15s var(--ease-default),
+    box-shadow 0.15s var(--ease-default);
+  /* Strip the native search-field UI (WebKit cancel button, Safari
+     decoration). The wrapper chrome owns the visual contract. */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.ui-search__input::-webkit-search-decoration,
+.ui-search__input::-webkit-search-cancel-button,
+.ui-search__input::-webkit-search-results-button,
+.ui-search__input::-webkit-search-results-decoration {
+  display: none;
+}
+
+.ui-search__input::placeholder {
+  /* #8F8F8F sits between --admin-text-secondary (#616161) and
+     --admin-text-tertiary (#a19e99) — no existing token matches.
+     Token-debt acknowledged. Same value reused on .ui-search__icon
+     so icon + placeholder read as a unified "soft affordance". */
+  color: #8f8f8f;
+}
+
+.ui-search__input:hover:not(:disabled):not(:focus) {
+  border-color: var(--textarea-border-hover);
+}
+
+.ui-search__input:focus {
+  border-color: var(--textarea-border-focus);
+  box-shadow: var(--textarea-focus-ring);
+}
+
+.ui-search__input:disabled {
+  background: var(--textarea-disabled-bg);
+  color: var(--admin-text-secondary);
+  cursor: not-allowed;
+}
+
+/* ── Sizes ──
+   Heights match Input exactly so a SearchInput in a toolbar lines
+   up with adjacent <Input>s. padding-left = horizontal-pad + icon-w
+   + gap. The icon-w varies per size (14/15/16) so left-pad varies
+   to keep an even ~8px gap between icon and text. */
+
+/* Icon is fixed 15×15 across all sizes, so left padding can be
+   uniform too: 12 (left pad) + 15 (icon) + 8 (gap) = 35 → 36. */
+.ui-search--sm .ui-search__input {
+  height: 32px;
+  padding: 0 12px 0 36px;
+  font-size: 14px;
+}
+
+.ui-search--md .ui-search__input {
+  height: 40px;
+  padding: 0 12px 0 36px;
+  font-size: 14px;
+}
+
+.ui-search--lg .ui-search__input {
+  height: 48px;
+  padding: 0 12px 0 36px;
+  font-size: 14px;
+}
+
+/* ── Invalid ──
+   Wrapper modifier so we can style both icon + input from the same
+   class. Mirrors `.ui-input--invalid` for the input itself. */
+.ui-search--invalid .ui-search__input,
+.ui-search--invalid .ui-search__input:focus {
+  border-color: var(--textarea-border-error);
+  box-shadow: var(--textarea-error-ring);
+}
+
+.ui-search--invalid .ui-search__input:hover:not(:disabled):not(:focus) {
+  border-color: var(--textarea-border-hover);
+  box-shadow: 0 0 0 0 transparent;
+}
+
+/* ── Icon ──
+   Absolutely positioned overlay. `pointer-events: none` so clicks
+   fall through to the input (the icon is decorative, not a button).
+   Color tracks `--admin-text-secondary` so it reads as a soft
+   affordance rather than competing with the placeholder. */
+/* Wrapper span around the SVG. Owns position + color — the SVG
+   has inline `color: currentColor`, which inherits from this span.
+   `display: inline-flex` collapses any extra leading inside the
+   span so the 15px box is exactly 15×15. `pointer-events: none`
+   so clicks fall through to the input. */
+.ui-search__icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  /* Matches placeholder color so icon + placeholder read as one
+     soft affordance. See placeholder rule for token-debt note. */
+  color: #8f8f8f;
+  pointer-events: none;
+}
+
+.ui-search--disabled .ui-search__icon {
+  opacity: 0.5;
+}

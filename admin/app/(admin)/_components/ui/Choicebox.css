@@ -1,0 +1,153 @@
+/* ── Choicebox — Phase 2 primitive ──
+   Larger tap-target alternative to Radio/Checkbox. Whole card is
+   the click surface; the indicator (radio dot or checkbox tick)
+   is a visual hint, not the only target.
+
+   Selection visual: dark border + subtle bg tint. The indicator
+   fills with the same dark colour so the chosen card reads as a
+   single coherent "active" affordance. */
+
+.ui-choicebox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ui-choicebox {
+  display: flex;
+  align-items: center;
+  gap: var(--choicebox-gap);
+  width: 100%;
+  padding: var(--choicebox-padding);
+  background: var(--choicebox-bg);
+  border: 1.5px solid var(--choicebox-border);
+  border-radius: var(--choicebox-radius);
+  font-family: var(--admin-font);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s var(--ease-default),
+    background-color 0.15s var(--ease-default);
+}
+
+/* Hover (only when not selected): darker bg + darker border on
+   BOTH the card and the indicator. */
+.ui-choicebox:hover:not(:disabled):not(.ui-choicebox--selected) {
+  background: var(--choicebox-bg-hover);
+  border-color: var(--choicebox-border-hover);
+}
+
+.ui-choicebox:hover:not(:disabled):not(.ui-choicebox--selected)
+  .ui-choicebox__indicator {
+  border-color: var(--choicebox-indicator-border-hover);
+}
+
+.ui-choicebox:focus-visible {
+  outline: 2px solid var(--admin-input-focus, var(--admin-accent));
+  outline-offset: 2px;
+}
+
+/* Selected: even slightly darker bg than hover, mid-grey card
+   border (so the card stays calm), and the indicator picks up
+   the accent — the card reads via the blue indicator first. */
+.ui-choicebox--selected {
+  background: var(--choicebox-bg-selected);
+  border-color: var(--choicebox-border-selected);
+}
+
+.ui-choicebox--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Indicator (radio circle / checkbox square) ──
+   18×18, 1.5px border on rest. Selected = filled dark with white
+   inner element (dot for radio, check svg for checkbox). */
+
+.ui-choicebox__indicator {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--choicebox-indicator-bg);
+  border: 1.5px solid var(--choicebox-indicator-border);
+  /* Card uses align-items: center, so the indicator centres
+     vertically against the whole body block — no margin-top
+     correction needed. */
+  transition: background-color 0.15s var(--ease-default),
+    border-color 0.15s var(--ease-default);
+}
+
+.ui-choicebox__indicator--radio {
+  border-radius: 50%;
+}
+
+.ui-choicebox__indicator--checkbox {
+  border-radius: 4px;
+  color: var(--choicebox-indicator-fg-selected);
+}
+
+/* Selected indicator: accent fill + accent border, white inner.
+   Both fill and border use the same accent token so the indicator
+   reads as one solid blue surface. */
+.ui-choicebox--selected .ui-choicebox__indicator {
+  background: var(--choicebox-indicator-bg-selected);
+  border-color: var(--choicebox-indicator-border-selected);
+}
+
+.ui-choicebox__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--choicebox-indicator-fg-selected);
+  opacity: 0;
+  transition: opacity 0.15s var(--ease-default);
+}
+
+.ui-choicebox--selected .ui-choicebox__dot {
+  opacity: 1;
+}
+
+.ui-choicebox__check {
+  opacity: 0;
+  transition: opacity 0.15s var(--ease-default);
+}
+
+.ui-choicebox--selected .ui-choicebox__check {
+  opacity: 1;
+}
+
+/* ── Body ── */
+
+.ui-choicebox__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ui-choicebox__title {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--choicebox-fg);
+  transition: color 0.15s var(--ease-default);
+}
+
+.ui-choicebox__description {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--choicebox-fg-secondary);
+  transition: color 0.15s var(--ease-default);
+}
+
+/* Selected: both title and description flip to accent so the
+   whole card reads as one coherent blue block — chrome + body. */
+.ui-choicebox--selected .ui-choicebox__title,
+.ui-choicebox--selected .ui-choicebox__description {
+  color: var(--choicebox-fg-selected);
+}

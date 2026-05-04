@@ -1,0 +1,85 @@
+/* ── Banner — Phase 2 primitive ──
+   Full-width inline status container. Centred icon + text + cta
+   group on a tinted surface. Variant supplies background, foreground,
+   and border colour from the --banner-* token set in base.css. */
+
+.ui-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--banner-gap);
+  width: 100%;
+  padding: var(--banner-padding);
+  border: 1px solid;
+  border-radius: var(--banner-radius);
+  font-family: var(--admin-font);
+  font-size: var(--banner-font-size);
+  font-weight: var(--banner-font-weight);
+  line-height: var(--banner-line-height);
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* The text node carries the variant fg colour via inheritance from
+   .ui-banner — keeping it on its own span lets the CTA be a sibling
+   that visually merges with the text but is structurally a link. */
+.ui-banner__text {
+  color: inherit;
+}
+
+/* Chained `.material-symbols-rounded` (0,2,0) is mandatory:
+   Google Fonts ships an unscoped `.material-symbols-rounded
+   { font-size: 24px }` (0,1,0) that would otherwise win on equal
+   specificity through cascade order. Same pattern Button, Calendar,
+   Toast and the sidebar use. */
+.ui-banner__icon.material-symbols-rounded {
+  flex-shrink: 0;
+  font-size: var(--banner-icon-size);
+  line-height: 1;
+  /* Ligature inherits colour from the parent — variant fg flows down. */
+  color: inherit;
+}
+
+/* CTA inherits everything from the banner text and adds an underline
+   as the link affordance. Hover removes the underline as the inverse
+   cue (matches the apps-setup-banner__link pattern that this primitive
+   replaces). focus-visible gets a ring so keyboard users see where they
+   are without relying on the underline alone. */
+.ui-banner__cta {
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  border-radius: var(--radius-xs);
+  transition: text-decoration-color var(--duration-fast) var(--ease-default);
+}
+
+.ui-banner__cta:hover {
+  text-decoration: none;
+}
+
+.ui-banner__cta:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  text-decoration: none;
+}
+
+/* ── Variants ── */
+
+.ui-banner--success {
+  background: var(--banner-success-bg);
+  color: var(--banner-success-fg);
+  border-color: var(--banner-success-border);
+}
+
+.ui-banner--warning {
+  background: var(--banner-warning-bg);
+  color: var(--banner-warning-fg);
+  border-color: var(--banner-warning-border);
+}
+
+.ui-banner--error {
+  background: var(--banner-error-bg);
+  color: var(--banner-error-fg);
+  border-color: var(--banner-error-border);
+}

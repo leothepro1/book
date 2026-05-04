@@ -1,0 +1,234 @@
+/* ── Modal — Phase 2 primitive ──
+   All variants share: backdrop overlay, modal shape, shadow, padding
+   defaults, and enter transition. The variant only governs scroll
+   behaviour and footer button layout — see the variant blocks at
+   the bottom of this file.
+
+   Animation strategy: render-only-when-open (no exit animation).
+   The enter sequence is two synchronous keyframe animations: the
+   overlay fades in, the modal fades in + slides up + scales from
+   0.98. Both are 220ms (token: --modal-transition) on a soft
+   ease-out curve so the modal "lands" rather than snapping. */
+
+.ui-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--modal-overlay-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.ui-modal {
+  background: var(--modal-bg);
+  border-radius: var(--modal-radius);
+  box-shadow: var(--modal-shadow);
+  /* Width responds to viewport: never wider than --modal-max-width,
+     never wider than (viewport - overlay padding × 2). The min()
+     pair is the key — it kills the need for a media query for
+     mobile fit. */
+  width: min(100%, var(--modal-max-width));
+  max-height: var(--modal-max-height);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Hide the dialog focus outline — focus is communicated via
+     focused children inside the modal. The dialog itself is
+     tabIndex=-1 only so initial-focus fallback works. */
+  outline: none;
+}
+
+/* Enter / exit animations driven by data-state on both the overlay
+   (fade) and the modal (fade + translate + scale). Same duration
+   and easing on enter and exit so the slide-out feels symmetric to
+   the slide-in. Switching data-state mid-animation (e.g. user
+   re-opens during exit) restarts the animation cleanly because the
+   `animation-name` changes, which the browser treats as a new
+   animation. */
+
+.ui-modal-overlay[data-state='enter'] {
+  animation: ui-modal-overlay-in var(--modal-transition) var(--ease-default)
+    both;
+}
+
+.ui-modal-overlay[data-state='exit'] {
+  animation: ui-modal-overlay-out var(--modal-transition) var(--ease-default)
+    both;
+}
+
+.ui-modal[data-state='enter'] {
+  animation: ui-modal-in var(--modal-transition) var(--ease-default) both;
+}
+
+.ui-modal[data-state='exit'] {
+  animation: ui-modal-out var(--modal-transition) var(--ease-default) both;
+}
+
+@keyframes ui-modal-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ui-modal-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes ui-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ui-modal-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-modal-overlay,
+  .ui-modal {
+    animation-duration: 1ms;
+  }
+}
+
+/* ── Header ── */
+
+.ui-modal__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--modal-divider);
+}
+
+.ui-modal__title {
+  margin: 0;
+  font-family: var(--admin-font);
+  /* 22px not in --font-* scale (12/13/15/16/17) — token-debt
+     acknowledged. Modal title is the primary text in any dialog,
+     so size matters more than rigid scale adherence. */
+  font-size: 22px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.3;
+  color: var(--admin-text);
+  /* Multi-line titles are an anti-pattern in dialogs — keep them
+     single-line and concise. Long titles truncate. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Body ── */
+
+.ui-modal__body {
+  padding: var(--space-5) var(--space-6);
+  font-family: var(--admin-font);
+  /* 14px not in --font-* scale (12/13/15/16/17) — token-debt
+     acknowledged. Body copy in dialogs reads better at 14 than at
+     13 (--font-md), especially with the 20px title above. */
+  font-size: 14px;
+  line-height: var(--line-height-normal, 1.5);
+  color: var(--admin-text);
+  /* `min-height: 0` is required for the body to actually shrink
+     inside its flex parent — without it, flex children default to
+     their content size and the modal grows to fit, breaking the
+     scroll-when-overflowing contract. */
+  min-height: 0;
+  overflow-y: auto;
+  /* Default state: body fills available height between header and
+     footer. Long content scrolls within this area. */
+  flex: 1 1 auto;
+}
+
+/* Override the global `p { font-size: 13px }` admin reset for any
+   paragraph inside the modal body — specificity (0,1,1) beats the
+   global element selector (0,0,1). */
+.ui-modal__body p {
+  font-size: 14px;
+}
+
+/* ── Footer ── */
+
+.ui-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--modal-divider);
+  background: var(--modal-footer-bg);
+}
+
+/* ── Variants ──
+   Default = subdued header that flows into the body. The title
+     reads as the start of the message, not a separated section —
+     10px gap to body, no divider. Good for short, casual modals.
+
+   Sticky = pin header and footer; the body is the only scroll
+     container. Header gets the prominent shared styling (border +
+     padding) because it stays visible while content scrolls
+     underneath — the divider is what anchors it visually.
+
+   Single-button = footer button stretches to full width. Common
+     for confirmation/acknowledge modals where there's only one
+     action and centring it on a wide footer reads as awkward. */
+
+/* Default — informal header. Override the shared border-bottom +
+   padding-bottom and tighten the body's top padding to land the
+   first line of body text exactly 10px under the title. */
+.ui-modal--default .ui-modal__header {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.ui-modal--default .ui-modal__body {
+  padding-top: 10px;
+}
+
+/* Sticky — pin header and footer; only the body scrolls. Borders
+   stay (they're already in the shared rules) so the pinned zones
+   read clearly against the scrolling content underneath. */
+.ui-modal--sticky .ui-modal__header {
+  position: sticky;
+  top: 0;
+  background: var(--modal-bg);
+  z-index: 1;
+}
+
+.ui-modal--sticky .ui-modal__footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--modal-footer-bg);
+  z-index: 1;
+}
+
+/* Single-button — footer button stretches to full width. */
+.ui-modal--single-button .ui-modal__footer {
+  justify-content: stretch;
+}
+
+.ui-modal--single-button .ui-modal__footer > * {
+  flex: 1 1 auto;
+}

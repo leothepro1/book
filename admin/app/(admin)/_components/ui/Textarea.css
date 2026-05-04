@@ -1,0 +1,90 @@
+/* ── Textarea — Phase 1 primitive ──
+   Reference: legacy `.admin-textarea`. The component IS the
+   textarea element — label, help, error, count are sibling
+   concerns owned by the composer.
+
+   Visual contract:
+     - 1.5px border, 10px radius, 12px padding
+     - 14px / 1.5 line-height body text
+     - Min-height 96px (≈ 4 rows at default sizing)
+     - Default resize: vertical (overridable via `resize` prop)
+     - Focus border darkens to --textarea-border-focus
+     - Invalid border = --textarea-border-error and stays red on
+       focus so the error read is consistent while typing */
+
+.ui-textarea {
+  font-family: var(--admin-font);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--textarea-fg);
+  background: var(--textarea-bg);
+  border: 1.5px solid var(--textarea-border);
+  border-radius: var(--textarea-radius);
+  padding: var(--textarea-padding);
+  outline: none;
+  width: 100%;
+  min-height: var(--textarea-min-height);
+  box-sizing: border-box;
+  line-height: 1.5;
+  display: block;
+  /* `box-shadow: 0 0 0 0 transparent` on rest is the start state for
+     the focus-ring grow animation — without it, the ring would just
+     pop in (no spread to interpolate from). */
+  box-shadow: 0 0 0 0 transparent;
+  transition:
+    border-color 0.15s var(--ease-default),
+    box-shadow 0.15s var(--ease-default);
+}
+
+.ui-textarea::placeholder {
+  color: var(--textarea-placeholder);
+}
+
+/* ── Sizes ──
+   Md is the historical default — keeps the existing `--textarea-*`
+   token values. Sm/lg only override the typographic + padding feel,
+   not the radius or border, so the textarea reads as a denser or
+   roomier variant of the same component, not a different one. */
+.ui-textarea--sm {
+  font-size: 13px;
+  padding: 8px 10px;
+  min-height: 64px;
+}
+.ui-textarea--lg {
+  font-size: 15px;
+  padding: 14px 14px;
+  min-height: 120px;
+}
+
+.ui-textarea:hover:not(:disabled):not(:focus) {
+  border-color: var(--textarea-border-hover);
+}
+
+.ui-textarea:focus {
+  border-color: var(--textarea-border-focus);
+  box-shadow: var(--textarea-focus-ring);
+}
+
+.ui-textarea:disabled {
+  background: var(--textarea-disabled-bg);
+  color: var(--admin-text-secondary);
+  cursor: not-allowed;
+}
+
+/* Invalid modifier — red border + light-red halo in BOTH rest and
+   focus states. Mirrors the focus-ring effect on default textareas
+   but applied by default so errors are obvious without interaction. */
+.ui-textarea--invalid,
+.ui-textarea--invalid:focus {
+  border-color: var(--textarea-border-error);
+  box-shadow: var(--textarea-error-ring);
+}
+
+/* Hover on an invalid textarea reverts to the default neutral
+   look (gray hover border, no halo) — gives the user a visual
+   "you can interact / fix this" cue. The :not(:focus) guard means
+   focus still trumps hover, keeping the red ring while editing. */
+.ui-textarea--invalid:hover:not(:disabled):not(:focus) {
+  border-color: var(--textarea-border-hover);
+  box-shadow: 0 0 0 0 transparent;
+}
