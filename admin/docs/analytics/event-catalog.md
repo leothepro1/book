@@ -77,6 +77,69 @@ that pass `{}` get a JSON empty object (the distinction is
 preserved end-to-end). The drainer never inspects context content;
 schema-validation runs against `payload` only.
 
+## Geo enrichment
+
+Storefront events emitted via `/api/analytics/collect` (`page_viewed`,
+`accommodation_viewed`, `availability_searched`, the cart_* events,
+`checkout_started`) carry a coarse `geo` field on
+`event.context.geo` — populated post-consent at the dispatch
+endpoint via a MaxMind GeoLite2 lookup. PR-X3a's context-pipeline
+wire-through is the prerequisite that lets this data flow end-to-end
+to `analytics.event.context`.
+
+**When the lookup runs.** AFTER the consent gate AND the per-tenant
+pipeline feature flag pass. A consent-declined or pipeline-disabled
+visitor never burns a MaxMind read; the lookup is also skipped on
+rate-limited / origin-rejected requests.
+
+**What is read.** The first hop in the request's `X-Forwarded-For`
+header (the visitor's external IP — Vercel sets this on every
+request).
+
+**What is stored.** Exactly two fields on `event.context.geo`:
+
+  ```
+  geo.country  ISO 3166-1 alpha-2 country code (uppercase) — e.g. "SE"
+  geo.city     English city name (MaxMind 'en' name) — e.g. "Apelviken"
+  ```
+
+Nothing else. The helper's return type structurally lacks `lat` /
+`lng` so they cannot leak even by accident, and the IP is NEVER
+stored — not in the database, not in logs.
+
+**Privacy posture.** GDPR rekital 26 puts city-level geo (without
+the underlying IP, without precise coordinates) under the PII
+threshold when stored against a pseudonymous identifier. Bedfront's
+posture aligns:
+
+  - The IP is consumed at the request boundary and discarded.
+  - lat/lng never enters the helper's return object.
+  - Lookup is gated by `consent.analytics === true` (the consent
+    gate runs upstream of `resolveGeoForContext`).
+  - Logs emit the derived country only (city is omitted from logs
+    because country + tenant + timing rebuilds a coarse fingerprint
+    of where a tenant's traffic comes from — interesting enough to
+    keep, not coarse enough to pair with city safely).
+
+The posture is complementary to `user_agent_hash` and
+`device_type`: in every case we leak the coarse class and never
+the raw signal.
+
+**Failure mode.** GeoLite2 database absent (preview deploys may
+skip the prebuild download), unparsable IP (private network,
+reserved range), MaxMind throws — every failure path returns
+`null` from the helper, the dispatch route omits the `geo` field
+on `event.context`, and emit proceeds. A guest's session is never
+blocked by an unavailable GeoLite2 database. Aggregators map
+absent-geo to the `"unknown"` bucket per Phase 5A recon §2.10.
+
+**Server-side events** (booking_completed, payment_succeeded,
+booking_imported, …) do NOT carry `geo` today — they don't
+naturally have a request-IP source (PMS sync events run on a cron,
+checkout side-effects run server-internal). If Phase 5+ ever
+needs geo on server-side events, it lands as a separate enrichment
+PR with its own consent + PII analysis. Out of scope for X3b.
+
 ## Schema authoring rules
 
 Locked decisions every new event schema MUST follow.
