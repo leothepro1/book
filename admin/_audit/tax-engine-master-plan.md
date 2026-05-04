@@ -755,6 +755,11 @@ exist on our platform.**
 
 ## 6 — Cross-domain coordination map
 
+> **Status update 2026-05-04:** Terminal A reviewed all three coord
+> points and gave green-light on Coord #1 with two specific asks for
+> Coord #2 and #3 (preserved below in **Refinement** boxes). Their
+> handoff is captured in `_audit/session-2026-05-04-resume.md`.
+
 ### Coord #1 — Tax-0 schema additions (Terminal A)
 
 **What:** New tables: `TaxLine`, `TaxRegistration`,
@@ -765,9 +770,18 @@ exist on our platform.**
 namespace. Terminal A's analytics-pipeline också gör schema-changes.
 Migration-numbers can collide.
 
-**Action:** Operator-decision on coord cadence. Either:
-- A) Terminal B opens schema-migration PR first; A waits to layer on top
-- B) A finishes Phase 5A; B opens after
+**✅ Resolved (Terminal A 2026-05-04):**
+- GO för Tax-0 schema. No wait needed.
+- Latest analytics migration on main: `20260504144722_analytics_phase5a_aggregator`
+- No concurrent migration in flight. Phase 5B-equivalent
+  (`feature/analytics-funnel-metrics`) is pure additive logic — zero
+  schema touch.
+- Namespace `tax_foundation_<timestamp>` then
+  `dual_currency_pricing_<timestamp>` är OK.
+- **Lock-in ask from Terminal A:** Båda Tax-0 migrations i SAMMA PR
+  (atomic backfill). DO NOT split into separate merges — would create
+  a window where `presentment*` columns exist but are NULL on
+  historical rows, requiring analytics tail-reads to special-case.
 
 ### Coord #2 — Tax-3 commerce wiring (Terminal A)
 
@@ -776,10 +790,30 @@ create` get tax engine calls.
 
 **Why coord:** Terminal A:s analytics (per deras handoff) lägger
 analytics-events på checkout-paths. If both edit same files,
-merge-conflicts.
+merge-conflicts. Plus: `payment_succeeded` event emitted från
+`app/_lib/orders/process-paid-side-effects.ts` — exakt den fil Tax-3
+kommer touch.
 
 **Action:** Inverse coord — same patterns as Terminal A:s "we'll add
 3 LOC per touchpoint" approach. Sequence: Terminal A first, B layers.
+
+**Refinement (Terminal A 2026-05-04 ask):** When Tax-3 changes
+`OrderLineItem`-shape (e.g. adds `TaxLine[]` per line, splits net vs.
+gross), the analytics emitter's `line_items[]` mapping
+(`{ product_id, amount: lineItem.totalAmount }`) needs to know which
+money to send. Therefore:
+
+> **Tax-3 recon MUST document explicitly:**
+> 1. The new line-item shape (which fields exist post-Tax-3)
+> 2. Which field is "the" amount for analytics:
+>    - `gross-with-tax` (current `totalAmount`)
+>    - `gross-without-tax` (subtotal pre-tax)
+>    - `taxable-base` (subtotal post-discount, pre-tax)
+> 3. Whether Tax-3 PR ships emitter-update in same PR OR sequences a
+>    `payment_succeeded` v0.3.0 alongside
+
+Without this spec, Terminal A cannot ship analytics-pipeline updates
+alongside Tax-3.
 
 ### Coord #3 — Tax-4 Markets touches storefront (Terminal A)
 
@@ -791,6 +825,43 @@ on Market data-model.
 
 **Action:** Joint design session before Tax-4 start. May spawn separate
 "Markets Master Plan" doc om scope grows.
+
+**Refinement (Terminal A 2026-05-04 ask):** Tax-4 forces every
+storefront analytics event with monetary fields (`cart_started`,
+`cart_updated`, `checkout_started`, `payment_succeeded`) to evolve
+to presentment-aware schemas. That's 4-5 schemas + their hand-rolled
+validators + parity tests + worker validators (per CLAUDE.md analytics
+worker validator parity rule). Plus funnel-rates `derivedMetrics`
+treats currency as single-axis dimension — Tax-4 forces a Phase-6-
+equivalent revisit splitting by `(shop_currency, presentment_currency)`
+pairs.
+
+> **Tax-4 recon MUST specify before merge:**
+> - **Critical:** What does `Order.currency` mean post-Tax-4?
+>   - If `Order.currency` continues to mean **shop currency** (with
+>     `presentment*` purely additive "extra info") → analytics can lag
+>     and ship sequentially. **(Path b — lag acceptable.)**
+>   - If `Order.currency` changes meaning → analytics MUST land
+>     simultaneously, otherwise breaks. **(Path a — coordinated
+>     landing.)**
+> - **Sequencing decision** between Path a and Path b
+> - **Ping Terminal A before merging** Tax-4 PR for review of the
+>   `Order.currency` semantic decision
+
+Default expectation per master plan §4 Decision 11: **storage stays
+net (shop-currency-equivalent), `presentment*` is display only** →
+implies Path b (lag acceptable). But this MUST be explicit in Tax-4
+recon, not implicit.
+
+### Cross-reference — presentment-money contract
+
+For Coord #2 + #3 + intervening phases, see the dedicated cross-team
+contract doc at `_audit/presentment-money-handoff.md` covering:
+- When presentment ≠ shop currency
+- Backfill semantics for historical rows
+- Which writers populate presentment vs which read shop-only
+- MoneyBag-nesting decision (storage flat, service-API nested, helpers
+  in `_lib/money/` to map between)
 
 ---
 
