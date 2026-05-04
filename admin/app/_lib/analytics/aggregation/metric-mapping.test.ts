@@ -338,6 +338,189 @@ describe("page_viewed@0.1.0 mapping", () => {
   });
 });
 
+describe("cart_started@0.2.0 mapping", () => {
+  const mapping = findMapping("cart_started", "0.2.0")!;
+
+  function cartEvent(payload: Record<string, unknown>): AnalyticsEventRow {
+    return row({
+      event_name: "cart_started",
+      schema_version: "0.2.0",
+      payload,
+    });
+  }
+
+  it("Fixture 1 — CART_STARTED × TOTAL distinct on cart_id", () => {
+    const e = cartEvent({
+      cart_id: "01HZCART1AAAAAAAAAAAAAAAAA",
+      product_id: "prod_x",
+      cart_total: { amount: 12_000, currency: "SEK" },
+    });
+    const c = mapping.contributions[0];
+    if (c.kind === "expand") throw new Error("expected scalar contribution");
+    expect(c.metric).toBe("CART_STARTED");
+    expect(c.dimension).toBe("TOTAL");
+    expect(c.dimensionValueFrom(e)).toBe("TOTAL");
+    expect(c.aggregator).toBe("distinct");
+    expect(c.distinctKey?.(e)).toBe("01HZCART1AAAAAAAAAAAAAAAAA");
+  });
+
+  it("Fixture 2 — distinct on cart_id when same id appears twice", () => {
+    const c = mapping.contributions[0];
+    if (c.kind === "expand") throw new Error("expected scalar contribution");
+    const e1 = cartEvent({
+      cart_id: "01HZCART2BBBBBBBBBBBBBBBBB",
+      product_id: "prod_x",
+      cart_total: { amount: 100, currency: "SEK" },
+    });
+    const e2 = cartEvent({
+      cart_id: "01HZCART2BBBBBBBBBBBBBBBBB",
+      product_id: "prod_y",
+      cart_total: { amount: 200, currency: "SEK" },
+    });
+    expect(c.distinctKey?.(e1)).toBe(c.distinctKey?.(e2));
+  });
+
+  it("Fixture 3 — different cart_id produces different distinct keys", () => {
+    const c = mapping.contributions[0];
+    if (c.kind === "expand") throw new Error("expected scalar contribution");
+    const e1 = cartEvent({
+      cart_id: "01HZCART3CCCCCCCCCCCCCCCCC",
+      product_id: "prod_x",
+      cart_total: { amount: 100, currency: "SEK" },
+    });
+    const e2 = cartEvent({
+      cart_id: "01HZCART3DDDDDDDDDDDDDDDDD",
+      product_id: "prod_x",
+      cart_total: { amount: 100, currency: "SEK" },
+    });
+    expect(c.distinctKey?.(e1)).not.toBe(c.distinctKey?.(e2));
+  });
+});
+
+describe("checkout_started@0.2.0 mapping", () => {
+  const mapping = findMapping("checkout_started", "0.2.0")!;
+
+  function checkoutEvent(payload: Record<string, unknown>): AnalyticsEventRow {
+    return row({
+      event_name: "checkout_started",
+      schema_version: "0.2.0",
+      payload,
+    });
+  }
+
+  it("Fixture 1 — CHECKOUT_STARTED × TOTAL distinct on cart_id", () => {
+    const e = checkoutEvent({
+      cart_id: "01HZCHKO1AAAAAAAAAAAAAAAAA",
+      items_count: 3,
+      line_items_count: 2,
+      cart_total: { amount: 30_000, currency: "SEK" },
+    });
+    const c = mapping.contributions[0];
+    if (c.kind === "expand") throw new Error("expected scalar contribution");
+    expect(c.metric).toBe("CHECKOUT_STARTED");
+    expect(c.dimension).toBe("TOTAL");
+    expect(c.dimensionValueFrom(e)).toBe("TOTAL");
+    expect(c.aggregator).toBe("distinct");
+    expect(c.distinctKey?.(e)).toBe("01HZCHKO1AAAAAAAAAAAAAAAAA");
+  });
+
+  it("Fixture 2 — distinct on cart_id when worker double-fires beacon", () => {
+    const c = mapping.contributions[0];
+    if (c.kind === "expand") throw new Error("expected scalar contribution");
+    const payload = {
+      cart_id: "01HZCHKO2BBBBBBBBBBBBBBBBB",
+      items_count: 1,
+      line_items_count: 1,
+      cart_total: { amount: 100, currency: "SEK" },
+    };
+    expect(c.distinctKey?.(checkoutEvent(payload))).toBe(
+      c.distinctKey?.(checkoutEvent(payload)),
+    );
+  });
+
+  it("Fixture 3 — different cart_id distinct keys do not collide", () => {
+    const c = mapping.contributions[0];
+    if (c.kind === "expand") throw new Error("expected scalar contribution");
+    const e1 = checkoutEvent({
+      cart_id: "01HZCHKO3CCCCCCCCCCCCCCCCC",
+      items_count: 1,
+      line_items_count: 1,
+      cart_total: { amount: 100, currency: "SEK" },
+    });
+    const e2 = checkoutEvent({
+      cart_id: "01HZCHKO3DDDDDDDDDDDDDDDDD",
+      items_count: 1,
+      line_items_count: 1,
+      cart_total: { amount: 100, currency: "SEK" },
+    });
+    expect(c.distinctKey?.(e1)).not.toBe(c.distinctKey?.(e2));
+  });
+});
+
+describe("cart_abandoned@0.2.0 mapping", () => {
+  const mapping = findMapping("cart_abandoned", "0.2.0")!;
+
+  function abandonedEvent(payload: Record<string, unknown>): AnalyticsEventRow {
+    return row({
+      event_name: "cart_abandoned",
+      schema_version: "0.2.0",
+      payload,
+    });
+  }
+
+  it("Fixture 1 — CART_ABANDONED × TOTAL distinct on cart_id", () => {
+    const e = abandonedEvent({
+      cart_id: "01HZABND1AAAAAAAAAAAAAAAAA",
+      items_count: 2,
+      line_items_count: 2,
+      cart_total: { amount: 5_000, currency: "SEK" },
+      time_since_last_interaction_ms: 60_000,
+    });
+    const c = mapping.contributions[0];
+    if (c.kind === "expand") throw new Error("expected scalar contribution");
+    expect(c.metric).toBe("CART_ABANDONED");
+    expect(c.dimension).toBe("TOTAL");
+    expect(c.dimensionValueFrom(e)).toBe("TOTAL");
+    expect(c.aggregator).toBe("distinct");
+    expect(c.distinctKey?.(e)).toBe("01HZABND1AAAAAAAAAAAAAAAAA");
+  });
+
+  it("Fixture 2 — sendBeacon double-fire collapses to one distinct cart_id", () => {
+    const c = mapping.contributions[0];
+    if (c.kind === "expand") throw new Error("expected scalar contribution");
+    const payload = {
+      cart_id: "01HZABND2BBBBBBBBBBBBBBBBB",
+      items_count: 1,
+      line_items_count: 1,
+      cart_total: { amount: 100, currency: "SEK" },
+      time_since_last_interaction_ms: 30_000,
+    };
+    expect(c.distinctKey?.(abandonedEvent(payload))).toBe(
+      c.distinctKey?.(abandonedEvent(payload)),
+    );
+  });
+
+  it("Fixture 3 — different abandoned carts produce different distinct keys", () => {
+    const c = mapping.contributions[0];
+    if (c.kind === "expand") throw new Error("expected scalar contribution");
+    const e1 = abandonedEvent({
+      cart_id: "01HZABND3CCCCCCCCCCCCCCCCC",
+      items_count: 1,
+      line_items_count: 1,
+      cart_total: { amount: 100, currency: "SEK" },
+      time_since_last_interaction_ms: 10_000,
+    });
+    const e2 = abandonedEvent({
+      cart_id: "01HZABND3DDDDDDDDDDDDDDDDD",
+      items_count: 1,
+      line_items_count: 1,
+      cart_total: { amount: 100, currency: "SEK" },
+      time_since_last_interaction_ms: 10_000,
+    });
+    expect(c.distinctKey?.(e1)).not.toBe(c.distinctKey?.(e2));
+  });
+});
+
 describe("derivedMetrics", () => {
   it("emits AOV = REVENUE/ORDERS when orders > 0", () => {
     const folded = new Map<string, bigint>();
@@ -372,5 +555,146 @@ describe("derivedMetrics", () => {
     expect(rows2.find((r) => r.metric === "AVERAGE_ORDER_VALUE")?.value).toBe(
       BigInt(3),
     );
+  });
+});
+
+describe("derivedMetrics — funnel rates", () => {
+  // Helper — builds a folded Map populated with the funnel base counts
+  // (and optional ORDERS for completion rate). All other AOV-related
+  // keys are left empty unless the test sets them.
+  function foldedWith(counts: {
+    cartStarted?: number;
+    checkoutStarted?: number;
+    cartAbandoned?: number;
+    orders?: number;
+  }): Map<string, bigint> {
+    const folded = new Map<string, bigint>();
+    if (counts.cartStarted !== undefined) {
+      folded.set(
+        makeAccumulatorKey("CART_STARTED", "TOTAL", "TOTAL"),
+        BigInt(counts.cartStarted),
+      );
+    }
+    if (counts.checkoutStarted !== undefined) {
+      folded.set(
+        makeAccumulatorKey("CHECKOUT_STARTED", "TOTAL", "TOTAL"),
+        BigInt(counts.checkoutStarted),
+      );
+    }
+    if (counts.cartAbandoned !== undefined) {
+      folded.set(
+        makeAccumulatorKey("CART_ABANDONED", "TOTAL", "TOTAL"),
+        BigInt(counts.cartAbandoned),
+      );
+    }
+    if (counts.orders !== undefined) {
+      folded.set(
+        makeAccumulatorKey("ORDERS", "TOTAL", "TOTAL"),
+        BigInt(counts.orders),
+      );
+    }
+    return folded;
+  }
+
+  it("CART_TO_CHECKOUT_RATE — 30/100 = 30% (3000 bp)", () => {
+    const rows = derivedMetrics(
+      foldedWith({ cartStarted: 100, checkoutStarted: 30 }),
+    );
+    const r = rows.find((x) => x.metric === "CART_TO_CHECKOUT_RATE");
+    expect(r?.value).toBe(BigInt(3000));
+  });
+
+  it("CART_ABANDONMENT_RATE — 70/100 = 70% (7000 bp)", () => {
+    const rows = derivedMetrics(
+      foldedWith({ cartStarted: 100, cartAbandoned: 70 }),
+    );
+    const r = rows.find((x) => x.metric === "CART_ABANDONMENT_RATE");
+    expect(r?.value).toBe(BigInt(7000));
+  });
+
+  it("CHECKOUT_COMPLETION_RATE — 25/30 ≈ 83.33% (8333 bp)", () => {
+    const rows = derivedMetrics(
+      foldedWith({ checkoutStarted: 30, orders: 25 }),
+    );
+    const r = rows.find((x) => x.metric === "CHECKOUT_COMPLETION_RATE");
+    expect(r?.value).toBe(BigInt(8333));
+  });
+
+  it("zero-divide guard — cart_started=0 omits CART_TO_CHECKOUT_RATE", () => {
+    const rows = derivedMetrics(foldedWith({ cartStarted: 0, checkoutStarted: 5 }));
+    expect(
+      rows.find((x) => x.metric === "CART_TO_CHECKOUT_RATE"),
+    ).toBeUndefined();
+  });
+
+  it("zero-divide guard — cart_started=0 omits CART_ABANDONMENT_RATE", () => {
+    const rows = derivedMetrics(foldedWith({ cartStarted: 0, cartAbandoned: 5 }));
+    expect(
+      rows.find((x) => x.metric === "CART_ABANDONMENT_RATE"),
+    ).toBeUndefined();
+  });
+
+  it("zero-divide guard — checkout_started=0 omits CHECKOUT_COMPLETION_RATE", () => {
+    const rows = derivedMetrics(foldedWith({ checkoutStarted: 0, orders: 5 }));
+    expect(
+      rows.find((x) => x.metric === "CHECKOUT_COMPLETION_RATE"),
+    ).toBeUndefined();
+  });
+
+  it("all-zero scenario — no funnel-rate rows emitted", () => {
+    const rows = derivedMetrics(new Map());
+    expect(rows.find((x) => x.metric === "CART_TO_CHECKOUT_RATE")).toBeUndefined();
+    expect(rows.find((x) => x.metric === "CART_ABANDONMENT_RATE")).toBeUndefined();
+    expect(
+      rows.find((x) => x.metric === "CHECKOUT_COMPLETION_RATE"),
+    ).toBeUndefined();
+    // AOV is still emitted as 0 (Phase 5A's existing behaviour).
+    expect(rows.find((x) => x.metric === "AVERAGE_ORDER_VALUE")?.value).toBe(
+      BigInt(0),
+    );
+  });
+
+  it("missing keys treated as 0 — partial input doesn't crash", () => {
+    // Only cart_started present; checkout/abandoned/orders all missing.
+    const rows = derivedMetrics(foldedWith({ cartStarted: 50 }));
+    // CART_TO_CHECKOUT_RATE = 0 / 50 = 0 bp (rate emitted, value 0).
+    expect(rows.find((x) => x.metric === "CART_TO_CHECKOUT_RATE")?.value).toBe(
+      BigInt(0),
+    );
+    // CART_ABANDONMENT_RATE = 0 / 50 = 0 bp.
+    expect(rows.find((x) => x.metric === "CART_ABANDONMENT_RATE")?.value).toBe(
+      BigInt(0),
+    );
+    // CHECKOUT_COMPLETION_RATE — denominator 0, omitted.
+    expect(
+      rows.find((x) => x.metric === "CHECKOUT_COMPLETION_RATE"),
+    ).toBeUndefined();
+  });
+
+  it("cross-day carryover — checkout_started > cart_started yields rate > 100%", () => {
+    // Documented behaviour: same-day approximation means a cart that
+    // started yesterday and checked out today inflates today's
+    // CART_TO_CHECKOUT_RATE above 10000 bp. Aggregator does NOT clamp.
+    const rows = derivedMetrics(
+      foldedWith({ cartStarted: 10, checkoutStarted: 15 }),
+    );
+    const r = rows.find((x) => x.metric === "CART_TO_CHECKOUT_RATE");
+    expect(r?.value).toBe(BigInt(15_000));
+  });
+
+  it("rounds half-up to nearest basis point", () => {
+    // 1 / 3 = 0.3333... → 3333 bp (Math.round half-up; 3333.33 → 3333)
+    expect(
+      derivedMetrics(
+        foldedWith({ cartStarted: 3, checkoutStarted: 1 }),
+      ).find((x) => x.metric === "CART_TO_CHECKOUT_RATE")?.value,
+    ).toBe(BigInt(3333));
+
+    // 2 / 3 = 0.6666... → 6667 bp (Math.round half-up; 6666.67 → 6667)
+    expect(
+      derivedMetrics(
+        foldedWith({ cartStarted: 3, checkoutStarted: 2 }),
+      ).find((x) => x.metric === "CART_TO_CHECKOUT_RATE")?.value,
+    ).toBe(BigInt(6667));
   });
 });
