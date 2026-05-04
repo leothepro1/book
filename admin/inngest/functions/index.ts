@@ -9,3 +9,5 @@
 
 export { drainAnalyticsOutbox } from "./drain-analytics-outbox";
 export { scanAnalyticsOutbox } from "./scan-analytics-outbox";
+export { scanAnalyticsAggregate } from "./scan-analytics-aggregate";
+export { runAnalyticsAggregateDay } from "./run-analytics-aggregate-day";

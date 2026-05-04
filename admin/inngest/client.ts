@@ -51,6 +51,25 @@ export type InngestEvents = {
   "analytics.outbox.scan": {
     data: Record<string, never>;
   };
+  /**
+   * Cron-triggered scan event for the Phase 5A aggregator. Mirrors
+   * `analytics.outbox.scan` — exposed as a typed event so operators
+   * (and verify-phase5a-aggregator.ts) can invoke an immediate scan
+   * without waiting for the next 15-min cron tick.
+   */
+  "analytics.aggregate.scan": {
+    data: Record<string, never>;
+  };
+  /**
+   * Per-tenant fanout from the aggregator scanner. Triggers
+   * `run-analytics-aggregate-day` which runs the 48h sliding window
+   * for the tenant via runAggregateDay.
+   */
+  "analytics.aggregate.fanout": {
+    data: {
+      tenant_id: string;
+    };
+  };
 };
 
 export type InngestEventName = keyof InngestEvents;
