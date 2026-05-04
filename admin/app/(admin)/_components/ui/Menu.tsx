@@ -111,9 +111,16 @@ function MenuRoot({
 
   const triggerRef = useRef<HTMLElement | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ top: number; left: number }>({
+  const [position, setPosition] = useState<{
+    top: number;
+    left: number;
+    /** Mirrors the trigger's measured width so the popover always
+        reads as anchored to it (Polaris/Shopify pattern). */
+    width: number | null;
+  }>({
     top: -9999,
     left: -9999,
+    width: null,
   });
   // Placement is exposed as `data-placement` on the menu so the CSS
   // can swap the enter animation (slide-down vs slide-up) to match
@@ -129,6 +136,12 @@ function MenuRoot({
     const triggerRect = triggerRef.current.getBoundingClientRect();
     const listRect = listRef.current.getBoundingClientRect();
     const margin = 8;
+    // Menu width always mirrors the trigger — settings dropdowns
+    // and select-style use cases need this to read as anchored.
+    // Horizontal clamping uses this value (not listRect.width)
+    // since the inline width override below makes listRect.width
+    // stale on the first measurement.
+    const width = triggerRect.width;
 
     let top = triggerRect.bottom + offset;
     let left = triggerRect.left;
@@ -141,12 +154,12 @@ function MenuRoot({
     }
 
     // Clamp horizontally so the menu never extends past the viewport
-    if (left + listRect.width > window.innerWidth - margin) {
-      left = window.innerWidth - margin - listRect.width;
+    if (left + width > window.innerWidth - margin) {
+      left = window.innerWidth - margin - width;
     }
     if (left < margin) left = margin;
 
-    setPosition({ top, left });
+    setPosition({ top, left, width });
     setPlacement(nextPlacement);
   }, [open, offset, children]);
 
@@ -243,6 +256,13 @@ function MenuRoot({
                 position: 'fixed',
                 top: position.top,
                 left: position.left,
+                ...(position.width !== null && {
+                  width: position.width,
+                  // Override CSS `min-width: var(--menu-min-width)` so the
+                  // popover truly mirrors the trigger even when the trigger
+                  // is narrower than the default min.
+                  minWidth: position.width,
+                }),
               }}
             >
               <MenuContext.Provider value={ctx}>{children}</MenuContext.Provider>
