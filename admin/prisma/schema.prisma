@@ -475,7 +475,6 @@ enum CheckoutMode {
   @@schema("public")
 }
 
-
 enum PaymentTermsType {
   DUE_ON_RECEIPT
   DUE_ON_FULFILLMENT
@@ -519,7 +518,6 @@ model PendingBookingLock {
   createdAt DateTime @default(now())
 
   @@index([expiresAt])
-
   @@schema("public")
 }
 
@@ -684,8 +682,8 @@ model Tenant {
   emailSuppressions       EmailSuppression[]
 
   // B2B ("Företag")
-  companies      Company[]
-  companyEvents  CompanyEvent[]
+  companies     Company[]
+  companyEvents CompanyEvent[]
 
   // SEO engine
   pageTypeSeoDefaults PageTypeSeoDefault[]
@@ -702,7 +700,6 @@ model Tenant {
 
   @@index([slug])
   @@index([clerkOrgId])
-
   @@schema("public")
 }
 
@@ -727,7 +724,6 @@ model TenantPolicy {
 
   @@unique([tenantId, policyId])
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -751,7 +747,6 @@ model BusinessEntity {
   updatedAt DateTime @updatedAt
 
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -893,7 +888,6 @@ model Booking {
   @@index([tenantId, cancelledAt])
   @@index([holdExpiresAt])
   @@index([tenantId, integrityFlag])
-
   @@schema("public")
 }
 
@@ -909,7 +903,6 @@ model MagicLink {
 
   @@index([token])
   @@index([bookingId])
-
   @@schema("public")
 }
 
@@ -921,38 +914,37 @@ model MagicLink {
 /// Credentials are AES-256-GCM encrypted — never stored in cleartext.
 /// Separate from TenantConfig (which is sent to the editor frontend).
 model TenantIntegration {
-  id                   String    @id @default(cuid())
-  tenantId             String    @unique
-  provider             String
-  credentialsEncrypted Bytes
-  credentialsIv        Bytes
-  status               String    @default("pending")
-  lastSyncAt           DateTime?
-  lastErrorAt          DateTime?
-  lastError            String?
-  consecutiveFailures  Int       @default(0)
-  externalTenantId     String?
-  isDemoEnvironment    Boolean   @default(false)
+  id                    String    @id @default(cuid())
+  tenantId              String    @unique
+  provider              String
+  credentialsEncrypted  Bytes
+  credentialsIv         Bytes
+  status                String    @default("pending")
+  lastSyncAt            DateTime?
+  lastErrorAt           DateTime?
+  lastError             String?
+  consecutiveFailures   Int       @default(0)
+  externalTenantId      String?
+  isDemoEnvironment     Boolean   @default(false)
   // Kill-switch for the PMS reliability engine. When false, the
   // reconciliation cron skips this tenant entirely. Defaults to true.
   // Toggle off only during incident response (e.g. adapter regression,
   // runaway cost). Does not affect webhook ingestion.
-  reconciliationEnabled Boolean  @default(true)
+  reconciliationEnabled Boolean   @default(true)
   // Independent kill-switch for the webhook intake path. When false,
   // the route returns 200 immediately without persisting or
   // processing. Use when a tenant's PMS is misconfigured and flooding
   // us with invalid events — stops ingestion without deleting the
   // integration record. Reconciliation still works (it pulls from
   // the PMS rather than receiving pushes).
-  webhookEnabled        Boolean  @default(true)
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  webhookEnabled        Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([provider, externalTenantId])
   @@index([reconciliationEnabled, status])
-
   @@schema("public")
 }
 
@@ -981,7 +973,6 @@ model SyncJob {
 
   @@index([tenantId, status])
   @@index([scheduledAt, status])
-
   @@schema("public")
 }
 
@@ -1007,7 +998,6 @@ model SyncEvent {
 
   @@index([tenantId, createdAt])
   @@index([tenantId, eventType])
-
   @@schema("public")
 }
 
@@ -1049,7 +1039,6 @@ model BookingSyncError {
 
   @@unique([tenantId, externalId])
   @@index([tenantId, resolvedAt])
-
   @@schema("public")
 }
 
@@ -1081,15 +1070,15 @@ model BookingSyncError {
 /// preserves audit integrity and lets us replay events exactly as
 /// the PMS sent them if a bug in our parser is later found.
 model PmsWebhookInbox {
-  id                String    @id @default(cuid())
-  tenantId          String
-  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  provider          String
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider String
 
   /// Provider-assigned unique event ID. Combined with `provider`,
   /// this is the dedup key: a second delivery of the same event
   /// collides with the unique constraint and is rejected at the DB.
-  externalEventId   String
+  externalEventId String
 
   /// The booking this event refers to (optional — some events don't
   /// carry a booking reference). Populated when the provider's
@@ -1098,25 +1087,24 @@ model PmsWebhookInbox {
 
   /// Provider-specific event type string (e.g. "Reservation.Updated").
   /// Opaque to our code — we always re-fetch state from the PMS.
-  eventType         String
+  eventType String
 
   /// Raw webhook payload, preserved verbatim for audit/replay.
-  rawPayload        Json
+  rawPayload Json
 
-  status            String    @default("PENDING")
-  attempts          Int       @default(0)
-  lastError         String?
-  lastAttemptAt     DateTime?
-  nextRetryAt       DateTime?
-  receivedAt        DateTime  @default(now())
-  processedAt       DateTime?
-  deadAt            DateTime?
+  status        String    @default("PENDING")
+  attempts      Int       @default(0)
+  lastError     String?
+  lastAttemptAt DateTime?
+  nextRetryAt   DateTime?
+  receivedAt    DateTime  @default(now())
+  processedAt   DateTime?
+  deadAt        DateTime?
 
   @@unique([provider, externalEventId])
   @@index([tenantId, status])
   @@index([status, nextRetryAt])
   @@index([receivedAt])
-
   @@schema("public")
 }
 
@@ -1146,9 +1134,9 @@ model PmsWebhookInbox {
 /// → 24h = ~30h worst case) plus buffer. The cleanup cron deletes
 /// rows older than that.
 model PmsIdempotencyKey {
-  id        String @id @default(cuid())
-  tenantId  String
-  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   /// SHA-256 hex of (tenantId, provider, operation, canonicalizedInputs).
   /// Globally unique — two different tenants will have different keys
@@ -1170,7 +1158,6 @@ model PmsIdempotencyKey {
 
   @@index([tenantId, firstSeenAt])
   @@index([status, firstSeenAt])
-
   @@schema("public")
 }
 
@@ -1244,7 +1231,6 @@ model PmsOutboundJob {
   @@index([tenantId, status])
   @@index([status, lastAttemptAt])
   @@index([status, compensationLastAt])
-
   @@schema("public")
 }
 
@@ -1282,7 +1268,6 @@ model ReconciliationCursor {
   @@unique([tenantId, provider, tier])
   @@index([lastRunAt])
   @@index([tier, lastRunAt])
-
   @@schema("public")
 }
 
@@ -1301,7 +1286,6 @@ model WebhookDedup {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
-
   @@schema("public")
 }
 
@@ -1318,7 +1302,6 @@ model WebhookEvent {
   processedAt DateTime @default(now())
 
   @@index([id])
-
   @@schema("public")
 }
 
@@ -1383,7 +1366,6 @@ model MediaAsset {
   @@index([tenantId, createdAt])
   @@index([tenantId, mimeType])
   @@index([deletedAt]) // For cleanup job: find soft-deleted assets
-
   @@schema("public")
 }
 
@@ -1445,7 +1427,6 @@ model TenantLocale {
 
   @@unique([tenantId, locale])
   @@index([tenantId, published])
-
   @@schema("public")
 }
 
@@ -1468,7 +1449,6 @@ model TenantTranslation {
   @@unique([tenantId, locale, resourceId])
   @@index([tenantId, locale])
   @@index([tenantId, resourceId])
-
   @@schema("public")
 }
 
@@ -1501,7 +1481,6 @@ model EmailTemplate {
 
   @@unique([tenantId, eventType])
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -1538,7 +1517,6 @@ model EmailSendLog {
   @@index([status, nextRetryAt])
   @@index([orderId, eventType])
   @@index([bookingId, eventType])
-
   @@schema("public")
 }
 
@@ -1563,7 +1541,6 @@ model EmailUnsubscribe {
   @@unique([tenantId, email])
   @@index([tenantId])
   @@index([email])
-
   @@schema("public")
 }
 
@@ -1596,7 +1573,6 @@ model EmailDomain {
 
   @@unique([tenantId, domain])
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -1622,7 +1598,6 @@ model MagicLinkToken {
   @@index([token])
   @@index([tenantId, email])
   @@index([expiresAt])
-
   @@schema("public")
 }
 
@@ -1642,7 +1617,6 @@ model EmailRateLimit {
   sentAt    DateTime       @default(now())
 
   @@index([tenantId, email, eventType, sentAt])
-
   @@schema("public")
 }
 
@@ -1695,19 +1669,19 @@ model GuestAccount {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant                  Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  bookings                Booking[]
-  orders                  Order[]
-  otpCodes                GuestOtpCode[]
-  tags                    GuestTag[]
-  notes                   GuestNote[]
-  events                  GuestAccountEvent[]
-  addresses               GuestAddress[]
-  segmentMemberships      GuestSegmentMembership[]
-  discountTargets         DiscountCustomer[]
-  campaignRecipients      CampaignRecipient[]
-  automationEnrollments   AutomationEnrollment[]
-  companyContacts         CompanyContact[]
+  tenant                Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bookings              Booking[]
+  orders                Order[]
+  otpCodes              GuestOtpCode[]
+  tags                  GuestTag[]
+  notes                 GuestNote[]
+  events                GuestAccountEvent[]
+  addresses             GuestAddress[]
+  segmentMemberships    GuestSegmentMembership[]
+  discountTargets       DiscountCustomer[]
+  campaignRecipients    CampaignRecipient[]
+  automationEnrollments AutomationEnrollment[]
+  companyContacts       CompanyContact[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -1715,7 +1689,6 @@ model GuestAccount {
   @@index([tenantId, state])
   @@index([tenantId, emailMarketingState])
   @@index([tenantId, createdAt])
-
   @@schema("public")
 }
 
@@ -1734,7 +1707,6 @@ model GuestOtpCode {
   guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
 
   @@index([guestAccountId])
-
   @@schema("public")
 }
 
@@ -1754,7 +1726,6 @@ model GuestTag {
   @@unique([tenantId, guestAccountId, tag])
   @@index([tenantId, tag])
   @@index([guestAccountId])
-
   @@schema("public")
 }
 
@@ -1774,7 +1745,6 @@ model GuestNote {
   guestAccount GuestAccount @relation(fields: [guestAccountId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, guestAccountId])
-
   @@schema("public")
 }
 
@@ -1800,7 +1770,6 @@ model GuestAccountEvent {
   @@index([tenantId, guestAccountId])
   @@index([tenantId, type])
   @@index([guestAccountId, createdAt])
-
   @@schema("public")
 }
 
@@ -1829,7 +1798,6 @@ model GuestAddress {
 
   @@index([tenantId, guestAccountId])
   @@index([guestAccountId, isDefault])
-
   @@schema("public")
 }
 
@@ -1960,7 +1928,6 @@ model Product {
   @@index([tenantId, productType])
   @@index([tenantId, sortOrder])
   @@index([tenantId, archivedAt])
-
   @@schema("public")
 }
 
@@ -1993,7 +1960,6 @@ model ProductMedia {
 
   @@index([productId])
   @@index([productId, sortOrder])
-
   @@schema("public")
 }
 
@@ -2022,7 +1988,6 @@ model ProductOption {
 
   @@unique([productId, name])
   @@index([productId])
-
   @@schema("public")
 }
 
@@ -2082,7 +2047,6 @@ model ProductVariant {
   @@index([productId])
   @@index([productId, sortOrder])
   @@index([productId, sku])
-
   @@schema("public")
 }
 
@@ -2119,7 +2083,6 @@ model ProductTemplate {
   @@unique([tenantId, suffix])
   @@index([tenantId])
   @@index([tenantId, isDefault])
-
   @@schema("public")
 }
 
@@ -2168,7 +2131,6 @@ model ProductCollection {
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, sortOrder])
-
   @@schema("public")
 }
 
@@ -2190,7 +2152,6 @@ model ProductCollectionItem {
   @@unique([collectionId, productId])
   @@index([collectionId, sortOrder])
   @@index([productId])
-
   @@schema("public")
 }
 
@@ -2291,7 +2252,6 @@ model Accommodation {
   @@index([tenantId, sortOrder])
   @@index([tenantId, archivedAt])
   @@index([tenantId, pmsProvider, externalId])
-
   @@schema("public")
 }
 
@@ -2311,7 +2271,6 @@ model AccommodationHighlight {
 
   @@index([accommodationId])
   @@index([accommodationId, sortOrder])
-
   @@schema("public")
 }
 
@@ -2341,7 +2300,6 @@ model AccommodationUnit {
   @@index([tenantId])
   @@index([accommodationId])
   @@index([tenantId, status])
-
   @@schema("public")
 }
 
@@ -2360,7 +2318,6 @@ model AccommodationFacility {
 
   @@unique([accommodationId, facilityType])
   @@index([accommodationId])
-
   @@schema("public")
 }
 
@@ -2376,7 +2333,6 @@ model BedConfiguration {
 
   @@unique([accommodationId, bedType])
   @@index([accommodationId])
-
   @@schema("public")
 }
 
@@ -2412,7 +2368,6 @@ model RatePlan {
   @@index([tenantId])
   @@index([accommodationId])
   @@index([accommodationId, status])
-
   @@schema("public")
 }
 
@@ -2437,7 +2392,6 @@ model AccommodationRestriction {
   @@index([tenantId])
   @@index([accommodationId])
   @@index([accommodationId, date])
-
   @@schema("public")
 }
 
@@ -2455,7 +2409,6 @@ model AccommodationMedia {
 
   @@index([accommodationId])
   @@index([accommodationId, sortOrder])
-
   @@schema("public")
 }
 
@@ -2498,7 +2451,6 @@ model AccommodationCategory {
   @@index([tenantId, status])
   @@index([tenantId, visibleInSearch])
   @@index([tenantId, sortOrder])
-
   @@schema("public")
 }
 
@@ -2516,7 +2468,6 @@ model AccommodationCategoryItem {
   @@unique([categoryId, accommodationId])
   @@index([categoryId, sortOrder])
   @@index([accommodationId])
-
   @@schema("public")
 }
 
@@ -2535,7 +2486,6 @@ model AccommodationCategoryAddon {
   @@unique([categoryId, collectionId])
   @@index([categoryId, sortOrder])
   @@index([collectionId])
-
   @@schema("public")
 }
 
@@ -2617,7 +2567,6 @@ model CheckoutSession {
 
   @@index([tenantId, status])
   @@index([expiresAt])
-
   @@schema("public")
 }
 
@@ -2641,7 +2590,6 @@ model ProductTag {
 
   @@unique([tenantId, name])
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -2658,7 +2606,6 @@ model ProductTagItem {
   @@unique([productId, tagId])
   @@index([productId])
   @@index([tagId])
-
   @@schema("public")
 }
 
@@ -2713,7 +2660,6 @@ model InventoryChange {
   @@index([tenantId, productId])
   @@index([tenantId, createdAt])
   @@index([reason])
-
   @@schema("public")
 }
 
@@ -2749,7 +2695,6 @@ model PriceChange {
   @@index([productId])
   @@index([tenantId, productId])
   @@index([tenantId, createdAt])
-
   @@schema("public")
 }
 
@@ -2788,7 +2733,6 @@ model InventoryReservation {
   @@index([tenantId, variantId])
   @@index([expiresAt])
   @@index([sessionId])
-
   @@schema("public")
 }
 
@@ -2902,7 +2846,6 @@ model Order {
   @@index([tenantId, fulfillmentStatus])
   @@index([companyLocationId, paymentDueAt])
   @@index([companyId])
-
   @@schema("public")
 }
 
@@ -2924,7 +2867,6 @@ model ProductChannelPublication {
   @@unique([tenantId, productId, channelHandle])
   @@index([tenantId, channelHandle])
   @@index([tenantId, productId])
-
   @@schema("public")
 }
 
@@ -2953,7 +2895,6 @@ model OrderLineItem {
 
   @@index([orderId])
   @@index([productId])
-
   @@schema("public")
 }
 
@@ -2972,7 +2913,6 @@ model OrderEvent {
 
   @@index([orderId, createdAt])
   @@index([tenantId, orderId])
-
   @@schema("public")
 }
 
@@ -3039,7 +2979,6 @@ model Discount {
   @@index([tenantId, status])
   @@index([tenantId, method])
   @@index([tenantId, startsAt, endsAt])
-
   @@schema("public")
 }
 
@@ -3063,7 +3002,6 @@ model DiscountCode {
   @@unique([tenantId, code])
   @@index([discountId])
   @@index([tenantId, isActive])
-
   @@schema("public")
 }
 
@@ -3082,7 +3020,6 @@ model DiscountCondition {
 
   @@index([discountId])
   @@index([discountId, type])
-
   @@schema("public")
 }
 
@@ -3099,7 +3036,6 @@ model DiscountProduct {
   @@unique([discountId, productId])
   @@index([discountId])
   @@index([tenantId, productId])
-
   @@schema("public")
 }
 
@@ -3116,7 +3052,6 @@ model DiscountCollection {
   @@unique([discountId, collectionId])
   @@index([discountId])
   @@index([tenantId, collectionId])
-
   @@schema("public")
 }
 
@@ -3133,7 +3068,6 @@ model DiscountSegment {
   @@unique([discountId, segmentId])
   @@index([discountId])
   @@index([tenantId, segmentId])
-
   @@schema("public")
 }
 
@@ -3150,7 +3084,6 @@ model DiscountCustomer {
   @@unique([discountId, guestAccountId])
   @@index([discountId])
   @@index([tenantId, guestAccountId])
-
   @@schema("public")
 }
 
@@ -3174,7 +3107,6 @@ model DiscountAllocation {
   @@index([orderId])
   @@index([discountId])
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -3201,7 +3133,6 @@ model DiscountUsage {
   @@index([discountId, createdAt])
   @@index([tenantId, guestEmail])
   @@index([tenantId, discountId])
-
   @@schema("public")
 }
 
@@ -3222,7 +3153,6 @@ model DiscountEvent {
 
   @@index([discountId, createdAt])
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -3236,7 +3166,6 @@ model StripeWebhookEvent {
   eventType     String
 
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -3286,7 +3215,6 @@ model GiftCardProduct {
 
   @@unique([tenantId, slug])
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -3309,7 +3237,6 @@ model GiftCardDesign {
 
   @@index([tenantId]) // admin list: all designs for a tenant
   @@index([productId]) // product detail: designs for this gift card product
-
   @@schema("public")
 }
 
@@ -3343,7 +3270,6 @@ model GiftCard {
   @@index([tenantId]) // admin list: all gift cards for tenant
   @@index([orderId]) // order detail: gift card for this order
   @@index([tenantId, status, scheduledAt]) // cron: unsent cards ready for delivery
-
   @@schema("public")
 }
 
@@ -3362,7 +3288,6 @@ model GiftCardRedemption {
 
   @@index([giftCardId]) // gift card detail: all redemptions
   @@index([tenantId]) // admin: all redemptions for tenant
-
   @@schema("public")
 }
 
@@ -3392,7 +3317,6 @@ model PaymentSession {
 
   @@index([providerKey, status])
   @@index([tenantId, status])
-
   @@schema("public")
 }
 
@@ -3471,7 +3395,6 @@ model TenantApp {
 
   @@unique([tenantId, appId])
   @@index([tenantId, status])
-
   @@schema("public")
 }
 
@@ -3490,7 +3413,6 @@ model TenantAppEvent {
 
   @@index([tenantId, appId])
   @@index([tenantId, createdAt])
-
   @@schema("public")
 }
 
@@ -3515,7 +3437,6 @@ model TenantAppWizard {
 
   @@unique([tenantId, appId])
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -3543,7 +3464,6 @@ model TenantAppHealth {
   @@unique([tenantId, appId])
   @@index([tenantId])
   @@index([nextCheckAt])
-
   @@schema("public")
 }
 
@@ -3562,7 +3482,6 @@ model TenantAppHealthHistory {
 
   @@index([tenantId, appId, checkedAt])
   @@index([checkedAt])
-
   @@schema("public")
 }
 
@@ -3583,7 +3502,6 @@ model PlatformEventLog {
 
   @@index([tenantId, emittedAt])
   @@index([tenantId, eventType])
-
   @@schema("public")
 }
 
@@ -3614,7 +3532,6 @@ model AppWebhookDelivery {
   @@index([tenantId, appId, createdAt])
   @@index([status, nextRetryAt])
   @@index([tenantId, appId, status])
-
   @@schema("public")
 }
 
@@ -3660,7 +3577,6 @@ model TenantBillingPeriod {
   @@unique([tenantId, periodStart])
   @@index([tenantId, status])
   @@index([status, periodEnd])
-
   @@schema("public")
 }
 
@@ -3686,7 +3602,6 @@ model BillingLineItem {
   @@index([periodId])
   @@index([tenantId, appId])
   @@index([tenantId, createdAt])
-
   @@schema("public")
 }
 
@@ -3720,7 +3635,6 @@ model EmailMarketingSync {
   @@unique([tenantId, appId, email])
   @@index([tenantId, appId])
   @@index([tenantId, status])
-
   @@schema("public")
 }
 
@@ -3741,7 +3655,6 @@ model EmailAttribution {
   @@index([tenantId, appId])
   @@index([tenantId, attributedAt])
   @@index([orderId])
-
   @@schema("public")
 }
 
@@ -3769,7 +3682,6 @@ model GuestSegment {
 
   @@index([tenantId])
   @@index([tenantId, isDefault])
-
   @@schema("public")
 }
 
@@ -3791,7 +3703,6 @@ model GuestSegmentMembership {
   @@index([tenantId, segmentId])
   @@index([tenantId, guestAccountId])
   @@index([segmentId, leftAt])
-
   @@schema("public")
 }
 
@@ -3822,7 +3733,6 @@ model CheckoutIdempotencyKey {
 
   @@unique([tenantId, key, routeType])
   @@index([expiresAt])
-
   @@schema("public")
 }
 
@@ -3851,7 +3761,6 @@ model RumEvent {
   @@index([tenantId, createdAt])
   @@index([tenantId, sessionId])
   @@index([tenantId, deviceType, createdAt])
-
   @@schema("public")
 }
 
@@ -3865,7 +3774,6 @@ model RumRateLimit {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -3907,7 +3815,6 @@ model RumDailyAggregate {
 
   @@unique([tenantId, date])
   @@index([tenantId, date])
-
   @@schema("public")
 }
 
@@ -3988,7 +3895,6 @@ model AnalyticsLocation {
 
   @@unique([country, city])
   @@index([country])
-
   @@schema("public")
 }
 
@@ -4027,7 +3933,6 @@ model AnalyticsEvent {
   @@index([tenantId, visitorId])
   @@index([tenantId, occurredAt])
   @@index([tenantId, occurredAt, eventType])
-
   @@schema("public")
 }
 
@@ -4048,7 +3953,6 @@ model AnalyticsDailyMetric {
   @@index([tenantId, date])
   @@index([tenantId, metric, date])
   @@index([tenantId, dimension, date])
-
   @@schema("public")
 }
 
@@ -4079,7 +3983,6 @@ model SpotMap {
   accommodationItems SpotMapAccommodation[]
 
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -4097,7 +4000,6 @@ model SpotMapAccommodation {
 
   @@unique([accommodationId])
   @@index([spotMapId])
-
   @@schema("public")
 }
 
@@ -4126,7 +4028,6 @@ model SpotMarker {
   @@index([tenantId])
   @@index([spotMapId])
   @@index([accommodationUnitId])
-
   @@schema("public")
 }
 
@@ -4148,7 +4049,6 @@ model PendingSpotReservation {
 
   @@index([tenantId, accommodationUnitId, checkIn, checkOut])
   @@index([expiresAt])
-
   @@schema("public")
 }
 
@@ -4256,7 +4156,6 @@ model EmailAppTemplate {
   steps     EmailAutomationStep[]
 
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -4279,7 +4178,6 @@ model EmailCampaign {
   analytics  EmailCampaignAnalytics?
 
   @@index([tenantId, status])
-
   @@schema("public")
 }
 
@@ -4302,7 +4200,6 @@ model CampaignRecipient {
   @@unique([campaignId, guestId])
   @@index([resendMessageId])
   @@index([campaignId, status])
-
   @@schema("public")
 }
 
@@ -4322,7 +4219,6 @@ model EmailAutomation {
   analytics EmailAutomationAnalytics?
 
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -4339,7 +4235,6 @@ model EmailAutomationStep {
   enrollments AutomationEnrollment[]
 
   @@unique([automationId, order])
-
   @@schema("public")
 }
 
@@ -4360,7 +4255,6 @@ model AutomationEnrollment {
 
   @@index([scheduledAt, status])
   @@index([tenantId, automationId])
-
   @@schema("public")
 }
 
@@ -4375,7 +4269,6 @@ model EmailSuppression {
 
   @@unique([tenantId, email])
   @@index([tenantId, email])
-
   @@schema("public")
 }
 
@@ -4397,7 +4290,6 @@ model EmailBounceEvent {
 
   @@index([tenantId, email])
   @@index([createdAt])
-
   @@schema("public")
 }
 
@@ -4468,7 +4360,6 @@ model Company {
   @@unique([tenantId, externalId])
   @@index([tenantId, status])
   @@index([tenantId, orderingApproved])
-
   @@schema("public")
 }
 
@@ -4510,7 +4401,6 @@ model CompanyLocation {
 
   @@unique([tenantId, companyId, externalId])
   @@index([tenantId, companyId])
-
   @@schema("public")
 }
 
@@ -4562,7 +4452,6 @@ model CompanyContact {
   @@unique([companyId, guestAccountId], name: "one_membership_per_guest_per_company")
   @@index([tenantId, companyId])
   @@index([guestAccountId])
-
   @@schema("public")
 }
 
@@ -4585,7 +4474,6 @@ model CompanyLocationAccess {
   @@unique([companyContactId, companyLocationId], name: "one_access_per_contact_per_location")
   @@index([companyLocationId])
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -4613,7 +4501,6 @@ model PaymentTerms {
   companyLocations CompanyLocation[]
 
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -4640,7 +4527,6 @@ model Catalog {
   assignments   CompanyLocationCatalog[]
 
   @@index([tenantId, status])
-
   @@schema("public")
 }
 
@@ -4730,7 +4616,6 @@ model CompanyLocationCatalog {
   createdAt DateTime @default(now())
 
   @@unique([companyLocationId, catalogId])
-
   @@schema("public")
 }
 
@@ -4757,7 +4642,6 @@ model VaultedCard {
 
   @@index([companyLocationId])
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -4780,7 +4664,6 @@ model StoreCreditTransaction {
 
   @@index([companyLocationId, createdAt])
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -4803,7 +4686,6 @@ model CompanyAccountRequest {
   createdAt DateTime @default(now())
 
   @@index([tenantId, status])
-
   @@schema("public")
 }
 
@@ -4822,7 +4704,6 @@ model PageTypeSeoDefault {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, pageType])
-
   @@schema("public")
 }
 
@@ -4862,37 +4743,37 @@ enum SeoPageType {
 ///      aggregate-seo-redirect-hits cron rolls counts up into
 ///      hitCount + lastHitAt on this row.
 model SeoRedirect {
-  id         String   @id @default(cuid())
-  tenantId   String
+  id       String @id @default(cuid())
+  tenantId String
 
   /// Source path, NO protocol, NO host, lowercased, NO trailing
   /// slash. e.g. "/shop/products/old-slug". Matched 1:1 against
   /// normalized request pathname by the middleware.
-  fromPath   String
+  fromPath String
 
   /// Destination path, same shape as fromPath. Always points at a
   /// live entity's current path (chain-collapsed at write-time).
-  toPath     String
+  toPath String
 
   /// BCP-47 locale for the fromPath. In M11.1 every row is
   /// tenant.defaultLocale — locale-prefix routing lands with M8.
   /// The column carves the namespace so /en/foo and /sv/foo can
   /// route independently once M8 ships.
-  locale     String
+  locale String
 
-  statusCode Int      @default(301)
+  statusCode Int @default(301)
 
   /// Denormalized hit counter, updated by the
   /// aggregate-seo-redirect-hits cron from SeoRedirectHit rows.
   /// Admin UI (M11.3) reads this directly.
-  hitCount   Int      @default(0)
+  hitCount Int @default(0)
 
   /// Last observed hit, set by the same cron. Null for redirects
   /// that haven't fired yet.
-  lastHitAt  DateTime?
+  lastHitAt DateTime?
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   hits   SeoRedirectHit[]
@@ -4901,15 +4782,12 @@ model SeoRedirect {
   /// surface as P2002 — the save transaction rolls back and the
   /// caller returns a typed user-visible error.
   @@unique([tenantId, fromPath, locale])
-
   /// Tenant-scoped scan for `cleanupRedirectsForDeletedEntity`
   /// (find redirects pointing at an entity's routes) + admin UI
   /// "redirects pointing at this URL" lookups.
   @@index([tenantId, toPath])
-
   /// Tenant-scoped scan for admin list view (sort by recency).
   @@index([tenantId, createdAt])
-
   @@schema("public")
 }
 
@@ -4933,10 +4811,8 @@ model SeoRedirectHit {
 
   /// Tenant + time scan for the aggregation cron's "drain window".
   @@index([tenantId, occurredAt])
-
   /// redirectId scan for the roll-up group-by.
   @@index([redirectId])
-
   @@schema("public")
 }
 
@@ -5039,7 +4915,7 @@ model CancellationRequest {
   /// Handle into CancellationReasonDefinition — loose FK; reason defs can be soft-deleted.
   reasonHandle    String?
   /// Guest-provided free text. Max 300 chars (Shopify customerNote parity).
-  guestNote       String? @db.VarChar(300)
+  guestNote       String?               @db.VarChar(300)
 
   declineReason CancellationDeclineReason?
   /// Staff-provided free text shown to guest on decline. Max 500 chars (Shopify declineNote parity).
@@ -5099,7 +4975,6 @@ model CancellationRequest {
   @@index([status, expiresAt]) // auto-expire cron
   @@index([status, nextAttemptAt]) // saga-retry cron
   @@index([tenantId, requestedAt]) // admin queue sort
-
   @@schema("public")
 }
 
@@ -5119,7 +4994,6 @@ model CancellationEvent {
 
   @@index([cancellationRequestId, createdAt])
   @@index([tenantId, type, createdAt])
-
   @@schema("public")
 }
 
@@ -5146,7 +5020,7 @@ model CancellationPolicy {
   requireApproval Boolean @default(false)
 
   /// How long a REQUESTED request sits before auto-expire fires. Default 48h.
-  autoExpireHours Int     @default(48)
+  autoExpireHours Int @default(48)
 
   active      Boolean  @default(true)
   description String?  @db.Text
@@ -5156,7 +5030,6 @@ model CancellationPolicy {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, active])
-
   @@schema("public")
 }
 
@@ -5177,7 +5050,6 @@ model CancellationReasonDefinition {
 
   @@unique([tenantId, handle])
   @@index([tenantId, deleted, sortOrder])
-
   @@schema("public")
 }
 
@@ -5222,7 +5094,6 @@ model CompanyEvent {
   @@index([tenantId, companyId])
   @@index([tenantId, type])
   @@index([companyId, createdAt])
-
   @@schema("public")
 }
 
@@ -5240,7 +5111,6 @@ model PendingCancellationLock {
 
   @@unique([tenantId, dedupKey])
   @@index([expiresAt])
-
   @@schema("public")
 }
 
@@ -5416,7 +5286,6 @@ model DraftOrder {
   @@index([tenantId, expiresAt])
   @@index([tenantId, companyLocationId])
   @@index([tenantId, guestAccountId])
-
   @@schema("public")
 }
 
@@ -5488,7 +5357,6 @@ model DraftLineItem {
 
   @@index([draftOrderId, position])
   @@index([tenantId])
-
   @@schema("public")
 }
 
@@ -5533,7 +5401,6 @@ model DraftReservation {
   /// Supports sweep A (expired PLACED) and sweep B (stuck PLACING) in
   /// the release-expired-draft-holds cron (FAS 6.5C).
   @@index([holdState, holdLastAttemptAt])
-
   @@schema("public")
 }
 
@@ -5559,7 +5426,122 @@ model DraftOrderEvent {
 
   @@index([draftOrderId, createdAt])
   @@index([tenantId, type])
+  @@schema("public")
+}
 
+// ============================================================================
+// TAX ENGINE (Tax-0 foundation — `public` schema)
+// ============================================================================
+//
+// New tax-domain tables shipped without behavior change. Calculator wiring
+// lands in Tax-1 → Tax-3. See `_audit/tax-engine-master-plan.md` and
+// `_audit/tax-0-recon.md`. Polymorphic FKs are loose strings (Q3 LOCKED,
+// matches existing DraftOrder pattern); no @relation to existing tables so
+// archival of an Order/Draft never cascades into tax history.
+
+enum TaxRegistrationStatus {
+  ACTIVE
+  INACTIVE
+
+  @@schema("public")
+}
+
+enum TaxCollectMode {
+  COLLECT
+  DO_NOT_COLLECT
+  COLLECT_UNLESS_EXEMPT
+
+  @@schema("public")
+}
+
+/// Per-line, per-jurisdiction tax computation snapshot. One TaxLine per
+/// (lineItem, jurisdiction) — multi-jurisdiction (US state + county +
+/// city) is a 1—N relationship per Shopify's model.
+///
+/// `orderLineItemId` and `draftLineItemId` are mutually exclusive
+/// polymorphic FKs (loose strings, Q3 LOCKED). A future `shippingLineId`
+/// joins them when shipping lines become a first-class model.
+model TaxLine {
+  id                        String   @id @default(cuid())
+  tenantId                  String
+  orderLineItemId           String?
+  draftLineItemId           String?
+  title                     String
+  /// "SE", "US-NY-NEW_YORK_COUNTY", etc.
+  jurisdiction              String
+  /// Decimal(7,6) per Q2 LOCKED — matches Shopify + Avalara representation
+  /// (e.g. 0.250000 for 25 %). Basis points lose precision for sub-bp
+  /// jurisdictional rates.
+  rate                      Decimal  @db.Decimal(7, 6)
+  taxableAmountCents        BigInt
+  taxAmountCents            BigInt
+  presentmentTaxAmountCents BigInt
+  presentmentCurrency       String   @default("SEK")
+  /// "builtin" | "avalara" | "vertex" | "manual_override" | "fallback_zip"
+  source                    String
+  /// Marketplace-facilitator liability flag. null = unknown.
+  channelLiable             Boolean?
+  createdAt                 DateTime @default(now())
+
+  @@index([tenantId, jurisdiction])
+  @@index([orderLineItemId])
+  @@index([draftLineItemId])
+  @@schema("public")
+}
+
+/// Tenant-level tax-registration record. One row per (tenant, country,
+/// region) where the merchant is registered to collect/remit. Drives
+/// nexus-aware tax-engine behavior in Tax-1+.
+model TaxRegistration {
+  id                 String                @id @default(cuid())
+  tenantId           String
+  countryCode        String
+  region             String?
+  /// VAT ID, EIN, etc.
+  registrationNumber String?
+  startedAt          DateTime
+  endedAt            DateTime?
+  status             TaxRegistrationStatus @default(ACTIVE)
+  /// "manual" | "shopify_tax_managed" | future provider keys.
+  source             String                @default("manual")
+
+  @@unique([tenantId, countryCode, region])
+  @@index([tenantId])
+  @@schema("public")
+}
+
+/// 1:1 with `CompanyLocation` (loose FK — no @relation to keep archival
+/// cascades isolated). Holds B2B tax overrides + VAT-validation cache.
+model CompanyLocationTaxSettings {
+  companyLocationId    String         @id
+  taxRegistrationId    String?
+  collectMode          TaxCollectMode @default(COLLECT)
+  /// Stored as TaxExemptionCode[] — string array since Prisma cannot
+  /// constrain to the TypeScript union; validation happens at the
+  /// service-layer.
+  taxExemptions        String[]       @default([])
+  vatNumber            String?
+  vatNumberValidatedAt DateTime?
+  vatNumberValid       Boolean?
+
+  @@schema("public")
+}
+
+/// Per-tenant tax-provider configuration. One row per region (or
+/// `regionScope = "GLOBAL"` for tenant-wide default). Drives
+/// resolveAdapter()-style provider lookup in Tax-1+.
+model TenantTaxConfig {
+  id          String  @id @default(cuid())
+  tenantId    String
+  /// "GLOBAL" or ISO 3166-1 alpha-2 country code.
+  regionScope String  @default("GLOBAL")
+  providerKey String  @default("builtin")
+  /// Encrypted, provider-specific. Empty for builtin.
+  credentials Json?
+  active      Boolean @default(true)
+
+  @@unique([tenantId, regionScope])
+  @@index([tenantId])
   @@schema("public")
 }
 
@@ -5701,7 +5683,6 @@ model AnalyticsDailyMetricV2 {
   @@index([tenantId, metric, date])
   @@index([tenantId, dimension, date])
   @@index([tenantId, date, metric])
-
   @@map("daily_metric")
   @@schema("analytics")
 }
