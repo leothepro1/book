@@ -3,26 +3,30 @@
 # PostToolUse hook — remind about migrations when prisma/schema.prisma changes.
 #
 # Per admin/CLAUDE.md "Migrations workflow" rules: every schema change
-# must go through `prisma migrate dev` locally and the resulting
-# migration file must be committed. `prisma db push` is forbidden.
+# must go through `prisma migrate dev` locally, the resulting migration
+# file must be committed, and `prisma db push` is forbidden.
 #
-# Exit 2 sends the reminder to Claude (the edit already happened — this
-# is a forward instruction for what to do next, not a block).
+# Exit 2 sends the reminder to Claude as a forward instruction (the
+# edit already happened — this is what to do next).
 #
-# Disable by setting CLAUDE_HOOK_SCHEMA=0
+# Resilience:
+#   - Bails silently if jq is missing.
+#
+# Disable with CLAUDE_HOOK_SCHEMA=0
 #
 set -u
 
 [[ "${CLAUDE_HOOK_SCHEMA:-1}" == "0" ]] && exit 0
+command -v jq >/dev/null 2>&1 || exit 0
 
 input=$(cat)
 file=$(echo "$input" | jq -r '.tool_input.file_path // empty')
 
-# Only fire on prisma/schema.prisma.
+# Only fire for prisma/schema.prisma.
 [[ "$file" == */prisma/schema.prisma ]] || exit 0
 
 cat <<'MSG' >&2
-Schema changed (prisma/schema.prisma). Per CLAUDE.md migration rules:
+Schema changed (prisma/schema.prisma). Per admin/CLAUDE.md migration rules:
 
   1. Generate migration:
        cd admin && npx prisma migrate dev --name <descriptive_name>
