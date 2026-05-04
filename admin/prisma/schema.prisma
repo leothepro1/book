@@ -2771,6 +2771,15 @@ model Order {
   totalAmount    Int // what guest paid
   currency       String @default("SEK")
 
+  // Dual-currency display (Tax-0 Decision 3 / handoff §5).
+  // Nullable; null = same as shop currency. Tax-0 backfill sets these
+  // equal to the shop fields. Tax-3 + Tax-4 (Markets) populate
+  // non-equal values when buyer's market currency differs from shop.
+  presentmentSubtotalAmount Int?
+  presentmentTaxAmount      Int?
+  presentmentTotalAmount    Int?
+  presentmentCurrency       String?
+
   // Discount — snapshot at checkout time
   discountAmount Int     @default(0) // total discount in ören
   discountCode   String? // code used (null for automatic discounts)
@@ -2888,6 +2897,13 @@ model OrderLineItem {
   unitAmount  Int // price per unit in ören/cents
   totalAmount Int // quantity * unitAmount
   currency    String @default("SEK")
+
+  // Dual-currency display (Tax-0 Decision 3 / handoff §5). Nullable;
+  // backfill sets to shop equivalents. Tax-3+ populates non-equal
+  // values for multi-market orders.
+  presentmentUnitAmount  Int?
+  presentmentTotalAmount Int?
+  presentmentCurrency    String?
 
   // Discount — allocated amount for this line
   discountAmount      Int                  @default(0)
@@ -5219,6 +5235,16 @@ model DraftOrder {
   currency           String  @default("SEK")
   taxesIncluded      Boolean @default(true)
 
+  // ── Dual-currency display (Tax-0 Decision 3 / handoff §5) ──
+  // Nullable; null = same as shop currency. Tax-0 backfill sets these
+  // equal to the shop fields. Tax-3 + Tax-4 (Markets) populate
+  // non-equal values when buyer's market currency differs from shop.
+  presentmentSubtotalCents      BigInt?
+  presentmentOrderDiscountCents BigInt?
+  presentmentTotalTaxCents      BigInt?
+  presentmentTotalCents         BigInt?
+  presentmentCurrency           String?
+
   /// Set by the service layer when prices are frozen for invoice send.
   /// After this moment the draft is effectively read-only for pricing.
   pricesFrozenAt DateTime?
@@ -5338,6 +5364,17 @@ model DraftLineItem {
   lineDiscountCents BigInt @default(0)
   taxAmountCents    BigInt @default(0)
   totalCents        BigInt
+
+  // ── Dual-currency display (Tax-0 Decision 3 / handoff §5) ──
+  // Nullable; null = same as shop currency. Tax-0 backfill sets these
+  // equal to the shop fields. Tax-3+ populates non-equal values for
+  // multi-market drafts.
+  presentmentUnitPriceCents    BigInt?
+  presentmentSubtotalCents     BigInt?
+  presentmentLineDiscountCents BigInt?
+  presentmentTaxAmountCents    BigInt?
+  presentmentTotalCents        BigInt?
+  presentmentCurrency          String?
 
   // ── B2B pricing audit ──
   appliedCatalogId String?
