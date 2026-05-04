@@ -1,10 +1,12 @@
 /**
  * Tax engine — public barrel.
  *
- * Tax-0 ships type contracts and enums only. Calculator implementation
- * (`calculateTax`) lands in Tax-1. Provider adapters in Tax-1 (builtin)
- * and Tax-8 (Avalara).
+ * Tax-0 ships type contracts and enums. Tax-1 adds the calculator
+ * orchestrator (`calculateTax`) + builtin provider (Nordic V1).
+ * Tax-8 adds the Avalara adapter.
  */
+
+export { calculateTax } from "./calculate";
 
 export type {
   ComputedTaxLine,
