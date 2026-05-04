@@ -344,8 +344,64 @@ check(
 );
 
 console.log("");
+console.log("Besokare live-widget (Track 3)");
+check(
+  "17. /api/analytics/live/visitors route exists and uses _unguardedAnalyticsPipelineClient (singleton-disciplin)",
+  () => {
+    const routePath = join(
+      REPO_ROOT,
+      "app/api/analytics/live/visitors/route.ts",
+    );
+    if (!existsSync(routePath)) {
+      return { pass: false, reason: "route file missing" };
+    }
+    // The route delegates to getVisitorsNow which is the singleton
+    // user — verify the chain by inspecting the visitors module too.
+    const visitorsPath = join(
+      REPO_ROOT,
+      "app/_lib/analytics/live/visitors.ts",
+    );
+    if (!existsSync(visitorsPath)) {
+      return { pass: false, reason: "visitors.ts module missing" };
+    }
+    const visitorsText = readFile(visitorsPath);
+    if (/new\s+PrismaClient\s*\(/.test(visitorsText)) {
+      return { pass: false, reason: "new PrismaClient() found in visitors.ts" };
+    }
+    return /_unguardedAnalyticsPipelineClient/.test(visitorsText)
+      ? { pass: true, reason: "" }
+      : { pass: false, reason: "singleton import missing in visitors.ts" };
+  },
+);
+
+check(
+  "18. besokare SQL has tenant_id = ${...} literal in WHERE (extends check #10 to live widget)",
+  () => {
+    const visitorsPath = join(
+      REPO_ROOT,
+      "app/_lib/analytics/live/visitors.ts",
+    );
+    const text = readFile(visitorsPath);
+    // Find every analytics.event query block; each must contain a
+    // tenant_id literal-binding via template-tag interpolation.
+    const re = /FROM\s+analytics\.event[\s\S]*?(?=`|;|\)\s*\})/gi;
+    const violations: string[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const block = m[0];
+      if (!/tenant_id\s*=\s*\$\{/.test(block)) {
+        violations.push(block.slice(0, 80).replace(/\s+/g, " ") + "…");
+      }
+    }
+    return violations.length === 0
+      ? { pass: true, reason: "all live-widget queries tenant-scoped" }
+      : { pass: false, reason: violations[0] };
+  },
+);
+
+console.log("");
 console.log("Repo health");
-check("17. tsc clean for Phase 5A files (3 pre-existing SEO errors allowed)", () => {
+check("19. tsc clean for Phase 5A files (3 pre-existing SEO errors allowed)", () => {
   try {
     execSync("npx tsc --noEmit", { cwd: REPO_ROOT, stdio: "pipe" });
     return { pass: true, reason: "tsc clean repo-wide" };
@@ -356,11 +412,15 @@ check("17. tsc clean for Phase 5A files (3 pre-existing SEO errors allowed)", ()
         : "";
     const PR_PATHS = [
       "app/_lib/analytics/aggregation/",
+      "app/_lib/analytics/live/",
+      "app/api/analytics/live/",
+      "app/(admin)/analytics/components/VisitorsLiveCard",
       "inngest/functions/scan-analytics-aggregate",
       "inngest/functions/run-analytics-aggregate-day",
       "inngest/functions/index.ts",
       "inngest/client.ts",
       "scripts/verify-phase5a-aggregator",
+      "scripts/load-test-besokare",
     ];
     const ourErrors = out
       .split("\n")
