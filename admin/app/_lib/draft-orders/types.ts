@@ -564,6 +564,70 @@ export type CancelDraftResult = {
   stripePaymentIntentCancelError: string | null;
 };
 
+// ── FAS 7.6-lite: approval services ──────────────────────────────
+
+/**
+ * Manual operator-driven approval flow. Three services wrap the existing
+ * `transitionDraftStatusInTx` helper for the
+ * `OPEN → PENDING_APPROVAL → APPROVED|REJECTED` transitions that have
+ * existed since FAS 6.5D but had no caller.
+ *
+ * Self-approval rule (Q1 advisory, locked by operator): a user who
+ * submitted a request cannot also approve it. Enforced at the service
+ * layer (`actorUserId !== draft.createdByUserId`); UI hide is best-effort.
+ *
+ * Legacy createdByUserId === null (Q3): pre-FAS-7.0 drafts and
+ * dev-seed data may lack creator attribution. The self-approval check
+ * is skipped (with a log warning) rather than blocking governance on
+ * historical data.
+ *
+ * Note metadata (Q5 advisory, locked at 500 chars): mirrors
+ * `cancelDraft.reason` precedent. `rejectionReason` is REQUIRED
+ * (Q2 LOCKED) — terminal-state without trail is unacceptable for audit.
+ */
+
+export const SubmitForApprovalInputSchema = z.object({
+  tenantId: z.string().min(1),
+  draftOrderId: z.string().min(1),
+  /** Optional reason/note for the approver. Max 500 chars (Q5). */
+  requestNote: z.string().max(500).optional(),
+  /** REQUIRED — must be tracked for audit. Action layer guards null userId. */
+  actorUserId: z.string().min(1),
+});
+
+export type SubmitForApprovalInput = z.infer<typeof SubmitForApprovalInputSchema>;
+export type SubmitForApprovalArgs = z.input<typeof SubmitForApprovalInputSchema>;
+
+export type SubmitForApprovalResult = { draft: DraftOrder };
+
+export const ApproveDraftInputSchema = z.object({
+  tenantId: z.string().min(1),
+  draftOrderId: z.string().min(1),
+  /** Optional approver note. Max 500 chars (Q5). */
+  approvalNote: z.string().max(500).optional(),
+  /** REQUIRED — must be tracked for audit + self-approval check (Q1). */
+  actorUserId: z.string().min(1),
+});
+
+export type ApproveDraftInput = z.infer<typeof ApproveDraftInputSchema>;
+export type ApproveDraftArgs = z.input<typeof ApproveDraftInputSchema>;
+
+export type ApproveDraftResult = { draft: DraftOrder };
+
+export const RejectDraftInputSchema = z.object({
+  tenantId: z.string().min(1),
+  draftOrderId: z.string().min(1),
+  /** REQUIRED — reason shown in timeline + audit (Q2 LOCKED). Max 500 chars (Q5). */
+  rejectionReason: z.string().min(1).max(500),
+  /** REQUIRED — must be tracked for audit. */
+  actorUserId: z.string().min(1),
+});
+
+export type RejectDraftInput = z.infer<typeof RejectDraftInputSchema>;
+export type RejectDraftArgs = z.input<typeof RejectDraftInputSchema>;
+
+export type RejectDraftResult = { draft: DraftOrder };
+
 // ── FAS 6.5D lifecycle: convertDraftToOrder ──────────────────────
 
 /**

@@ -41,7 +41,11 @@ export type PlatformEventType =
   | "draft_order.invoiced"
   | "draft_order.invoice_resent"
   | "draft_order.paid"
-  | "draft_order.completed";
+  | "draft_order.completed"
+  // ── DraftOrder approval events (FAS 7.6-lite) ──
+  | "draft_order.approval_requested"
+  | "draft_order.approved"
+  | "draft_order.rejected";
 
 export type PlatformEvent = {
   type: PlatformEventType;
