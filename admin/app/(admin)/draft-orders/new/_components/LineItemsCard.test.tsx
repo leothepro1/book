@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LocalLineItem } from "./types";
 
 vi.mock("../actions", () => ({
@@ -95,7 +95,13 @@ describe("LineItemsCard", () => {
     let captured: LocalLineItem[] = [];
     function Wrapper() {
       const [lines, setLines] = useState<LocalLineItem[]>([]);
-      captured = lines;
+      // Mirror state into the closure-scoped capture after commit. Updating
+      // in an effect (vs. directly during render) satisfies
+      // react-hooks/globals — assertions still see the latest value because
+      // act() flushes effects before they read.
+      useEffect(() => {
+        captured = lines;
+      }, [lines]);
       return (
         <LineItemsCard
           lines={lines}
@@ -173,7 +179,10 @@ describe("LineItemsCard", () => {
           },
         }),
       ]);
-      captured = lines;
+      // See L4 — mirror in effect, not during render.
+      useEffect(() => {
+        captured = lines;
+      }, [lines]);
       return (
         <LineItemsCard
           lines={lines}

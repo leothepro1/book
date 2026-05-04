@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 type Props = {
@@ -9,12 +9,19 @@ type Props = {
   onSave: () => void;
 };
 
-export function SaveBar({ canSave, isSaving, onSave }: Props) {
-  const [mounted, setMounted] = useState(false);
+// SSR-safe gate for createPortal — server snapshot is false (no document),
+// client snapshot is true. Replaces the cascading useState+useEffect
+// "after-mount" pattern that triggered react-hooks/set-state-in-effect.
+const subscribe = () => () => {};
+const getServerSnapshot = () => false;
+const getClientSnapshot = () => true;
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+export function SaveBar({ canSave, isSaving, onSave }: Props) {
+  const mounted = useSyncExternalStore(
+    subscribe,
+    getClientSnapshot,
+    getServerSnapshot,
+  );
 
   if (!mounted) return null;
 
