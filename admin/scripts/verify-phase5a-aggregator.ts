@@ -3,9 +3,10 @@
  *
  *   $ npm run verify:phase5a
  *
- * 11 static checks confirming the aggregator's structural contract is
- * intact. Runtime behaviour (idempotency, fold correctness, DB upsert)
- * is covered by the in-repo test suite under
+ * 17 static checks confirming the aggregator's structural contract is
+ * intact (11 from Phase 5A + 6 funnel-metrics extensions). Runtime
+ * behaviour (idempotency, fold correctness, DB upsert) is covered by
+ * the in-repo test suite under
  * `app/_lib/analytics/aggregation/*.test.ts` — this verifier exists
  * to catch drift in:
  *
@@ -17,6 +18,8 @@
  *   - Singleton client used (no `new PrismaClient()`)
  *   - Cross-tenant scope: every analytics.event query filters on
  *     `tenant_id =` literal in WHERE
+ *   - Funnel metrics: cart_started / checkout_started / cart_abandoned
+ *     mappings registered + rate computations + zero-divide guard
  *   - tsc clean for Phase 5A files
  *
  * The verifier is grep-/regex-based on file contents — no DB, no
@@ -227,8 +230,122 @@ check(
 );
 
 console.log("");
+console.log("Funnel metrics");
+check(
+  "11. metric-mapping.ts registers cart_started@0.2.0 → CART_STARTED contribution",
+  () => {
+    const text = readFile(
+      join(REPO_ROOT, "app/_lib/analytics/aggregation/metric-mapping.ts"),
+    );
+    // Look for the cart_started mapping block + a contribution with
+    // metric:"CART_STARTED". The mapping block guard prevents a stray
+    // CART_STARTED string elsewhere from satisfying the check.
+    const block = /eventName:\s*"cart_started"[\s\S]*?contributions:\s*\[[\s\S]*?metric:\s*"CART_STARTED"/;
+    return block.test(text)
+      ? { pass: true, reason: "" }
+      : { pass: false, reason: "cart_started mapping or CART_STARTED metric missing" };
+  },
+);
+
+check(
+  "12. metric-mapping.ts registers checkout_started@0.2.0 → CHECKOUT_STARTED contribution",
+  () => {
+    const text = readFile(
+      join(REPO_ROOT, "app/_lib/analytics/aggregation/metric-mapping.ts"),
+    );
+    const block =
+      /eventName:\s*"checkout_started"[\s\S]*?contributions:\s*\[[\s\S]*?metric:\s*"CHECKOUT_STARTED"/;
+    return block.test(text)
+      ? { pass: true, reason: "" }
+      : { pass: false, reason: "checkout_started mapping or CHECKOUT_STARTED metric missing" };
+  },
+);
+
+check(
+  "13. metric-mapping.ts registers cart_abandoned@0.2.0 → CART_ABANDONED contribution",
+  () => {
+    const text = readFile(
+      join(REPO_ROOT, "app/_lib/analytics/aggregation/metric-mapping.ts"),
+    );
+    const block =
+      /eventName:\s*"cart_abandoned"[\s\S]*?contributions:\s*\[[\s\S]*?metric:\s*"CART_ABANDONED"/;
+    return block.test(text)
+      ? { pass: true, reason: "" }
+      : { pass: false, reason: "cart_abandoned mapping or CART_ABANDONED metric missing" };
+  },
+);
+
+check(
+  "14. derivedMetrics emits CART_TO_CHECKOUT_RATE / CART_ABANDONMENT_RATE / CHECKOUT_COMPLETION_RATE",
+  () => {
+    // The three rate metrics are produced inside derivedMetrics() in
+    // metric-mapping.ts. The rate computations live in that file, NOT
+    // in aggregate-day.ts (aggregate-day.ts only forwards the merged
+    // counts map into derivedMetrics).
+    const text = readFile(
+      join(REPO_ROOT, "app/_lib/analytics/aggregation/metric-mapping.ts"),
+    );
+    const missing: string[] = [];
+    for (const m of [
+      "CART_TO_CHECKOUT_RATE",
+      "CART_ABANDONMENT_RATE",
+      "CHECKOUT_COMPLETION_RATE",
+    ]) {
+      if (!new RegExp(`metric:\\s*"${m}"`).test(text)) missing.push(m);
+    }
+    return missing.length === 0
+      ? { pass: true, reason: "" }
+      : { pass: false, reason: `missing: ${missing.join(", ")}` };
+  },
+);
+
+check(
+  "15. derivedMetrics has explicit zero-divide guards for funnel rates",
+  () => {
+    // Each rate emit must be wrapped in `if (... > ZERO)`. We grep for
+    // the canonical pattern: at minimum two such guards — one for
+    // cartStarted (covers rates 1+2) and one for checkoutStarted
+    // (covers rate 3).
+    const text = readFile(
+      join(REPO_ROOT, "app/_lib/analytics/aggregation/metric-mapping.ts"),
+    );
+    const cartStartedGuard = /if\s*\(\s*cartStarted\s*>\s*ZERO\s*\)/.test(text);
+    const checkoutStartedGuard = /if\s*\(\s*checkoutStarted\s*>\s*ZERO\s*\)/.test(
+      text,
+    );
+    if (!cartStartedGuard) {
+      return { pass: false, reason: "cartStarted > ZERO guard missing" };
+    }
+    if (!checkoutStartedGuard) {
+      return { pass: false, reason: "checkoutStarted > ZERO guard missing" };
+    }
+    return { pass: true, reason: "" };
+  },
+);
+
+check(
+  "16. aggregate-day.ts merges distinct counts into derivedMetrics input",
+  () => {
+    // Funnel rates depend on distinct-aggregator counts (CART_STARTED).
+    // aggregate-day.ts must merge distinctSets sizes into a unified
+    // map BEFORE calling derivedMetrics — otherwise rates always
+    // compute as 0 because the keys are absent.
+    const text = readFile(
+      join(REPO_ROOT, "app/_lib/analytics/aggregation/aggregate-day.ts"),
+    );
+    // Pattern: a Map cloned from scalarSum, then distinctSets folded in
+    // via BigInt(set.size).
+    const mergePattern =
+      /new\s+Map[\s\S]*?scalarSum[\s\S]*?distinctSets[\s\S]*?BigInt\s*\(\s*set\.size\s*\)/;
+    return mergePattern.test(text)
+      ? { pass: true, reason: "" }
+      : { pass: false, reason: "merge of distinct counts into derivedMetrics input not found" };
+  },
+);
+
+console.log("");
 console.log("Repo health");
-check("11. tsc clean for Phase 5A files (3 pre-existing SEO errors allowed)", () => {
+check("17. tsc clean for Phase 5A files (3 pre-existing SEO errors allowed)", () => {
   try {
     execSync("npx tsc --noEmit", { cwd: REPO_ROOT, stdio: "pipe" });
     return { pass: true, reason: "tsc clean repo-wide" };
