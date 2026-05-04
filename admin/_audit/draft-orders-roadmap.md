@@ -229,3 +229,21 @@ till V2.)_
 - [ ] Commit-meddelanden följer `feat(draft-orders): FAS X.Y — <desc>`.
 - [ ] PR-beskrivning länkar till recon-dokumentet.
 - [ ] Denna roadmap-fil uppdaterad: fasen flyttad från Pending → Klart.
+
+---
+
+## Tax Engine — separate master plan
+
+See `_audit/tax-engine-master-plan.md` for the multi-phase decomposition
+(Tax-0 → Tax-10). Tax-0 is the foundation phase that blocks all
+downstream tax work. Cross-team coord with Terminal A is documented in
+`_audit/presentment-money-handoff.md`.
+
+| Phase | Status |
+|---|---|
+| Tax-0 | Implemented on `claude/tax-0-implementation` — banker's rounding helper + tax types/enums + MoneyBag helpers + provider interface skeleton + 4 new Prisma models (TaxLine, TaxRegistration, CompanyLocationTaxSettings, TenantTaxConfig) + presentment\* dual-currency columns on Order/OrderLineItem/DraftOrder/DraftLineItem with atomic backfill. Verified locally: tsc baseline 3 (no new), vitest +63 net new (29 round + 11 from-flat + 8 taxonomy + 5 exemptions + 5 provider + 5 hold/lineitem fixture updates folded in), eslint 0, both migrations applied + 0 NULL backfill across all 4 tables. |
+| Tax-1 | Pending — calculator core + builtin provider + per-(category, country) rate lookup + failure-mode fallback. |
+| Tax-2 | Pending — Draft Orders integration: previewDraftTotals + freezePrices wired through calculateTax(); convert.ts inherits TaxLine rows. |
+| Tax-3 | Pending — Cart/Checkout integration. ⚠ Coord #2 with Terminal A on `OrderLineItem` shape evolution + line_items emitter mapping. |
+| Tax-4 | Pending — Markets foundation. ⚠ Coord #3 with Terminal A on `Order.currency` semantic decision + presentment-aware analytics events (Path a vs Path b). |
+| Tax-5..10 | Pending — exemptions, overrides, EU rev-charge + VIES, Avalara adapter, full taxonomy, provider webhooks. |
