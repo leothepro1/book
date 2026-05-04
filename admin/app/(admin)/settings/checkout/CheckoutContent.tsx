@@ -1,9 +1,52 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { EditorIcon } from "@/app/_components/EditorIcon";
-import { Radio, Checkbox, Toggle } from "@/app/(admin)/_components/ui";
+import { Fragment, useEffect, useState } from "react";
+import {
+  Radio,
+  Checkbox,
+  Menu,
+  Button,
+  Input,
+} from "@/app/(admin)/_components/ui";
 import "./checkout.css";
+
+// ── Marknadsföring placement options ────────────────────────
+const MARKETING_PLACEMENT_OPTIONS: Array<{ id: string; label: string }> = [
+  { id: "checkout-only", label: "Endast i kassan" },
+  { id: "login-only", label: "Endast i inloggning" },
+  { id: "checkout-and-login", label: "Kassa och inloggning" },
+  { id: "hidden", label: "Visa inte" },
+];
+
+// ── Kundinformation rows ────────────────────────────────────
+// Each row owns its own option list. First option in each row is
+// the default. The id strings are arbitrary internal identifiers —
+// the storefront checkout will read these when persistence wires up.
+type CustomerFieldRow = {
+  key: string;
+  title: string;
+  options: Array<{ id: string; label: string }>;
+};
+
+const CUSTOMER_FIELD_ROWS: CustomerFieldRow[] = [
+  {
+    key: "fullName",
+    title: "Fullständigt namn",
+    options: [
+      { id: "first-and-last", label: "Kräv för- och efternamn" },
+      { id: "last-only", label: "Kräv efternamn" },
+    ],
+  },
+  {
+    key: "company",
+    title: "Företagsnamn",
+    options: [
+      { id: "exclude", label: "Inkludera inte" },
+      { id: "optional", label: "Valfritt" },
+      { id: "required", label: "Obligatorisk" },
+    ],
+  },
+];
 
 type Props = {
   onSubTitleChange?: (title: string | null) => void;
@@ -27,15 +70,23 @@ export function CheckoutContent({ onSubTitleChange }: Props) {
   const [requireLoginBeforeCheckout, setRequireLoginBeforeCheckout] =
     useState(false);
 
-  // ── Container 2: Anpassning av kassan ───────────────────────
-  const [allowSpecialRequests, setAllowSpecialRequests] = useState(true);
-  const [showArrivalTime, setShowArrivalTime] = useState(false);
-  const [showHoldCountdown, setShowHoldCountdown] = useState(true);
+  // ── Container 2: Kundinformation ────────────────────────────
+  // First option per row is the default — derived from the row
+  // definitions so adding a row only requires updating the array.
+  const [customerFields, setCustomerFields] = useState<Record<string, string>>(
+    () =>
+      Object.fromEntries(
+        CUSTOMER_FIELD_ROWS.map((row) => [row.key, row.options[0].id]),
+      ),
+  );
 
-  // ── Container 3: Marknadsföring & samtycke ──────────────────
-  const [allowNewsletterOptIn, setAllowNewsletterOptIn] = useState(true);
-  const [newsletterPrechecked, setNewsletterPrechecked] = useState(false);
-  const [requireTermsAcceptance, setRequireTermsAcceptance] = useState(true);
+  // ── Container 3: Anmälan till marknadsföring ────────────────
+  const [marketingPlacement, setMarketingPlacement] = useState(
+    MARKETING_PLACEMENT_OPTIONS[0].id,
+  );
+  const [marketingLabel, setMarketingLabel] = useState(
+    "Skicka mig nyheter och erbjudanden via e-post",
+  );
 
   useEffect(() => {
     onSubTitleChange?.(null);
@@ -44,7 +95,7 @@ export function CheckoutContent({ onSubTitleChange }: Props) {
   return (
     <>
       {/* ═══ Container 1: Kontaktmetod ════════════════════════ */}
-      <div>
+      <div className="co-settings__group--contact">
         <div className="co-settings__label">Kontaktmetod</div>
 
         <div className="co-settings__list">
@@ -87,151 +138,99 @@ export function CheckoutContent({ onSubTitleChange }: Props) {
         </div>
       </div>
 
-      {/* ═══ Container 2: Anpassning av kassan ════════════════ */}
-      <div>
-        <div className="co-settings__label">Anpassning av kassan</div>
+      {/* ═══ Container 2: Kundinformation ═════════════════════ */}
+      <div className="co-settings__group--customer">
+        <div className="co-settings__label">Kundinformation</div>
 
         <div className="co-settings__list">
-          <div className="co-settings__row">
-            <span className="co-settings__row-icon">
-              <EditorIcon name="edit_note" size={20} />
-            </span>
-            <div className="co-settings__row-text">
-              <div className="co-settings__row-title">
-                Tillåt specialönskemål
-              </div>
-              <div className="co-settings__row-desc">
-                Visa ett textfält där gästen kan skriva önskemål inför ankomst
-                (allergier, preferenser, hänsyn).
-              </div>
-            </div>
-            <span className="co-settings__row-control">
-              <Toggle
-                checked={allowSpecialRequests}
-                onChange={setAllowSpecialRequests}
-                aria-label="Tillåt specialönskemål"
-              />
-            </span>
-          </div>
-
-          <div className="co-settings__divider" />
-
-          <div className="co-settings__row">
-            <span className="co-settings__row-icon">
-              <EditorIcon name="schedule" size={20} />
-            </span>
-            <div className="co-settings__row-text">
-              <div className="co-settings__row-title">Visa ankomsttid</div>
-              <div className="co-settings__row-desc">
-                Låt gästen ange en planerad ankomsttid i kassan. Synkas till
-                PMS.
-              </div>
-            </div>
-            <span className="co-settings__row-control">
-              <Toggle
-                checked={showArrivalTime}
-                onChange={setShowArrivalTime}
-                aria-label="Visa ankomsttid"
-              />
-            </span>
-          </div>
-
-          <div className="co-settings__divider" />
-
-          <div className="co-settings__row">
-            <span className="co-settings__row-icon">
-              <EditorIcon name="timer" size={20} />
-            </span>
-            <div className="co-settings__row-text">
-              <div className="co-settings__row-title">Visa nedräkning</div>
-              <div className="co-settings__row-desc">
-                Visa hur länge bokningen är reserverad i kassan (15 minuter).
-                Skapar urgency och kommunicerar tillgänglighetslås tydligt.
-              </div>
-            </div>
-            <span className="co-settings__row-control">
-              <Toggle
-                checked={showHoldCountdown}
-                onChange={setShowHoldCountdown}
-                aria-label="Visa nedräkning"
-              />
-            </span>
-          </div>
+          {CUSTOMER_FIELD_ROWS.map((row, i) => {
+            const selectedId = customerFields[row.key];
+            const selectedLabel =
+              row.options.find((o) => o.id === selectedId)?.label ?? "";
+            return (
+              <Fragment key={row.key}>
+                {i > 0 && <div className="co-settings__divider" />}
+                <div className="co-settings__row">
+                  <div className="co-settings__row-text">
+                    <div className="co-settings__row-title">{row.title}</div>
+                  </div>
+                  <span className="co-settings__row-control">
+                    <Menu
+                      trigger={
+                        <Button
+                          variant="secondary"
+                          trailingIcon="expand_more"
+                        >
+                          {selectedLabel}
+                        </Button>
+                      }
+                    >
+                      {row.options.map((opt) => (
+                        <Menu.Item
+                          key={opt.id}
+                          onSelect={() =>
+                            setCustomerFields((prev) => ({
+                              ...prev,
+                              [row.key]: opt.id,
+                            }))
+                          }
+                        >
+                          {opt.label}
+                        </Menu.Item>
+                      ))}
+                    </Menu>
+                  </span>
+                </div>
+              </Fragment>
+            );
+          })}
         </div>
       </div>
 
-      {/* ═══ Container 3: Marknadsföring & samtycke ═══════════ */}
-      <div>
-        <div className="co-settings__label">Marknadsföring & samtycke</div>
+      {/* ═══ Container 3: Anmälan till marknadsföring ═════════ */}
+      <div className="co-settings__group--marketing">
+        <div className="co-settings__label">Anmälan till marknadsföring</div>
+        <div className="co-settings__desc">
+          Visa en kryssruta så att kunder kan anmäla sig till marknadsföring.
+        </div>
 
         <div className="co-settings__list">
-          <div className="co-settings__row">
-            <span className="co-settings__row-icon">
-              <EditorIcon name="subscriptions" size={20} />
-            </span>
-            <div className="co-settings__row-text">
-              <div className="co-settings__row-title">
-                Tillåt nyhetsbrevsanmälan
-              </div>
-              <div className="co-settings__row-desc">
-                Visa en kryssruta för nyhetsbrev i kassan. Gäster som tackar ja
-                synkas till din epostmarknadsföring.
-              </div>
+          <div className="co-settings__row co-settings__row--columns">
+            <div className="co-settings__col">
+              <label className="co-settings__field-label">
+                Visa kryssrutan
+              </label>
+              <Menu
+                trigger={
+                  <Button
+                    variant="secondary"
+                    trailingIcon="expand_more"
+                  >
+                    {MARKETING_PLACEMENT_OPTIONS.find(
+                      (o) => o.id === marketingPlacement,
+                    )?.label ?? ""}
+                  </Button>
+                }
+              >
+                {MARKETING_PLACEMENT_OPTIONS.map((opt) => (
+                  <Menu.Item
+                    key={opt.id}
+                    onSelect={() => setMarketingPlacement(opt.id)}
+                  >
+                    {opt.label}
+                  </Menu.Item>
+                ))}
+              </Menu>
             </div>
-            <span className="co-settings__row-control">
-              <Toggle
-                checked={allowNewsletterOptIn}
-                onChange={setAllowNewsletterOptIn}
-                aria-label="Tillåt nyhetsbrevsanmälan"
+            <div className="co-settings__col">
+              <label className="co-settings__field-label">
+                Texten på kryssrutan
+              </label>
+              <Input
+                value={marketingLabel}
+                onChange={setMarketingLabel}
               />
-            </span>
-          </div>
-
-          <div className="co-settings__divider" />
-
-          <div className="co-settings__row">
-            <span className="co-settings__row-icon">
-              <EditorIcon name="done_all" size={20} />
-            </span>
-            <div className="co-settings__row-text">
-              <div className="co-settings__row-title">Förvald opt-in</div>
-              <div className="co-settings__row-desc">
-                Förkryssa nyhetsbrevsrutan. Stäng av för att kräva aktivt
-                samtycke (rekommenderas i EU).
-              </div>
             </div>
-            <span className="co-settings__row-control">
-              <Toggle
-                checked={newsletterPrechecked}
-                onChange={setNewsletterPrechecked}
-                disabled={!allowNewsletterOptIn}
-                aria-label="Förvald opt-in"
-              />
-            </span>
-          </div>
-
-          <div className="co-settings__divider" />
-
-          <div className="co-settings__row">
-            <span className="co-settings__row-icon">
-              <EditorIcon name="gavel" size={20} />
-            </span>
-            <div className="co-settings__row-text">
-              <div className="co-settings__row-title">
-                Kräv villkorsacceptans
-              </div>
-              <div className="co-settings__row-desc">
-                Gästen måste aktivt acceptera bokningsvillkoren innan betalning
-                kan slutföras.
-              </div>
-            </div>
-            <span className="co-settings__row-control">
-              <Toggle
-                checked={requireTermsAcceptance}
-                onChange={setRequireTermsAcceptance}
-                aria-label="Kräv villkorsacceptans"
-              />
-            </span>
           </div>
         </div>
       </div>

@@ -9,18 +9,62 @@
 
 /* ── Group label above each list ───────────────────────────── */
 .co-settings__label {
-  font-size: var(--font-sm);
+  font-size: var(--font-md);
   font-weight: var(--font-weight-semibold);
   color: var(--admin-text);
   line-height: var(--line-height-tight);
-  padding: 0 0 7px 0;
+  padding: 0 0 7px;
+}
+
+/* Group sub-text — sits between the label and the bordered list.
+ * Used when the container needs a one-liner description (e.g.
+ * Anmälan till marknadsföring). */
+.co-settings__desc {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-normal);
+  color: var(--admin-text-secondary);
+  line-height: var(--line-height-tight);
+  padding: 0 0 10px;
+  margin-top: -4px;
+}
+
+/* ── Two-column row (label + control side by side) ─────────── */
+/* Used when a row hosts two fields (e.g. dropdown 50% / input 50%
+ * with 8px gap). Each child is a `.co-settings__col`. Bottom-aligned
+ * so trailing controls sit on a shared baseline regardless of label
+ * length. */
+.co-settings__row--columns {
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.co-settings__col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.co-settings__field-label {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--admin-text);
+  line-height: var(--line-height-tight);
+  margin-bottom: 3px;
+}
+
+/* Stretch the dropdown trigger button to fill its column so it
+ * matches the input's full-column width. Chevron pinned right. */
+.co-settings__col > .ui-btn {
+  width: 100%;
+  justify-content: space-between;
 }
 
 /* ── Bordered list grouping rows + dividers ────────────────── */
 .co-settings__list {
   border: 1px solid var(--admin-border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
 }
 
 /* ── Inner settings row ────────────────────────────────────── */
@@ -79,6 +123,34 @@
  * focus, active styling, and dark-mode tokens. */
 .co-settings__choice-row {
   padding: 8px 16px;
+}
+
+/* ── Container-scoped overrides: Kontaktmetod ──────────────── */
+/* Only the Kontaktmetod group: drop the outer border, kill the
+ * row padding (ui-primitives bring their own), and collapse the
+ * divider to invisible. Other containers keep the default chrome. */
+.co-settings__group--contact .co-settings__list {
+  border: none;
+}
+
+.co-settings__group--contact .co-settings__choice-row {
+  padding: 0;
+}
+
+.co-settings__group--contact .co-settings__divider {
+  height: 0;
+}
+
+/* ── Container-scoped overrides: Anmälan till marknadsföring ── */
+/* Same chrome stripping as Kontaktmetod: no outer border, no row
+ * padding. The two-column layout sits flush against the container
+ * edge instead of inside a card. */
+.co-settings__group--marketing .co-settings__list {
+  border: none;
+}
+
+.co-settings__group--marketing .co-settings__row {
+  padding: 0;
 }
 
 /* Stacked label + helptext for ui/Checkbox's `label` ReactNode. */
