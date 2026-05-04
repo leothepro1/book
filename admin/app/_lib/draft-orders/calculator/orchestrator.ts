@@ -36,7 +36,6 @@ import {
   buildDiscountEngineInput,
   buildDraftTotalsInput,
   type RawDraftOrder,
-  type RawDraftLineItem,
   type TaxByLineEntry,
 } from "./context";
 import { resolveFulfillmentCountry } from "./fulfillment-country";
