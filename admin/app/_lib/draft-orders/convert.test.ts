@@ -32,6 +32,8 @@ const mockTx = {
   discountUsage: { upsert: vi.fn() },
   discountEvent: { create: vi.fn() },
   orderEvent: { create: vi.fn() },
+  // Tax-2 B.5: reparentTaxLinesDraftToOrder runs inside the convert tx.
+  taxLine: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
   $queryRaw: vi.fn(),
   $executeRaw: vi.fn(),
 };
@@ -360,6 +362,9 @@ beforeEach(() => {
   mockTx.booking.create.mockResolvedValue(makeBooking());
   mockTx.accommodation.findFirst.mockResolvedValue({ externalId: "ext_acc_1" });
   mockTx.companyLocation.findFirst.mockResolvedValue(null);
+  // Tax-2 B.5: reparentTaxLinesDraftToOrder updateMany — re-set since
+  // resetAllMocks() above wipes the in-place initializer.
+  mockTx.taxLine.updateMany.mockResolvedValue({ count: 0 });
   mockEmit.mockResolvedValue(undefined);
   mockNextOrderNumber.mockResolvedValue(1042);
   mockResolveAdapter.mockResolvedValue({ provider: "mews" });
